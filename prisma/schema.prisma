@@ -1,0 +1,137 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum ChannelType {
+  sms
+}
+
+enum ChannelProvider {
+  twilio
+}
+
+enum MessageDirection {
+  inbound
+  outbound
+}
+
+enum DraftStatus {
+  none
+  proposed
+  approved
+  sent
+}
+
+enum ConversationStatus {
+  needs_reply
+  in_progress
+  closed
+}
+
+model Tenant {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  createdAt     DateTime       @default(now())
+  users         User[]
+  channels      Channel[]
+  conversations Conversation[]
+  contacts      Contact[]
+  auditLogs     AuditLog[]
+}
+
+model User {
+  id           String    @id @default(cuid())
+  tenantId     String
+  email        String    @unique
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+  auditLogs    AuditLog[]
+}
+
+model Channel {
+  id                       String          @id @default(cuid())
+  tenantId                 String
+  type                     ChannelType     @default(sms)
+  provider                 ChannelProvider @default(twilio)
+  phoneNumberE164          String          @unique
+  twilioAccountSid         String?
+  twilioAuthTokenEncrypted String?
+  createdAt                DateTime        @default(now())
+  tenant                   Tenant          @relation(fields: [tenantId], references: [id])
+  conversations            Conversation[]
+}
+
+model Contact {
+  id            String         @id @default(cuid())
+  tenantId      String
+  name          String
+  phoneE164     String
+  createdAt     DateTime       @default(now())
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  conversations Conversation[]
+
+  @@unique([tenantId, phoneE164])
+}
+
+model Conversation {
+  id               String             @id @default(cuid())
+  tenantId         String
+  channelId        String
+  externalThreadId String
+  contactId        String?
+  label            String?
+  status           ConversationStatus @default(needs_reply)
+  lastMessageAt    DateTime           @default(now())
+  createdAt        DateTime           @default(now())
+  tenant           Tenant             @relation(fields: [tenantId], references: [id])
+  channel          Channel            @relation(fields: [channelId], references: [id])
+  contact          Contact?           @relation(fields: [contactId], references: [id])
+  messages         Message[]
+  draft            Draft?
+
+  @@unique([tenantId, channelId, externalThreadId])
+  @@index([tenantId, lastMessageAt])
+}
+
+model Message {
+  id                String           @id @default(cuid())
+  conversationId    String
+  direction         MessageDirection
+  fromE164          String
+  toE164            String
+  body              String
+  providerMessageId String
+  createdAt         DateTime         @default(now())
+  conversation      Conversation     @relation(fields: [conversationId], references: [id])
+
+  @@unique([providerMessageId])
+  @@index([conversationId, createdAt])
+}
+
+model Draft {
+  id             String      @id @default(cuid())
+  conversationId String      @unique
+  text           String
+  status         DraftStatus @default(none)
+  createdAt      DateTime    @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  userId      String?
+  action      String
+  payloadJson Json
+  createdAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, createdAt])
+}

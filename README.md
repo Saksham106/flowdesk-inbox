@@ -1,36 +1,133 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# flowdesk-inbox
 
-## Getting Started
+Minimal multi-tenant SMS inbox (Twilio) for V1.
 
-First, run the development server:
+## Requirements
+
+- Node.js 18+
+- Docker Desktop
+
+## Local setup
+
+1) Install dependencies
+
+```bash
+npm install
+```
+
+2) Configure environment
+
+```bash
+cp .env.example .env
+```
+
+Fill in:
+- `NEXTAUTH_SECRET`
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+
+3) Start Postgres
+
+```bash
+docker compose up -d
+```
+
+4) Run migrations + seed
+
+```bash
+npm run db:migrate
+npm run db:seed
+```
+
+5) Start the app
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Login:
+- Email: `owner@flowdesk-inbox.local`
+- Password: `password123`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Twilio inbound webhook (local)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1) Start ngrok
 
-## Learn More
+```bash
+ngrok http 3000
+```
 
-To learn more about Next.js, take a look at the following resources:
+2) Configure your Twilio phone number webhook:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+POST https://<ngrok-subdomain>.ngrok-free.app/api/webhooks/twilio/inbound
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+3) Send an SMS to your Twilio number. It will appear in `/inbox`.
 
-## Deploy on Vercel
+### Sample curl (manual)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Twilio signs requests with `X-Twilio-Signature`. To simulate a webhook, compute the signature and send a form-encoded request:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+node -e "const crypto=require('crypto');const url='https://<ngrok-subdomain>.ngrok-free.app/api/webhooks/twilio/inbound';const params={From:'+15555550123',To:'+15555550100',Body:'Hello',MessageSid:'SM123'};const data=url+Object.keys(params).sort().map(k=>k+params[k]).join('');const sig=crypto.createHmac('sha1',process.env.TWILIO_AUTH_TOKEN).update(data).digest('base64');console.log(sig);"
+```
+
+```bash
+curl -X POST 'https://<ngrok-subdomain>.ngrok-free.app/api/webhooks/twilio/inbound' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -H 'X-Twilio-Signature: <computed-signature>' \
+  --data-urlencode 'From=+15555550123' \
+  --data-urlencode 'To=+15555550100' \
+  --data-urlencode 'Body=Hello from curl' \
+  --data-urlencode 'MessageSid=SM123'
+```
+
+## Environment variables
+
+- `DATABASE_URL`: Postgres connection string
+- `NEXTAUTH_URL`: base URL (e.g. `https://yourdomain.up.railway.app`)
+- `NEXTAUTH_SECRET`: session secret — generate with `openssl rand -base64 32`
+- `TWILIO_ACCOUNT_SID`: Twilio account SID
+- `TWILIO_AUTH_TOKEN`: Twilio auth token (used for signature validation and send)
+- `TWILIO_PHONE_NUMBER`: your Twilio number in E.164 format (e.g. `+12125550100`) — **required for seeding**
+- `SEED_EMAIL` *(optional)*: override the default login email
+- `SEED_PASSWORD` *(optional)*: override the default login password
+- `SEED_TENANT_NAME` *(optional)*: override the default tenant name
+
+## Production deployment (Railway)
+
+1. Push this repo to GitHub.
+
+2. Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub repo → select this repo.
+
+3. Add a **Postgres** plugin inside the Railway project. Railway will inject `DATABASE_URL` automatically.
+
+4. Under the service's **Variables** tab, add:
+   - `NEXTAUTH_SECRET` — `openssl rand -base64 32`
+   - `NEXTAUTH_URL` — `https://<your-service>.up.railway.app`
+   - `TWILIO_ACCOUNT_SID`
+   - `TWILIO_AUTH_TOKEN`
+   - `TWILIO_PHONE_NUMBER`
+
+5. Deploy. Railway runs `npm run build` on push and `prisma migrate deploy` on start automatically (see `railway.json`).
+
+6. After first deploy, seed the database once:
+   ```bash
+   # From Railway's service shell, or locally with DATABASE_URL pointing at prod:
+   npm run db:seed
+   ```
+
+7. Update your Twilio phone number's inbound webhook to:
+   ```
+   POST https://<your-service>.up.railway.app/api/webhooks/twilio/inbound
+   ```
+
+## Scripts
+
+- `npm run dev`: start Next.js dev server
+- `npm run build`: production build
+- `npm run db:migrate`: create/update schema (dev only — prompts interactively)
+- `npm run db:deploy`: apply pending migrations (production-safe, non-interactive)
+- `npm run db:seed`: seed tenant/user/channel (requires `TWILIO_PHONE_NUMBER`)
+- `npm run db:studio`: open Prisma Studio
