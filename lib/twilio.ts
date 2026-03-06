@@ -1,19 +1,22 @@
 import Twilio from "twilio";
+import { decryptString } from "@/lib/crypto";
 
 export function getTwilioClient(
   accountSid?: string | null,
-  authToken?: string | null
+  encryptedAuthToken?: string | null
 ) {
   const sid = accountSid ?? process.env.TWILIO_ACCOUNT_SID;
-  const token = authToken ?? process.env.TWILIO_AUTH_TOKEN;
+  const rawToken = encryptedAuthToken ?? process.env.TWILIO_AUTH_TOKEN;
 
-  if (!sid || !token) {
+  if (!sid || !rawToken) {
     throw new Error("Twilio credentials are not configured.");
   }
 
+  const token = decryptString(rawToken);
   return Twilio(sid, token);
 }
 
-export function getTwilioAuthToken(overrides?: string | null) {
-  return overrides ?? process.env.TWILIO_AUTH_TOKEN ?? "";
+export function getTwilioAuthToken(encryptedOverride?: string | null): string {
+  const raw = encryptedOverride ?? process.env.TWILIO_AUTH_TOKEN ?? "";
+  return decryptString(raw);
 }

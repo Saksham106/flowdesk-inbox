@@ -1,38 +1,104 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+import { Suspense } from "react";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import SignOutButton from "@/app/inbox/SignOutButton";
+import SearchInput from "@/app/inbox/SearchInput";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import { StatusBadge, LabelBadge } from "@/app/components/badges";
 
 export const dynamic = "force-dynamic";
 
-export default async function InboxPage() {
+type ConversationStatus = "needs_reply" | "in_progress" | "closed";
+
+const STATUS_LABELS: Record<ConversationStatus, string> = {
+  needs_reply: "Needs Reply",
+  in_progress: "In Progress",
+  closed: "Closed",
+};
+
+const ALL_STATUSES = Object.keys(STATUS_LABELS) as ConversationStatus[];
+
+interface Props {
+  searchParams: { status?: string; q?: string };
+}
+
+export default async function InboxPage({ searchParams }: Props) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.tenantId) {
     redirect("/login");
   }
 
-  const conversations = await prisma.conversation.findMany({
-    where: { tenantId: session.user.tenantId },
-    orderBy: { lastMessageAt: "desc" },
-    include: {
-      messages: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-      },
-      channel: true,
-      contact: true,
-    },
-  });
+  const tenantId = session.user.tenantId;
+  const activeStatus = ALL_STATUSES.includes(searchParams.status as ConversationStatus)
+    ? (searchParams.status as ConversationStatus)
+    : null;
+  const q = searchParams.q?.trim() ?? "";
 
-  const needsReplyCount = conversations.filter(
-    (c) => c.status === "needs_reply"
-  ).length;
+  // Build where clause
+  const where = {
+    tenantId,
+    ...(activeStatus ? { status: activeStatus } : {}),
+    ...(q
+      ? {
+          OR: [
+            { externalThreadId: { contains: q, mode: "insensitive" as const } },
+            { contact: { name: { contains: q, mode: "insensitive" as const } } },
+          ],
+        }
+      : {}),
+  };
+
+  const [conversations, statusCounts] = await Promise.all([
+    prisma.conversation.findMany({
+      where,
+      orderBy: { lastMessageAt: "desc" },
+      include: {
+        messages: { orderBy: { createdAt: "desc" }, take: 1 },
+        channel: true,
+        contact: true,
+      },
+    }),
+    prisma.conversation.groupBy({
+      by: ["status"],
+      where: {
+        tenantId,
+        ...(q
+          ? {
+              OR: [
+                { externalThreadId: { contains: q, mode: "insensitive" } },
+                { contact: { name: { contains: q, mode: "insensitive" } } },
+              ],
+            }
+          : {}),
+      },
+      _count: { status: true },
+    }),
+  ]);
+
+  const countByStatus = Object.fromEntries(
+    statusCounts.map((r) => [r.status, r._count.status])
+  ) as Record<string, number>;
+
+  const totalCount = statusCounts.reduce((sum, r) => sum + r._count.status, 0);
+  const needsReplyCount = countByStatus["needs_reply"] ?? 0;
+
+  function tabHref(status: ConversationStatus | null) {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (q) params.set("q", q);
+    const qs = params.toString();
+    return qs ? `/inbox?${qs}` : "/inbox";
+  }
+
+  const tabs = [
+    { label: "All", status: null, count: totalCount },
+    ...ALL_STATUSES.map((s) => ({ label: STATUS_LABELS[s], status: s, count: countByStatus[s] ?? 0 })),
+  ];
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -43,26 +109,70 @@ export default async function InboxPage() {
             <h1 className="text-xl font-semibold">Inbox</h1>
             <p className="text-sm text-slate-500">
               {needsReplyCount > 0 ? (
-                <span className="font-medium text-red-600">{needsReplyCount} need{needsReplyCount === 1 ? "s" : ""} reply</span>
+                <span className="font-medium text-red-600">
+                  {needsReplyCount} need{needsReplyCount === 1 ? "s" : ""} reply
+                </span>
               ) : (
                 "All caught up"
               )}
-              {" · "}{conversations.length} total
+              {" · "}{totalCount} total
             </p>
           </div>
           <SignOutButton />
         </div>
+
+        {/* Status tabs */}
+        <div className="mx-auto max-w-5xl px-6">
+          <nav className="-mb-px flex gap-6 overflow-x-auto">
+            {tabs.map(({ label, status, count }) => {
+              const isActive = status === activeStatus;
+              return (
+                <Link
+                  key={label}
+                  href={tabHref(status)}
+                  className={`whitespace-nowrap border-b-2 pb-3 pt-2 text-sm font-medium transition ${
+                    isActive
+                      ? "border-slate-900 text-slate-900"
+                      : "border-transparent text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  {label}
+                  {count > 0 && (
+                    <span
+                      className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs ${
+                        isActive ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
       </header>
-      <main className="mx-auto max-w-5xl px-6 py-8">
+
+      <main className="mx-auto max-w-5xl px-6 py-6">
+        {/* Search */}
+        <div className="mb-5">
+          <Suspense>
+            <SearchInput defaultValue={q} />
+          </Suspense>
+        </div>
+
         <div className="space-y-3">
           {conversations.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-sm text-slate-500">
-              No conversations yet. Send a test SMS to your Twilio number.
+              {q || activeStatus
+                ? "No conversations match your search."
+                : "No conversations yet. Send a test SMS to your Twilio number."}
             </div>
           ) : (
             conversations.map((conversation) => {
               const lastMessage = conversation.messages[0];
-              const displayName = conversation.contact?.name ?? conversation.externalThreadId;
+              const displayName =
+                conversation.contact?.name ?? conversation.externalThreadId;
               return (
                 <Link
                   key={conversation.id}
