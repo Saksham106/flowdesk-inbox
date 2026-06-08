@@ -45,6 +45,7 @@ model Tenant {
   contacts                  Contact[]
   auditLogs                 AuditLog[]
   googleCalendarCredentials GoogleCalendarCredential[]
+  mindBodyCredential        MindBodyCredential?
 }
 
 model User {
@@ -83,6 +84,16 @@ model GmailCredential {
   historyId             String?
   createdAt             DateTime  @default(now())
   channel               Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+}
+
+model MindBodyCredential {
+  id                String   @id @default(cuid())
+  tenantId          String   @unique
+  siteId            String
+  usernameEncrypted String
+  passwordEncrypted String
+  createdAt         DateTime @default(now())
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model GoogleCalendarCredential {

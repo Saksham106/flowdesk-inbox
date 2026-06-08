@@ -7,6 +7,8 @@ import { prisma } from "@/lib/prisma";
 import DisconnectGmailButton from "@/app/settings/DisconnectGmailButton";
 import SyncGmailButton from "@/app/settings/SyncGmailButton";
 import DisconnectCalendarButton from "@/app/settings/DisconnectCalendarButton";
+import MindBodyConnectForm from "@/app/settings/MindBodyConnectForm";
+import DisconnectMindBodyButton from "@/app/settings/DisconnectMindBodyButton";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +35,7 @@ export default async function SettingsPage({ searchParams }: Props) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.tenantId) redirect("/login");
 
-  const [gmailChannels, calendarCredentials] = await Promise.all([
+  const [gmailChannels, calendarCredentials, mindBodyCredential] = await Promise.all([
     prisma.channel.findMany({
       where: { tenantId: session.user.tenantId, type: "email" },
       include: { gmailCredential: { select: { createdAt: true } } },
@@ -42,6 +44,9 @@ export default async function SettingsPage({ searchParams }: Props) {
     prisma.googleCalendarCredential.findMany({
       where: { tenantId: session.user.tenantId },
       orderBy: { createdAt: "asc" },
+    }),
+    prisma.mindBodyCredential.findUnique({
+      where: { tenantId: session.user.tenantId },
     }),
   ]);
 
@@ -174,7 +179,7 @@ export default async function SettingsPage({ searchParams }: Props) {
           </div>
 
           {/* Google Calendar */}
-          <div className="px-6 py-5">
+          <div className="border-b border-slate-100 px-6 py-5">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white">
@@ -225,6 +230,49 @@ export default async function SettingsPage({ searchParams }: Props) {
                 ))}
               </div>
             )}
+          </div>
+          {/* MindBody */}
+          <div className="px-6 py-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white">
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" fill="#0077CC" />
+                    <path d="M7 8h2.5l2.5 5 2.5-5H17v8h-2v-5l-2 4h-1l-2-4v5H7V8z" fill="white" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-medium">MindBody</p>
+                  <p className="text-xs text-slate-500">
+                    Look up clients, view appointments, and book sessions from your MindBody site.
+                  </p>
+                </div>
+              </div>
+
+              {!mindBodyCredential && (
+                !process.env.MINDBODY_API_KEY ? (
+                  <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                    Not configured
+                  </span>
+                ) : (
+                  <MindBodyConnectForm />
+                )
+              )}
+
+              {mindBodyCredential && (
+                <DisconnectMindBodyButton />
+              )}
+            </div>
+
+            {mindBodyCredential && (
+              <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3">
+                <p className="text-sm font-medium">Site ID: {mindBodyCredential.siteId}</p>
+                <p className="text-xs text-slate-500">
+                  Connected {mindBodyCredential.createdAt.toLocaleDateString()}
+                </p>
+              </div>
+            )}
+
           </div>
         </section>
       </main>
