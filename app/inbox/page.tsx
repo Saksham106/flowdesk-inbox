@@ -118,7 +118,15 @@ export default async function InboxPage({ searchParams }: Props) {
               {" · "}{totalCount} total
             </p>
           </div>
-          <SignOutButton />
+          <div className="flex items-center gap-3">
+            <Link
+              href="/settings"
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Settings
+            </Link>
+            <SignOutButton />
+          </div>
         </div>
 
         {/* Status tabs */}

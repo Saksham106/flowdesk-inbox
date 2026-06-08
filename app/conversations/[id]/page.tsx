@@ -59,7 +59,9 @@ export default async function ConversationPage({
               {conversation.label && <LabelBadge label={conversation.label} />}
             </div>
             <p className="text-sm text-slate-500">
-              {conversation.externalThreadId} · {conversation.channel.phoneNumberE164}
+              {conversation.channel.type === "email"
+                ? conversation.channel.emailAddress
+                : `${conversation.externalThreadId} · ${conversation.channel.phoneNumberE164}`}
             </p>
           </div>
           <StatusButton
@@ -107,8 +109,10 @@ export default async function ConversationPage({
             {conversation.contact ? (
               <div>
                 <p className="text-sm font-medium">{conversation.contact.name}</p>
-                <p className="text-xs text-slate-500">{conversation.externalThreadId}</p>
+                <p className="text-xs text-slate-500">{conversation.contact.phoneE164}</p>
               </div>
+            ) : conversation.channel.type === "email" ? (
+              <p className="text-sm text-slate-500">No contact saved</p>
             ) : (
               <SaveContactForm
                 conversationId={conversation.id}

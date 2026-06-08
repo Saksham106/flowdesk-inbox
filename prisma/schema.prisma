@@ -9,10 +9,12 @@ generator client {
 
 enum ChannelType {
   sms
+  email
 }
 
 enum ChannelProvider {
   twilio
+  google
 }
 
 enum MessageDirection {
@@ -55,18 +57,31 @@ model User {
 }
 
 model Channel {
-  id                       String          @id @default(cuid())
+  id                       String           @id @default(cuid())
   tenantId                 String
-  type                     ChannelType     @default(sms)
-  provider                 ChannelProvider @default(twilio)
-  phoneNumberE164          String          @unique
+  type                     ChannelType      @default(sms)
+  provider                 ChannelProvider  @default(twilio)
+  phoneNumberE164          String?          @unique
+  emailAddress             String?          @unique
   twilioAccountSid         String?
   twilioAuthTokenEncrypted String?
   officePhoneE164          String?
   missedCallReplyText      String?
-  createdAt                DateTime        @default(now())
-  tenant                   Tenant          @relation(fields: [tenantId], references: [id])
+  createdAt                DateTime         @default(now())
+  tenant                   Tenant           @relation(fields: [tenantId], references: [id])
   conversations            Conversation[]
+  gmailCredential          GmailCredential?
+}
+
+model GmailCredential {
+  id                    String    @id @default(cuid())
+  channelId             String    @unique
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String
+  tokenExpiry           DateTime?
+  historyId             String?
+  createdAt             DateTime  @default(now())
+  channel               Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
 }
 
 model Contact {
