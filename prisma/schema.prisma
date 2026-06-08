@@ -46,6 +46,8 @@ model Tenant {
   auditLogs                 AuditLog[]
   googleCalendarCredentials GoogleCalendarCredential[]
   mindBodyCredential        MindBodyCredential?
+  businessProfile           BusinessProfile?
+  knowledgeDocuments        KnowledgeDocument[]
 }
 
 model User {
@@ -176,4 +178,32 @@ model AuditLog {
   user        User?    @relation(fields: [userId], references: [id])
 
   @@index([tenantId, createdAt])
+}
+
+model BusinessProfile {
+  id               String   @id @default(cuid())
+  tenantId         String   @unique
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  businessName     String
+  industry         String   @default("med_spa")
+  timezone         String   @default("America/New_York")
+  defaultTone      String   @default("professional")
+  businessHoursJson Json?
+  bookingPolicy    String?
+  escalationPolicy String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model KnowledgeDocument {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title      String
+  content    String
+  sourceType String   @default("manual")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([tenantId])
 }
