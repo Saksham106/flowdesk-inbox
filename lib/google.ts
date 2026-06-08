@@ -11,8 +11,18 @@ export const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/userinfo.profile",
 ];
 
+export const CALENDAR_SCOPES = [
+  "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/userinfo.email",
+  "https://www.googleapis.com/auth/userinfo.profile",
+];
+
 function callbackUrl() {
   return `${process.env.NEXTAUTH_URL}/api/connectors/gmail/callback`;
+}
+
+function calendarCallbackUrl() {
+  return `${process.env.NEXTAUTH_URL}/api/connectors/google-calendar/callback`;
 }
 
 export function createOAuth2Client() {
@@ -283,4 +293,182 @@ export async function sendGmailReply(
   });
 
   return res.data.id ?? "";
+}
+
+// ── Google Calendar ────────────────────────────────────────────────────────────
+
+export function createCalendarOAuth2Client() {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    calendarCallbackUrl()
+  );
+}
+
+export function buildCalendarAuthUrl(state: string): string {
+  const auth = createCalendarOAuth2Client();
+  return auth.generateAuthUrl({
+    access_type: "offline",
+    prompt: "consent",
+    scope: CALENDAR_SCOPES,
+    state,
+  });
+}
+
+// State tokens for Calendar use a "cal:" prefix to namespace from Gmail state
+export function signCalendarState(tenantId: string): string {
+  const ts = Date.now().toString();
+  const hmac = createHmac("sha256", process.env.NEXTAUTH_SECRET!)
+    .update(`cal:${tenantId}:${ts}`)
+    .digest("hex");
+  return Buffer.from(`cal:${tenantId}:${ts}:${hmac}`).toString("base64url");
+}
+
+export function verifyCalendarState(state: string): string | null {
+  try {
+    const decoded = Buffer.from(state, "base64url").toString("utf8");
+    const parts = decoded.split(":");
+    if (parts.length < 4 || parts[0] !== "cal") return null;
+    const hmac = parts[parts.length - 1];
+    const ts = parts[parts.length - 2];
+    const tenantId = parts.slice(1, parts.length - 2).join(":");
+    const expected = createHmac("sha256", process.env.NEXTAUTH_SECRET!)
+      .update(`cal:${tenantId}:${ts}`)
+      .digest("hex");
+    if (hmac !== expected) return null;
+    if (Date.now() - parseInt(ts) > 10 * 60 * 1000) return null;
+    return tenantId;
+  } catch {
+    return null;
+  }
+}
+
+export async function getCalendarClient(tenantId: string, email: string) {
+  const cred = await prisma.googleCalendarCredential.findUnique({
+    where: { tenantId_email: { tenantId, email } },
+  });
+  if (!cred) throw new Error("No Google Calendar credential found");
+
+  const auth = createCalendarOAuth2Client();
+  auth.setCredentials({
+    access_token: decryptString(cred.accessTokenEncrypted),
+    refresh_token: decryptString(cred.refreshTokenEncrypted),
+    expiry_date: cred.tokenExpiry?.getTime(),
+  });
+
+  auth.on("tokens", async (tokens) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updates: Record<string, any> = {};
+    if (tokens.access_token) updates.accessTokenEncrypted = encryptString(tokens.access_token);
+    if (tokens.expiry_date) updates.tokenExpiry = new Date(tokens.expiry_date);
+    if (tokens.refresh_token) updates.refreshTokenEncrypted = encryptString(tokens.refresh_token);
+    if (Object.keys(updates).length > 0) {
+      await prisma.googleCalendarCredential.update({
+        where: { tenantId_email: { tenantId, email } },
+        data: updates,
+      });
+    }
+  });
+
+  return google.calendar({ version: "v3", auth });
+}
+
+export type CalendarEvent = {
+  id: string;
+  summary: string;
+  description?: string;
+  start: Date;
+  end: Date;
+  attendees: string[];
+  location?: string;
+  htmlLink?: string;
+};
+
+// List upcoming events from the primary calendar
+export async function listEvents(
+  calendar: ReturnType<typeof google.calendar>,
+  { maxResults = 20, timeMin = new Date() }: { maxResults?: number; timeMin?: Date } = {}
+): Promise<CalendarEvent[]> {
+  const res = await calendar.events.list({
+    calendarId: "primary",
+    timeMin: timeMin.toISOString(),
+    maxResults,
+    singleEvents: true,
+    orderBy: "startTime",
+  });
+
+  return (res.data.items ?? []).map((e) => ({
+    id: e.id ?? "",
+    summary: e.summary ?? "(No title)",
+    description: e.description ?? undefined,
+    start: new Date(e.start?.dateTime ?? e.start?.date ?? Date.now()),
+    end: new Date(e.end?.dateTime ?? e.end?.date ?? Date.now()),
+    attendees: (e.attendees ?? []).map((a) => a.email ?? "").filter(Boolean),
+    location: e.location ?? undefined,
+    htmlLink: e.htmlLink ?? undefined,
+  }));
+}
+
+// Create a new event on the primary calendar
+export async function createCalendarEvent(
+  calendar: ReturnType<typeof google.calendar>,
+  {
+    summary,
+    description,
+    start,
+    end,
+    attendeeEmails = [],
+    location,
+  }: {
+    summary: string;
+    description?: string;
+    start: Date;
+    end: Date;
+    attendeeEmails?: string[];
+    location?: string;
+  }
+): Promise<CalendarEvent> {
+  const res = await calendar.events.insert({
+    calendarId: "primary",
+    requestBody: {
+      summary,
+      description,
+      location,
+      start: { dateTime: start.toISOString() },
+      end: { dateTime: end.toISOString() },
+      attendees: attendeeEmails.map((email) => ({ email })),
+    },
+  });
+
+  const e = res.data;
+  return {
+    id: e.id ?? "",
+    summary: e.summary ?? summary,
+    description: e.description ?? undefined,
+    start: new Date(e.start?.dateTime ?? e.start?.date ?? start),
+    end: new Date(e.end?.dateTime ?? e.end?.date ?? end),
+    attendees: (e.attendees ?? []).map((a) => a.email ?? "").filter(Boolean),
+    location: e.location ?? undefined,
+    htmlLink: e.htmlLink ?? undefined,
+  };
+}
+
+// Check free/busy for a time range
+export async function getFreeBusy(
+  calendar: ReturnType<typeof google.calendar>,
+  { start, end }: { start: Date; end: Date }
+): Promise<Array<{ start: Date; end: Date }>> {
+  const res = await calendar.freebusy.query({
+    requestBody: {
+      timeMin: start.toISOString(),
+      timeMax: end.toISOString(),
+      items: [{ id: "primary" }],
+    },
+  });
+
+  const busy = res.data.calendars?.["primary"]?.busy ?? [];
+  return busy.map((b) => ({
+    start: new Date(b.start ?? start),
+    end: new Date(b.end ?? end),
+  }));
 }

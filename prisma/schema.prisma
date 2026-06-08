@@ -36,14 +36,15 @@ enum ConversationStatus {
 }
 
 model Tenant {
-  id            String         @id @default(cuid())
-  name          String         @unique
-  createdAt     DateTime       @default(now())
-  users         User[]
-  channels      Channel[]
-  conversations Conversation[]
-  contacts      Contact[]
-  auditLogs     AuditLog[]
+  id                        String                      @id @default(cuid())
+  name                      String                      @unique
+  createdAt                 DateTime                    @default(now())
+  users                     User[]
+  channels                  Channel[]
+  conversations             Conversation[]
+  contacts                  Contact[]
+  auditLogs                 AuditLog[]
+  googleCalendarCredentials GoogleCalendarCredential[]
 }
 
 model User {
@@ -82,6 +83,19 @@ model GmailCredential {
   historyId             String?
   createdAt             DateTime  @default(now())
   channel               Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+}
+
+model GoogleCalendarCredential {
+  id                    String    @id @default(cuid())
+  tenantId              String
+  email                 String
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String
+  tokenExpiry           DateTime?
+  createdAt             DateTime  @default(now())
+  tenant                Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
 }
 
 model Contact {

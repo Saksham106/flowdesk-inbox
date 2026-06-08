@@ -6,11 +6,17 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import DisconnectGmailButton from "@/app/settings/DisconnectGmailButton";
 import SyncGmailButton from "@/app/settings/SyncGmailButton";
+import DisconnectCalendarButton from "@/app/settings/DisconnectCalendarButton";
 
 export const dynamic = "force-dynamic";
 
 interface Props {
-  searchParams: { connected?: string; error?: string };
+  searchParams: {
+    connected?: string;
+    error?: string;
+    cal_connected?: string;
+    cal_error?: string;
+  };
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -18,7 +24,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_state: "The authentication request expired. Please try again.",
   token_exchange_failed: "Could not complete Google sign-in. Please try again.",
   missing_tokens: "Google did not return the required permissions. Make sure to grant all requested scopes.",
-  userinfo_failed: "Could not retrieve Gmail account info.",
+  userinfo_failed: "Could not retrieve account info.",
   no_email: "No email address returned from Google.",
   invalid_callback: "Invalid callback. Please try connecting again.",
 };
@@ -27,17 +33,27 @@ export default async function SettingsPage({ searchParams }: Props) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.tenantId) redirect("/login");
 
-  const gmailChannels = await prisma.channel.findMany({
-    where: { tenantId: session.user.tenantId, type: "email" },
-    include: { gmailCredential: { select: { createdAt: true, tokenExpiry: true } } },
-    orderBy: { createdAt: "asc" },
-  });
+  const [gmailChannels, calendarCredentials] = await Promise.all([
+    prisma.channel.findMany({
+      where: { tenantId: session.user.tenantId, type: "email" },
+      include: { gmailCredential: { select: { createdAt: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.googleCalendarCredential.findMany({
+      where: { tenantId: session.user.tenantId },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
 
   const googleConfigured =
     !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
 
-  const errorMsg = searchParams.error
+  const gmailError = searchParams.error
     ? (ERROR_MESSAGES[searchParams.error] ?? "An error occurred. Please try again.")
+    : null;
+
+  const calError = searchParams.cal_error
+    ? (ERROR_MESSAGES[searchParams.cal_error] ?? "An error occurred. Please try again.")
     : null;
 
   return (
@@ -54,16 +70,27 @@ export default async function SettingsPage({ searchParams }: Props) {
       </header>
 
       <main className="mx-auto max-w-3xl space-y-6 px-6 py-8">
-        {errorMsg && (
+        {/* Success / error banners */}
+        {gmailError && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {errorMsg}
+            Gmail: {gmailError}
           </div>
         )}
-
         {searchParams.connected && (
           <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
             <span className="font-medium">{decodeURIComponent(searchParams.connected)}</span> connected
-            successfully. Recent threads have been imported into your inbox.
+            — recent threads imported into your inbox.
+          </div>
+        )}
+        {calError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            Google Calendar: {calError}
+          </div>
+        )}
+        {searchParams.cal_connected && (
+          <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+            <span className="font-medium">{decodeURIComponent(searchParams.cal_connected)}</span> calendar
+            connected successfully.
           </div>
         )}
 
@@ -77,10 +104,9 @@ export default async function SettingsPage({ searchParams }: Props) {
           </div>
 
           {/* Gmail */}
-          <div className="px-6 py-5">
+          <div className="border-b border-slate-100 px-6 py-5">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
-                {/* Gmail icon */}
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white">
                   <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
                     <path
@@ -106,7 +132,7 @@ export default async function SettingsPage({ searchParams }: Props) {
                   href="/api/connectors/gmail/connect"
                   className="shrink-0 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
                 >
-                  + Connect Gmail
+                  + Connect
                 </a>
               )}
             </div>
@@ -115,27 +141,15 @@ export default async function SettingsPage({ searchParams }: Props) {
               <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                 <p className="font-medium">Setup required</p>
                 <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs text-amber-700">
-                  <li>
-                    Go to{" "}
-                    <span className="font-mono">console.cloud.google.com</span> → Create a project
-                  </li>
-                  <li>Enable the <span className="font-medium">Gmail API</span></li>
-                  <li>
-                    Create <span className="font-medium">OAuth 2.0 credentials</span> (Web application)
-                  </li>
-                  <li>
-                    Add redirect URI:{" "}
-                    <span className="font-mono">{process.env.NEXTAUTH_URL}/api/connectors/gmail/callback</span>
-                  </li>
-                  <li>
-                    Set <span className="font-mono">GOOGLE_CLIENT_ID</span> and{" "}
-                    <span className="font-mono">GOOGLE_CLIENT_SECRET</span> in your <span className="font-mono">.env</span>
-                  </li>
+                  <li>Go to <span className="font-mono">console.cloud.google.com</span> → Create a project</li>
+                  <li>Enable the <span className="font-medium">Gmail API</span> and <span className="font-medium">Google Calendar API</span></li>
+                  <li>Create <span className="font-medium">OAuth 2.0 credentials</span> (Web application)</li>
+                  <li>Add redirect URIs for both Gmail and Calendar callbacks</li>
+                  <li>Set <span className="font-mono">GOOGLE_CLIENT_ID</span> and <span className="font-mono">GOOGLE_CLIENT_SECRET</span> in your <span className="font-mono">.env</span></li>
                 </ol>
               </div>
             )}
 
-            {/* Connected Gmail accounts */}
             {gmailChannels.length > 0 && (
               <div className="mt-4 space-y-3">
                 {gmailChannels.map((channel) => (
@@ -152,6 +166,60 @@ export default async function SettingsPage({ searchParams }: Props) {
                     <div className="ml-4 flex shrink-0 items-center gap-2">
                       <SyncGmailButton channelId={channel.id} />
                       <DisconnectGmailButton channelId={channel.id} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Google Calendar */}
+          <div className="px-6 py-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white">
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+                    <path d="M19 4h-1V2h-2v2H8V2H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 16H5V9h14v11zM5 7V6h14v1H5z" fill="#4285F4" />
+                    <path d="M7 11h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2zM7 15h2v2H7zm4 0h2v2h-2z" fill="#4285F4" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Google Calendar</p>
+                  <p className="text-xs text-slate-500">
+                    Read and create calendar events, check availability, and book appointments.
+                  </p>
+                </div>
+              </div>
+
+              {!googleConfigured ? (
+                <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                  Not configured
+                </span>
+              ) : (
+                <a
+                  href="/api/connectors/google-calendar/connect"
+                  className="shrink-0 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
+                >
+                  + Connect
+                </a>
+              )}
+            </div>
+
+            {calendarCredentials.length > 0 && (
+              <div className="mt-4 space-y-3">
+                {calendarCredentials.map((cred) => (
+                  <div
+                    key={cred.id}
+                    className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{cred.email}</p>
+                      <p className="text-xs text-slate-500">
+                        Connected {cred.createdAt.toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="ml-4 shrink-0">
+                      <DisconnectCalendarButton email={cred.email} />
                     </div>
                   </div>
                 ))}
