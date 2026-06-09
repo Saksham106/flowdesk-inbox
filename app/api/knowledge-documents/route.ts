@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { VALID_SOURCE_TYPES } from "@/lib/knowledge-document-types";
+import { isValidSourceType } from "@/lib/knowledge-document-types";
 
 // GET /api/knowledge-documents — list all KnowledgeDocuments for the tenant
 export async function GET() {
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "content is required" }, { status: 400 });
   }
 
-  if (!VALID_SOURCE_TYPES.includes(sourceType)) {
+  if (!isValidSourceType(sourceType)) {
     return NextResponse.json({ error: "Invalid sourceType" }, { status: 400 });
   }
 

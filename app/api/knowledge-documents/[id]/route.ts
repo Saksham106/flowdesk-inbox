@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { VALID_SOURCE_TYPES } from "@/lib/knowledge-document-types";
+import { isValidSourceType } from "@/lib/knowledge-document-types";
 import { Prisma } from "@prisma/client";
 
 // GET /api/knowledge-documents/[id] — fetch one document (must belong to tenant)
@@ -67,7 +67,7 @@ export async function PATCH(
       return NextResponse.json({ error: "content must be a non-empty string" }, { status: 400 });
     }
   }
-  if (sourceType !== undefined && !VALID_SOURCE_TYPES.includes(sourceType)) {
+  if (sourceType !== undefined && !isValidSourceType(sourceType)) {
     return NextResponse.json({ error: "Invalid sourceType" }, { status: 400 });
   }
 

@@ -10,3 +10,7 @@ export const SOURCE_TYPE_OPTIONS = [
 
 export const VALID_SOURCE_TYPES = SOURCE_TYPE_OPTIONS.map((o) => o.value)
 export type SourceType = (typeof SOURCE_TYPE_OPTIONS)[number]["value"]
+
+export function isValidSourceType(value: string): value is SourceType {
+  return (VALID_SOURCE_TYPES as readonly string[]).includes(value)
+}
