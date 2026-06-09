@@ -47,12 +47,21 @@ export async function POST(
     return NextResponse.json({ error: "Business profile is required before generating drafts" }, { status: 400 })
   }
 
+  const latestJob = await prisma.agentJob.findFirst({
+    where: { conversationId: conversation.id, tenantId: session.user.tenantId, status: "completed" },
+    orderBy: { completedAt: "desc" },
+  })
+  const availableSlots = Array.isArray(latestJob?.slotsJson)
+    ? (latestJob.slotsJson as string[])
+    : undefined
+
   let result: Awaited<ReturnType<typeof generateDraftReply>>
   try {
     result = await generateDraftReply({
       businessProfile: context.profile,
       knowledgeDocuments: context.documents,
       messages: conversation.messages,
+      availableSlots,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to generate AI draft"

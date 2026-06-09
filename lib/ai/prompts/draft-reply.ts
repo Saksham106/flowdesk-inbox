@@ -35,6 +35,7 @@ export type DraftReplyPromptInput = {
     body: string
     createdAt: Date | string
   }>
+  availableSlots?: string[]
 }
 
 export const draftReplyJsonSchema = {
@@ -87,7 +88,7 @@ export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
     "",
     "Safety rules:",
     "- Do not diagnose, give medical advice, or promise outcomes.",
-    "- Do not claim calendar availability or book appointments in this MVP.",
+    "- Only mention calendar slots if they are provided below — do not invent availability.",
     "- If the customer asks about emergencies, legal/medical issues, refunds, complaints, or sensitive topics, set riskLevel to high and write a cautious escalation-style draft.",
     "- If information is missing, ask a concise clarifying question.",
     "- Keep the tone aligned with the business profile.",
@@ -110,6 +111,13 @@ export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
     "Knowledge base:",
     knowledge || "No knowledge documents configured.",
     "",
+    ...(input.availableSlots && input.availableSlots.length > 0
+      ? [
+          "Available appointment slots (use up to 3 of these if scheduling is relevant):",
+          input.availableSlots.map((s) => `- ${s}`).join("\n"),
+          "",
+        ]
+      : []),
     "Conversation:",
     messages || "No messages yet.",
   ].join("\n")

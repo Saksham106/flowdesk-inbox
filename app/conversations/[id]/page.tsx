@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import AIDraftPanel from "@/app/conversations/[id]/AIDraftPanel";
+import CalendarHoldPanel from "@/app/conversations/[id]/CalendarHoldPanel";
 import SendBox from "@/app/conversations/[id]/SendBox";
 import StatusButton from "@/app/conversations/[id]/StatusButton";
 import LabelSelect from "@/app/conversations/[id]/LabelSelect";
@@ -25,7 +26,7 @@ export default async function ConversationPage({
     redirect("/login");
   }
 
-  const [conversation, businessProfile, knowledgeDocumentCount] = await Promise.all([
+  const [conversation, businessProfile, knowledgeDocumentCount, latestAgentJob, activeHold] = await Promise.all([
     prisma.conversation.findFirst({
       where: {
         id: params.id,
@@ -46,6 +47,14 @@ export default async function ConversationPage({
     }),
     prisma.knowledgeDocument.count({
       where: { tenantId: session.user.tenantId },
+    }),
+    prisma.agentJob.findFirst({
+      where: { conversationId: params.id, tenantId: session.user.tenantId, status: "completed" },
+      orderBy: { completedAt: "desc" },
+    }),
+    prisma.calendarHold.findFirst({
+      where: { conversationId: params.id, tenantId: session.user.tenantId, status: "held" },
+      orderBy: { createdAt: "desc" },
     }),
   ]);
 
@@ -131,7 +140,12 @@ export default async function ConversationPage({
             {conversation.contact ? (
               <div>
                 <p className="text-sm font-medium">{conversation.contact.name}</p>
-                <p className="text-xs text-slate-500">{conversation.contact.phoneE164}</p>
+                <p className="text-xs text-slate-500">
+                  <span className="font-medium">
+                    {conversation.channel.type === "email" ? "Email" : "Phone"}:
+                  </span>{" "}
+                  {conversation.contact.phoneE164}
+                </p>
               </div>
             ) : conversation.channel.type === "email" ? (
               <p className="text-sm text-slate-500">No contact saved</p>
@@ -169,6 +183,23 @@ export default async function ConversationPage({
                 : null
             }
           />
+
+          {/* Calendar holds */}
+          {conversation.channel.type === "email" && (
+            <CalendarHoldPanel
+              conversationId={conversation.id}
+              availableSlots={
+                Array.isArray(latestAgentJob?.slotsJson)
+                  ? (latestAgentJob.slotsJson as string[])
+                  : []
+              }
+              primaryCalendarEmail={
+                (businessProfile as { primaryCalendarEmail?: string | null } | null)
+                  ?.primaryCalendarEmail ?? null
+              }
+              activeHold={activeHold}
+            />
+          )}
 
           {/* Send */}
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

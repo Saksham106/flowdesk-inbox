@@ -96,7 +96,7 @@ describe('buildDraftReplyPrompt', () => {
     expect(prompt).toContain('Hydrafacials start at $199.')
     expect(prompt).toContain('How much is a hydrafacial?')
     expect(prompt).toContain('Do not diagnose')
-    expect(prompt).toContain('Do not claim calendar availability')
+    expect(prompt).toContain('do not invent availability')
   })
 })
 
