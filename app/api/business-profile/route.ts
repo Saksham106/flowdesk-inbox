@@ -39,6 +39,8 @@ export async function PATCH(request: Request) {
     businessHoursJson,
     bookingPolicy,
     escalationPolicy,
+    primaryCalendarEmail,
+    serviceDurationMinutes,
   } = body as {
     businessName?: string;
     industry?: string;
@@ -47,6 +49,8 @@ export async function PATCH(request: Request) {
     businessHoursJson?: unknown;
     bookingPolicy?: string;
     escalationPolicy?: string;
+    primaryCalendarEmail?: string | null;
+    serviceDurationMinutes?: number;
   };
 
   // Fix 3: Allow partial updates — only require businessName when creating a new profile
@@ -64,6 +68,14 @@ export async function PATCH(request: Request) {
   if (businessHoursJson !== undefined) updateData.businessHoursJson = businessHoursJson;
   if (bookingPolicy !== undefined) updateData.bookingPolicy = bookingPolicy;
   if (escalationPolicy !== undefined) updateData.escalationPolicy = escalationPolicy;
+  if (primaryCalendarEmail !== undefined) updateData.primaryCalendarEmail = primaryCalendarEmail ?? null;
+  if (serviceDurationMinutes !== undefined) {
+    const dur = Number(serviceDurationMinutes);
+    if (!Number.isInteger(dur) || dur < 15 || dur > 480) {
+      return NextResponse.json({ error: "serviceDurationMinutes must be between 15 and 480" }, { status: 400 });
+    }
+    updateData.serviceDurationMinutes = dur;
+  }
 
   // If creating a new profile, businessName is required
   const existing = await prisma.businessProfile.findUnique({ where: { tenantId } });
