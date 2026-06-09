@@ -9,6 +9,8 @@ import SyncGmailButton from "@/app/settings/SyncGmailButton";
 import DisconnectCalendarButton from "@/app/settings/DisconnectCalendarButton";
 import MindBodyConnectForm from "@/app/settings/MindBodyConnectForm";
 import DisconnectMindBodyButton from "@/app/settings/DisconnectMindBodyButton";
+import KnowledgeDocumentList from "@/app/settings/KnowledgeDocumentList";
+import BusinessProfileForm from "@/app/settings/BusinessProfileForm";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +37,13 @@ export default async function SettingsPage({ searchParams }: Props) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.tenantId) redirect("/login");
 
-  const [gmailChannels, calendarCredentials, mindBodyCredential] = await Promise.all([
+  const [
+    gmailChannels,
+    calendarCredentials,
+    mindBodyCredential,
+    knowledgeDocuments,
+    businessProfile,
+  ] = await Promise.all([
     prisma.channel.findMany({
       where: { tenantId: session.user.tenantId, type: "email" },
       include: { gmailCredential: { select: { createdAt: true } } },
@@ -46,6 +54,13 @@ export default async function SettingsPage({ searchParams }: Props) {
       orderBy: { createdAt: "asc" },
     }),
     prisma.mindBodyCredential.findUnique({
+      where: { tenantId: session.user.tenantId },
+    }),
+    prisma.knowledgeDocument.findMany({
+      where: { tenantId: session.user.tenantId },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.businessProfile.findUnique({
       where: { tenantId: session.user.tenantId },
     }),
   ]);
@@ -273,6 +288,32 @@ export default async function SettingsPage({ searchParams }: Props) {
               </div>
             )}
 
+          </div>
+        </section>
+
+        {/* Business Profile */}
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="font-semibold">Business Profile</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Configure the business facts, tone, booking rules, and escalation policy the AI will use.
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <BusinessProfileForm initial={businessProfile} />
+          </div>
+        </section>
+
+        {/* Knowledge Base */}
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="font-semibold">Knowledge Base</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Add FAQs, service descriptions, policies, and other information the AI will use when drafting replies.
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <KnowledgeDocumentList initialDocuments={knowledgeDocuments} />
           </div>
         </section>
       </main>

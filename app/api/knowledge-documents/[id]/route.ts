@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { VALID_SOURCE_TYPES } from "@/lib/knowledge-document-types";
 import { Prisma } from "@prisma/client";
 
 // GET /api/knowledge-documents/[id] — fetch one document (must belong to tenant)
@@ -65,6 +66,9 @@ export async function PATCH(
     if (typeof content !== "string" || !content.trim()) {
       return NextResponse.json({ error: "content must be a non-empty string" }, { status: 400 });
     }
+  }
+  if (sourceType !== undefined && !VALID_SOURCE_TYPES.includes(sourceType)) {
+    return NextResponse.json({ error: "Invalid sourceType" }, { status: 400 });
   }
 
   // Fix 5: Remove explicit updatedAt — Prisma @updatedAt handles this automatically

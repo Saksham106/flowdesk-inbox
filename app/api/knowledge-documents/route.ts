@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { VALID_SOURCE_TYPES } from "@/lib/knowledge-document-types";
 
 // GET /api/knowledge-documents — list all KnowledgeDocuments for the tenant
 export async function GET() {
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
   const title = typeof body?.title === "string" ? body.title.trim() : "";
   const content = typeof body?.content === "string" ? body.content.trim() : "";
   const sourceType =
-    typeof body?.sourceType === "string" ? body.sourceType.trim() : "manual";
+    typeof body?.sourceType === "string" ? body.sourceType.trim() : "faq";
 
   if (!title) {
     return NextResponse.json({ error: "title is required" }, { status: 400 });
@@ -42,6 +43,10 @@ export async function POST(request: Request) {
 
   if (!content) {
     return NextResponse.json({ error: "content is required" }, { status: 400 });
+  }
+
+  if (!VALID_SOURCE_TYPES.includes(sourceType)) {
+    return NextResponse.json({ error: "Invalid sourceType" }, { status: 400 });
   }
 
   // Fix 1: Wrap knowledgeDocument.create + auditLog.create in $transaction
