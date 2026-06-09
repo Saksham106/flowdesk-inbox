@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import AIDraftPanel from "@/app/conversations/[id]/AIDraftPanel";
 import SendBox from "@/app/conversations/[id]/SendBox";
 import StatusButton from "@/app/conversations/[id]/StatusButton";
 import LabelSelect from "@/app/conversations/[id]/LabelSelect";
@@ -24,25 +25,46 @@ export default async function ConversationPage({
     redirect("/login");
   }
 
-  const conversation = await prisma.conversation.findFirst({
-    where: {
-      id: params.id,
-      tenantId: session.user.tenantId,
-    },
-    include: {
-      messages: {
-        orderBy: { createdAt: "asc" },
+  const [conversation, businessProfile, knowledgeDocumentCount] = await Promise.all([
+    prisma.conversation.findFirst({
+      where: {
+        id: params.id,
+        tenantId: session.user.tenantId,
       },
-      channel: true,
-      contact: true,
-    },
-  });
+      include: {
+        messages: {
+          orderBy: { createdAt: "asc" },
+        },
+        channel: true,
+        contact: true,
+        draft: true,
+      },
+    }),
+    prisma.businessProfile.findUnique({
+      where: { tenantId: session.user.tenantId },
+      select: { id: true },
+    }),
+    prisma.knowledgeDocument.count({
+      where: { tenantId: session.user.tenantId },
+    }),
+  ]);
 
   if (!conversation) {
     notFound();
   }
 
   const displayName = conversation.contact?.name ?? conversation.externalThreadId;
+  const draftMetadata = (
+    conversation.draft as {
+      metadataJson?: {
+        intent?: unknown;
+        confidence?: unknown;
+        riskLevel?: unknown;
+        suggestedLabel?: unknown;
+        escalationReason?: unknown;
+      } | null;
+    } | null
+  )?.metadataJson;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -129,6 +151,24 @@ export default async function ConversationPage({
               currentLabel={conversation.label}
             />
           </div>
+
+          {/* AI Draft */}
+          <AIDraftPanel
+            conversationId={conversation.id}
+            channelType={conversation.channel.type}
+            hasBusinessProfile={Boolean(businessProfile)}
+            knowledgeDocumentCount={knowledgeDocumentCount}
+            initialDraft={
+              conversation.draft
+                ? {
+                    id: conversation.draft.id,
+                    text: conversation.draft.text,
+                    status: conversation.draft.status,
+                    metadataJson: draftMetadata ?? null,
+                  }
+                : null
+            }
+          />
 
           {/* Send */}
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

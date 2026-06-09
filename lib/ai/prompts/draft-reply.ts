@@ -1,0 +1,171 @@
+const ALLOWED_LABELS = ["Lead", "Reschedule", "Pricing", "Complaint"] as const
+const RISK_LEVELS = ["low", "medium", "high"] as const
+
+export type AllowedLabel = (typeof ALLOWED_LABELS)[number]
+export type RiskLevel = (typeof RISK_LEVELS)[number]
+
+export type DraftReplyResult = {
+  draftText: string
+  intent: string
+  confidence: number
+  riskLevel: RiskLevel
+  suggestedLabel: AllowedLabel | null
+  escalationReason: string | null
+  model: string
+}
+
+export type DraftReplyPromptInput = {
+  businessProfile: {
+    businessName?: string | null
+    industry?: string | null
+    timezone?: string | null
+    defaultTone?: string | null
+    bookingPolicy?: string | null
+    escalationPolicy?: string | null
+    businessHoursJson?: unknown
+  } | null
+  knowledgeDocuments: Array<{
+    id?: string
+    title?: string
+    content?: string
+    sourceType?: string
+  }>
+  messages: Array<{
+    direction: string
+    body: string
+    createdAt: Date | string
+  }>
+}
+
+export const draftReplyJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "draftText",
+    "intent",
+    "confidence",
+    "riskLevel",
+    "suggestedLabel",
+    "escalationReason",
+  ],
+  properties: {
+    draftText: { type: "string" },
+    intent: { type: "string" },
+    confidence: { type: "number", minimum: 0, maximum: 1 },
+    riskLevel: { type: "string", enum: RISK_LEVELS },
+    suggestedLabel: { anyOf: [{ type: "string", enum: ALLOWED_LABELS }, { type: "null" }] },
+    escalationReason: { anyOf: [{ type: "string" }, { type: "null" }] },
+  },
+}
+
+export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
+  const profile = input.businessProfile
+  const knowledge = input.knowledgeDocuments
+    .slice(0, 50)
+    .map((doc, index) => {
+      const title = doc.title?.trim() || `Document ${index + 1}`
+      return `- ${title} (${doc.sourceType ?? "knowledge"}): ${truncate(doc.content ?? "", 1800)}`
+    })
+    .join("\n")
+
+  const messages = input.messages
+    .slice(-20)
+    .map((message) => {
+      const createdAt =
+        message.createdAt instanceof Date ? message.createdAt.toISOString() : message.createdAt
+      return `${createdAt} ${message.direction.toUpperCase()}: ${truncate(message.body, 2500)}`
+    })
+    .join("\n")
+
+  return [
+    "You are Flowdesk's AI drafting assistant for a small business inbox.",
+    "Draft a reply that a staff member will review, edit, and explicitly send.",
+    "",
+    "Return only JSON matching the schema. Do not include markdown.",
+    "",
+    "Allowed suggestedLabel values: Lead, Reschedule, Pricing, Complaint, or null.",
+    "",
+    "Safety rules:",
+    "- Do not diagnose, give medical advice, or promise outcomes.",
+    "- Do not claim calendar availability or book appointments in this MVP.",
+    "- If the customer asks about emergencies, legal/medical issues, refunds, complaints, or sensitive topics, set riskLevel to high and write a cautious escalation-style draft.",
+    "- If information is missing, ask a concise clarifying question.",
+    "- Keep the tone aligned with the business profile.",
+    "",
+    "Business profile:",
+    JSON.stringify(
+      {
+        businessName: profile?.businessName ?? null,
+        industry: profile?.industry ?? null,
+        timezone: profile?.timezone ?? null,
+        defaultTone: profile?.defaultTone ?? null,
+        bookingPolicy: profile?.bookingPolicy ?? null,
+        escalationPolicy: profile?.escalationPolicy ?? null,
+        businessHoursJson: profile?.businessHoursJson ?? null,
+      },
+      null,
+      2
+    ),
+    "",
+    "Knowledge base:",
+    knowledge || "No knowledge documents configured.",
+    "",
+    "Conversation:",
+    messages || "No messages yet.",
+  ].join("\n")
+}
+
+export function normalizeDraftReplyOutput(rawText: string, model: string): DraftReplyResult {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(rawText)
+  } catch {
+    throw new Error("AI response was not valid JSON")
+  }
+
+  if (!isRecord(parsed)) {
+    throw new Error("AI response was not an object")
+  }
+
+  const draftText = asTrimmedString(parsed.draftText)
+  if (!draftText) {
+    throw new Error("AI response did not include draftText")
+  }
+
+  const intent = asTrimmedString(parsed.intent) || "unknown"
+  const confidence = clampConfidence(parsed.confidence)
+  const riskLevel = RISK_LEVELS.includes(parsed.riskLevel as RiskLevel)
+    ? (parsed.riskLevel as RiskLevel)
+    : "medium"
+  const suggestedLabel = ALLOWED_LABELS.includes(parsed.suggestedLabel as AllowedLabel)
+    ? (parsed.suggestedLabel as AllowedLabel)
+    : null
+  const escalationReason = asTrimmedString(parsed.escalationReason) || null
+
+  return {
+    draftText,
+    intent,
+    confidence,
+    riskLevel,
+    suggestedLabel,
+    escalationReason,
+    model,
+  }
+}
+
+function truncate(value: string, maxLength: number): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value
+}
+
+function asTrimmedString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : ""
+}
+
+function clampConfidence(value: unknown): number {
+  const numberValue = typeof value === "number" && Number.isFinite(value) ? value : 0
+  return Math.max(0, Math.min(1, numberValue))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
