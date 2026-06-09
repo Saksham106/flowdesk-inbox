@@ -1,33 +1,43 @@
 # FlowDesk Inbox
 
-AI-powered communications inbox for med spas. Centralizes inbound SMS, email, and third-party integrations (MindBody, Google Calendar) into a single inbox so staff can manage client conversations, book appointments, and send replies — all in one place.
+FlowDesk is an email-first AI front desk for appointment-heavy small businesses. It reads inbound Gmail, drafts safe replies, suggests appointment times from Google Calendar, and escalates sensitive conversations to staff — all with a full audit trail and human approval before anything sends.
 
-## What it does
+---
 
-- **Unified inbox** — all inbound messages (SMS, Gmail) appear in one place with status tracking (Needs Reply / In Progress / Closed)
-- **SMS via Twilio** — receive and reply to texts from clients; missed calls trigger an automatic SMS
-- **Gmail connector** — connect a Gmail account to read and reply to emails directly from the inbox
-- **Google Calendar connector** — connect Google Calendar to read/write events and check availability (used by the AI layer)
-- **MindBody connector** — connect a MindBody site to look up clients, view appointments, and book sessions
-- **Contacts** — save clients with names, auto-created from inbound messages
-- **Labels & status** — organize conversations with custom labels and status
-- **Multi-tenant** — each business gets its own isolated data
+## Current MVP Scope
 
-## Tech stack
+- **Gmail OAuth connect/sync** — connect a business Gmail account; inbound emails appear in the conversation inbox automatically
+- **Google Calendar connect** — connect Google Calendar to read availability and suggest appointment times
+- **Conversation inbox** — all inbound emails in one place with status tracking (Needs Reply / In Progress / Closed)
+- **Manual reply** — staff can read and reply to conversations directly from the inbox
+- **AI draft suggestions (human-approved)** — the AI drafts a reply; a staff member reviews and approves before anything sends
+- **Business profile + knowledge base** — store business hours, services, and FAQs so the AI has accurate context
+- **Audit logs** — every AI suggestion, human edit, and send action is recorded for compliance and review
+
+---
+
+## Deferred: SMS / Twilio
+
+Twilio and SMS are paused. The A2P 10DLC carrier-registration process added significant compliance overhead before a single message could be sent, making it impractical to validate the product with early customers. The product also proved harder to onboard when SMS was the primary channel — businesses wanted email first.
+
+**Email is now the primary (and only) channel for the MVP.** SMS may return after the email-AI workflow closes pilots and customers actively request it.
+
+---
+
+## Tech Stack
 
 - **Next.js 14** (App Router, TypeScript)
 - **Tailwind CSS v4**
-- **PostgreSQL + Prisma**
+- **PostgreSQL + Prisma 5**
 - **NextAuth** (credentials-based auth, JWT sessions)
-- **Twilio** — SMS send/receive + voice call handling
-- **Gmail API** (googleapis) — email read/reply
-- **Google Calendar API** — event read/write/availability
-- **MindBody Public API v6** — client + appointment management
+- **Google APIs** — Gmail API (email read/reply) + Google Calendar API (availability + events)
+- **OpenAI** — AI draft suggestions
+- **MindBody Public API v6** — client + appointment management (optional connector)
 - **Railway** — hosting + managed Postgres
 
 ---
 
-## Local setup
+## Local Setup
 
 ### Prerequisites
 
@@ -48,11 +58,13 @@ Copy the example and fill in values:
 cp .env.example .env
 ```
 
-Required variables (see full list below):
-- `NEXTAUTH_SECRET`
-- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` *(for Gmail + Calendar connectors)*
-- `MINDBODY_API_KEY` *(for MindBody connector)*
+Required variables:
+- `DATABASE_URL`
+- `NEXTAUTH_URL` — base URL of the app (e.g. `http://localhost:3000`)
+- `NEXTAUTH_SECRET` — generate with `openssl rand -base64 32`
+- `ENCRYPTION_SECRET` — generate with `openssl rand -base64 32`
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — see Google OAuth setup below
+- `OPENAI_API_KEY`
 
 ### 3. Start Postgres
 
@@ -102,7 +114,7 @@ Connectors are configured per-tenant from the **Settings** page (`/settings`).
 
 > **Note:** While your Google app is in Testing mode, add users at APIs & Services → OAuth consent screen → Test users before they can connect.
 
-### MindBody
+### MindBody (optional)
 
 1. Register at `developers.mindbodyonline.com` and create an app to get your source password (API key)
 2. Set `MINDBODY_API_KEY` in `.env`
@@ -113,51 +125,25 @@ Credentials are verified live against MindBody's API before being saved. Use Sit
 
 ---
 
-## Twilio setup (SMS + voice)
-
-### Inbound SMS webhook (local dev)
-
-1. Start ngrok: `ngrok http 3000`
-2. Set your Twilio number's inbound webhook to:
-   ```
-   POST https://<ngrok-subdomain>.ngrok-free.app/api/webhooks/twilio/inbound
-   ```
-
-### Missed call auto-text (voice)
-
-When a call goes unanswered, Twilio sends an automatic SMS to the caller. Configure the voice webhook on your Twilio number:
-```
-POST https://<your-domain>/api/webhooks/twilio/voice
-```
-
-Set `PUBLIC_WEBHOOK_BASE_URL` and `OFFICE_PHONE_NUMBER` in `.env`.
-
----
-
-## Environment variables
+## Environment Variables
 
 | Variable | Required | Description |
 |---|---|---|
 | `DATABASE_URL` | Yes | Postgres connection string |
 | `NEXTAUTH_URL` | Yes | Base URL (e.g. `https://yourapp.up.railway.app`) |
 | `NEXTAUTH_SECRET` | Yes | Session secret — `openssl rand -base64 32` |
-| `ENCRYPTION_SECRET` | Yes (prod) | AES-256 key for encrypting tokens — `openssl rand -base64 32` |
-| `TWILIO_ACCOUNT_SID` | Yes | Twilio account SID |
-| `TWILIO_AUTH_TOKEN` | Yes | Twilio auth token |
-| `TWILIO_PHONE_NUMBER` | Yes | Your Twilio number in E.164 format |
-| `PUBLIC_WEBHOOK_BASE_URL` | Yes | Public URL for Twilio voice callbacks |
-| `OFFICE_PHONE_NUMBER` | Yes | Real office phone to ring before auto-texting |
-| `MISSED_CALL_REPLY_TEXT` | No | Custom SMS for missed calls |
-| `GOOGLE_CLIENT_ID` | Gmail/Calendar | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | Gmail/Calendar | Google OAuth client secret |
-| `MINDBODY_API_KEY` | MindBody | MindBody source password from developer portal |
+| `ENCRYPTION_SECRET` | Yes (prod) | AES-256 key for encrypting OAuth tokens — `openssl rand -base64 32` |
+| `GOOGLE_CLIENT_ID` | Yes | Google OAuth client ID (Gmail + Calendar) |
+| `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth client secret |
+| `OPENAI_API_KEY` | Yes | OpenAI API key for AI draft suggestions |
+| `MINDBODY_API_KEY` | Optional | MindBody source password from developer portal |
 | `SEED_EMAIL` | No | Override default login email |
 | `SEED_PASSWORD` | No | Override default login password |
 | `SEED_TENANT_NAME` | No | Override default tenant name |
 
 ---
 
-## Production deployment (Railway)
+## Production Deployment (Railway)
 
 1. Push this repo to GitHub
 2. Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub repo
@@ -169,7 +155,6 @@ Set `PUBLIC_WEBHOOK_BASE_URL` and `OFFICE_PHONE_NUMBER` in `.env`.
    ```bash
    npm run db:seed
    ```
-8. Update Twilio webhook URLs to your Railway domain
 
 Live URL: `https://flowdesk-inbox-production.up.railway.app`
 
