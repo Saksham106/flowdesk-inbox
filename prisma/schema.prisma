@@ -29,6 +29,26 @@ enum DraftStatus {
   sent
 }
 
+enum ApprovalStatus {
+  pending
+  approved
+  rejected
+}
+
+enum AgentJobStatus {
+  pending
+  running
+  completed
+  failed
+}
+
+enum CalendarHoldStatus {
+  held
+  confirmed
+  cancelled
+  expired
+}
+
 enum ConversationStatus {
   needs_reply
   in_progress
@@ -48,6 +68,11 @@ model Tenant {
   mindBodyCredential        MindBodyCredential?
   businessProfile           BusinessProfile?
   knowledgeDocuments        KnowledgeDocument[]
+  approvalRequests          ApprovalRequest[]
+  agentJobs                 AgentJob[]
+  calendarHolds             CalendarHold[]
+  followUpSetting           FollowUpSetting?
+  autopilotSetting          AutopilotSetting?
 }
 
 model User {
@@ -57,7 +82,8 @@ model User {
   passwordHash String
   createdAt    DateTime  @default(now())
   tenant       Tenant    @relation(fields: [tenantId], references: [id])
-  auditLogs    AuditLog[]
+  auditLogs        AuditLog[]
+  approvalRequests ApprovalRequest[]
 }
 
 model Channel {
@@ -84,6 +110,8 @@ model GmailCredential {
   refreshTokenEncrypted String
   tokenExpiry           DateTime?
   historyId             String?
+  lastSyncedAt          DateTime?
+  lastSyncError         String?
   createdAt             DateTime  @default(now())
   channel               Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
 }
@@ -138,6 +166,9 @@ model Conversation {
   contact          Contact?           @relation(fields: [contactId], references: [id])
   messages         Message[]
   draft            Draft?
+  approvalRequests ApprovalRequest[]
+  agentJobs        AgentJob[]
+  calendarHolds    CalendarHold[]
 
   @@unique([tenantId, channelId, externalThreadId])
   @@index([tenantId, lastMessageAt])
@@ -165,8 +196,9 @@ model Draft {
   status         DraftStatus @default(none)
   metadataJson   Json?
   createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  updatedAt        DateTime         @updatedAt
+  conversation     Conversation     @relation(fields: [conversationId], references: [id])
+  approvalRequests ApprovalRequest[]
 }
 
 model BusinessProfile {
@@ -178,10 +210,12 @@ model BusinessProfile {
   timezone         String   @default("America/New_York")
   defaultTone      String   @default("professional")
   businessHoursJson Json?
-  bookingPolicy    String?
-  escalationPolicy String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  bookingPolicy            String?
+  escalationPolicy         String?
+  primaryCalendarEmail     String?
+  serviceDurationMinutes   Int      @default(60)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 }
 
 model KnowledgeDocument {
@@ -208,4 +242,107 @@ model AuditLog {
   user        User?    @relation(fields: [userId], references: [id])
 
   @@index([tenantId, createdAt])
+}
+
+model ApprovalRequest {
+  id             String         @id @default(cuid())
+  tenantId       String
+  conversationId String
+  agentJobId     String?
+  draftId        String?
+  status         ApprovalStatus @default(pending)
+  reviewerUserId String?
+  decisionNote   String?
+  createdAt      DateTime       @default(now())
+  decidedAt      DateTime?
+  tenant         Tenant         @relation(fields: [tenantId], references: [id])
+  conversation   Conversation   @relation(fields: [conversationId], references: [id])
+  agentJob       AgentJob?      @relation(fields: [agentJobId], references: [id])
+  draft          Draft?         @relation(fields: [draftId], references: [id])
+  reviewer       User?          @relation(fields: [reviewerUserId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([conversationId])
+}
+
+model AgentJob {
+  id               String          @id @default(cuid())
+  tenantId         String
+  conversationId   String
+  trigger          String
+  status           AgentJobStatus  @default(pending)
+  intent           String?
+  confidence       Float?
+  requiresApproval Boolean         @default(true)
+  slotsJson        Json?
+  error            String?
+  createdAt        DateTime        @default(now())
+  startedAt        DateTime?
+  completedAt      DateTime?
+  tenant           Tenant          @relation(fields: [tenantId], references: [id])
+  conversation     Conversation    @relation(fields: [conversationId], references: [id])
+  toolCalls        AgentToolCall[]
+  approvalRequests ApprovalRequest[]
+
+  @@index([tenantId, createdAt])
+  @@index([conversationId])
+}
+
+model AgentToolCall {
+  id          String    @id @default(cuid())
+  agentJobId  String
+  toolName    String
+  inputJson   Json
+  outputJson  Json?
+  status      String    @default("pending")
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+  agentJob    AgentJob  @relation(fields: [agentJobId], references: [id], onDelete: Cascade)
+
+  @@index([agentJobId])
+}
+
+model CalendarHold {
+  id              String             @id @default(cuid())
+  tenantId        String
+  conversationId  String
+  calendarEmail   String
+  externalEventId String
+  status          CalendarHoldStatus @default(held)
+  startAt         DateTime
+  endAt           DateTime
+  expiresAt       DateTime
+  createdAt       DateTime           @default(now())
+  tenant          Tenant             @relation(fields: [tenantId], references: [id])
+  conversation    Conversation       @relation(fields: [conversationId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([conversationId])
+  @@index([expiresAt, status])
+}
+
+model FollowUpSetting {
+  id                          String   @id @default(cuid())
+  tenantId                    String   @unique
+  enabled                     Boolean  @default(false)
+  staleAfterDays              Int      @default(3)
+  maxFollowUpsPerConversation Int      @default(2)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+  tenant                      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model AutopilotSetting {
+  id                   String    @id @default(cuid())
+  tenantId             String    @unique
+  enabled              Boolean   @default(false)
+  confidenceThreshold  Float     @default(0.85)
+  allowedIntentsJson   Json?
+  maxAutoSendsPerDay   Int       @default(10)
+  disableAfterFailures Int       @default(3)
+  currentFailures      Int       @default(0)
+  disabledAt           DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }

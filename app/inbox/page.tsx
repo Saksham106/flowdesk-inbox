@@ -120,6 +120,18 @@ export default async function InboxPage({ searchParams }: Props) {
           </div>
           <div className="flex items-center gap-3">
             <Link
+              href="/digest"
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Digest
+            </Link>
+            <Link
+              href="/audit"
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Audit
+            </Link>
+            <Link
               href="/settings"
               className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
             >
@@ -174,7 +186,7 @@ export default async function InboxPage({ searchParams }: Props) {
             <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-sm text-slate-500">
               {q || activeStatus
                 ? "No conversations match your search."
-                : "No conversations yet. Send a test SMS to your Twilio number."}
+                : "No conversations yet. Connect Gmail in Settings to import threads."}
             </div>
           ) : (
             conversations.map((conversation) => {

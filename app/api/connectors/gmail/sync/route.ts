@@ -26,6 +26,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Channel not found" }, { status: 404 });
   }
 
-  const count = await syncGmailChannel(channelId, session.user.tenantId);
-  return NextResponse.json({ ok: true, synced: count });
+  try {
+    const count = await syncGmailChannel(channelId, session.user.tenantId);
+
+    await prisma.gmailCredential.update({
+      where: { channelId },
+      data: { lastSyncedAt: new Date(), lastSyncError: null },
+    });
+
+    return NextResponse.json({ ok: true, synced: count });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown sync error";
+
+    await prisma.gmailCredential.update({
+      where: { channelId },
+      data: { lastSyncError: message },
+    }).catch(() => {});
+
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

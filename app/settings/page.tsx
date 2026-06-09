@@ -11,6 +11,8 @@ import MindBodyConnectForm from "@/app/settings/MindBodyConnectForm";
 import DisconnectMindBodyButton from "@/app/settings/DisconnectMindBodyButton";
 import KnowledgeDocumentList from "@/app/settings/KnowledgeDocumentList";
 import BusinessProfileForm from "@/app/settings/BusinessProfileForm";
+import FollowUpSettingsForm from "@/app/settings/FollowUpSettingsForm";
+import AutopilotSettingsForm from "@/app/settings/AutopilotSettingsForm";
 
 export const dynamic = "force-dynamic";
 
@@ -43,10 +45,12 @@ export default async function SettingsPage({ searchParams }: Props) {
     mindBodyCredential,
     knowledgeDocuments,
     businessProfile,
+    followUpSetting,
+    autopilotSetting,
   ] = await Promise.all([
     prisma.channel.findMany({
       where: { tenantId: session.user.tenantId, type: "email" },
-      include: { gmailCredential: { select: { createdAt: true } } },
+      include: { gmailCredential: { select: { createdAt: true, lastSyncedAt: true, lastSyncError: true } } },
       orderBy: { createdAt: "asc" },
     }),
     prisma.googleCalendarCredential.findMany({
@@ -61,6 +65,12 @@ export default async function SettingsPage({ searchParams }: Props) {
       orderBy: { createdAt: "desc" },
     }),
     prisma.businessProfile.findUnique({
+      where: { tenantId: session.user.tenantId },
+    }),
+    prisma.followUpSetting.findUnique({
+      where: { tenantId: session.user.tenantId },
+    }),
+    prisma.autopilotSetting.findUnique({
       where: { tenantId: session.user.tenantId },
     }),
   ]);
@@ -184,7 +194,11 @@ export default async function SettingsPage({ searchParams }: Props) {
                       </p>
                     </div>
                     <div className="ml-4 flex shrink-0 items-center gap-2">
-                      <SyncGmailButton channelId={channel.id} />
+                      <SyncGmailButton
+                        channelId={channel.id}
+                        lastSyncedAt={channel.gmailCredential?.lastSyncedAt ?? null}
+                        lastSyncError={channel.gmailCredential?.lastSyncError ?? null}
+                      />
                       <DisconnectGmailButton channelId={channel.id} />
                     </div>
                   </div>
@@ -300,7 +314,10 @@ export default async function SettingsPage({ searchParams }: Props) {
             </p>
           </div>
           <div className="px-6 py-5">
-            <BusinessProfileForm initial={businessProfile} />
+            <BusinessProfileForm
+              initial={businessProfile}
+              calendarEmails={calendarCredentials.map((c) => c.email)}
+            />
           </div>
         </section>
 
@@ -314,6 +331,62 @@ export default async function SettingsPage({ searchParams }: Props) {
           </div>
           <div className="px-6 py-5">
             <KnowledgeDocumentList initialDocuments={knowledgeDocuments} />
+          </div>
+        </section>
+
+        {/* Follow-Up Automation */}
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="font-semibold">Follow-Up Automation</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Surface quiet leads in your{" "}
+              <a href="/digest" className="underline hover:text-slate-700">
+                daily digest
+              </a>{" "}
+              so you never let a hot lead go cold.
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <FollowUpSettingsForm
+              initial={
+                followUpSetting
+                  ? {
+                      enabled: followUpSetting.enabled,
+                      staleAfterDays: followUpSetting.staleAfterDays,
+                      maxFollowUpsPerConversation: followUpSetting.maxFollowUpsPerConversation,
+                    }
+                  : null
+              }
+            />
+          </div>
+        </section>
+
+        {/* Autopilot */}
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="font-semibold">Autopilot</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Allow the AI to send replies automatically for low-risk, high-confidence categories. Requires trust to be earned first.
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <AutopilotSettingsForm
+              initial={
+                autopilotSetting
+                  ? {
+                      enabled: autopilotSetting.enabled,
+                      confidenceThreshold: autopilotSetting.confidenceThreshold,
+                      allowedIntents: Array.isArray(autopilotSetting.allowedIntentsJson)
+                        ? (autopilotSetting.allowedIntentsJson as string[])
+                        : [],
+                      maxAutoSendsPerDay: autopilotSetting.maxAutoSendsPerDay,
+                      disableAfterFailures: autopilotSetting.disableAfterFailures,
+                      currentFailures: autopilotSetting.currentFailures,
+                      disabledAt: autopilotSetting.disabledAt?.toISOString() ?? null,
+                    }
+                  : null
+              }
+            />
           </div>
         </section>
       </main>

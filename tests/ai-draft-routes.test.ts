@@ -7,6 +7,7 @@ const {
   mockDraftUpdate,
   mockDraftFindUnique,
   mockAuditCreate,
+  mockAgentJobFindFirst,
   mockGenerateDraftReply,
   mockGetFullBusinessContext,
   mockSendConversationMessage,
@@ -17,6 +18,7 @@ const {
   mockDraftUpdate: vi.fn(),
   mockDraftFindUnique: vi.fn(),
   mockAuditCreate: vi.fn(),
+  mockAgentJobFindFirst: vi.fn(),
   mockGenerateDraftReply: vi.fn(),
   mockGetFullBusinessContext: vi.fn(),
   mockSendConversationMessage: vi.fn(),
@@ -32,6 +34,9 @@ vi.mock('@/lib/prisma', () => ({
       upsert: mockDraftUpsert,
       update: mockDraftUpdate,
       findUnique: mockDraftFindUnique,
+    },
+    agentJob: {
+      findFirst: mockAgentJobFindFirst,
     },
     auditLog: {
       create: mockAuditCreate,
@@ -106,6 +111,7 @@ describe('POST /api/conversations/[id]/draft/suggest', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSession = { user: { id: 'user1', tenantId: 'tenant-A' } }
+    mockAgentJobFindFirst.mockResolvedValue(null)
   })
 
   it('returns 401 without a session', async () => {

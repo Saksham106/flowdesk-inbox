@@ -31,7 +31,13 @@ const TONES = [
   { value: "concise", label: "Concise" },
 ]
 
-export default function BusinessProfileForm({ initial }: { initial: BusinessProfile | null }) {
+export default function BusinessProfileForm({
+  initial,
+  calendarEmails = [],
+}: {
+  initial: BusinessProfile | null
+  calendarEmails?: string[]
+}) {
   const router = useRouter()
   const [businessName, setBusinessName] = useState(initial?.businessName ?? "")
   const [industry, setIndustry] = useState(initial?.industry ?? "med_spa")
@@ -39,6 +45,12 @@ export default function BusinessProfileForm({ initial }: { initial: BusinessProf
   const [defaultTone, setDefaultTone] = useState(initial?.defaultTone ?? "professional")
   const [bookingPolicy, setBookingPolicy] = useState(initial?.bookingPolicy ?? "")
   const [escalationPolicy, setEscalationPolicy] = useState(initial?.escalationPolicy ?? "")
+  const [primaryCalendarEmail, setPrimaryCalendarEmail] = useState(
+    initial?.primaryCalendarEmail ?? ""
+  )
+  const [serviceDurationMinutes, setServiceDurationMinutes] = useState(
+    initial?.serviceDurationMinutes ?? 60
+  )
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState("")
@@ -66,6 +78,8 @@ export default function BusinessProfileForm({ initial }: { initial: BusinessProf
           defaultTone,
           bookingPolicy: bookingPolicy || null,
           escalationPolicy: escalationPolicy || null,
+          primaryCalendarEmail: primaryCalendarEmail || null,
+          serviceDurationMinutes,
         }),
       })
       if (!res.ok) throw new Error(await res.text())
@@ -175,6 +189,44 @@ export default function BusinessProfileForm({ initial }: { initial: BusinessProf
           className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
         />
       </div>
+
+      {calendarEmails.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Primary Booking Calendar{" "}
+              <span className="font-normal text-slate-400">(optional)</span>
+            </label>
+            <select
+              value={primaryCalendarEmail}
+              onChange={(e) => setPrimaryCalendarEmail(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+            >
+              <option value="">None selected</option>
+              {calendarEmails.map((email) => (
+                <option key={email} value={email}>
+                  {email}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Appointment Duration (minutes)
+            </label>
+            <input
+              type="number"
+              min={15}
+              max={480}
+              step={15}
+              value={serviceDurationMinutes}
+              onChange={(e) => setServiceDurationMinutes(Number(e.target.value))}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+            />
+          </div>
+        </div>
+      )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

@@ -419,6 +419,7 @@ export async function createCalendarEvent(
     end,
     attendeeEmails = [],
     location,
+    status,
   }: {
     summary: string;
     description?: string;
@@ -426,6 +427,7 @@ export async function createCalendarEvent(
     end: Date;
     attendeeEmails?: string[];
     location?: string;
+    status?: "confirmed" | "tentative" | "cancelled";
   }
 ): Promise<CalendarEvent> {
   const res = await calendar.events.insert({
@@ -434,6 +436,7 @@ export async function createCalendarEvent(
       summary,
       description,
       location,
+      status,
       start: { dateTime: start.toISOString() },
       end: { dateTime: end.toISOString() },
       attendees: attendeeEmails.map((email) => ({ email })),
@@ -471,4 +474,24 @@ export async function getFreeBusy(
     start: new Date(b.start ?? start),
     end: new Date(b.end ?? end),
   }));
+}
+
+export async function deleteCalendarEvent(
+  calendar: ReturnType<typeof google.calendar>,
+  eventId: string
+): Promise<void> {
+  await calendar.events.delete({ calendarId: "primary", eventId });
+}
+
+export async function patchCalendarEventStatus(
+  calendar: ReturnType<typeof google.calendar>,
+  eventId: string,
+  status: "confirmed" | "tentative" | "cancelled",
+  summary?: string
+): Promise<void> {
+  await calendar.events.patch({
+    calendarId: "primary",
+    eventId,
+    requestBody: { status, ...(summary ? { summary } : {}) },
+  });
 }
