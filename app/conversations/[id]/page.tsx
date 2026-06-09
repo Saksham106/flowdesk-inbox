@@ -138,12 +138,20 @@ export default async function ConversationPage({
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="mb-3 text-sm font-semibold text-slate-600">Contact</h2>
             {conversation.contact ? (
-              <div>
-                <p className="text-sm font-medium">{conversation.contact.name}</p>
-                <p className="text-xs text-slate-500">
-                  <span className="font-medium">
-                    {conversation.channel.type === "email" ? "Email" : "Phone"}:
-                  </span>{" "}
+              <div className="min-w-0 space-y-0.5">
+                <p
+                  className="truncate text-sm font-medium"
+                  title={conversation.contact.name}
+                >
+                  {conversation.contact.name}
+                </p>
+                <p className="text-xs font-medium text-slate-500">
+                  {conversation.channel.type === "email" ? "Email" : "Phone"}:
+                </p>
+                <p
+                  className="truncate text-xs text-slate-500"
+                  title={conversation.contact.phoneE164}
+                >
                   {conversation.contact.phoneE164}
                 </p>
               </div>
