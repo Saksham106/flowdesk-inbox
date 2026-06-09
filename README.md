@@ -16,6 +16,21 @@ FlowDesk is an email-first AI front desk for appointment-heavy small businesses.
 
 ---
 
+## AI Draft MVP Handoff
+
+The AI draft MVP is implemented in two stacked PRs:
+
+1. Backend/API: https://github.com/Saksham106/flowdesk-inbox/pull/7
+2. Frontend UI: https://github.com/Saksham106/flowdesk-inbox/pull/8
+
+Merge PR #7 first, then PR #8.
+
+For implementation details, local QA steps, known limitations, and recommended next work, see:
+
+- `docs/AI_DRAFT_MVP_HANDOFF.md`
+
+---
+
 ## Deferred: SMS / Twilio
 
 Twilio and SMS are paused. The A2P 10DLC carrier-registration process added significant compliance overhead before a single message could be sent, making it impractical to validate the product with early customers. The product also proved harder to onboard when SMS was the primary channel — businesses wanted email first.
@@ -65,6 +80,7 @@ Required variables:
 - `ENCRYPTION_SECRET` — generate with `openssl rand -base64 32`
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — see Google OAuth setup below
 - `OPENAI_API_KEY`
+- `OPENAI_MODEL` — defaults/recommended value: `gpt-5.4-mini`
 
 ### 3. Start Postgres
 
@@ -72,10 +88,10 @@ Required variables:
 docker compose up -d
 ```
 
-### 4. Push schema + seed
+### 4. Apply migrations + seed
 
 ```bash
-npx prisma db push
+npm run db:deploy
 npm run db:seed
 ```
 
@@ -136,6 +152,7 @@ Credentials are verified live against MindBody's API before being saved. Use Sit
 | `GOOGLE_CLIENT_ID` | Yes | Google OAuth client ID (Gmail + Calendar) |
 | `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth client secret |
 | `OPENAI_API_KEY` | Yes | OpenAI API key for AI draft suggestions |
+| `OPENAI_MODEL` | Yes | OpenAI model used for draft suggestions |
 | `MINDBODY_API_KEY` | Optional | MindBody source password from developer portal |
 | `SEED_EMAIL` | No | Override default login email |
 | `SEED_PASSWORD` | No | Override default login password |
