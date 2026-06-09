@@ -385,18 +385,45 @@ The AI should not receive raw Gmail tokens, database credentials, or broad files
 
 ## Sprint Roadmap
 
+## Current Implementation Status
+
+As of 2026-06-09, the AI Draft MVP has been implemented in two stacked PRs:
+
+- Backend/API: https://github.com/Saksham106/flowdesk-inbox/pull/7
+- Frontend UI: https://github.com/Saksham106/flowdesk-inbox/pull/8
+
+Merge PR #7 first, then PR #8. Detailed handoff notes are in `docs/AI_DRAFT_MVP_HANDOFF.md`.
+
+Completed in this slice:
+
+- OpenAI provider abstraction.
+- Structured draft reply prompt and parser.
+- `Draft.metadataJson` and `Draft.updatedAt`.
+- Draft suggest/edit/approve/clear/send-approved API routes.
+- Shared conversation send helper used by manual send and approved AI sends.
+- Conversation-page AI draft review panel.
+- Tests for provider parsing, missing OpenAI key, route scoping, email-only gating, metadata storage, staff edits, and approved send wiring.
+
+Still intentionally deferred:
+
+- AgentJob and AgentToolCall lifecycle.
+- ApprovalRequest table.
+- Calendar-aware scheduling suggestions.
+- Automatic draft generation on Gmail sync.
+- Autopilot/automatic sending.
+
 ## Sprint 0 — Product Reset and Cleanup
 
 Goal: Make the repo honest about the email-first direction and pause Twilio complexity.
 
 Tasks:
 
-- [ ] Update README to describe email-first AI front desk positioning.
+- [x] Update README to describe email-first AI front desk positioning.
 - [ ] Mark Twilio/SMS routes as paused or move them behind documentation notes.
 - [ ] Decide whether to keep Twilio code in-place but unused, or remove it from the current MVP path.
-- [ ] Update `.env.example` so Gmail/Calendar/OpenAI are primary and Twilio is optional/future.
-- [ ] Add a clear "Current MVP Scope" section to README.
-- [ ] Add a "Deferred SMS/Twilio" section explaining A2P 10DLC rationale.
+- [x] Update `.env.example` so Gmail/Calendar/OpenAI are primary and Twilio is optional/future.
+- [x] Add a clear "Current MVP Scope" section to README.
+- [x] Add a "Deferred SMS/Twilio" section explaining A2P 10DLC rationale.
 
 Acceptance criteria:
 
@@ -467,16 +494,16 @@ Goal: Generate useful draft replies, but require staff approval before sending.
 
 Tasks:
 
-- [ ] Add an AI provider abstraction.
-- [ ] Choose initial provider/model.
-- [ ] Define strict structured output schema for draft replies.
-- [ ] Generate drafts from conversation history, business profile, and knowledge documents.
-- [ ] Store generated text in `Draft`.
+- [x] Add an AI provider abstraction.
+- [x] Choose initial provider/model.
+- [x] Define strict structured output schema for draft replies.
+- [x] Generate drafts from conversation history, business profile, and knowledge documents.
+- [x] Store generated text in `Draft`.
 - [ ] Add `ApprovalRequest` model.
-- [ ] Add UI panel for reviewing AI draft.
-- [ ] Add approve/edit/reject actions.
-- [ ] Only send email through existing Gmail send route after approval.
-- [ ] Write audit logs for generated, edited, approved, rejected, and sent states.
+- [x] Add UI panel for reviewing AI draft.
+- [x] Add approve/edit/reject actions.
+- [x] Only send email through existing Gmail send route after approval.
+- [x] Write audit logs for generated, edited, approved, rejected, and sent states.
 
 Acceptance criteria:
 
@@ -591,15 +618,15 @@ Follow these principles while building:
 
 ### Immediate
 
-- [ ] Update README for the email-first pivot.
+- [x] Update README for the email-first pivot.
 - [ ] Decide whether Twilio code is hidden, removed, or left as future infrastructure.
-- [ ] Add OpenAI or chosen AI provider dependency.
-- [ ] Add AI provider abstraction.
-- [ ] Add tests framework if none exists.
-- [ ] Add `BusinessProfile` schema.
-- [ ] Add `KnowledgeDocument` schema.
-- [ ] Add profile/settings UI.
-- [ ] Add knowledge base UI.
+- [x] Add OpenAI or chosen AI provider dependency.
+- [x] Add AI provider abstraction.
+- [x] Add tests framework if none exists.
+- [x] Add `BusinessProfile` schema.
+- [x] Add `KnowledgeDocument` schema.
+- [x] Add profile/settings UI.
+- [x] Add knowledge base UI.
 - [ ] Add `AgentJob` schema.
 - [ ] Add `AgentToolCall` schema.
 - [ ] Add `ApprovalRequest` schema.
@@ -607,24 +634,24 @@ Follow these principles while building:
 ### AI Workflow
 
 - [ ] Define classification schema.
-- [ ] Define draft reply schema.
+- [x] Define draft reply schema.
 - [ ] Define escalation schema.
 - [ ] Define tool-call log schema.
-- [ ] Build `lib/agent/context.ts`.
+- [x] Build `lib/agent/context.ts`.
 - [ ] Build `lib/agent/classify.ts`.
-- [ ] Build `lib/agent/draft.ts`.
+- [x] Build draft generation through `lib/ai/provider.ts` and `lib/ai/prompts/draft-reply.ts`.
 - [ ] Build `lib/agent/jobs.ts`.
 - [ ] Build `lib/agent/policy.ts`.
-- [ ] Add prompt-injection defensive instructions.
+- [x] Add prompt-injection defensive instructions.
 - [ ] Add confidence thresholds.
-- [ ] Add escalation reasons.
+- [x] Add escalation reasons.
 
 ### UI
 
-- [ ] Add AI draft panel on conversation page.
-- [ ] Add "Suggest reply" button.
-- [ ] Add approve/edit/reject flow.
-- [ ] Add approval status badges.
+- [x] Add AI draft panel on conversation page.
+- [x] Add "Suggest reply" button.
+- [x] Add approve/edit/reject flow.
+- [x] Add approval status badges.
 - [ ] Add agent job status display.
 - [ ] Add settings pages for AI policies.
 - [ ] Add daily digest page.
