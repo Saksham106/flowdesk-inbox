@@ -2,9 +2,11 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 
 import { authOptions } from "@/lib/auth"
-import { getFullBusinessContext } from "@/lib/agent/context"
+import { getFullBusinessContext, getPersonalContext } from "@/lib/agent/context"
 import { generateDraftReply } from "@/lib/ai/provider"
+import { buildPersonalDraftReplyPrompt, draftReplyJsonSchema, normalizeDraftReplyOutput } from "@/lib/ai/prompts/draft-reply"
 import { prisma } from "@/lib/prisma"
+import OpenAI from "openai"
 
 export const runtime = "nodejs"
 
@@ -42,31 +44,86 @@ export async function POST(
     return NextResponse.json({ error: "AI drafts are only available for email conversations" }, { status: 400 })
   }
 
-  const context = await getFullBusinessContext(session.user.tenantId)
-  if (!context.profile) {
-    return NextResponse.json({ error: "Business profile is required before generating drafts" }, { status: 400 })
-  }
-
-  const latestJob = await prisma.agentJob.findFirst({
-    where: { conversationId: conversation.id, tenantId: session.user.tenantId, status: "completed" },
-    orderBy: { completedAt: "desc" },
+  // Fetch tenant account type
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: session.user.tenantId },
+    select: { accountType: true },
   })
-  const availableSlots = Array.isArray(latestJob?.slotsJson)
-    ? (latestJob.slotsJson as string[])
-    : undefined
+
+  const accountType = tenant?.accountType ?? "business"
 
   let result: Awaited<ReturnType<typeof generateDraftReply>>
-  try {
-    result = await generateDraftReply({
-      businessProfile: context.profile,
-      knowledgeDocuments: context.documents,
+  let promptVersion: string
+  let knowledgeDocumentIds: string[] = []
+
+  if (accountType === "personal") {
+    // Personal account path
+    const context = await getPersonalContext(session.user.tenantId)
+
+    promptVersion = "personal-draft-v1"
+
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) {
+      return NextResponse.json({ error: "OPENAI_API_KEY is not configured" }, { status: 503 })
+    }
+
+    const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
+    const client = new OpenAI({ apiKey })
+    const prompt = buildPersonalDraftReplyPrompt({
+      personalProfile: context.profile,
       messages: conversation.messages,
-      availableSlots,
     })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to generate AI draft"
-    const status = message.includes("OPENAI_API_KEY") ? 503 : 502
-    return NextResponse.json({ error: message }, { status })
+
+    let rawResponse: OpenAI.Responses.Response
+    try {
+      rawResponse = await client.responses.create({
+        model,
+        input: prompt,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "flowdesk_draft_reply",
+            strict: true,
+            schema: draftReplyJsonSchema,
+          },
+        },
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to generate AI draft"
+      return NextResponse.json({ error: message }, { status: 502 })
+    }
+
+    result = normalizeDraftReplyOutput(rawResponse.output_text, model)
+  } else {
+    // Business account path (existing logic)
+    const context = await getFullBusinessContext(session.user.tenantId)
+    if (!context.profile) {
+      return NextResponse.json({ error: "Business profile is required before generating drafts" }, { status: 400 })
+    }
+
+    promptVersion = "ai-draft-mvp-v1"
+    knowledgeDocumentIds = context.documents.map((doc) => doc.id)
+
+    const latestJob = await prisma.agentJob.findFirst({
+      where: { conversationId: conversation.id, tenantId: session.user.tenantId, status: "completed" },
+      orderBy: { completedAt: "desc" },
+    })
+    const availableSlots = Array.isArray(latestJob?.slotsJson)
+      ? (latestJob.slotsJson as string[])
+      : undefined
+
+    try {
+      result = await generateDraftReply({
+        businessProfile: context.profile,
+        knowledgeDocuments: context.documents,
+        messages: conversation.messages,
+        availableSlots,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to generate AI draft"
+      const status = message.includes("OPENAI_API_KEY") ? 503 : 502
+      return NextResponse.json({ error: message }, { status })
+    }
   }
 
   const metadataJson = {
@@ -76,8 +133,9 @@ export async function POST(
     suggestedLabel: result.suggestedLabel,
     escalationReason: result.escalationReason,
     model: result.model,
-    promptVersion: "ai-draft-mvp-v1",
-    knowledgeDocumentIds: context.documents.map((doc) => doc.id),
+    promptVersion,
+    accountType,
+    knowledgeDocumentIds,
   }
 
   const draft = await prisma.draft.upsert({
@@ -110,6 +168,7 @@ export async function POST(
       payloadJson: {
         conversationId: conversation.id,
         draftId: draft.id,
+        accountType,
         metadata: metadataJson,
       },
     },

@@ -6,6 +6,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import DisconnectGmailButton from "@/app/settings/DisconnectGmailButton";
 import SyncGmailButton from "@/app/settings/SyncGmailButton";
+import DisconnectOutlookButton from "@/app/settings/DisconnectOutlookButton";
+import SyncOutlookButton from "@/app/settings/SyncOutlookButton";
 import DisconnectCalendarButton from "@/app/settings/DisconnectCalendarButton";
 import MindBodyConnectForm from "@/app/settings/MindBodyConnectForm";
 import DisconnectMindBodyButton from "@/app/settings/DisconnectMindBodyButton";
@@ -13,6 +15,7 @@ import KnowledgeDocumentList from "@/app/settings/KnowledgeDocumentList";
 import BusinessProfileForm from "@/app/settings/BusinessProfileForm";
 import FollowUpSettingsForm from "@/app/settings/FollowUpSettingsForm";
 import AutopilotSettingsForm from "@/app/settings/AutopilotSettingsForm";
+import PersonalStylePanel from "@/app/settings/PersonalStylePanel";
 
 export const dynamic = "force-dynamic";
 
@@ -41,16 +44,24 @@ export default async function SettingsPage({ searchParams }: Props) {
 
   const [
     gmailChannels,
+    outlookChannels,
     calendarCredentials,
     mindBodyCredential,
     knowledgeDocuments,
     businessProfile,
     followUpSetting,
     autopilotSetting,
+    tenant,
+    personalProfile,
   ] = await Promise.all([
     prisma.channel.findMany({
       where: { tenantId: session.user.tenantId, type: "email" },
       include: { gmailCredential: { select: { createdAt: true, lastSyncedAt: true, lastSyncError: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.channel.findMany({
+      where: { tenantId: session.user.tenantId, provider: "microsoft" },
+      include: { outlookCredential: { select: { createdAt: true, lastSyncedAt: true, lastSyncError: true } } },
       orderBy: { createdAt: "asc" },
     }),
     prisma.googleCalendarCredential.findMany({
@@ -73,10 +84,22 @@ export default async function SettingsPage({ searchParams }: Props) {
     prisma.autopilotSetting.findUnique({
       where: { tenantId: session.user.tenantId },
     }),
+    prisma.tenant.findUnique({
+      where: { id: session.user.tenantId },
+      select: { accountType: true },
+    }),
+    prisma.personalProfile.findUnique({
+      where: { tenantId: session.user.tenantId },
+    }),
   ]);
+
+  const isPersonal = tenant?.accountType === "personal";
 
   const googleConfigured =
     !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
+
+  const microsoftConfigured =
+    !!process.env.MICROSOFT_CLIENT_ID && !!process.env.MICROSOFT_CLIENT_SECRET;
 
   const gmailError = searchParams.error
     ? (ERROR_MESSAGES[searchParams.error] ?? "An error occurred. Please try again.")
@@ -92,7 +115,7 @@ export default async function SettingsPage({ searchParams }: Props) {
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
           <div>
             <Link href="/inbox" className="text-sm text-slate-500 hover:text-slate-700">
-              ← Back to inbox
+              &larr; Back to inbox
             </Link>
             <h1 className="mt-1 text-xl font-semibold">Settings</h1>
           </div>
@@ -171,7 +194,7 @@ export default async function SettingsPage({ searchParams }: Props) {
               <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                 <p className="font-medium">Setup required</p>
                 <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs text-amber-700">
-                  <li>Go to <span className="font-mono">console.cloud.google.com</span> → Create a project</li>
+                  <li>Go to <span className="font-mono">console.cloud.google.com</span> &rarr; Create a project</li>
                   <li>Enable the <span className="font-medium">Gmail API</span> and <span className="font-medium">Google Calendar API</span></li>
                   <li>Create <span className="font-medium">OAuth 2.0 credentials</span> (Web application)</li>
                   <li>Add redirect URIs for both Gmail and Calendar callbacks</li>
@@ -207,31 +230,33 @@ export default async function SettingsPage({ searchParams }: Props) {
             )}
           </div>
 
-          {/* Google Calendar */}
-          <div className="border-b border-slate-100 px-6 py-5">
+          {/* Outlook / Microsoft 365 */}
+          <div className={`border-b border-slate-100 px-6 py-5`}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white">
                   <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-                    <path d="M19 4h-1V2h-2v2H8V2H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 16H5V9h14v11zM5 7V6h14v1H5z" fill="#4285F4" />
-                    <path d="M7 11h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2zM7 15h2v2H7zm4 0h2v2h-2z" fill="#4285F4" />
+                    <rect x="1" y="1" width="10" height="10" fill="#F25022"/>
+                    <rect x="13" y="1" width="10" height="10" fill="#7FBA00"/>
+                    <rect x="1" y="13" width="10" height="10" fill="#00A4EF"/>
+                    <rect x="13" y="13" width="10" height="10" fill="#FFB900"/>
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm font-medium">Google Calendar</p>
+                  <p className="text-sm font-medium">Outlook / Microsoft 365</p>
                   <p className="text-xs text-slate-500">
-                    Read and create calendar events, check availability, and book appointments.
+                    Read your inbox and reply to emails directly from FlowDesk.
                   </p>
                 </div>
               </div>
 
-              {!googleConfigured ? (
+              {!microsoftConfigured ? (
                 <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
                   Not configured
                 </span>
               ) : (
                 <a
-                  href="/api/connectors/google-calendar/connect"
+                  href="/api/connectors/outlook/connect"
                   className="shrink-0 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
                 >
                   + Connect
@@ -239,100 +264,216 @@ export default async function SettingsPage({ searchParams }: Props) {
               )}
             </div>
 
-            {calendarCredentials.length > 0 && (
+            {!microsoftConfigured && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                <p className="font-medium">Setup required</p>
+                <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs text-amber-700">
+                  <li>Go to <span className="font-mono">portal.azure.com</span> &rarr; Azure Active Directory &rarr; App registrations</li>
+                  <li>Create a new registration with &ldquo;personal + work accounts&rdquo; support</li>
+                  <li>Add redirect URI: <span className="font-mono">{"{NEXTAUTH_URL}"}/api/connectors/outlook/callback</span></li>
+                  <li>Add API permissions: <span className="font-medium">Mail.Read, Mail.Send, Mail.ReadWrite, User.Read, offline_access</span></li>
+                  <li>Set <span className="font-mono">MICROSOFT_CLIENT_ID</span> and <span className="font-mono">MICROSOFT_CLIENT_SECRET</span> in your <span className="font-mono">.env</span></li>
+                </ol>
+              </div>
+            )}
+
+            {outlookChannels.length > 0 && (
               <div className="mt-4 space-y-3">
-                {calendarCredentials.map((cred) => (
+                {outlookChannels.map((channel) => (
                   <div
-                    key={cred.id}
+                    key={channel.id}
                     className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-4 py-3"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{cred.email}</p>
+                      <p className="truncate text-sm font-medium">{channel.emailAddress}</p>
                       <p className="text-xs text-slate-500">
-                        Connected {cred.createdAt.toLocaleDateString()}
+                        Connected {channel.outlookCredential?.createdAt.toLocaleDateString()}
                       </p>
                     </div>
-                    <div className="ml-4 shrink-0">
-                      <DisconnectCalendarButton email={cred.email} />
+                    <div className="ml-4 flex shrink-0 items-center gap-2">
+                      <SyncOutlookButton
+                        channelId={channel.id}
+                        lastSyncedAt={channel.outlookCredential?.lastSyncedAt ?? null}
+                        lastSyncError={channel.outlookCredential?.lastSyncError ?? null}
+                      />
+                      <DisconnectOutlookButton channelId={channel.id} />
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
-          {/* MindBody */}
-          <div className="px-6 py-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white">
-                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-                    <circle cx="12" cy="12" r="10" fill="#0077CC" />
-                    <path d="M7 8h2.5l2.5 5 2.5-5H17v8h-2v-5l-2 4h-1l-2-4v5H7V8z" fill="white" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm font-medium">MindBody</p>
-                  <p className="text-xs text-slate-500">
-                    Look up clients, view appointments, and book sessions from your MindBody site.
-                  </p>
-                </div>
-              </div>
 
-              {!mindBodyCredential && (
-                !process.env.MINDBODY_API_KEY ? (
+          {/* Google Calendar — business only */}
+          {!isPersonal && (
+            <div className="border-b border-slate-100 px-6 py-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white">
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+                      <path d="M19 4h-1V2h-2v2H8V2H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 16H5V9h14v11zM5 7V6h14v1H5z" fill="#4285F4" />
+                      <path d="M7 11h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2zM7 15h2v2H7zm4 0h2v2h-2z" fill="#4285F4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Google Calendar</p>
+                    <p className="text-xs text-slate-500">
+                      Read and create calendar events, check availability, and book appointments.
+                    </p>
+                  </div>
+                </div>
+
+                {!googleConfigured ? (
                   <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
                     Not configured
                   </span>
                 ) : (
-                  <MindBodyConnectForm />
-                )
-              )}
+                  <a
+                    href="/api/connectors/google-calendar/connect"
+                    className="shrink-0 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
+                  >
+                    + Connect
+                  </a>
+                )}
+              </div>
 
-              {mindBodyCredential && (
-                <DisconnectMindBodyButton />
+              {calendarCredentials.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  {calendarCredentials.map((cred) => (
+                    <div
+                      key={cred.id}
+                      className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{cred.email}</p>
+                        <p className="text-xs text-slate-500">
+                          Connected {cred.createdAt.toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="ml-4 shrink-0">
+                        <DisconnectCalendarButton email={cred.email} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
+          )}
 
-            {mindBodyCredential && (
-              <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3">
-                <p className="text-sm font-medium">Site ID: {mindBodyCredential.siteId}</p>
-                <p className="text-xs text-slate-500">
-                  Connected {mindBodyCredential.createdAt.toLocaleDateString()}
-                </p>
+          {/* MindBody — business only */}
+          {!isPersonal && (
+            <div className="px-6 py-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white">
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10" fill="#0077CC" />
+                      <path d="M7 8h2.5l2.5 5 2.5-5H17v8h-2v-5l-2 4h-1l-2-4v5H7V8z" fill="white" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">MindBody</p>
+                    <p className="text-xs text-slate-500">
+                      Look up clients, view appointments, and book sessions from your MindBody site.
+                    </p>
+                  </div>
+                </div>
+
+                {!mindBodyCredential && (
+                  !process.env.MINDBODY_API_KEY ? (
+                    <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                      Not configured
+                    </span>
+                  ) : (
+                    <MindBodyConnectForm />
+                  )
+                )}
+
+                {mindBodyCredential && (
+                  <DisconnectMindBodyButton />
+                )}
               </div>
-            )}
 
-          </div>
+              {mindBodyCredential && (
+                <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3">
+                  <p className="text-sm font-medium">Site ID: {mindBodyCredential.siteId}</p>
+                  <p className="text-xs text-slate-500">
+                    Connected {mindBodyCredential.createdAt.toLocaleDateString()}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
-        {/* Business Profile */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-6 py-4">
-            <h2 className="font-semibold">Business Profile</h2>
-            <p className="mt-0.5 text-sm text-slate-500">
-              Configure the business facts, tone, booking rules, and escalation policy the AI will use.
-            </p>
-          </div>
-          <div className="px-6 py-5">
-            <BusinessProfileForm
-              initial={businessProfile}
-              calendarEmails={calendarCredentials.map((c) => c.email)}
-            />
-          </div>
-        </section>
+        {/* Business Profile — business only */}
+        {!isPersonal && (
+          <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="font-semibold">Business Profile</h2>
+              <p className="mt-0.5 text-sm text-slate-500">
+                Configure the business facts, tone, booking rules, and escalation policy the AI will use.
+              </p>
+            </div>
+            <div className="px-6 py-5">
+              <BusinessProfileForm
+                initial={businessProfile}
+                calendarEmails={calendarCredentials.map((c) => c.email)}
+              />
+            </div>
+          </section>
+        )}
 
-        {/* Knowledge Base */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-6 py-4">
-            <h2 className="font-semibold">Knowledge Base</h2>
-            <p className="mt-0.5 text-sm text-slate-500">
-              Add FAQs, service descriptions, policies, and other information the AI will use when drafting replies.
-            </p>
-          </div>
-          <div className="px-6 py-5">
-            <KnowledgeDocumentList initialDocuments={knowledgeDocuments} />
-          </div>
-        </section>
+        {/* Knowledge Base — business only */}
+        {!isPersonal && (
+          <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="font-semibold">Knowledge Base</h2>
+              <p className="mt-0.5 text-sm text-slate-500">
+                Add FAQs, service descriptions, policies, and other information the AI will use when drafting replies.
+              </p>
+            </div>
+            <div className="px-6 py-5">
+              <KnowledgeDocumentList initialDocuments={knowledgeDocuments} />
+            </div>
+          </section>
+        )}
+
+        {/* Personal Style — personal only */}
+        {isPersonal && (
+          <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="font-semibold">Personal Style</h2>
+              <p className="mt-0.5 text-sm text-slate-500">
+                FlowDesk learns your writing style from your sent emails to draft replies that sound like you.
+              </p>
+            </div>
+            <div className="px-6 py-5">
+              <PersonalStylePanel
+                initial={
+                  personalProfile
+                    ? {
+                        toneSummary: personalProfile.toneSummary,
+                        greetingPatterns: personalProfile.greetingPatterns,
+                        signoffPatterns: personalProfile.signoffPatterns,
+                        sentenceLengthStyle: personalProfile.sentenceLengthStyle,
+                        formalityLevel: personalProfile.formalityLevel,
+                        recurringPhrasesToUse: Array.isArray(personalProfile.recurringPhrasesToUse)
+                          ? (personalProfile.recurringPhrasesToUse as string[])
+                          : [],
+                        recurringPhrasesToAvoid: Array.isArray(personalProfile.recurringPhrasesToAvoid)
+                          ? (personalProfile.recurringPhrasesToAvoid as string[])
+                          : [],
+                        sanitizedExamples: personalProfile.sanitizedExamples,
+                        sampleCount: personalProfile.sampleCount,
+                        lastTrainedAt: personalProfile.lastTrainedAt?.toISOString() ?? null,
+                      }
+                    : null
+                }
+              />
+            </div>
+          </section>
+        )}
 
         {/* Follow-Up Automation */}
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -361,12 +502,14 @@ export default async function SettingsPage({ searchParams }: Props) {
           </div>
         </section>
 
-        {/* Autopilot */}
+        {/* Autopilot / Auto-Send */}
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">
-            <h2 className="font-semibold">Autopilot</h2>
+            <h2 className="font-semibold">{isPersonal ? "Auto-Send" : "Autopilot"}</h2>
             <p className="mt-0.5 text-sm text-slate-500">
-              Allow the AI to send replies automatically for low-risk, high-confidence categories. Requires trust to be earned first.
+              {isPersonal
+                ? "Allow FlowDesk to send replies automatically when it is highly confident the draft matches your style."
+                : "Allow the AI to send replies automatically for low-risk, high-confidence categories. Requires trust to be earned first."}
             </p>
           </div>
           <div className="px-6 py-5">

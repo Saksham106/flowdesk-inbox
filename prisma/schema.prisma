@@ -7,6 +7,11 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum AccountType {
+  personal
+  business
+}
+
 enum ChannelType {
   sms
   email
@@ -15,6 +20,7 @@ enum ChannelType {
 enum ChannelProvider {
   twilio
   google
+  microsoft
 }
 
 enum MessageDirection {
@@ -58,6 +64,7 @@ enum ConversationStatus {
 model Tenant {
   id                        String                      @id @default(cuid())
   name                      String                      @unique
+  accountType               AccountType                 @default(business)
   createdAt                 DateTime                    @default(now())
   users                     User[]
   channels                  Channel[]
@@ -67,6 +74,7 @@ model Tenant {
   googleCalendarCredentials GoogleCalendarCredential[]
   mindBodyCredential        MindBodyCredential?
   businessProfile           BusinessProfile?
+  personalProfile           PersonalProfile?
   knowledgeDocuments        KnowledgeDocument[]
   approvalRequests          ApprovalRequest[]
   agentJobs                 AgentJob[]
@@ -101,6 +109,7 @@ model Channel {
   tenant                   Tenant           @relation(fields: [tenantId], references: [id])
   conversations            Conversation[]
   gmailCredential          GmailCredential?
+  outlookCredential        OutlookCredential?
 }
 
 model GmailCredential {
@@ -110,6 +119,18 @@ model GmailCredential {
   refreshTokenEncrypted String
   tokenExpiry           DateTime?
   historyId             String?
+  lastSyncedAt          DateTime?
+  lastSyncError         String?
+  createdAt             DateTime  @default(now())
+  channel               Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+}
+
+model OutlookCredential {
+  id                    String    @id @default(cuid())
+  channelId             String    @unique
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String
+  tokenExpiry           DateTime?
   lastSyncedAt          DateTime?
   lastSyncError         String?
   createdAt             DateTime  @default(now())
@@ -345,4 +366,22 @@ model AutopilotSetting {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model PersonalProfile {
+  id                      String    @id @default(cuid())
+  tenantId                String    @unique
+  toneSummary             String?
+  greetingPatterns        String?
+  signoffPatterns         String?
+  sentenceLengthStyle     String?
+  formalityLevel          String?
+  recurringPhrasesToUse   String[]  @default([])
+  recurringPhrasesToAvoid String[]  @default([])
+  sanitizedExamples       String?
+  sampleCount             Int       @default(0)
+  lastTrainedAt           DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  tenant                  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }

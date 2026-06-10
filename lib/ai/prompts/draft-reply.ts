@@ -177,3 +177,75 @@ function clampConfidence(value: unknown): number {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
+
+// ---------------------------------------------------------------------------
+// Personal draft reply prompt
+// ---------------------------------------------------------------------------
+
+export type PersonalStyleProfile = {
+  toneSummary: string | null
+  greetingPatterns: string | null
+  signoffPatterns: string | null
+  sentenceLengthStyle: string | null
+  formalityLevel: string | null
+  recurringPhrasesToUse: string[]
+  recurringPhrasesToAvoid: string[]
+  sanitizedExamples: string | null
+}
+
+export type PersonalDraftReplyPromptInput = {
+  personalProfile: PersonalStyleProfile | null
+  messages: Array<{
+    direction: string
+    body: string
+    createdAt: Date | string
+  }>
+}
+
+export function buildPersonalDraftReplyPrompt(input: PersonalDraftReplyPromptInput): string {
+  const profile = input.personalProfile
+
+  const messages = input.messages
+    .slice(-20)
+    .map((message) => {
+      const createdAt =
+        message.createdAt instanceof Date ? message.createdAt.toISOString() : message.createdAt
+      return `${createdAt} ${message.direction.toUpperCase()}: ${truncate(message.body, 2500)}`
+    })
+    .join("\n")
+
+  return [
+    "You are FlowDesk's personal AI drafting assistant.",
+    "Draft a reply that matches the user's personal writing style.",
+    "The user will review and send this reply themselves.",
+    "",
+    "Return only JSON matching the schema. Do not include markdown.",
+    "",
+    "Allowed suggestedLabel values: Lead, Reschedule, Pricing, Complaint, or null.",
+    "",
+    "Personal style profile:",
+    JSON.stringify(
+      profile ?? {
+        toneSummary: null,
+        greetingPatterns: null,
+        signoffPatterns: null,
+        sentenceLengthStyle: null,
+        formalityLevel: null,
+        recurringPhrasesToUse: [],
+        recurringPhrasesToAvoid: [],
+        sanitizedExamples: null,
+      },
+      null,
+      2
+    ),
+    "",
+    "Safety rules (personal):",
+    "- Never auto-send financial, legal, medical, employment, relationship-conflict, password/security, urgent, emotional, or ambiguous messages — flag these as riskLevel \"high\".",
+    "- Do not invent facts not present in the conversation.",
+    "- Keep tone and style consistent with the user's style profile.",
+    "- If no style profile exists, write a neutral, clear reply.",
+    "",
+    "Conversation:",
+    messages || "No messages yet.",
+  ].join("\n")
+}

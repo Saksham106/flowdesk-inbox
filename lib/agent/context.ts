@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import type { BusinessProfile, KnowledgeDocument } from '@prisma/client'
+import type { BusinessProfile, KnowledgeDocument, PersonalProfile } from '@prisma/client'
 
 /**
  * Retrieves the tenant's business profile. Returns null if not configured.
@@ -52,4 +52,15 @@ export async function getFullBusinessContext(tenantId: string): Promise<{
     }),
   ])
   return { profile, documents }
+}
+
+/**
+ * Returns the personal context needed to construct a personal AI prompt:
+ * the personal style profile for the tenant (or null if not yet trained).
+ */
+export async function getPersonalContext(tenantId: string): Promise<{
+  profile: PersonalProfile | null
+}> {
+  const profile = await prisma.personalProfile.findUnique({ where: { tenantId } })
+  return { profile }
 }

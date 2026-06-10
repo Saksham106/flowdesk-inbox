@@ -24,6 +24,7 @@ export const authOptions: NextAuthOptions = {
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
+          include: { tenant: { select: { accountType: true } } },
         });
 
         if (!user) {
@@ -43,6 +44,7 @@ export const authOptions: NextAuthOptions = {
           id: user.id,
           email: user.email,
           tenantId: user.tenantId,
+          accountType: user.tenant.accountType as string,
         };
       },
     }),
@@ -51,14 +53,17 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.tenantId = (user as { tenantId: string }).tenantId;
+        token.tenantId = (user as unknown as { tenantId: string }).tenantId;
+        token.accountType = (user as unknown as { accountType: string }).accountType;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string;
-        session.user.tenantId = token.tenantId as string;
+        const u = session.user as Record<string, unknown>;
+        u.id = token.id as string;
+        u.tenantId = token.tenantId as string;
+        u.accountType = token.accountType as string;
       }
       return session;
     },

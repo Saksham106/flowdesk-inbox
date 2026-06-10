@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { getTwilioClient } from "@/lib/twilio"
 import { extractEmail, fetchThread, getGmailClient, sendGmailReply } from "@/lib/google"
+import { sendOutlookReply } from "@/lib/microsoft"
 
 type ConversationForSend = NonNullable<
   Awaited<
@@ -95,6 +96,11 @@ async function sendEmailConversationMessage({
   const channelEmail = conversation.channel.emailAddress
   if (!channelEmail) {
     throw new ConversationSendError("Channel has no email address", 500)
+  }
+
+  // For Outlook channels, route through Microsoft Graph
+  if (conversation.channel.provider === "microsoft") {
+    return sendOutlookEmailMessage({ conversation, text, userId, auditAction })
   }
 
   let recipientEmail = conversation.contact?.phoneE164 ?? ""
@@ -267,4 +273,80 @@ async function sendSmsConversationMessage({
   }
 
   return { ok: true, providerMessageId: result.sid }
+}
+
+async function sendOutlookEmailMessage({
+  conversation,
+  text,
+  userId,
+  auditAction,
+}: {
+  conversation: ConversationForSend
+  text: string
+  userId?: string | null
+  auditAction: string
+}): Promise<SendConversationMessageResult> {
+  const channelEmail = conversation.channel.emailAddress
+  if (!channelEmail) {
+    throw new ConversationSendError("Channel has no email address", 500)
+  }
+
+  const recipientEmail = conversation.contact?.phoneE164 ?? ""
+  if (!recipientEmail) {
+    throw new ConversationSendError("Cannot determine recipient email address", 400)
+  }
+
+  let outlookMsgId: string
+  try {
+    outlookMsgId = await sendOutlookReply({
+      channelId: conversation.channelId,
+      to: recipientEmail,
+      subject: "Re: message",
+      body: text,
+      conversationId: conversation.externalThreadId,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Outlook send error"
+    console.error("[send/outlook] error:", err)
+    throw new ConversationSendError(message, 502)
+  }
+
+  const now = new Date()
+  try {
+    await prisma.$transaction([
+      prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          direction: "outbound",
+          fromE164: channelEmail,
+          toE164: recipientEmail,
+          body: text,
+          providerMessageId: `outlook_${outlookMsgId}`,
+          createdAt: now,
+        },
+      }),
+      prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { lastMessageAt: now, status: "in_progress" },
+      }),
+      prisma.auditLog.create({
+        data: {
+          tenantId: conversation.tenantId,
+          userId,
+          action: auditAction,
+          payloadJson: {
+            conversationId: conversation.id,
+            outlookMsgId,
+            to: recipientEmail,
+            channel: "outlook",
+          },
+        },
+      }),
+    ])
+  } catch (err) {
+    console.error("[send/outlook] DB error after send (id=%s):", outlookMsgId, err)
+    throw new ConversationSendError("Email sent but failed to save - refresh the page.", 500)
+  }
+
+  return { ok: true, providerMessageId: `outlook_${outlookMsgId}` }
 }
