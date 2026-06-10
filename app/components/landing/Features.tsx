@@ -55,7 +55,7 @@ export default function Features() {
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-10">
           <h2 className="font-serif text-3xl sm:text-4xl text-neutral-900">
-            Everything you need, nothing you don't.
+            Everything you need, nothing you don&apos;t.
           </h2>
         </div>
 

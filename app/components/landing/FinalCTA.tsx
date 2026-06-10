@@ -9,7 +9,7 @@ export default function FinalCTA() {
             Be first in the door.
           </h2>
           <p className="text-neutral-500 text-base mb-8 leading-relaxed">
-            We're opening access now. Create your account in under a minute.
+            We&apos;re opening access now. Create your account in under a minute.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
