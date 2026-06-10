@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
+import OpenAI from "openai"
 
 import { authOptions } from "@/lib/auth"
-import { getFullBusinessContext, getPersonalContext } from "@/lib/agent/context"
+import { getReplyGenerationContext } from "@/lib/agent/reply-context"
 import { generateDraftReply } from "@/lib/ai/provider"
 import { buildPersonalDraftReplyPrompt, draftReplyJsonSchema, normalizeDraftReplyOutput } from "@/lib/ai/prompts/draft-reply"
 import { prisma } from "@/lib/prisma"
-import OpenAI from "openai"
 
 export const runtime = "nodejs"
 
@@ -44,22 +44,19 @@ export async function POST(
     return NextResponse.json({ error: "AI drafts are only available for email conversations" }, { status: 400 })
   }
 
-  // Fetch tenant account type
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: session.user.tenantId },
-    select: { accountType: true },
+  const context = await getReplyGenerationContext({
+    tenantId: session.user.tenantId,
+    channelId: conversation.channelId,
   })
-
-  const accountType = tenant?.accountType ?? "business"
+  const accountType = context.accountType
 
   let result: Awaited<ReturnType<typeof generateDraftReply>>
   let promptVersion: string
   let knowledgeDocumentIds: string[] = []
+  const learnedProfileId = context.learnedProfile?.id ?? null
+  const learnedProfilePromptVersion = context.learnedProfile?.promptVersion ?? null
 
   if (accountType === "personal") {
-    // Personal account path
-    const context = await getPersonalContext(session.user.tenantId)
-
     promptVersion = "personal-draft-v1"
 
     const apiKey = process.env.OPENAI_API_KEY
@@ -70,7 +67,7 @@ export async function POST(
     const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
     const client = new OpenAI({ apiKey })
     const prompt = buildPersonalDraftReplyPrompt({
-      personalProfile: context.profile,
+      personalProfile: learnedProfileToPersonalStyle(context.learnedProfile),
       messages: conversation.messages,
     })
 
@@ -95,14 +92,12 @@ export async function POST(
 
     result = normalizeDraftReplyOutput(rawResponse.output_text, model)
   } else {
-    // Business account path (existing logic)
-    const context = await getFullBusinessContext(session.user.tenantId)
-    if (!context.profile) {
+    if (!context.businessProfile) {
       return NextResponse.json({ error: "Business profile is required before generating drafts" }, { status: 400 })
     }
 
-    promptVersion = "ai-draft-mvp-v1"
-    knowledgeDocumentIds = context.documents.map((doc) => doc.id)
+    promptVersion = context.learnedProfile ? "business-draft-learned-v1" : "ai-draft-mvp-v1"
+    knowledgeDocumentIds = context.knowledgeDocuments.map((doc) => doc.id)
 
     const latestJob = await prisma.agentJob.findFirst({
       where: { conversationId: conversation.id, tenantId: session.user.tenantId, status: "completed" },
@@ -114,8 +109,9 @@ export async function POST(
 
     try {
       result = await generateDraftReply({
-        businessProfile: context.profile,
-        knowledgeDocuments: context.documents,
+        businessProfile: context.businessProfile,
+        knowledgeDocuments: context.knowledgeDocuments,
+        learnedReplyProfile: context.learnedProfile,
         messages: conversation.messages,
         availableSlots,
       })
@@ -135,6 +131,10 @@ export async function POST(
     model: result.model,
     promptVersion,
     accountType,
+    learnedProfileId,
+    learnedProfilePromptVersion,
+    autoSendEligible: false,
+    autoSendHoldReason: "manual_draft_suggestion",
     knowledgeDocumentIds,
   }
 
@@ -175,4 +175,33 @@ export async function POST(
   })
 
   return NextResponse.json({ draft, meta: metadataJson })
+}
+
+function learnedProfileToPersonalStyle(profile: {
+  styleSummaryJson?: unknown
+  exampleSnippetsJson?: unknown
+} | null) {
+  if (!profile || typeof profile.styleSummaryJson !== "object" || profile.styleSummaryJson === null) {
+    return null
+  }
+
+  const style = profile.styleSummaryJson as Record<string, unknown>
+  const snippets = Array.isArray(profile.exampleSnippetsJson)
+    ? profile.exampleSnippetsJson.filter((item): item is string => typeof item === "string").join("\n")
+    : null
+
+  return {
+    toneSummary: typeof style.tone === "string" ? style.tone : null,
+    greetingPatterns: typeof style.greetings === "string" ? style.greetings : null,
+    signoffPatterns: typeof style.signoffs === "string" ? style.signoffs : null,
+    sentenceLengthStyle: typeof style.length === "string" ? style.length : null,
+    formalityLevel: typeof style.formality === "string" ? style.formality : null,
+    recurringPhrasesToUse: Array.isArray(style.commonPhrases)
+      ? style.commonPhrases.filter((item): item is string => typeof item === "string")
+      : [],
+    recurringPhrasesToAvoid: Array.isArray(style.thingsToAvoid)
+      ? style.thingsToAvoid.filter((item): item is string => typeof item === "string")
+      : [],
+    sanitizedExamples: snippets,
+  }
 }

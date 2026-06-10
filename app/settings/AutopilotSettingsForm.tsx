@@ -14,7 +14,15 @@ type AutopilotSnapshot = {
   disabledAt: string | null
 } | null
 
-export default function AutopilotSettingsForm({ initial }: { initial: AutopilotSnapshot }) {
+export default function AutopilotSettingsForm({
+  initial,
+  requiresLearnedProfile = false,
+  hasLearnedProfile = true,
+}: {
+  initial: AutopilotSnapshot
+  requiresLearnedProfile?: boolean
+  hasLearnedProfile?: boolean
+}) {
   const [enabled, setEnabled] = useState(initial?.enabled ?? false)
   const [threshold, setThreshold] = useState(String(initial?.confidenceThreshold ?? 0.85))
   const [allowedIntents, setAllowedIntents] = useState<string[]>(initial?.allowedIntents ?? [])
@@ -25,6 +33,7 @@ export default function AutopilotSettingsForm({ initial }: { initial: AutopilotS
   const [error, setError] = useState<string | null>(null)
 
   const isDisabled = !!initial?.disabledAt
+  const blockedByLearning = requiresLearnedProfile && !hasLearnedProfile
   const currentFailures = initial?.currentFailures ?? 0
 
   function toggleIntent(intent: string) {
@@ -110,7 +119,7 @@ export default function AutopilotSettingsForm({ initial }: { initial: AutopilotS
         <button
           type="button"
           onClick={() => setEnabled((v) => !v)}
-          disabled={isDisabled}
+          disabled={isDisabled || blockedByLearning}
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-40 ${
             enabled ? "bg-slate-900" : "bg-slate-300"
           }`}
@@ -128,6 +137,12 @@ export default function AutopilotSettingsForm({ initial }: { initial: AutopilotS
       {enabled && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
           Autopilot will send emails without staff review. Only enable for workflows you have fully validated.
+        </div>
+      )}
+
+      {blockedByLearning && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+          Train reply learning before enabling auto-send.
         </div>
       )}
 
@@ -204,7 +219,7 @@ export default function AutopilotSettingsForm({ initial }: { initial: AutopilotS
 
       <button
         onClick={handleSave}
-        disabled={saving}
+        disabled={saving || blockedByLearning}
         className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
       >
         {saving ? "Saving…" : "Save"}

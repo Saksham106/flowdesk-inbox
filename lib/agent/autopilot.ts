@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
-import { getFullBusinessContext } from "@/lib/agent/context"
+import { evaluateAutonomy } from "@/lib/agent/autonomy"
+import { getReplyGenerationContext } from "@/lib/agent/reply-context"
 import { generateDraftReply } from "@/lib/ai/provider"
 import { sendConversationMessage, ConversationSendError } from "@/lib/conversations/send-message"
 import type { ClassifyResult } from "@/lib/ai/prompts/classify"
@@ -115,9 +116,59 @@ export async function attemptAutopilotSend(
     return { sent: false, reason: "Autopilot only supports email conversations" }
   }
 
-  const context = await getFullBusinessContext(job.tenantId)
-  if (!context.profile) {
+  const context = await getReplyGenerationContext({
+    tenantId: job.tenantId,
+    channelId: job.conversation.channelId,
+  })
+
+  if (context.accountType === "business" && !context.businessProfile) {
     return { sent: false, reason: "Business profile not configured" }
+  }
+
+  const setting = await prisma.autopilotSetting.findUnique({ where: { tenantId: job.tenantId } })
+  if (!setting) {
+    return { sent: false, reason: "Autopilot is not enabled" }
+  }
+
+  const since = new Date()
+  since.setUTCHours(0, 0, 0, 0)
+  const dailyAutoSendCount = await prisma.auditLog.count({
+    where: {
+      tenantId: job.tenantId,
+      action: "autopilot.send",
+      createdAt: { gte: since },
+    },
+  })
+
+  const autonomy = evaluateAutonomy({
+    accountType: context.accountType,
+    hasLearnedProfile: !!context.learnedProfile,
+    autopilotEnabled: setting.enabled,
+    confidence: classification.confidence,
+    confidenceThreshold: setting.confidenceThreshold,
+    riskLevel: classification.riskLevel,
+    intent: classification.intent,
+    escalationReason: classification.escalationReason,
+    dailyAutoSendCount,
+    maxAutoSendsPerDay: setting.maxAutoSendsPerDay,
+    currentFailures: setting.currentFailures,
+    disableAfterFailures: setting.disableAfterFailures,
+  })
+
+  if (!autonomy.eligible) {
+    await prisma.auditLog.create({
+      data: {
+        tenantId: job.tenantId,
+        action: "autopilot.held",
+        payloadJson: {
+          jobId,
+          conversationId: job.conversationId,
+          reason: autonomy.reason,
+          accountType: context.accountType,
+        },
+      },
+    })
+    return { sent: false, reason: autonomy.reason }
   }
 
   const slots = Array.isArray(job.slotsJson) ? (job.slotsJson as string[]) : undefined
@@ -125,8 +176,9 @@ export async function attemptAutopilotSend(
   let draftText: string
   try {
     const result = await generateDraftReply({
-      businessProfile: context.profile,
-      knowledgeDocuments: context.documents,
+      businessProfile: context.businessProfile,
+      knowledgeDocuments: context.knowledgeDocuments,
+      learnedReplyProfile: context.learnedProfile,
       messages: job.conversation.messages,
       availableSlots: slots,
     })

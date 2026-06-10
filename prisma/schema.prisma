@@ -12,6 +12,11 @@ enum AccountType {
   business
 }
 
+enum ReplyProfileType {
+  personal
+  business
+}
+
 enum ChannelType {
   sms
   email
@@ -75,6 +80,8 @@ model Tenant {
   mindBodyCredential        MindBodyCredential?
   businessProfile           BusinessProfile?
   personalProfile           PersonalProfile?
+  learnedReplyProfiles      LearnedReplyProfile[]
+  aiUsageEvents             AiUsageEvent[]
   knowledgeDocuments        KnowledgeDocument[]
   approvalRequests          ApprovalRequest[]
   agentJobs                 AgentJob[]
@@ -110,6 +117,7 @@ model Channel {
   conversations            Conversation[]
   gmailCredential          GmailCredential?
   outlookCredential        OutlookCredential?
+  learnedReplyProfiles     LearnedReplyProfile[]
 }
 
 model GmailCredential {
@@ -366,6 +374,40 @@ model AutopilotSetting {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model LearnedReplyProfile {
+  id                   String           @id @default(cuid())
+  tenantId             String
+  channelId            String?
+  profileType          ReplyProfileType
+  styleSummaryJson     Json
+  exampleSnippetsJson  Json?
+  sourceStatsJson      Json?
+  promptVersion        String
+  lastTrainedAt        DateTime?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  tenant               Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channel              Channel?         @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, profileType])
+  @@index([channelId])
+}
+
+model AiUsageEvent {
+  id              String   @id @default(cuid())
+  tenantId        String
+  feature         String
+  model           String
+  estimatedInputTokens  Int      @default(0)
+  estimatedOutputTokens Int      @default(0)
+  status          String
+  createdAt       DateTime @default(now())
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([feature])
 }
 
 model PersonalProfile {

@@ -11,7 +11,9 @@ const {
   mockDraftUpsert,
   mockDraftUpdate,
   mockAuditCreate,
+  mockAuditCount,
   mockGetFullBusinessContext,
+  mockGetReplyGenerationContext,
   mockGenerateDraftReply,
   mockSendConversationMessage,
 } = vi.hoisted(() => ({
@@ -22,7 +24,9 @@ const {
   mockDraftUpsert:                vi.fn(),
   mockDraftUpdate:                vi.fn(),
   mockAuditCreate:                vi.fn(),
+  mockAuditCount:                 vi.fn(),
   mockGetFullBusinessContext:     vi.fn(),
+  mockGetReplyGenerationContext:  vi.fn(),
   mockGenerateDraftReply:         vi.fn(),
   mockSendConversationMessage:    vi.fn(),
 }))
@@ -36,12 +40,16 @@ vi.mock('@/lib/prisma', () => ({
     },
     agentJob: { findUnique: mockJobFindUnique },
     draft:    { upsert: mockDraftUpsert, update: mockDraftUpdate },
-    auditLog: { create: mockAuditCreate },
+    auditLog: { create: mockAuditCreate, count: mockAuditCount },
   },
 }))
 
 vi.mock('@/lib/agent/context', () => ({
   getFullBusinessContext: mockGetFullBusinessContext,
+}))
+
+vi.mock('@/lib/agent/reply-context', () => ({
+  getReplyGenerationContext: mockGetReplyGenerationContext,
 }))
 
 vi.mock('@/lib/ai/provider', () => ({
@@ -104,6 +112,7 @@ const baseJob = {
   conversationId: CONV_ID,
   slotsJson: null,
   conversation: {
+    channelId: 'channel-1',
     channel: { type: 'email' },
     messages: [],
   },
@@ -255,10 +264,13 @@ describe('attemptAutopilotSend', () => {
     vi.clearAllMocks()
     mockJobFindUnique.mockResolvedValue(baseJob)
     mockAutopilotSettingFindUnique.mockResolvedValue(enabledSetting)
-    mockGetFullBusinessContext.mockResolvedValue({
-      profile: { id: 'bp-1', timezone: 'America/New_York' },
-      documents: [],
+    mockGetReplyGenerationContext.mockResolvedValue({
+      accountType: 'business',
+      businessProfile: { id: 'bp-1', timezone: 'America/New_York' },
+      knowledgeDocuments: [],
+      learnedProfile: { id: 'learned-1', promptVersion: 'reply-learning-v1' },
     })
+    mockAuditCount.mockResolvedValue(0)
     mockGenerateDraftReply.mockResolvedValue({ draftText: 'Hello, here is your reply.', intent: 'booking', confidence: 0.92 })
     mockDraftUpsert.mockResolvedValue({ id: 'draft-1' })
     mockDraftUpdate.mockResolvedValue({})
@@ -315,8 +327,34 @@ describe('attemptAutopilotSend', () => {
   })
 
   it('returns sent: false when business profile is not configured', async () => {
-    mockGetFullBusinessContext.mockResolvedValue({ profile: null, documents: [] })
+    mockGetReplyGenerationContext.mockResolvedValue({
+      accountType: 'business',
+      businessProfile: null,
+      knowledgeDocuments: [],
+      learnedProfile: { id: 'learned-1' },
+    })
     const result = await attemptAutopilotSend(JOB_ID, classification, policyOk)
     expect(result.sent).toBe(false)
+  })
+
+  it('returns sent: false and logs a hold when learned profile is missing', async () => {
+    mockGetReplyGenerationContext.mockResolvedValue({
+      accountType: 'personal',
+      businessProfile: null,
+      knowledgeDocuments: [],
+      learnedProfile: null,
+    })
+
+    const result = await attemptAutopilotSend(JOB_ID, classification, policyOk)
+
+    expect(result.sent).toBe(false)
+    expect(mockAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'autopilot.held',
+          payloadJson: expect.objectContaining({ reason: 'learned_profile_required' }),
+        }),
+      })
+    )
   })
 })

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { generatePersonalStyleProfile } from "@/lib/ai/provider";
+import { trainLearnedReplyProfile } from "@/lib/agent/reply-learning";
 
 export const runtime = "nodejs";
 
@@ -16,75 +16,48 @@ export async function POST() {
 
   const tenantId = session.user.tenantId;
 
-  // Require a connected Gmail channel
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { accountType: true },
+  });
+
   const channel = await prisma.channel.findFirst({
     where: { tenantId, type: "email" },
   });
 
   if (!channel) {
     return NextResponse.json(
-      { error: "A connected Gmail channel is required to train your style profile." },
+      { error: "A connected email channel is required to train your reply style." },
       { status: 400 }
     );
   }
 
-  // Fetch recent outbound messages for this tenant (across all conversations)
-  const tenantConversations = await prisma.conversation.findMany({
-    where: { tenantId },
-    select: { id: true },
-  });
-
-  const conversationIds = tenantConversations.map((c) => c.id);
-
-  const messages = await prisma.message.findMany({
-    where: {
-      conversationId: { in: conversationIds },
-      direction: "outbound",
-    },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-    select: { body: true, createdAt: true },
-  });
-
-  if (messages.length < 5) {
-    return NextResponse.json(
-      { error: "Not enough sent messages to learn from. Send at least 5 emails first." },
-      { status: 400 }
-    );
-  }
-
-  let styleResult: Awaited<ReturnType<typeof generatePersonalStyleProfile>>;
+  let training: Awaited<ReturnType<typeof trainLearnedReplyProfile>>;
   try {
-    styleResult = await generatePersonalStyleProfile(messages);
+    training = await trainLearnedReplyProfile({
+      tenantId,
+      channelId: channel.id,
+      profileType: tenant?.accountType === "personal" ? "personal" : "business",
+    });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to generate style profile";
+    const message = err instanceof Error ? err.message : "Failed to train reply style";
     const status = message.includes("OPENAI_API_KEY") ? 503 : 502;
     return NextResponse.json({ error: message }, { status });
   }
 
-  const profile = await prisma.personalProfile.upsert({
-    where: { tenantId },
-    create: {
-      tenantId,
-      ...styleResult,
-      lastTrainedAt: new Date(),
-      sampleCount: messages.length,
-    },
-    update: {
-      ...styleResult,
-      lastTrainedAt: new Date(),
-      sampleCount: messages.length,
-    },
+  const profile = await prisma.learnedReplyProfile.findFirst({
+    where: { id: training.profileId, tenantId },
   });
 
   await prisma.auditLog.create({
     data: {
       tenantId,
       userId: session.user.id,
-      action: "personal_profile.trained",
+      action: "reply_learning.trained",
       payloadJson: {
-        sampleCount: messages.length,
-        profileId: profile.id,
+        sampleCount: training.sampleCount,
+        profileId: training.profileId,
+        accountType: tenant?.accountType ?? "business",
       },
     },
   });

@@ -14,6 +14,9 @@ interface PersonalProfile {
   sanitizedExamples?: string | null
   sampleCount?: number | null
   lastTrainedAt?: string | Date | null
+  lastTrainingTokens?: number | null
+  lastTrainingStatus?: string | null
+  lastTrainingAt?: string | Date | null
 }
 
 export default function PersonalStylePanel({
@@ -53,6 +56,7 @@ export default function PersonalStylePanel({
 
   const phrasesToUse = initial?.recurringPhrasesToUse ?? []
   const phrasesToAvoid = initial?.recurringPhrasesToAvoid ?? []
+  const lastTrainingTokens = initial?.lastTrainingTokens ?? null
 
   return (
     <div className="space-y-4">
@@ -76,6 +80,12 @@ export default function PersonalStylePanel({
               </p>
               {lastTrainedAt && (
                 <p className="text-xs text-slate-500">Last trained {lastTrainedAt}</p>
+              )}
+              {lastTrainingTokens != null && (
+                <p className="text-xs text-slate-500">
+                  Last run used about {lastTrainingTokens.toLocaleString()} tokens
+                  {initial?.lastTrainingStatus ? ` (${initial.lastTrainingStatus})` : ""}
+                </p>
               )}
             </div>
             {initial.toneSummary && (

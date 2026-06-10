@@ -8,6 +8,13 @@ import {
   type DraftReplyResult,
   type PersonalStyleProfile,
 } from "@/lib/ai/prompts/draft-reply"
+import {
+  buildLearnedReplyProfilePrompt,
+  learnedReplyProfileJsonSchema,
+  normalizeLearnedReplyProfileOutput,
+  type LearnedReplyProfileResult,
+  type ReplyLearningSample,
+} from "@/lib/ai/prompts/learned-reply-profile"
 
 export async function generateDraftReplyWithOpenAI(
   input: DraftReplyPromptInput
@@ -144,4 +151,32 @@ export async function generatePersonalStyleProfileWithOpenAI(
       : [],
     sanitizedExamples: typeof p.sanitizedExamples === "string" ? p.sanitizedExamples : null,
   }
+}
+
+export async function summarizeLearnedReplyProfileWithOpenAI(
+  samples: ReplyLearningSample[]
+): Promise<LearnedReplyProfileResult> {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is not configured")
+  }
+
+  const model = process.env.OPENAI_LEARNING_MODEL || process.env.OPENAI_MODEL || "gpt-5.4-mini"
+  const client = new OpenAI({ apiKey })
+  const prompt = buildLearnedReplyProfilePrompt(samples)
+
+  const response = await client.responses.create({
+    model,
+    input: prompt,
+    text: {
+      format: {
+        type: "json_schema",
+        name: "flowdesk_learned_reply_profile",
+        strict: true,
+        schema: learnedReplyProfileJsonSchema,
+      },
+    },
+  })
+
+  return normalizeLearnedReplyProfileOutput(response.output_text, model, samples, prompt)
 }

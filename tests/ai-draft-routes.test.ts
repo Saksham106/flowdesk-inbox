@@ -10,6 +10,7 @@ const {
   mockAgentJobFindFirst,
   mockGenerateDraftReply,
   mockGetFullBusinessContext,
+  mockGetReplyGenerationContext,
   mockSendConversationMessage,
 } = vi.hoisted(() => ({
   mockConversationFindFirst: vi.fn(),
@@ -21,6 +22,7 @@ const {
   mockAgentJobFindFirst: vi.fn(),
   mockGenerateDraftReply: vi.fn(),
   mockGetFullBusinessContext: vi.fn(),
+  mockGetReplyGenerationContext: vi.fn(),
   mockSendConversationMessage: vi.fn(),
 }))
 
@@ -55,6 +57,10 @@ vi.mock('@/lib/auth', () => ({
 
 vi.mock('@/lib/agent/context', () => ({
   getFullBusinessContext: mockGetFullBusinessContext,
+}))
+
+vi.mock('@/lib/agent/reply-context', () => ({
+  getReplyGenerationContext: mockGetReplyGenerationContext,
 }))
 
 vi.mock('@/lib/ai/provider', () => ({
@@ -112,6 +118,12 @@ describe('POST /api/conversations/[id]/draft/suggest', () => {
     vi.clearAllMocks()
     mockSession = { user: { id: 'user1', tenantId: 'tenant-A' } }
     mockAgentJobFindFirst.mockResolvedValue(null)
+    mockGetReplyGenerationContext.mockResolvedValue({
+      accountType: 'business',
+      businessProfile: { businessName: 'Glow Studio' },
+      knowledgeDocuments: [{ id: 'doc1', title: 'Pricing', content: 'Botox starts at $12/unit.' }],
+      learnedProfile: null,
+    })
   })
 
   it('returns 401 without a session', async () => {
@@ -136,10 +148,6 @@ describe('POST /api/conversations/[id]/draft/suggest', () => {
 
   it('upserts a proposed draft with AI metadata scoped to the session tenant', async () => {
     mockConversationFindFirst.mockResolvedValue(emailConversation)
-    mockGetFullBusinessContext.mockResolvedValue({
-      profile: { businessName: 'Glow Studio' },
-      documents: [{ id: 'doc1', title: 'Pricing', content: 'Botox starts at $12/unit.' }],
-    })
     mockGenerateDraftReply.mockResolvedValue({
       draftText: 'Thanks for reaching out. Botox starts at $12/unit.',
       intent: 'pricing',

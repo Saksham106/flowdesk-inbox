@@ -52,7 +52,8 @@ export default async function SettingsPage({ searchParams }: Props) {
     followUpSetting,
     autopilotSetting,
     tenant,
-    personalProfile,
+    learnedReplyProfile,
+    latestLearningUsage,
   ] = await Promise.all([
     prisma.channel.findMany({
       where: { tenantId: session.user.tenantId, type: "email" },
@@ -88,8 +89,13 @@ export default async function SettingsPage({ searchParams }: Props) {
       where: { id: session.user.tenantId },
       select: { accountType: true },
     }),
-    prisma.personalProfile.findUnique({
+    prisma.learnedReplyProfile.findFirst({
       where: { tenantId: session.user.tenantId },
+      orderBy: { updatedAt: "desc" },
+    }),
+    prisma.aiUsageEvent.findFirst({
+      where: { tenantId: session.user.tenantId, feature: "reply_learning.train" },
+      orderBy: { createdAt: "desc" },
     }),
   ]);
 
@@ -439,41 +445,22 @@ export default async function SettingsPage({ searchParams }: Props) {
           </section>
         )}
 
-        {/* Personal Style — personal only */}
-        {isPersonal && (
-          <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-6 py-4">
-              <h2 className="font-semibold">Personal Style</h2>
-              <p className="mt-0.5 text-sm text-slate-500">
-                FlowDesk learns your writing style from your sent emails to draft replies that sound like you.
-              </p>
-            </div>
-            <div className="px-6 py-5">
-              <PersonalStylePanel
-                initial={
-                  personalProfile
-                    ? {
-                        toneSummary: personalProfile.toneSummary,
-                        greetingPatterns: personalProfile.greetingPatterns,
-                        signoffPatterns: personalProfile.signoffPatterns,
-                        sentenceLengthStyle: personalProfile.sentenceLengthStyle,
-                        formalityLevel: personalProfile.formalityLevel,
-                        recurringPhrasesToUse: Array.isArray(personalProfile.recurringPhrasesToUse)
-                          ? (personalProfile.recurringPhrasesToUse as string[])
-                          : [],
-                        recurringPhrasesToAvoid: Array.isArray(personalProfile.recurringPhrasesToAvoid)
-                          ? (personalProfile.recurringPhrasesToAvoid as string[])
-                          : [],
-                        sanitizedExamples: personalProfile.sanitizedExamples,
-                        sampleCount: personalProfile.sampleCount,
-                        lastTrainedAt: personalProfile.lastTrainedAt?.toISOString() ?? null,
-                      }
-                    : null
-                }
-              />
-            </div>
-          </section>
-        )}
+        {/* Reply Learning */}
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="font-semibold">Reply Learning</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              {isPersonal
+                ? "FlowDesk learns your writing style from sent emails to draft replies that sound like you."
+                : "FlowDesk learns from sent staff replies to make business drafts sound more like your team."}
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <PersonalStylePanel
+              initial={toLearnedPanelSnapshot(learnedReplyProfile, latestLearningUsage)}
+            />
+          </div>
+        </section>
 
         {/* Follow-Up Automation */}
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -514,6 +501,8 @@ export default async function SettingsPage({ searchParams }: Props) {
           </div>
           <div className="px-6 py-5">
             <AutopilotSettingsForm
+              requiresLearnedProfile={isPersonal}
+              hasLearnedProfile={!!learnedReplyProfile}
               initial={
                 autopilotSetting
                   ? {
@@ -535,4 +524,54 @@ export default async function SettingsPage({ searchParams }: Props) {
       </main>
     </div>
   );
+}
+
+function toLearnedPanelSnapshot(
+  profile: {
+    styleSummaryJson: unknown
+    exampleSnippetsJson: unknown
+    sourceStatsJson: unknown
+    lastTrainedAt: Date | null
+  } | null,
+  usage: {
+    estimatedInputTokens: number
+    estimatedOutputTokens: number
+    status: string
+    createdAt: Date
+  } | null
+) {
+  if (!profile) return null
+
+  const style =
+    typeof profile.styleSummaryJson === "object" && profile.styleSummaryJson !== null
+      ? (profile.styleSummaryJson as Record<string, unknown>)
+      : {}
+  const sourceStats =
+    typeof profile.sourceStatsJson === "object" && profile.sourceStatsJson !== null
+      ? (profile.sourceStatsJson as Record<string, unknown>)
+      : {}
+
+  return {
+    toneSummary: typeof style.tone === "string" ? style.tone : null,
+    greetingPatterns: typeof style.greetings === "string" ? style.greetings : null,
+    signoffPatterns: typeof style.signoffs === "string" ? style.signoffs : null,
+    sentenceLengthStyle: typeof style.length === "string" ? style.length : null,
+    formalityLevel: typeof style.formality === "string" ? style.formality : null,
+    recurringPhrasesToUse: Array.isArray(style.commonPhrases)
+      ? style.commonPhrases.filter((item): item is string => typeof item === "string")
+      : [],
+    recurringPhrasesToAvoid: Array.isArray(style.thingsToAvoid)
+      ? style.thingsToAvoid.filter((item): item is string => typeof item === "string")
+      : [],
+    sanitizedExamples: Array.isArray(profile.exampleSnippetsJson)
+      ? profile.exampleSnippetsJson.filter((item): item is string => typeof item === "string").join("\n")
+      : null,
+    sampleCount: typeof sourceStats.sampleCount === "number" ? sourceStats.sampleCount : 0,
+    lastTrainedAt: profile.lastTrainedAt?.toISOString() ?? null,
+    lastTrainingTokens: usage
+      ? usage.estimatedInputTokens + usage.estimatedOutputTokens
+      : null,
+    lastTrainingStatus: usage?.status ?? null,
+    lastTrainingAt: usage?.createdAt.toISOString() ?? null,
+  }
 }

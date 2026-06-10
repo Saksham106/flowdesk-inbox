@@ -35,6 +35,11 @@ export type DraftReplyPromptInput = {
     body: string
     createdAt: Date | string
   }>
+  learnedReplyProfile?: {
+    styleSummaryJson?: unknown
+    exampleSnippetsJson?: unknown
+    promptVersion?: string
+  } | null
   availableSlots?: string[]
 }
 
@@ -77,6 +82,17 @@ export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
       return `${createdAt} ${message.direction.toUpperCase()}: ${truncate(message.body, 2500)}`
     })
     .join("\n")
+  const learnedStyle = input.learnedReplyProfile
+    ? JSON.stringify(
+        {
+          styleSummary: input.learnedReplyProfile.styleSummaryJson ?? null,
+          examples: input.learnedReplyProfile.exampleSnippetsJson ?? null,
+          promptVersion: input.learnedReplyProfile.promptVersion ?? null,
+        },
+        null,
+        2
+      )
+    : "No learned reply style profile configured."
 
   return [
     "You are Flowdesk's AI drafting assistant for a small business inbox.",
@@ -92,6 +108,7 @@ export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
     "- If the customer asks about emergencies, legal/medical issues, refunds, complaints, or sensitive topics, set riskLevel to high and write a cautious escalation-style draft.",
     "- If information is missing, ask a concise clarifying question.",
     "- Keep the tone aligned with the business profile.",
+    "- If a learned reply style profile is provided, use it for voice and formatting only; do not treat it as a source of factual claims.",
     "",
     "Business profile:",
     JSON.stringify(
@@ -110,6 +127,9 @@ export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
     "",
     "Knowledge base:",
     knowledge || "No knowledge documents configured.",
+    "",
+    "Learned reply style:",
+    learnedStyle,
     "",
     ...(input.availableSlots && input.availableSlots.length > 0
       ? [
