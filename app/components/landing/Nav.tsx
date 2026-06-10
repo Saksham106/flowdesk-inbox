@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { scrollToLandingSection } from "@/lib/client-navigation";
 
 const navLinks = [
   { label: "Features", href: "#features" },
@@ -12,6 +13,15 @@ const navLinks = [
 
 export default function Nav() {
   const [menuOpen, setMenuOpen] = useState(false);
+
+  function onSectionClick(
+    event: React.MouseEvent<HTMLAnchorElement>,
+    href: string
+  ) {
+    event.preventDefault();
+    setMenuOpen(false);
+    scrollToLandingSection(href);
+  }
 
   return (
     <header className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-neutral-100">
@@ -25,6 +35,7 @@ export default function Nav() {
             <a
               key={link.href}
               href={link.href}
+              onClick={(event) => onSectionClick(event, link.href)}
               className="text-sm text-neutral-500 hover:text-neutral-900 transition-colors"
             >
               {link.label}
@@ -74,7 +85,7 @@ export default function Nav() {
             <a
               key={link.href}
               href={link.href}
-              onClick={() => setMenuOpen(false)}
+              onClick={(event) => onSectionClick(event, link.href)}
               className="text-sm text-neutral-600 hover:text-neutral-900 transition-colors"
             >
               {link.label}

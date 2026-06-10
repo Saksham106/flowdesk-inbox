@@ -1,8 +1,9 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { getAuthSuccessPath } from "@/lib/client-navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export default function LoginPage() {
 }
 
 function LoginForm() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [mode, setMode] = useState<"signin" | "signup">(
     searchParams.get("signup") ? "signup" : "signin"
@@ -33,6 +35,7 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const authError = searchParams.get("error");
+  const [signInError, setSignInError] = useState(false);
 
   // Sign-up state
   const [signupEmail, setSignupEmail] = useState("");
@@ -45,14 +48,23 @@ function LoginForm() {
   async function onSignIn(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
+    setSignInError(false);
 
-    await signIn("credentials", {
+    const result = await signIn("credentials", {
       email,
       password,
       callbackUrl: "/inbox",
+      redirect: false,
     });
 
     setIsSubmitting(false);
+
+    if (result?.ok) {
+      router.replace(getAuthSuccessPath(result.url));
+      return;
+    }
+
+    setSignInError(true);
   }
 
   async function onSignUp(event: React.FormEvent<HTMLFormElement>) {
@@ -87,11 +99,19 @@ function LoginForm() {
         return;
       }
 
-      await signIn("credentials", {
+      const result = await signIn("credentials", {
         email: signupEmail,
         password: signupPassword,
         callbackUrl: "/inbox",
+        redirect: false,
       });
+
+      if (result?.ok) {
+        router.replace(getAuthSuccessPath(result.url));
+        return;
+      }
+
+      setSignupError("Account created, but sign-in failed. Please sign in.");
     } catch {
       setSignupError("Something went wrong. Please try again.");
     } finally {
@@ -129,7 +149,7 @@ function LoginForm() {
                 className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
               />
             </label>
-            {authError ? (
+            {authError || signInError ? (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
                 Invalid credentials.
               </p>

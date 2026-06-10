@@ -21,8 +21,8 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "flowdesk-inbox",
-  description: "SMS inbox for multi-tenant support",
+  title: "Flowdesk Inbox",
+  description: "AI inbox for small business support",
 };
 
 export default function RootLayout({

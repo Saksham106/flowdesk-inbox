@@ -146,7 +146,7 @@ Credentials are verified live against MindBody's API before being saved. Use Sit
 | Variable | Required | Description |
 |---|---|---|
 | `DATABASE_URL` | Yes | Postgres connection string |
-| `NEXTAUTH_URL` | Yes | Base URL (e.g. `https://yourapp.up.railway.app`) |
+| `NEXTAUTH_URL` | Yes | Public base URL for the current deployment, e.g. your custom domain |
 | `NEXTAUTH_SECRET` | Yes | Session secret — `openssl rand -base64 32` |
 | `ENCRYPTION_SECRET` | Yes (prod) | AES-256 key for encrypting OAuth tokens — `openssl rand -base64 32` |
 | `GOOGLE_CLIENT_ID` | Yes | Google OAuth client ID (Gmail + Calendar) |
@@ -166,14 +166,14 @@ Credentials are verified live against MindBody's API before being saved. Use Sit
 2. Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub repo
 3. Add a **Postgres** plugin — Railway injects `DATABASE_URL` automatically
 4. Under the service's **Variables** tab, add all required env vars (see table above)
-5. Add your Railway URL as an authorized redirect URI in Google Cloud Console for both Gmail and Calendar
+5. Add your public app URL as an authorized redirect URI in Google Cloud Console for both Gmail and Calendar
 6. Deploy — Railway runs `npm run build` on push and `prisma migrate deploy` on start automatically
 7. Seed the database once after first deploy:
    ```bash
    npm run db:seed
    ```
 
-Live URL: `https://flowdesk-inbox-production.up.railway.app`
+Set `NEXTAUTH_URL` to the same public app URL users visit in production.
 
 ---
 
