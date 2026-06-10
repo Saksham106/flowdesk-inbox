@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DM_Mono, Space_Grotesk } from "next/font/google";
+import { DM_Mono, Space_Grotesk, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import Providers from "@/app/providers";
 
@@ -12,6 +12,12 @@ const dmMono = DM_Mono({
   variable: "--font-geist-mono",
   weight: ["400", "500"],
   subsets: ["latin"],
+});
+
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
+  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -27,7 +33,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${spaceGrotesk.variable} ${dmMono.variable} antialiased bg-slate-50 text-slate-900`}
+        className={`${spaceGrotesk.variable} ${dmMono.variable} ${playfair.variable} antialiased bg-slate-50 text-slate-900`}
       >
         <Providers>{children}</Providers>
       </body>

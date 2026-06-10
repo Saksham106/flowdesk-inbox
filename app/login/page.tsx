@@ -24,7 +24,9 @@ export default function LoginPage() {
 
 function LoginForm() {
   const searchParams = useSearchParams();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup">(
+    searchParams.get("signup") ? "signup" : "signin"
+  );
 
   // Sign-in state
   const [email, setEmail] = useState("");
