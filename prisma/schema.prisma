@@ -18,12 +18,10 @@ enum ReplyProfileType {
 }
 
 enum ChannelType {
-  sms
   email
 }
 
 enum ChannelProvider {
-  twilio
   google
   microsoft
 }
@@ -102,17 +100,12 @@ model User {
 }
 
 model Channel {
-  id                       String           @id @default(cuid())
-  tenantId                 String
-  type                     ChannelType      @default(sms)
-  provider                 ChannelProvider  @default(twilio)
-  phoneNumberE164          String?          @unique
-  emailAddress             String?          @unique
-  twilioAccountSid         String?
-  twilioAuthTokenEncrypted String?
-  officePhoneE164          String?
-  missedCallReplyText      String?
-  createdAt                DateTime         @default(now())
+  id           String          @id @default(cuid())
+  tenantId     String
+  type         ChannelType     @default(email)
+  provider     ChannelProvider @default(google)
+  emailAddress String?         @unique
+  createdAt    DateTime        @default(now())
   tenant                   Tenant           @relation(fields: [tenantId], references: [id])
   conversations            Conversation[]
   gmailCredential          GmailCredential?

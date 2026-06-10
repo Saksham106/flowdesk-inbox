@@ -90,9 +90,7 @@ export default async function ConversationPage({
               {conversation.label && <LabelBadge label={conversation.label} />}
             </div>
             <p className="text-sm text-slate-500">
-              {conversation.channel.type === "email"
-                ? conversation.channel.emailAddress
-                : `${conversation.externalThreadId} · ${conversation.channel.phoneNumberE164}`}
+              {conversation.channel.emailAddress ?? conversation.externalThreadId}
             </p>
           </div>
           <StatusButton

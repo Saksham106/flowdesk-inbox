@@ -1,5 +1,5 @@
 /**
- * AES-256-GCM encryption/decryption for sensitive values (e.g. Twilio auth tokens).
+ * AES-256-GCM encryption/decryption for sensitive values (e.g. OAuth tokens).
  *
  * Encrypted format: "<iv_hex>:<tag_hex>:<ciphertext_hex>"
  *

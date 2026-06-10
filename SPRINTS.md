@@ -143,13 +143,13 @@ On-demand AI:
 - Audit logs.
 - MindBody as optional future vertical integration for med spas.
 
-### Pause
+### Removed
 
-- Twilio inbound SMS.
-- Twilio outbound SMS.
-- Twilio voice/missed-call flow.
-- A2P 10DLC work.
-- SMS-first onboarding.
+- Twilio inbound SMS — decision made 2026-06-10, will not be used.
+- Twilio outbound SMS — removed from scope.
+- Twilio voice/missed-call flow — removed from scope.
+- A2P 10DLC work — not applicable.
+- SMS-first onboarding — not applicable.
 
 ### Add
 
@@ -593,8 +593,7 @@ Tasks:
 - [ ] Revisit MindBody for med spa appointment/client lookup.
 - [ ] Add service catalog sync if MindBody proves valuable.
 - [ ] Add booking into MindBody only after calendar scheduling works.
-- [ ] Revisit SMS/Twilio once there is paying customer demand.
-- [ ] Revisit voice/missed-call automation after SMS compliance is worth the cost.
+- ~~Twilio/SMS~~ — removed from roadmap (decision: 2026-06-10).
 
 Acceptance criteria:
 
@@ -619,7 +618,7 @@ Follow these principles while building:
 ### Immediate
 
 - [x] Update README for the email-first pivot.
-- [ ] Decide whether Twilio code is hidden, removed, or left as future infrastructure.
+- [ ] Remove Twilio code from the repo (decision made: not using Twilio).
 - [x] Add OpenAI or chosen AI provider dependency.
 - [x] Add AI provider abstraction.
 - [x] Add tests framework if none exists.
@@ -679,8 +678,7 @@ Follow these principles while building:
 
 ### Later
 
-- [ ] Reintroduce SMS only after email AI closes pilots.
-- [ ] Investigate Twilio compliance path when customers request SMS.
+- ~~SMS/Twilio~~ — removed from roadmap (decision: 2026-06-10).
 - [ ] Add MindBody booking after calendar booking works.
 - [ ] Add autopilot after enough approved draft data exists.
 - [ ] Explore Hermes/OpenClaw interoperability only for internal research/dev tooling, not core customer runtime.
@@ -689,7 +687,7 @@ Follow these principles while building:
 
 - Which AI provider/model should be used first?
 - Should the first niche remain med spas, or should the product be positioned as appointment-heavy local businesses?
-- Should Twilio code be deleted now or left dormant?
+- Twilio code should be deleted — decision made 2026-06-10 not to use Twilio.
 - Should the first MVP generate drafts automatically on sync, or only when staff clicks "Suggest reply"?
 - Should calendar booking create temporary holds, or only suggest slots until later?
 

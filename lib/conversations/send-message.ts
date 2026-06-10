@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma"
-import { getTwilioClient } from "@/lib/twilio"
 import { extractEmail, fetchThread, getGmailClient, sendGmailReply } from "@/lib/google"
 import { sendOutlookReply } from "@/lib/microsoft"
 
@@ -61,16 +60,11 @@ export async function sendConversationMessage(
     throw new ConversationSendError("Conversation not found", 404)
   }
 
-  if (conversation.channel.type === "email") {
-    return sendEmailConversationMessage({
-      conversation,
-      text,
-      userId: input.userId,
-      auditAction: input.auditAction ?? "conversation.send",
-    })
+  if (conversation.channel.type !== "email") {
+    throw new ConversationSendError("Only email channels are supported", 400)
   }
 
-  return sendSmsConversationMessage({
+  return sendEmailConversationMessage({
     conversation,
     text,
     userId: input.userId,
@@ -194,85 +188,6 @@ async function sendEmailConversationMessage({
   }
 
   return { ok: true, providerMessageId: `gmail_${gmailMessageId}` }
-}
-
-async function sendSmsConversationMessage({
-  conversation,
-  text,
-  userId,
-  auditAction,
-}: {
-  conversation: ConversationForSend
-  text: string
-  userId?: string | null
-  auditAction: string
-}): Promise<SendConversationMessageResult> {
-  if (!conversation) {
-    throw new ConversationSendError("Conversation not found", 404)
-  }
-
-  const phoneNumber = conversation.channel.phoneNumberE164
-  if (!phoneNumber) {
-    throw new ConversationSendError("Channel has no phone number", 500)
-  }
-
-  const client = getTwilioClient(
-    conversation.channel.twilioAccountSid,
-    conversation.channel.twilioAuthTokenEncrypted
-  )
-
-  let result: Awaited<ReturnType<typeof client.messages.create>>
-
-  try {
-    result = await client.messages.create({
-      from: phoneNumber,
-      to: conversation.externalThreadId,
-      body: text,
-    })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Twilio error"
-    console.error("[send] Twilio error:", err)
-    throw new ConversationSendError(message, 502)
-  }
-
-  try {
-    const now = new Date()
-
-    await prisma.$transaction([
-      prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          direction: "outbound",
-          fromE164: phoneNumber,
-          toE164: conversation.externalThreadId,
-          body: text,
-          providerMessageId: result.sid,
-          createdAt: now,
-        },
-      }),
-      prisma.conversation.update({
-        where: { id: conversation.id },
-        data: { lastMessageAt: now, status: "in_progress" },
-      }),
-      prisma.auditLog.create({
-        data: {
-          tenantId: conversation.tenantId,
-          userId,
-          action: auditAction,
-          payloadJson: {
-            conversationId: conversation.id,
-            messageSid: result.sid,
-            to: conversation.externalThreadId,
-          },
-        },
-      }),
-    ])
-  } catch (err) {
-    console.error("[send] DB error after successful Twilio send (sid=%s):", result.sid, err)
-    throw new ConversationSendError("Message sent but failed to save - refresh the page.", 500)
-  }
-
-  return { ok: true, providerMessageId: result.sid }
 }
 
 async function sendOutlookEmailMessage({
