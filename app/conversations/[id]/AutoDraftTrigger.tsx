@@ -11,7 +11,11 @@ export default function AutoDraftTrigger({ conversationId }: { conversationId: s
     if (fired.current) return
     fired.current = true
     fetch(`/api/conversations/${conversationId}/draft/suggest`, { method: "POST" })
-      .then(() => router.refresh())
+      .then((response) => {
+        if (response.ok) {
+          router.refresh()
+        }
+      })
       .catch(() => null)
   }, [conversationId, router])
 
