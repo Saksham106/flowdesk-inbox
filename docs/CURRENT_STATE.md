@@ -260,7 +260,7 @@ npm run build
 
 Observed result:
 
-- `npm test`: 183 tests passed across 21 files.
+- `npm test`: 216 tests passed across 24 files.
 - `npm run lint`: passed.
 - `npm run build`: passed.
 
