@@ -21,7 +21,7 @@ export async function scoreLeadForConversation(
     include: {
       conversation: {
         include: {
-          messages: { orderBy: { createdAt: "asc" }, take: 20 },
+          messages: { orderBy: { createdAt: "desc" }, take: 20 },
         },
       },
     },
@@ -32,7 +32,7 @@ export async function scoreLeadForConversation(
   if (!options.force && !shouldRescoreLead(lead.scoredAt, lead.conversation.lastMessageAt)) return
 
   const input: LeadScoringPromptInput = {
-    messages: lead.conversation.messages,
+    messages: lead.conversation.messages.slice().reverse(),
     existingNeed: lead.need,
     existingUrgency: lead.urgency,
     existingBudgetClue: lead.budgetClue,
@@ -46,8 +46,8 @@ export async function scoreLeadForConversation(
     return
   }
 
-  await prisma.lead.update({
-    where: { id: leadId },
+  await prisma.lead.updateMany({
+    where: { id: leadId, tenantId },
     data: {
       score: result.score,
       scoreExplanation: result.scoreExplanation,
