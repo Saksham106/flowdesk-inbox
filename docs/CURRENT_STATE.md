@@ -70,7 +70,7 @@ Email is the active channel. SMS/Twilio is not part of the active product path.
 - Business profile settings exist.
 - Knowledge document create/list/delete flows exist.
 - Personal/learned reply profile infrastructure exists.
-- Relationship memory is currently lightweight and derived from existing conversation data, not persisted as a full person-memory system.
+- Relationship memory is persisted per contact in `PersonMemory` (summary, preferences, open questions, promised actions) and updated automatically after conversation sync.
 
 ### Daily Command Center
 
@@ -118,6 +118,17 @@ Review actions and background sync slice implemented:
 - Inbox nav now includes Tasks and Leads links.
 - Tests in `tests/work-item-actions.test.ts`.
 
+Phase 1 completion slice implemented (commit `0e5926a`):
+
+- `PersonMemory` Prisma model: per-contact persisted memory with summary, preferences, open questions, promised actions, last contact, and message count.
+- `lib/agent/person-memory.ts` — deterministic extraction from up to 10 recent conversations (30 messages each); synced automatically from `lib/agent/work-item-sync.ts` after every conversation sync, with an audit-log entry per sync.
+- Relationship panel on conversation pages showing summary, promises made, open questions, and preferences.
+- `app/api/tasks/[id]/due/route.ts` plus inline due-date editing on `/tasks` (`app/tasks/TaskList.tsx`) — click a date to edit, Enter/Escape/blur to save.
+- Approval queue draft preview — each queue item can expand to show the draft text inline.
+- Batch select with bulk approve/reject on the approval queue via `app/api/approvals/bulk/route.ts`.
+- Follow-up tracker panel on `/inbox` — amber banner listing queued follow-up agent jobs.
+- "Safely ignored" collapsible section on `/inbox` driven by `ConversationState` safely-ignored metadata.
+
 Current behavior:
 
 - Opening a conversation syncs deterministic state, open tasks, and a lead record when the thread has matching signals.
@@ -127,12 +138,17 @@ Current behavior:
 - Approval queue supports inline approve/reject decisions without navigating to the conversation.
 - Tasks are extracted from promise, deadline, payment, invoice, and renewal language.
 - Leads are extracted from pricing, demo, setup, and booking language.
+- Task due dates can be edited inline on `/tasks`.
+- Approval queue shows a collapsible draft preview per item and supports batch approve/reject.
+- Every contact gets a persisted `PersonMemory` record after sync, surfaced as a relationship panel on conversation pages.
+- The inbox shows queued follow-up jobs and a collapsible safely-ignored section.
 
 Limitations:
 
-- Task due-date editing and assignment are not yet implemented.
+- Task assignment is not yet implemented.
 - Lead scoring is deterministic; LLM-based scoring is not yet implemented.
-- Approval queue does not yet show draft text preview inline.
+- Person-memory extraction is deterministic (regex heuristics), not LLM-based, and is not user-editable.
+- Follow-up jobs are queued but there are no staged follow-up sequences for leads.
 - Full CRM pipeline reporting is not yet implemented.
 
 ## Partial Features
@@ -161,9 +177,10 @@ See `MASTER_PRODUCT_PLAN.md` for phase recommendations and feature statuses.
 
 ## Not Yet Implemented As Product Features
 
-- Full task management.
+- Full task management (assignment, manual creation).
 - Full CRM pipeline.
-- Persisted relationship/person memory.
+- Lead follow-up sequences (staged first/second/close follow-ups).
+- Weekly value report / ROI analytics.
 - Thread explanation panel powered by LLM summaries.
 - Attachment intelligence.
 - Natural-language inbox search.
@@ -199,28 +216,20 @@ The AI Draft MVP PR handoff was removed. The feature is now part of the baseline
 
 ## Recommended Next Engineering Slice
 
-Build follow-up brain and relationship memory:
+The follow-up tracker, persisted `PersonMemory`, and conversation relationship panel are now shipped. The remaining Phase 1 gaps, in priority order:
 
-1. User-visible follow-up tracker in the inbox and task list.
-2. Persisted `PersonMemory` records updated from conversation history.
-3. Relationship context shown on conversation pages (promises made, last contact, preferences).
-4. Follow-up sequences for leads.
+1. Lead follow-up sequences (first follow-up, second follow-up, close) — the last open item of the follow-up brain slice.
+2. Weekly value report — Phase 1 feature with zero implementation; deterministic aggregation over existing drafts, tasks, leads, follow-ups, and approvals.
+3. Explain This Thread panel — LLM-backed what happened / what they want / what to do / risks summary per thread.
+4. Email risk radar — surface deadline, final-notice, unanswered-thread, and sensitive-content signals as a dedicated view.
 
-Why this slice:
-
-- Review actions and background sync are now complete.
-- Follow-up batch infrastructure exists but produces no user-visible output.
-- Relationship memory is lightweight and not persisted per contact, limiting the assistant's usefulness.
+See `docs/TODO.md` for the full remaining-work roadmap mapped against the master plan.
 
 ## Verification Baseline
 
-Recent verification after the Daily Command Center work:
+Recent verification (2026-06-11, after the Phase 1 completion slice):
 
 ```bash
-npm test -- tests/command-center.test.ts
-npm test -- tests/agent-availability.test.ts
-npm test -- tests/work-items.test.ts
-npm test -- tests/work-item-sync.test.ts
 npm test
 npm run lint
 npm run build
@@ -228,7 +237,7 @@ npm run build
 
 Observed result:
 
-- `npm test`: 158 tests passed across 20 files.
+- `npm test`: 173 tests passed across 21 files.
 - `npm run lint`: passed.
 - `npm run build`: passed.
 
