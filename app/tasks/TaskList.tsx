@@ -20,19 +20,27 @@ function TaskRow({ task }: { task: Task }) {
   const router = useRouter()
   const [editingDue, setEditingDue] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const displayName = task.conversation.contact?.name ?? task.conversation.externalThreadId
   const isOverdue = task.dueAt && task.dueAt < new Date()
 
   async function saveDue(value: string) {
     setSaving(true)
     setEditingDue(false)
+    setError(null)
     try {
-      await fetch(`/api/tasks/${task.id}/due`, {
+      const res = await fetch(`/api/tasks/${task.id}/due`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dueAt: value || null }),
       })
+      if (!res.ok) {
+        setError("Could not save due date.")
+        return
+      }
       router.refresh()
+    } catch {
+      setError("Could not save due date.")
     } finally {
       setSaving(false)
     }
@@ -44,7 +52,8 @@ function TaskRow({ task }: { task: Task }) {
         <p className="text-sm font-medium text-slate-900">{task.title}</p>
         <p className="mt-0.5 truncate text-xs text-slate-500">{displayName}</p>
       </div>
-      <div className="flex shrink-0 items-center gap-3">
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <div className="flex items-center gap-3">
         {editingDue ? (
           <input
             type="date"
@@ -70,8 +79,8 @@ function TaskRow({ task }: { task: Task }) {
             }`}
             title="Click to edit due date"
           >
-            {saving ? "…" : task.dueAt ? task.dueAt.toLocaleDateString() : "Set due date"}
-          </button>
+          {saving ? "…" : task.dueAt ? task.dueAt.toLocaleDateString() : "Set due date"}
+        </button>
         )}
         <Link
           href={`/conversations/${task.conversationId}`}
@@ -79,6 +88,8 @@ function TaskRow({ task }: { task: Task }) {
         >
           View →
         </Link>
+        </div>
+        {error ? <p className="text-xs text-red-600">{error}</p> : null}
       </div>
     </li>
   )

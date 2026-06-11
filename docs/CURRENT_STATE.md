@@ -112,7 +112,7 @@ Review actions and background sync slice implemented:
 - `app/tasks/page.tsx` — task list page with overdue/upcoming/undated grouping.
 - `app/leads/page.tsx` — leads pipeline page sorted by score.
 - `app/approvals/ApprovalActions.tsx` — client component with inline approve/reject buttons.
-- `app/approvals/ApprovalList.tsx` — client component with optimistic row removal.
+- `app/approvals/ApprovalList.tsx` — client component with draft previews, bulk decisions, and guarded row removal after successful mutations.
 - `WorkItemsPanel.tsx` — now a client component with task close button and lead stage dropdown.
 - `lib/google.ts` and `lib/microsoft.ts` — `syncConversationWorkItems` called after each conversation upsert during Gmail and Outlook sync.
 - Inbox nav now includes Tasks and Leads links.
@@ -122,17 +122,16 @@ Current behavior:
 
 - Opening a conversation syncs deterministic state, open tasks, and a lead record when the thread has matching signals.
 - Gmail and Outlook sync now also triggers work-item sync for each imported conversation (background, fire-and-forget).
-- Tasks can be closed from the conversation sidebar or from `/tasks`.
+- Tasks can be closed from the conversation sidebar and due dates can be edited from `/tasks`.
 - Leads can be moved through stages (new → contacted → qualified → won → lost) from the conversation sidebar or `/leads`.
-- Approval queue supports inline approve/reject decisions without navigating to the conversation.
+- Approval queue supports inline approve/reject decisions, bulk decisions, and inline draft previews without navigating to the conversation.
 - Tasks are extracted from promise, deadline, payment, invoice, and renewal language.
 - Leads are extracted from pricing, demo, setup, and booking language.
 
 Limitations:
 
-- Task due-date editing and assignment are not yet implemented.
+- Task assignment is not yet implemented.
 - Lead scoring is deterministic; LLM-based scoring is not yet implemented.
-- Approval queue does not yet show draft text preview inline.
 - Full CRM pipeline reporting is not yet implemented.
 
 ## Partial Features

@@ -8,7 +8,9 @@ const {
   mockLeadFindFirst,
   mockLeadUpdate,
   mockApprovalFindFirst,
+  mockApprovalFindMany,
   mockApprovalUpdate,
+  mockApprovalUpdateMany,
   mockAuditCreate,
 } = vi.hoisted(() => ({
   mockTaskFindFirst: vi.fn(),
@@ -16,7 +18,9 @@ const {
   mockLeadFindFirst: vi.fn(),
   mockLeadUpdate: vi.fn(),
   mockApprovalFindFirst: vi.fn(),
+  mockApprovalFindMany: vi.fn(),
   mockApprovalUpdate: vi.fn(),
+  mockApprovalUpdateMany: vi.fn(),
   mockAuditCreate: vi.fn(),
 }))
 
@@ -24,7 +28,12 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     inboxTask: { findFirst: mockTaskFindFirst, update: mockTaskUpdate },
     lead: { findFirst: mockLeadFindFirst, update: mockLeadUpdate },
-    approvalRequest: { findFirst: mockApprovalFindFirst, update: mockApprovalUpdate },
+    approvalRequest: {
+      findFirst: mockApprovalFindFirst,
+      findMany: mockApprovalFindMany,
+      update: mockApprovalUpdate,
+      updateMany: mockApprovalUpdateMany,
+    },
     auditLog: { create: mockAuditCreate },
   },
 }))
@@ -54,6 +63,12 @@ vi.mock("next/server", () => ({
 function makeRequest(body: unknown): Request {
   return {
     json: () => Promise.resolve(body),
+  } as unknown as Request
+}
+
+function makeInvalidJsonRequest(): Request {
+  return {
+    json: () => Promise.reject(new Error("invalid json")),
   } as unknown as Request
 }
 
@@ -121,6 +136,65 @@ describe("PATCH /api/tasks/[id]/status", () => {
     const res = (await PATCH(makeRequest({ status: "open" }), params("t1"))) as { status: number; _body: { ok: boolean } }
     expect(res.status).toBe(200)
     expect(res._body.ok).toBe(true)
+  })
+})
+
+// ── Task due route ───────────────────────────────────────────────────────────
+
+describe("PATCH /api/tasks/[id]/due", () => {
+  let PATCH: (req: Request, ctx: { params: { id: string } }) => Promise<unknown>
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    const mod = await import("@/app/api/tasks/[id]/due/route")
+    PATCH = mod.PATCH
+  })
+
+  it("returns 401 when unauthenticated", async () => {
+    mockGetServerSession.mockResolvedValue(null)
+    const res = (await PATCH(makeRequest({ dueAt: "2026-06-12" }), params("t1"))) as { status: number }
+    expect(res.status).toBe(401)
+  })
+
+  it("returns 400 for malformed json", async () => {
+    mockGetServerSession.mockResolvedValue({ user: { tenantId: "ten-1", id: "u1" } })
+    const res = (await PATCH(makeInvalidJsonRequest(), params("t1"))) as { status: number }
+    expect(res.status).toBe(400)
+  })
+
+  it("returns 400 for invalid due date", async () => {
+    mockGetServerSession.mockResolvedValue({ user: { tenantId: "ten-1", id: "u1" } })
+    const res = (await PATCH(makeRequest({ dueAt: "not-a-date" }), params("t1"))) as { status: number }
+    expect(res.status).toBe(400)
+  })
+
+  it("returns 404 when task not found", async () => {
+    mockGetServerSession.mockResolvedValue({ user: { tenantId: "ten-1", id: "u1" } })
+    mockTaskFindFirst.mockResolvedValue(null)
+    const res = (await PATCH(makeRequest({ dueAt: "2026-06-12" }), params("t1"))) as { status: number }
+    expect(res.status).toBe(404)
+  })
+
+  it("updates a tenant-owned task due date", async () => {
+    mockGetServerSession.mockResolvedValue({ user: { tenantId: "ten-1", id: "u1" } })
+    const task = { id: "t1", tenantId: "ten-1", conversationId: "c1" }
+    mockTaskFindFirst.mockResolvedValue(task)
+    mockTaskUpdate.mockResolvedValue({ ...task, dueAt: new Date("2026-06-12T00:00:00.000Z") })
+    mockAuditCreate.mockResolvedValue({})
+
+    const res = (await PATCH(makeRequest({ dueAt: "2026-06-12" }), params("t1"))) as { status: number }
+    expect(res.status).toBe(200)
+    expect(mockTaskUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "t1" },
+        data: { dueAt: expect.any(Date) },
+      })
+    )
+    expect(mockAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "inbox_task.due_date_updated" }),
+      })
+    )
   })
 })
 
@@ -251,6 +325,72 @@ describe("POST /api/approvals/[id]/decide", () => {
     expect(mockApprovalUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: "rejected", decisionNote: "Too informal" }),
+      })
+    )
+  })
+})
+
+// ── Approval bulk route ──────────────────────────────────────────────────────
+
+describe("POST /api/approvals/bulk", () => {
+  let POST: (req: Request) => Promise<unknown>
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    const mod = await import("@/app/api/approvals/bulk/route")
+    POST = mod.POST
+  })
+
+  it("returns 401 when unauthenticated", async () => {
+    mockGetServerSession.mockResolvedValue(null)
+    const res = (await POST(makeRequest({ ids: ["a1"], decision: "approved" }))) as { status: number }
+    expect(res.status).toBe(401)
+  })
+
+  it("returns 400 for malformed json", async () => {
+    mockGetServerSession.mockResolvedValue({ user: { tenantId: "ten-1", id: "u1" } })
+    const res = (await POST(makeInvalidJsonRequest())) as { status: number }
+    expect(res.status).toBe(400)
+  })
+
+  it("returns 400 for invalid decision", async () => {
+    mockGetServerSession.mockResolvedValue({ user: { tenantId: "ten-1", id: "u1" } })
+    const res = (await POST(makeRequest({ ids: ["a1"], decision: "maybe" }))) as { status: number }
+    expect(res.status).toBe(400)
+  })
+
+  it("returns 400 when no ids are provided", async () => {
+    mockGetServerSession.mockResolvedValue({ user: { tenantId: "ten-1", id: "u1" } })
+    const res = (await POST(makeRequest({ ids: [], decision: "approved" }))) as { status: number }
+    expect(res.status).toBe(400)
+  })
+
+  it("updates only owned pending approvals", async () => {
+    mockGetServerSession.mockResolvedValue({ user: { tenantId: "ten-1", id: "u1" } })
+    mockApprovalFindMany.mockResolvedValue([{ id: "a1" }])
+    mockApprovalUpdateMany.mockResolvedValue({ count: 1 })
+    mockAuditCreate.mockResolvedValue({})
+
+    const res = (await POST(makeRequest({ ids: ["a1", "other-tenant"], decision: "approved" }))) as {
+      status: number
+      _body: { updated: number }
+    }
+
+    expect(res.status).toBe(200)
+    expect(res._body.updated).toBe(1)
+    expect(mockApprovalFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: { in: ["a1", "other-tenant"] },
+          tenantId: "ten-1",
+          status: "pending",
+        }),
+      })
+    )
+    expect(mockApprovalUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: { in: ["a1"] } },
+        data: expect.objectContaining({ status: "approved" }),
       })
     )
   })

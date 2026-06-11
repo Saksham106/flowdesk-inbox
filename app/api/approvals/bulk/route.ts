@@ -9,11 +9,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const body = await req.json()
-  const ids: string[] = body.ids ?? []
-  const decision: "approved" | "rejected" = body.decision
+  const body = await req.json().catch(() => null)
+  const ids: string[] = Array.isArray(body?.ids)
+    ? body.ids.filter((id: unknown): id is string => typeof id === "string")
+    : []
+  const decision = body?.decision as "approved" | "rejected" | undefined
 
-  if (!["approved", "rejected"].includes(decision)) {
+  if (decision !== "approved" && decision !== "rejected") {
     return NextResponse.json({ error: "Invalid decision" }, { status: 400 })
   }
   if (!Array.isArray(ids) || ids.length === 0) {

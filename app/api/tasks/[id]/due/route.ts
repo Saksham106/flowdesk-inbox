@@ -12,7 +12,11 @@ export async function PATCH(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const body = await req.json()
+  const body = await req.json().catch(() => null)
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
+  }
+
   const dueAt = body.dueAt ? new Date(body.dueAt) : null
 
   if (dueAt !== null && isNaN(dueAt.getTime())) {

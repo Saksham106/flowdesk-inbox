@@ -44,16 +44,24 @@ export default function WorkItemsPanel({
   const router = useRouter()
   const [closingTaskId, setClosingTaskId] = useState<string | null>(null)
   const [stagingLeadId, setStagingLeadId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   async function closeTask(taskId: string) {
     setClosingTaskId(taskId)
+    setError(null)
     try {
-      await fetch(`/api/tasks/${taskId}/status`, {
+      const res = await fetch(`/api/tasks/${taskId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "closed" }),
       })
+      if (!res.ok) {
+        setError("Could not close task.")
+        return
+      }
       router.refresh()
+    } catch {
+      setError("Could not close task.")
     } finally {
       setClosingTaskId(null)
     }
@@ -61,13 +69,20 @@ export default function WorkItemsPanel({
 
   async function updateLeadStage(leadId: string, stage: string) {
     setStagingLeadId(leadId)
+    setError(null)
     try {
-      await fetch(`/api/leads/${leadId}/stage`, {
+      const res = await fetch(`/api/leads/${leadId}/stage`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stage }),
       })
+      if (!res.ok) {
+        setError("Could not update lead stage.")
+        return
+      }
       router.refresh()
+    } catch {
+      setError("Could not update lead stage.")
     } finally {
       setStagingLeadId(null)
     }
@@ -181,6 +196,8 @@ export default function WorkItemsPanel({
           </div>
         </div>
       ) : null}
+
+      {error ? <p className="mt-3 text-xs text-red-600">{error}</p> : null}
     </div>
   )
 }
