@@ -19,11 +19,13 @@ enum ReplyProfileType {
 
 enum ChannelType {
   email
+  sms
 }
 
 enum ChannelProvider {
   google
   microsoft
+  twilio
 }
 
 enum MessageDirection {
@@ -87,6 +89,7 @@ model Tenant {
   conversationStates        ConversationState[]
   inboxTasks                InboxTask[]
   leads                     Lead[]
+  personMemories            PersonMemory[]
   followUpSetting           FollowUpSetting?
   autopilotSetting          AutopilotSetting?
 }
@@ -172,8 +175,27 @@ model Contact {
   createdAt     DateTime       @default(now())
   tenant        Tenant         @relation(fields: [tenantId], references: [id])
   conversations Conversation[]
+  personMemory  PersonMemory?
 
   @@unique([tenantId, phoneE164])
+}
+
+model PersonMemory {
+  id              String    @id @default(cuid())
+  tenantId        String
+  contactId       String    @unique
+  lastContactAt   DateTime?
+  messageCount    Int       @default(0)
+  summary         String?
+  preferences     String?
+  openQuestions   String?
+  promisedActions String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact         Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 
 model Conversation {

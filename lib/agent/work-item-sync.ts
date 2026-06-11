@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client"
 
 import { prisma } from "@/lib/prisma"
 import { summarizeWorkItems, type WorkItemConversationInput } from "@/lib/agent/work-items"
+import { syncPersonMemory } from "@/lib/agent/person-memory"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
@@ -175,6 +176,10 @@ export async function syncConversationWorkItems(
     })
 
     leadSynced = true
+  }
+
+  if (conversation.contactId) {
+    await syncPersonMemory(conversation.tenantId, conversation.contactId)
   }
 
   return { stateSynced: true, tasksSynced, leadSynced }

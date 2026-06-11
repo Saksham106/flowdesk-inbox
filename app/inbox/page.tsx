@@ -55,7 +55,7 @@ export default async function InboxPage({ searchParams }: Props) {
       : {}),
   };
 
-  const [conversations, statusCounts, commandCenterConversations] = await Promise.all([
+  const [conversations, statusCounts, commandCenterConversations, ignoredStates, pendingFollowUps] = await Promise.all([
     prisma.conversation.findMany({
       where,
       orderBy: { lastMessageAt: "desc" },
@@ -102,6 +102,18 @@ export default async function InboxPage({ searchParams }: Props) {
         },
       },
     }),
+    prisma.conversationState.findMany({
+      where: { tenantId },
+      include: { conversation: { include: { contact: true } } },
+      orderBy: { updatedAt: "desc" },
+      take: 200,
+    }),
+    prisma.agentJob.findMany({
+      where: { tenantId, trigger: "follow_up", status: { in: ["pending", "running"] } },
+      include: { conversation: { include: { contact: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
   ]);
 
   const commandCenter = buildDailyCommandCenter(commandCenterConversations);
@@ -112,6 +124,25 @@ export default async function InboxPage({ searchParams }: Props) {
 
   const totalCount = statusCounts.reduce((sum, r) => sum + r._count.status, 0);
   const needsReplyCount = countByStatus["needs_reply"] ?? 0;
+
+  const ignoredConversations = ignoredStates
+    .filter((s) => {
+      const meta = s.metadataJson as Record<string, unknown> | null;
+      return meta?.safelyIgnored === true;
+    })
+    .map((s) => ({
+      id: s.conversationId,
+      displayName: s.conversation.contact?.name ?? s.conversation.externalThreadId,
+      reason: s.reason,
+      href: `/conversations/${s.conversationId}`,
+    }));
+
+  const followUpConversations = pendingFollowUps.map((job) => ({
+    id: job.conversationId,
+    displayName: job.conversation.contact?.name ?? job.conversation.externalThreadId,
+    scheduledAt: job.createdAt,
+    href: `/conversations/${job.conversationId}`,
+  }));
 
   function tabHref(status: ConversationStatus | null) {
     const params = new URLSearchParams();
@@ -219,6 +250,52 @@ export default async function InboxPage({ searchParams }: Props) {
 
       <main className="mx-auto max-w-5xl px-4 sm:px-6 py-6">
         <CommandCenterPanel commandCenter={commandCenter} />
+
+        {/* Follow-up tracker */}
+        {followUpConversations.length > 0 && (
+          <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700">
+              Follow-ups queued ({followUpConversations.length})
+            </p>
+            <ul className="space-y-1">
+              {followUpConversations.map((c) => (
+                <li key={c.id}>
+                  <Link
+                    href={c.href}
+                    className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-amber-100"
+                  >
+                    <span className="font-medium text-amber-900">{c.displayName}</span>
+                    <span className="text-xs text-amber-600">
+                      Queued {c.scheduledAt.toLocaleDateString()}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* What can I ignore */}
+        {ignoredConversations.length > 0 && (
+          <details className="mb-5 rounded-xl border border-slate-200 bg-white shadow-sm">
+            <summary className="cursor-pointer select-none px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700">
+              Safely ignored ({ignoredConversations.length})
+            </summary>
+            <ul className="divide-y divide-slate-100 border-t border-slate-100">
+              {ignoredConversations.map((c) => (
+                <li key={c.id}>
+                  <Link
+                    href={c.href}
+                    className="flex items-start justify-between gap-4 px-4 py-3 text-sm hover:bg-slate-50"
+                  >
+                    <span className="font-medium text-slate-700">{c.displayName}</span>
+                    <span className="text-xs text-slate-400">{c.reason}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
 
         {/* Search */}
         <div className="mb-5">

@@ -42,6 +42,7 @@ export default async function ApprovalsPage() {
       displayName:
         approval.conversation.contact?.name ?? approval.conversation.externalThreadId,
       lastMessageBody: approval.conversation.messages[0]?.body ?? null,
+      draftText: approval.draft?.text ?? null,
       intent: metadataText(metadata?.intent),
       riskLevel: metadataText(metadata?.riskLevel),
       confidence: metadataText(metadata?.confidence),

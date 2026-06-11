@@ -86,7 +86,7 @@ export default async function ConversationPage({
     conversationId: conversation.id,
   }).catch(() => null);
 
-  const [stateRecord, inboxTasks, lead] = await Promise.all([
+  const [stateRecord, inboxTasks, lead, personMemory] = await Promise.all([
     prisma.conversationState.findUnique({
       where: { conversationId: conversation.id },
       select: {
@@ -122,6 +122,19 @@ export default async function ConversationPage({
         stage: true,
       },
     }),
+    conversation.contactId
+      ? prisma.personMemory.findUnique({
+          where: { contactId: conversation.contactId },
+          select: {
+            summary: true,
+            preferences: true,
+            openQuestions: true,
+            promisedActions: true,
+            lastContactAt: true,
+            messageCount: true,
+          },
+        })
+      : null,
   ]);
 
   const displayName = conversation.contact?.name ?? conversation.externalThreadId;
@@ -263,6 +276,38 @@ export default async function ConversationPage({
             tasks={inboxTasks}
             lead={lead}
           />
+
+          {/* Relationship memory */}
+          {personMemory && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h2 className="mb-3 text-sm font-semibold text-slate-600">Relationship</h2>
+              <p className="text-xs text-slate-600 leading-relaxed">{personMemory.summary}</p>
+              {personMemory.promisedActions && (
+                <div className="mt-3">
+                  <p className="mb-1 text-xs font-semibold text-slate-500">Promises made</p>
+                  <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
+                    {personMemory.promisedActions}
+                  </p>
+                </div>
+              )}
+              {personMemory.openQuestions && (
+                <div className="mt-3">
+                  <p className="mb-1 text-xs font-semibold text-slate-500">Open questions</p>
+                  <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
+                    {personMemory.openQuestions}
+                  </p>
+                </div>
+              )}
+              {personMemory.preferences && (
+                <div className="mt-3">
+                  <p className="mb-1 text-xs font-semibold text-slate-500">Preferences noted</p>
+                  <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
+                    {personMemory.preferences}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* AI Draft */}
           <AIDraftPanel
