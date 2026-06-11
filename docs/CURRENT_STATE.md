@@ -169,13 +169,32 @@ Current behavior:
 - Every contact gets a persisted `PersonMemory` record after sync, surfaced as a relationship panel on conversation pages.
 - The inbox shows queued follow-up jobs and a collapsible safely-ignored section.
 
+Meeting prep + post-meeting follow-up slice implemented (2026-06-11, Phase 2):
+
+- `POST /api/meetings/prep` — on-demand brief from PersonMemory + recent email threads; returns context, talking points, and suggested goal.
+- `POST /api/meetings/follow-up` — notes + prior threads → follow-up draft queued as `ApprovalRequest`; falls back to inline copy if no prior conversation.
+- `/meetings` page with on-demand briefing form and follow-up generator.
+- Meetings-today section in the digest.
+- No schema changes; reuses existing calendar credentials, PersonMemory, and ApprovalRequest infrastructure.
+
+Lead intelligence + CRM pipeline slice implemented (2026-06-11, Phase 2):
+
+- `lib/ai/prompts/lead-scoring.ts` — prompt builder, JSON schema, and output normalizer for LLM-based scoring (score 1–100, explanation, estimated value, need, urgency, budget clue).
+- `lib/agent/lead-scoring.ts` — `shouldRescoreLead` guard (skips when conversation unchanged since last score) and `scoreLeadForConversation` orchestrator; writes score, scoreExplanation, estimatedValue, scoredAt, need, urgency, budgetClue to the Lead record and creates an audit entry.
+- `lib/agent/work-item-sync.ts` — fires `scoreLeadForConversation` as fire-and-forget after every lead upsert; heuristic score is preserved if LLM call fails.
+- `POST /api/leads/[id]/score` — on-demand re-score endpoint; bypasses the stale-guard with `force: true`.
+- `/leads` page — pipeline funnel header with per-stage counts and estimated value totals; color-coded score badge (green ≥70 / amber ≥40 / gray); scoreExplanation shown as italic subtitle; estimatedValue shown inline; RescoreButton client component for on-demand re-score.
+- Command center — opportunity cards use `lead.scoreExplanation` as the reason text; lead score badge shown alongside the priority badge on high-intent opportunity cards.
+- Tests in `tests/lead-scoring.test.ts`.
+
 Limitations:
 
 - Task assignment is not yet implemented.
-- Lead scoring is deterministic; LLM-based scoring is not yet implemented.
 - Person-memory extraction is deterministic (regex heuristics), not LLM-based, and is not user-editable.
 - Lead sequence step timings are fixed (2/4/7 days); there is no settings UI yet.
-- Full CRM pipeline reporting is not yet implemented.
+- Batch re-scoring of all existing leads is not implemented; scoring runs per lead after each sync.
+- CRM filter/search by score range is not yet implemented.
+- Full pipeline trend analytics and value forecasting are not yet implemented.
 
 ## Partial Features
 

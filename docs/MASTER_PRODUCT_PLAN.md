@@ -263,7 +263,7 @@ Success criteria:
 | 4 | AI Follow-Up Brain | `Partial` | Phase 1 | Tracker panel and three-step lead follow-up sequences shipped; needs sequence settings UI and sent-output visibility. |
 | 5 | Inbox Memory / Relationship Memory | `Partial` | Phase 1 | Persisted `PersonMemory` and conversation relationship panel shipped; extraction is deterministic and not user-editable yet. |
 | 6 | Never Drop the Ball System | `Partial` | Phase 1 | Computed and persisted states exist; needs inbox views, alerts, and task actions. |
-| 7 | Business Lead Capture From Email | `Partial` | Phase 2 | Lead model, extractor, stage controls, pipeline page, and background sync exist; needs scoring refinement and full CRM features. |
+| 7 | Business Lead Capture From Email | `Partial` | Phase 2 | LLM-based scoring, scoreExplanation, estimatedValue, funnel header, and score badge shipped. CRM filter/search and value forecasting remain. |
 | 8 | Knowledge Base Replies | `Partial` | Phase 1/2 | Knowledge documents exist; needs source management and stronger citations. |
 | 9 | Personal Voice Clone, Controlled | `Partial` | Phase 1 | Learned profile exists; needs clearer controls and style feedback. |
 | 10 | Sensitive Email Detection | `Partial` | Phase 1 | Basic detection exists; needs richer categories and highlighted risky draft parts. |
@@ -296,7 +296,7 @@ Success criteria:
 | 37 | Auto-Generated Snippets and Playbooks | `Planned` | Phase 4 | Needs repeated-pattern mining and user approval. |
 | 38 | Second Brain Inbox | `Planned` | Phase 3 | Depends on memory extraction and natural-language retrieval. |
 | 39 | Auto-Personalized Outreach | `Later` | Phase 4 | Valuable, but avoid spam positioning. |
-| 40 | Email Triage By Money Impact | `Partial` | Phase 2 | Lead/payment signals exist; needs command-center money-impact ranking and ROI views. |
+| 40 | Email Triage By Money Impact | `Partial` | Phase 2 | Lead score explanation surfaces in command center opportunity cards. Full money-impact ranking beyond lead signal TBD. |
 | 41 | One-Click Clean My Inbox Experience | `Planned` | Phase 4 | Great onboarding; needs safe bulk operations. |
 | 42 | Smart Email Labels That Matter | `Partial` | Phase 1 | Current labels are limited; needs action-oriented taxonomy. |
 | 43 | Ask My Inbox Chat | `Planned` | Phase 3 | Should answer with actions, not just summaries. |
@@ -323,10 +323,14 @@ Shipped first Phase 2 slice (2026-06-11):
 - Meeting prep brief: `/meetings` page with on-demand briefing from PersonMemory + email threads. Digest shows today's meetings with link to prep brief.
 - Post-meeting follow-up generator: notes field + AI draft queued in ApprovalRequest.
 
+Shipped Phase 2 slices (2026-06-11):
+
+- Meeting prep brief: `/meetings` page, digest card, on-demand brief from PersonMemory + email threads, post-meeting follow-up generator.
+- Lead intelligence: LLM-based scorer with `scoreExplanation` / `estimatedValue`, fire-and-forget sync integration, on-demand re-score API, funnel header + score badge on `/leads`, lead score badge on command center opportunity cards.
+
 Suggested next Phase 2 slice:
 
-- Lead scoring refinement: use LLM signal to improve score beyond the current heuristic (urgency + budget clues).
-- Knowledge base replies + customer support mode: build on existing KnowledgeDocument model.
+- Knowledge base replies + customer support mode: build on existing KnowledgeDocument model; add source management, website crawling, citation display in drafts, and FAQ-answer + escalation logic.
 
 See `docs/MASTER_PRODUCT_PLAN.md` Phase 2 section for the full feature list.
 
@@ -456,6 +460,7 @@ After an AI agent finishes work:
 | 2026-06-11 | Ship Explain This Thread as an on-demand, non-persisted panel. | First LLM summary surface; reuses the structured-output draft infrastructure. Read-only by design (never sends or mutates state), audited per run. Persistence and inbox surfacing deferred until usage justifies them. |
 | 2026-06-11 | Phase 1 complete. | All "Never Drop the Ball" MVP features shipped: daily command center, explain thread, follow-up brain with sequences, relationship memory, sensitive draft warnings, approval queue, tasks with due-date editing, lead pipeline, weekly value report, safely-ignored mode. Auto-draft-on-follow-up-open added for follow-up tracker magic. |
 | 2026-06-11 | Ship meeting prep + post-meeting follow-up as first Phase 2 slice. | Reuses existing calendar credentials, PersonMemory, and ApprovalRequest infrastructure. No schema changes. On-demand generation (briefs not persisted). Contact matching via `Contact.phoneE164` (email stored there for Gmail contacts). Follow-up attaches to existing conversation or falls back to inline copy. |
+| 2026-06-11 | Ship lead intelligence slice: LLM scorer + CRM funnel header + command center score badge. | Lead model already existed with deterministic heuristic. LLM replaces heuristic, adds explanation and estimated value, fires fire-and-forget after each sync with stale-guard. Next Phase 2 slice: KB replies + customer support mode. |
 
 ## Open Product Questions
 
