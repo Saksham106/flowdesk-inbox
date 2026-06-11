@@ -21,6 +21,7 @@ export default function ApprovalList({ items }: { items: ApprovalItem[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkLoading, setBulkLoading] = useState(false)
   const [expandedDraft, setExpandedDraft] = useState<Set<string>>(new Set())
+  const [bulkError, setBulkError] = useState<string | null>(null)
 
   const visible = items.filter((item) => !dismissed.has(item.id))
   const allSelected = visible.length > 0 && visible.every((i) => selected.has(i.id))
@@ -58,14 +59,21 @@ export default function ApprovalList({ items }: { items: ApprovalItem[] }) {
     const ids = [...selected]
     if (ids.length === 0) return
     setBulkLoading(true)
+    setBulkError(null)
     try {
-      await fetch("/api/approvals/bulk", {
+      const res = await fetch("/api/approvals/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids, decision }),
       })
+      if (!res.ok) {
+        setBulkError("Could not update selected approvals.")
+        return
+      }
       setDismissed((prev) => new Set([...prev, ...ids]))
       setSelected(new Set())
+    } catch {
+      setBulkError("Could not update selected approvals.")
     } finally {
       setBulkLoading(false)
     }
@@ -95,21 +103,24 @@ export default function ApprovalList({ items }: { items: ApprovalItem[] }) {
             : `Select all (${visible.length})`}
         </label>
         {selected.size > 0 && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => bulkDecide("approved")}
-              disabled={bulkLoading}
-              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {bulkLoading ? "…" : `Approve ${selected.size}`}
-            </button>
-            <button
-              onClick={() => bulkDecide("rejected")}
-              disabled={bulkLoading}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-            >
-              {bulkLoading ? "…" : `Reject ${selected.size}`}
-            </button>
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => bulkDecide("approved")}
+                disabled={bulkLoading}
+                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {bulkLoading ? "…" : `Approve ${selected.size}`}
+              </button>
+              <button
+                onClick={() => bulkDecide("rejected")}
+                disabled={bulkLoading}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {bulkLoading ? "…" : `Reject ${selected.size}`}
+              </button>
+            </div>
+            {bulkError ? <p className="text-xs text-red-600">{bulkError}</p> : null}
           </div>
         )}
       </div>
