@@ -19,16 +19,16 @@ export default function CommandCenterPanel({
 }) {
   return (
     <section className="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 px-5 py-4">
+      <div className="border-b border-slate-100 px-4 py-3 sm:px-5 sm:py-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           Today&apos;s Inbox Brief
         </p>
-        <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-2xl font-semibold text-slate-950">
+        <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
+          <div className="min-w-0">
+            <h2 className="text-xl font-semibold text-slate-950 sm:text-2xl">
               {commandCenter.headline}
             </h2>
-            <p className="mt-1 text-sm font-medium text-emerald-700">
+            <p className="mt-0.5 text-sm font-medium text-emerald-700">
               {commandCenter.droppedBallMessage}
             </p>
           </div>
@@ -41,10 +41,10 @@ export default function CommandCenterPanel({
         </div>
       </div>
 
-      <div className="grid gap-3 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 px-4 py-3 sm:gap-3 sm:px-5 sm:py-4 lg:grid-cols-4">
         {countItems.map(([key, label]) => (
-          <div key={key} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-            <p className="text-xl font-semibold text-slate-950">
+          <div key={key} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2 sm:px-3">
+            <p className="text-lg font-semibold text-slate-950 sm:text-xl">
               {commandCenter.counts[key]}
             </p>
             <p className="text-xs text-slate-500">{label}</p>

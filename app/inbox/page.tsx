@@ -161,58 +161,106 @@ export default async function InboxPage({ searchParams }: Props) {
     <div className="min-h-screen bg-slate-50">
       <AutoRefresh intervalMs={10000} />
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 sm:px-6 py-4">
-          <div>
-            <h1 className="text-xl font-semibold">Inbox</h1>
-            <p className="text-sm text-slate-500">
-              {needsReplyCount > 0 ? (
-                <span className="font-medium text-red-600">
-                  {needsReplyCount} need{needsReplyCount === 1 ? "s" : ""} reply
-                </span>
-              ) : (
-                "All caught up"
-              )}
-              {" · "}{totalCount} total
-            </p>
+        <div className="mx-auto max-w-5xl px-4 sm:px-6">
+          {/* Title row */}
+          <div className="flex items-center justify-between py-4">
+            <div>
+              <h1 className="text-xl font-semibold">Inbox</h1>
+              <p className="text-sm text-slate-500">
+                {needsReplyCount > 0 ? (
+                  <span className="font-medium text-red-600">
+                    {needsReplyCount} need{needsReplyCount === 1 ? "s" : ""} reply
+                  </span>
+                ) : (
+                  "All caught up"
+                )}
+                {" · "}{totalCount} total
+              </p>
+            </div>
+            {/* Desktop nav */}
+            <div className="hidden sm:flex items-center gap-3">
+              <Link
+                href="/digest"
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Digest
+              </Link>
+              <Link
+                href="/tasks"
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Tasks
+              </Link>
+              <Link
+                href="/leads"
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Leads
+              </Link>
+              <Link
+                href="/approvals"
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Approvals
+              </Link>
+              <Link
+                href="/audit"
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Audit
+              </Link>
+              <Link
+                href="/settings"
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Settings
+              </Link>
+              <SignOutButton />
+            </div>
+            {/* Mobile: sign out only */}
+            <div className="sm:hidden">
+              <SignOutButton />
+            </div>
           </div>
-          <div className="flex items-center gap-3">
+
+          {/* Mobile nav strip */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-3 sm:hidden">
             <Link
               href="/digest"
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
             >
               Digest
             </Link>
             <Link
               href="/tasks"
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
             >
               Tasks
             </Link>
             <Link
               href="/leads"
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
             >
               Leads
             </Link>
             <Link
               href="/approvals"
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
             >
               Approvals
             </Link>
             <Link
               href="/audit"
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
             >
               Audit
             </Link>
             <Link
               href="/settings"
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
             >
               Settings
             </Link>
-            <SignOutButton />
           </div>
         </div>
 
@@ -320,21 +368,29 @@ export default async function InboxPage({ searchParams }: Props) {
                 <Link
                   key={conversation.id}
                   href={`/conversations/${conversation.id}`}
-                  className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm transition hover:border-slate-300"
+                  className="block rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:border-slate-300 sm:px-5 sm:py-4"
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium">{displayName}</p>
-                      <StatusBadge status={conversation.status} />
-                      {conversation.label && <LabelBadge label={conversation.label} />}
-                    </div>
-                    <p className="mt-1 truncate text-sm text-slate-500">
-                      {lastMessage?.body ?? "No messages yet"}
+                  {/* Row 1: sender name + date */}
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p
+                      className="min-w-0 truncate text-sm font-medium"
+                      title={displayName}
+                    >
+                      {displayName}
                     </p>
+                    <span className="shrink-0 whitespace-nowrap text-xs text-slate-400">
+                      {conversation.lastMessageAt.toLocaleString()}
+                    </span>
                   </div>
-                  <div className="ml-4 shrink-0 text-xs text-slate-400">
-                    {conversation.lastMessageAt.toLocaleString()}
+                  {/* Row 2: badges */}
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <StatusBadge status={conversation.status} />
+                    {conversation.label && <LabelBadge label={conversation.label} />}
                   </div>
+                  {/* Row 3: preview */}
+                  <p className="mt-1 truncate text-sm text-slate-500">
+                    {lastMessage?.body ?? "No messages yet"}
+                  </p>
                 </Link>
               );
             })
