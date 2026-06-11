@@ -1,11 +1,15 @@
 import { generateDraftReplyWithOpenAI, generatePersonalStyleProfileWithOpenAI } from "@/lib/ai/openai"
 import type { DraftReplyPromptInput, DraftReplyResult } from "@/lib/ai/prompts/draft-reply"
 import type { PersonalStyleProfile } from "@/lib/ai/prompts/draft-reply"
-import { summarizeLearnedReplyProfileWithOpenAI } from "@/lib/ai/openai"
+import { explainThreadWithOpenAI, summarizeLearnedReplyProfileWithOpenAI } from "@/lib/ai/openai"
 import type {
   LearnedReplyProfileResult,
   ReplyLearningSample,
 } from "@/lib/ai/prompts/learned-reply-profile"
+import type {
+  ExplainThreadPromptInput,
+  ExplainThreadResult,
+} from "@/lib/ai/prompts/explain-thread"
 
 export type GenerateDraftReplyInput = DraftReplyPromptInput
 
@@ -25,4 +29,10 @@ export async function summarizeLearnedReplyProfile(
   samples: ReplyLearningSample[]
 ): Promise<LearnedReplyProfileResult> {
   return summarizeLearnedReplyProfileWithOpenAI(samples)
+}
+
+export async function explainThread(
+  input: ExplainThreadPromptInput
+): Promise<ExplainThreadResult> {
+  return explainThreadWithOpenAI(input)
 }
