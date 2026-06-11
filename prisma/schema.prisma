@@ -337,24 +337,27 @@ model InboxTask {
 }
 
 model Lead {
-  id             String   @id @default(cuid())
-  tenantId       String
-  conversationId String
-  name           String
-  company        String?
-  need           String
-  urgency        String   @default("medium")
-  budgetClue     String?
-  contactInfo    String?
-  nextAction     String
-  score          Int      @default(0)
-  stage          String   @default("new")
-  source         String   @default("deterministic")
-  metadataJson   Json?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  id               String   @id @default(cuid())
+  tenantId         String
+  conversationId   String
+  name             String
+  company          String?
+  need             String
+  urgency          String   @default("medium")
+  budgetClue       String?
+  contactInfo      String?
+  nextAction       String
+  score            Int      @default(0)
+  scoreExplanation String?
+  estimatedValue   Int?
+  scoredAt         DateTime?
+  stage            String   @default("new")
+  source           String   @default("deterministic")
+  metadataJson     Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  tenant           Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation     Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, conversationId])
   @@index([tenantId, stage])
