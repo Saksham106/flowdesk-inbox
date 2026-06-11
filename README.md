@@ -1,41 +1,38 @@
 # FlowDesk Inbox
 
-FlowDesk is an email-first AI front desk for appointment-heavy small businesses. It reads inbound Gmail, drafts safe replies, suggests appointment times from Google Calendar, and escalates sensitive conversations to staff — all with a full audit trail and human approval before anything sends.
+FlowDesk is an email-first AI inbox agent for individuals and small businesses. It turns email into an actionable command center: what needs a reply, what can be ignored, who needs follow-up, where money or deadlines are at risk, and which AI actions need approval before anything sends.
 
 ---
 
-## Current MVP Scope
+## Current Product Scope
 
-- **Gmail OAuth connect/sync** — connect a business Gmail account; inbound emails appear in the conversation inbox automatically
-- **Google Calendar connect** — connect Google Calendar to read availability and suggest appointment times
-- **Conversation inbox** — all inbound emails in one place with status tracking (Needs Reply / In Progress / Closed)
-- **Manual reply** — staff can read and reply to conversations directly from the inbox
-- **AI draft suggestions (human-approved)** — the AI drafts a reply; a staff member reviews and approves before anything sends
-- **Business profile + knowledge base** — store business hours, services, and FAQs so the AI has accurate context
-- **Audit logs** — every AI suggestion, human edit, and send action is recorded for compliance and review
-
----
-
-## AI Draft MVP Handoff
-
-The AI draft MVP is implemented in two stacked PRs:
-
-1. Backend/API: https://github.com/Saksham106/flowdesk-inbox/pull/7
-2. Frontend UI: https://github.com/Saksham106/flowdesk-inbox/pull/8
-
-Merge PR #7 first, then PR #8.
-
-For implementation details, local QA steps, known limitations, and recommended next work, see:
-
-- `docs/AI_DRAFT_MVP_HANDOFF.md`
+- **Gmail and Outlook sync** — connect an email account and import conversations into FlowDesk
+- **Google Calendar support** — connect Google Calendar for availability and calendar holds
+- **Conversation inbox** — view conversations with status, labels, drafts, and assistant context
+- **Daily Command Center** — see the conversations that actually matter today, plus what can be safely ignored
+- **Handle This** — ask FlowDesk to draft the next step from a thread-level assistant panel
+- **AI draft suggestions (human-approved)** — generate, edit, approve, and send replies through the email provider
+- **Business profile + knowledge base** — store approved facts, policies, tone, and FAQs for better replies
+- **Follow-up and autopilot foundations** — classify work, queue follow-up jobs, and gate automation behind policy
+- **Audit logs** — record agent, human, and send actions for review
 
 ---
 
-## Deferred: SMS / Twilio
+## Documentation
 
-Twilio and SMS are paused. The A2P 10DLC carrier-registration process added significant compliance overhead before a single message could be sent, making it impractical to validate the product with early customers. The product also proved harder to onboard when SMS was the primary channel — businesses wanted email first.
+Start here:
 
-**Email is now the primary (and only) channel for the MVP.** SMS may return after the email-AI workflow closes pilots and customers actively request it.
+- `docs/README.md` — documentation index
+- `docs/CURRENT_STATE.md` — current implemented/partial/deferred state
+- `docs/MASTER_PRODUCT_PLAN.md` — living master roadmap for the 45-feature product vision
+- `docs/superpowers/specs/2026-06-11-daily-command-center-design.md` — Daily Command Center design
+- `docs/superpowers/plans/2026-06-11-daily-command-center.md` — Daily Command Center implementation plan
+
+## Deferred: SMS
+
+SMS is paused. The A2P 10DLC carrier-registration process added significant compliance overhead before a single message could be sent, making it impractical to validate the product with early customers. The product also proved harder to onboard when SMS was the primary channel.
+
+Email is the active channel. SMS may return later only after customer demand justifies a fresh spec.
 
 ---
 
@@ -47,7 +44,7 @@ Twilio and SMS are paused. The A2P 10DLC carrier-registration process added sign
 - **NextAuth** (credentials-based auth, JWT sessions)
 - **Google APIs** — Gmail API (email read/reply) + Google Calendar API (availability + events)
 - **OpenAI** — AI draft suggestions
-- **MindBody Public API v6** — client + appointment management (optional connector)
+- **MindBody Public API v6** — optional connector foundation
 - **Railway** — hosting + managed Postgres
 
 ---
@@ -185,5 +182,5 @@ Set `NEXTAUTH_URL` to the same public app URL users visit in production.
 | `npm run build` | Production build |
 | `npm run db:migrate` | Create/update schema (dev only) |
 | `npm run db:deploy` | Apply pending migrations (production-safe) |
-| `npm run db:seed` | Seed tenant, user, and channel |
+| `npm run db:seed` | Seed tenant and user |
 | `npm run db:studio` | Open Prisma Studio |

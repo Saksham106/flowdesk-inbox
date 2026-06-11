@@ -106,8 +106,9 @@ function isWithinBusinessHours(
 
   const startH = localHour(start, timezone)
   const endH = localHour(end, timezone)
+  const sameLocalDay = localDateKey(start, timezone) === localDateKey(end, timezone)
 
-  return startH >= openH && endH <= closeH
+  return sameLocalDay && endH > startH && startH >= openH && endH <= closeH
 }
 
 function localHour(date: Date, timezone: string): number {
@@ -121,6 +122,20 @@ function localHour(date: Date, timezone: string): number {
   const h = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0")
   const m = parseInt(parts.find((p) => p.type === "minute")?.value ?? "0")
   return h + m / 60
+}
+
+function localDateKey(date: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date)
+
+  const year = parts.find((p) => p.type === "year")?.value ?? "0000"
+  const month = parts.find((p) => p.type === "month")?.value ?? "00"
+  const day = parts.find((p) => p.type === "day")?.value ?? "00"
+  return `${year}-${month}-${day}`
 }
 
 function parseHour(time: string): number {

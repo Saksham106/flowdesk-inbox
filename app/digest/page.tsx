@@ -2,7 +2,9 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { buildDailyCommandCenter } from "@/lib/agent/command-center"
 import { prisma } from "@/lib/prisma"
+import DailyBriefSections from "@/app/digest/DailyBriefSections"
 
 export const dynamic = "force-dynamic"
 
@@ -27,6 +29,7 @@ export default async function DigestPage() {
     needsReply,
     pendingApprovals,
     expiringHolds,
+    commandCenterConversations,
   ] = await Promise.all([
     // Conversations with a queued follow_up job
     prisma.agentJob.findMany({
@@ -72,6 +75,28 @@ export default async function DigestPage() {
       orderBy: { expiresAt: "asc" },
       take: 10,
     }),
+    prisma.conversation.findMany({
+      where: { tenantId },
+      include: {
+        messages: { orderBy: { createdAt: "asc" }, take: 20 },
+        channel: true,
+        contact: true,
+        draft: true,
+        agentJobs: { orderBy: { createdAt: "desc" }, take: 3 },
+        approvalRequests: {
+          where: { status: "pending" },
+          orderBy: { createdAt: "desc" },
+          take: 3,
+        },
+        calendarHolds: {
+          where: { status: "held" },
+          orderBy: { expiresAt: "asc" },
+          take: 3,
+        },
+      },
+      orderBy: { lastMessageAt: "desc" },
+      take: 100,
+    }),
   ])
 
   const totalItems =
@@ -79,6 +104,8 @@ export default async function DigestPage() {
     needsReply.length +
     pendingApprovals.length +
     expiringHolds.length
+
+  const commandCenter = buildDailyCommandCenter(commandCenterConversations, now)
 
   function convName(
     contact: { name: string } | null,
@@ -107,6 +134,8 @@ export default async function DigestPage() {
       </header>
 
       <main className="mx-auto max-w-3xl space-y-6 px-6 py-8">
+        <DailyBriefSections commandCenter={commandCenter} />
+
         {totalItems === 0 && (
           <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
             <p className="text-slate-500">All caught up — nothing needs attention right now.</p>
