@@ -1,4 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+// ---------------------------------------------------------------------------
+// Hoisted mocks (for orchestration tests at the bottom of this file)
+// ---------------------------------------------------------------------------
+const {
+  mockLeadFindFirst,
+  mockLeadUpdateMany,
+  mockAuditCreate,
+  mockScoreLead,
+} = vi.hoisted(() => ({
+  mockLeadFindFirst:  vi.fn(),
+  mockLeadUpdateMany: vi.fn(),
+  mockAuditCreate:    vi.fn(),
+  mockScoreLead:      vi.fn(),
+}))
+
+vi.mock('@/lib/prisma', () => ({
+  prisma: {
+    lead:     { findFirst: mockLeadFindFirst, updateMany: mockLeadUpdateMany },
+    auditLog: { create: mockAuditCreate },
+  },
+}))
+
+vi.mock('@/lib/ai/provider', () => ({
+  scoreLead: mockScoreLead,
+}))
+
 import {
   buildLeadScoringPrompt,
   normalizeLeadScoringOutput,
@@ -165,6 +192,146 @@ describe('normalizeLeadScoringOutput', () => {
     const raw = JSON.stringify({ score: 50, estimatedValue: null, need: 'test', urgency: 'low', budgetClue: null })
     expect(() => normalizeLeadScoringOutput(raw, 'gpt-5.4-mini')).toThrow(
       'AI response did not include scoreExplanation'
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// shouldRescoreLead
+// ---------------------------------------------------------------------------
+
+import { shouldRescoreLead, scoreLeadForConversation } from '@/lib/agent/lead-scoring'
+
+describe('shouldRescoreLead', () => {
+  it('returns true when scoredAt is null', () => {
+    expect(shouldRescoreLead(null, new Date())).toBe(true)
+  })
+
+  it('returns true when conversation has new messages since last score', () => {
+    const scoredAt = new Date('2026-06-10T10:00:00Z')
+    const lastMessageAt = new Date('2026-06-11T12:00:00Z')
+    expect(shouldRescoreLead(scoredAt, lastMessageAt)).toBe(true)
+  })
+
+  it('returns false when no new messages since last score', () => {
+    const scoredAt = new Date('2026-06-11T12:00:00Z')
+    const lastMessageAt = new Date('2026-06-10T10:00:00Z')
+    expect(shouldRescoreLead(scoredAt, lastMessageAt)).toBe(false)
+  })
+
+  it('returns false when scoredAt equals lastMessageAt', () => {
+    const ts = new Date('2026-06-11T12:00:00Z')
+    expect(shouldRescoreLead(ts, ts)).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// scoreLeadForConversation
+// ---------------------------------------------------------------------------
+
+describe('scoreLeadForConversation', () => {
+  const TENANT = 'tenant-1'
+  const LEAD_ID = 'lead-1'
+  const NOW = new Date('2026-06-11T12:00:00Z')
+  const YESTERDAY = new Date('2026-06-10T12:00:00Z')
+
+  const MOCK_LEAD = {
+    id: LEAD_ID,
+    tenantId: TENANT,
+    need: 'AI receptionist',
+    urgency: 'medium',
+    budgetClue: null,
+    scoredAt: null,
+    conversation: {
+      lastMessageAt: NOW,
+      messages: [
+        { direction: 'inbound', body: 'Do you offer dental AI?', createdAt: NOW },
+      ],
+    },
+  }
+
+  const MOCK_RESULT = {
+    score: 82,
+    scoreExplanation: 'Demo request with named budget.',
+    estimatedValue: 2000,
+    need: 'AI receptionist for dental clinic',
+    urgency: 'high' as const,
+    budgetClue: '$2k/month',
+    model: 'gpt-5.4-mini',
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockLeadFindFirst.mockResolvedValue(MOCK_LEAD)
+    mockScoreLead.mockResolvedValue(MOCK_RESULT)
+    mockLeadUpdateMany.mockResolvedValue({ count: 1 })
+    mockAuditCreate.mockResolvedValue({})
+  })
+
+  it('calls scoreLead and updates the lead when scoredAt is null', async () => {
+    await scoreLeadForConversation(TENANT, LEAD_ID)
+    expect(mockScoreLead).toHaveBeenCalledOnce()
+    expect(mockLeadUpdateMany).toHaveBeenCalledWith({
+      where: { id: LEAD_ID, tenantId: TENANT },
+      data: expect.objectContaining({
+        score: 82,
+        scoreExplanation: 'Demo request with named budget.',
+        estimatedValue: 2000,
+      }),
+    })
+  })
+
+  it('skips scoring when no new messages since last score', async () => {
+    mockLeadFindFirst.mockResolvedValue({
+      ...MOCK_LEAD,
+      scoredAt: NOW,
+      conversation: { ...MOCK_LEAD.conversation, lastMessageAt: YESTERDAY },
+    })
+    await scoreLeadForConversation(TENANT, LEAD_ID)
+    expect(mockScoreLead).not.toHaveBeenCalled()
+    expect(mockLeadUpdateMany).not.toHaveBeenCalled()
+  })
+
+  it('force option bypasses the re-scoring guard', async () => {
+    mockLeadFindFirst.mockResolvedValue({
+      ...MOCK_LEAD,
+      scoredAt: NOW,
+      conversation: { ...MOCK_LEAD.conversation, lastMessageAt: YESTERDAY },
+    })
+    await scoreLeadForConversation(TENANT, LEAD_ID, { force: true })
+    expect(mockScoreLead).toHaveBeenCalledOnce()
+  })
+
+  it('does not update the lead if scoreLead throws', async () => {
+    mockScoreLead.mockRejectedValue(new Error('OpenAI error'))
+    await scoreLeadForConversation(TENANT, LEAD_ID)
+    expect(mockLeadUpdateMany).not.toHaveBeenCalled()
+  })
+
+  it('returns immediately when the lead is not found', async () => {
+    mockLeadFindFirst.mockResolvedValue(null)
+    await scoreLeadForConversation(TENANT, LEAD_ID)
+    expect(mockScoreLead).not.toHaveBeenCalled()
+  })
+
+  it('writes an audit log entry on success', async () => {
+    await scoreLeadForConversation(TENANT, LEAD_ID)
+    expect(mockAuditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tenantId: TENANT,
+        action: 'lead.scored',
+      }),
+    })
+  })
+
+  it('falls back to existing budgetClue when LLM returns null', async () => {
+    mockScoreLead.mockResolvedValue({ ...MOCK_RESULT, budgetClue: null })
+    mockLeadFindFirst.mockResolvedValue({ ...MOCK_LEAD, budgetClue: 'existing clue' })
+    await scoreLeadForConversation(TENANT, LEAD_ID)
+    expect(mockLeadUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ budgetClue: 'existing clue' }),
+      })
     )
   })
 })
