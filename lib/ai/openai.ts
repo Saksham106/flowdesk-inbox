@@ -22,6 +22,20 @@ import {
   type ExplainThreadPromptInput,
   type ExplainThreadResult,
 } from "@/lib/ai/prompts/explain-thread"
+import {
+  buildMeetingPrepPrompt,
+  meetingPrepJsonSchema,
+  normalizeMeetingPrepOutput,
+  type MeetingPrepPromptInput,
+  type MeetingPrepResult,
+} from "@/lib/ai/prompts/meeting-prep"
+import {
+  buildMeetingFollowUpPrompt,
+  meetingFollowUpJsonSchema,
+  normalizeMeetingFollowUpOutput,
+  type MeetingFollowUpPromptInput,
+  type MeetingFollowUpResult,
+} from "@/lib/ai/prompts/meeting-follow-up"
 
 export async function generateDraftReplyWithOpenAI(
   input: DraftReplyPromptInput
@@ -214,4 +228,50 @@ export async function summarizeLearnedReplyProfileWithOpenAI(
   })
 
   return normalizeLearnedReplyProfileOutput(response.output_text, model, samples, prompt)
+}
+
+export async function generateMeetingPrepWithOpenAI(
+  input: MeetingPrepPromptInput
+): Promise<MeetingPrepResult> {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured")
+  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
+  const client = new OpenAI({ apiKey })
+  const prompt = buildMeetingPrepPrompt(input)
+  const response = await client.responses.create({
+    model,
+    input: prompt,
+    text: {
+      format: {
+        type: "json_schema",
+        name: "flowdesk_meeting_prep",
+        strict: true,
+        schema: meetingPrepJsonSchema,
+      },
+    },
+  })
+  return normalizeMeetingPrepOutput(response.output_text, model)
+}
+
+export async function generateMeetingFollowUpWithOpenAI(
+  input: MeetingFollowUpPromptInput
+): Promise<MeetingFollowUpResult> {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured")
+  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
+  const client = new OpenAI({ apiKey })
+  const prompt = buildMeetingFollowUpPrompt(input)
+  const response = await client.responses.create({
+    model,
+    input: prompt,
+    text: {
+      format: {
+        type: "json_schema",
+        name: "flowdesk_meeting_follow_up",
+        strict: true,
+        schema: meetingFollowUpJsonSchema,
+      },
+    },
+  })
+  return normalizeMeetingFollowUpOutput(response.output_text, model)
 }

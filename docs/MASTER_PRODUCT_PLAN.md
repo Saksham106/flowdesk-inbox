@@ -267,8 +267,8 @@ Success criteria:
 | 8 | Knowledge Base Replies | `Partial` | Phase 1/2 | Knowledge documents exist; needs source management and stronger citations. |
 | 9 | Personal Voice Clone, Controlled | `Partial` | Phase 1 | Learned profile exists; needs clearer controls and style feedback. |
 | 10 | Sensitive Email Detection | `Partial` | Phase 1 | Basic detection exists; needs richer categories and highlighted risky draft parts. |
-| 11 | Meeting Prep From Email History | `Planned` | Phase 2 | Depends on calendar events, relationship memory, and thread summaries. |
-| 12 | Post-Meeting Follow-Up Generator | `Planned` | Phase 2 | Depends on calendar events, notes/transcripts, tasks. |
+| 11 | Meeting Prep From Email History | `Partial` | Phase 2 | On-demand brief from PersonMemory + email threads; `/meetings` page + digest card. Briefs not persisted. Spec: `docs/superpowers/specs/2026-06-11-meeting-prep-design.md`. Plan: `docs/superpowers/plans/2026-06-11-meeting-prep.md`. |
+| 12 | Post-Meeting Follow-Up Generator | `Partial` | Phase 2 | Notes + prior threads → follow-up draft → ApprovalRequest. Falls back to inline copy if no prior conversation exists. |
 | 13 | Email-to-Task Extraction | `Partial` | Phase 1 | Task model, extraction, list page, close action, background sync, and inline due-date editing exist; needs assignment and manual creation. |
 | 14 | Smart Scheduling Agent | `Partial` | Phase 4 | Availability/holds exist; needs full back-and-forth booking. |
 | 15 | Explain This Thread Like I’m Busy | `Partial` | Phase 1 | On-demand LLM explanation panel shipped on conversation pages; needs persistence, inbox-level surfacing, and draft hand-off. |
@@ -318,11 +318,15 @@ Why now:
 - Meeting prep and post-meeting follow-up are the highest-leverage Phase 2 features — they use existing calendar, thread, and memory infrastructure.
 - ROI analytics (Phase 2) build directly on the weekly value report now shipping.
 
-Suggested first Phase 2 slice:
+Shipped first Phase 2 slice (2026-06-11):
 
-- Meeting prep brief: before a calendar event, surface a briefing from prior email threads with the attendee — what they asked about, last tone, suggested talking points.
-- Post-meeting follow-up generator: after a calendar event, draft a recap email using prior thread context and user notes.
+- Meeting prep brief: `/meetings` page with on-demand briefing from PersonMemory + email threads. Digest shows today's meetings with link to prep brief.
+- Post-meeting follow-up generator: notes field + AI draft queued in ApprovalRequest.
+
+Suggested next Phase 2 slice:
+
 - Lead scoring refinement: use LLM signal to improve score beyond the current heuristic (urgency + budget clues).
+- Knowledge base replies + customer support mode: build on existing KnowledgeDocument model.
 
 See `docs/MASTER_PRODUCT_PLAN.md` Phase 2 section for the full feature list.
 
@@ -451,6 +455,7 @@ After an AI agent finishes work:
 | 2026-06-11 | Compute the weekly value report live from existing records instead of adding a `ValueMetric` model. | All eight metrics are cheap tenant-scoped counts; persisted snapshots only become necessary for trends, which are Phase 2 ROI work. |
 | 2026-06-11 | Ship Explain This Thread as an on-demand, non-persisted panel. | First LLM summary surface; reuses the structured-output draft infrastructure. Read-only by design (never sends or mutates state), audited per run. Persistence and inbox surfacing deferred until usage justifies them. |
 | 2026-06-11 | Phase 1 complete. | All "Never Drop the Ball" MVP features shipped: daily command center, explain thread, follow-up brain with sequences, relationship memory, sensitive draft warnings, approval queue, tasks with due-date editing, lead pipeline, weekly value report, safely-ignored mode. Auto-draft-on-follow-up-open added for follow-up tracker magic. |
+| 2026-06-11 | Ship meeting prep + post-meeting follow-up as first Phase 2 slice. | Reuses existing calendar credentials, PersonMemory, and ApprovalRequest infrastructure. No schema changes. On-demand generation (briefs not persisted). Contact matching via `Contact.phoneE164` (email stored there for Gmail contacts). Follow-up attaches to existing conversation or falls back to inline copy. |
 
 ## Open Product Questions
 

@@ -4,7 +4,10 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { buildDailyCommandCenter } from "@/lib/agent/command-center"
 import { prisma } from "@/lib/prisma"
+import { getCalendarClient, listEvents } from "@/lib/google"
 import DailyBriefSections from "@/app/digest/DailyBriefSections"
+import MeetingsTodaySection from "@/app/digest/MeetingsTodaySection"
+import type { CalendarEvent } from "@/lib/google"
 
 export const dynamic = "force-dynamic"
 
@@ -24,12 +27,18 @@ export default async function DigestPage() {
   const now = new Date()
   const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000)
 
+  const startOfToday = new Date(now)
+  startOfToday.setHours(0, 0, 0, 0)
+  const endOfToday = new Date(now)
+  endOfToday.setHours(23, 59, 59, 999)
+
   const [
     pendingFollowUps,
     needsReply,
     pendingApprovals,
     expiringHolds,
     commandCenterConversations,
+    calendarCredential,
   ] = await Promise.all([
     // Conversations with a queued follow_up job
     prisma.agentJob.findMany({
@@ -97,6 +106,7 @@ export default async function DigestPage() {
       orderBy: { lastMessageAt: "desc" },
       take: 100,
     }),
+    prisma.googleCalendarCredential.findFirst({ where: { tenantId } }),
   ])
 
   const totalItems =
@@ -106,6 +116,20 @@ export default async function DigestPage() {
     expiringHolds.length
 
   const commandCenter = buildDailyCommandCenter(commandCenterConversations, now)
+
+  let todayMeetings: CalendarEvent[] = []
+  if (calendarCredential) {
+    try {
+      const calendar = await getCalendarClient(tenantId, calendarCredential.email)
+      todayMeetings = await listEvents(calendar, {
+        timeMin: startOfToday,
+        timeMax: endOfToday,
+        maxResults: 5,
+      })
+    } catch {
+      // Best-effort — digest renders without meetings if calendar fails
+    }
+  }
 
   function convName(
     contact: { name: string } | null,
@@ -134,6 +158,7 @@ export default async function DigestPage() {
       </header>
 
       <main className="mx-auto max-w-3xl space-y-6 px-4 sm:px-6 py-8">
+        {todayMeetings.length > 0 && <MeetingsTodaySection events={todayMeetings} />}
         <DailyBriefSections commandCenter={commandCenter} />
 
         {totalItems === 0 && (

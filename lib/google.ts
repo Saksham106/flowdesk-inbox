@@ -389,11 +389,16 @@ export type CalendarEvent = {
 // List upcoming events from the primary calendar
 export async function listEvents(
   calendar: ReturnType<typeof google.calendar>,
-  { maxResults = 20, timeMin = new Date() }: { maxResults?: number; timeMin?: Date } = {}
+  {
+    maxResults = 20,
+    timeMin = new Date(),
+    timeMax,
+  }: { maxResults?: number; timeMin?: Date; timeMax?: Date } = {}
 ): Promise<CalendarEvent[]> {
   const res = await calendar.events.list({
     calendarId: "primary",
     timeMin: timeMin.toISOString(),
+    ...(timeMax ? { timeMax: timeMax.toISOString() } : {}),
     maxResults,
     singleEvents: true,
     orderBy: "startTime",
