@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import AIDraftPanel from "@/app/conversations/[id]/AIDraftPanel";
 import CalendarHoldPanel from "@/app/conversations/[id]/CalendarHoldPanel";
+import ExplainThreadPanel from "@/app/conversations/[id]/ExplainThreadPanel";
 import HandleThisPanel from "@/app/conversations/[id]/HandleThisPanel";
 import WorkItemsPanel from "@/app/conversations/[id]/WorkItemsPanel";
 import SendBox from "@/app/conversations/[id]/SendBox";
@@ -270,6 +271,8 @@ export default async function ConversationPage({
             relationshipContext={relationshipContext}
             canSuggest={conversation.channel.type === "email" && Boolean(businessProfile)}
           />
+
+          <ExplainThreadPanel conversationId={conversation.id} />
 
           <WorkItemsPanel
             state={stateRecord}
