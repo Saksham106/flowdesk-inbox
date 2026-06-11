@@ -24,16 +24,16 @@ Most Phase 1 foundations are shipped (command center, task/lead extraction, appr
 - [ ] **Safely-ignored reasons and bulk archive** (#25).
 - [ ] **Person-memory editing and corrections** (#5) — user-editable memory; LLM-based extraction upgrade.
 
-## Phase 2: Business Revenue Inbox Agent — Not Started
+## Phase 2: Business Revenue Inbox Agent
 
-- [ ] **Lead scoring refinement** (#7) — LLM-assisted scoring; budget/urgency extraction.
-- [ ] **Mini CRM pipeline reporting** (#7) — stage funnel, value estimates.
+- [x] **Meeting prep from email history** (#11) — shipped 2026-06-11: `/meetings` page with on-demand brief from PersonMemory + email threads; digest shows today's meetings.
+- [x] **Post-meeting follow-up generator** (#12) — shipped 2026-06-11: notes + prior threads → follow-up draft → ApprovalRequest; falls back to inline copy.
+- [x] **Lead scoring refinement** (#7) — shipped 2026-06-11: LLM-based scorer replacing heuristic; `scoreExplanation`, `estimatedValue`, `scoredAt` fields; fire-and-forget sync integration; on-demand re-score API + RescoreButton; funnel header + color-coded score badge on `/leads`; command center opportunity cards use LLM explanation.
+- [ ] **Mini CRM pipeline reporting** (#7) — filter/search by score range, pipeline trend analytics, value forecasting.
 - [ ] **Sales agent mode** (#20) — qualify, ask budget/timeline, suggest closing language.
 - [ ] **Customer support agent mode** (#19) — FAQ answers, escalation, churn-risk detection, repeated-issue tracking.
-- [ ] **Meeting prep from email history** (#11) — calendar event + thread + person memory → pre-meeting brief.
-- [ ] **Post-meeting follow-up generator** (#12).
-- [ ] **Email triage by money impact** (#40) — money-impact ranking in command center.
-- [ ] **Full ROI analytics dashboard** (#32) — builds on the weekly value report.
+- [ ] **Email triage by money impact** (#40) — money-impact ranking in command center beyond current lead signal.
+- [ ] **Full ROI analytics dashboard** (#32) — builds on the weekly value report; needs trends, persisted snapshots, revenue attribution.
 - [ ] **Knowledge base source management** (#8) — website/page crawling, citations in drafts.
 - [ ] **Local-business concierge templates** (#36).
 
