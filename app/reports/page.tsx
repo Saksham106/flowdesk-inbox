@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth"
 
 import { authOptions } from "@/lib/auth"
 import { buildWeeklyValueReport } from "@/lib/agent/value-report"
+import { prisma } from "@/lib/prisma"
 
 export const dynamic = "force-dynamic"
 
@@ -16,6 +17,12 @@ function formatMinutes(minutes: number): string {
 export default async function ReportsPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.tenantId) redirect("/login")
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: session.user.tenantId },
+    select: { accountType: true },
+  })
+  if (tenant?.accountType === "personal") redirect("/inbox")
 
   const report = await buildWeeklyValueReport(session.user.tenantId)
 

@@ -26,6 +26,12 @@ export default async function LeadsPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.tenantId) redirect("/login")
 
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: session.user.tenantId },
+    select: { accountType: true },
+  })
+  if (tenant?.accountType === "personal") redirect("/inbox")
+
   const leads = await prisma.lead.findMany({
     where: { tenantId: session.user.tenantId },
     orderBy: { score: "desc" },

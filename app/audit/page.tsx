@@ -50,6 +50,12 @@ export default async function AuditPage({ searchParams }: Props) {
   if (!session?.user?.tenantId) redirect("/login")
 
   const tenantId = session.user.tenantId
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { accountType: true },
+  })
+  if (tenant?.accountType === "personal") redirect("/inbox")
+
   const page = Math.max(1, parseInt(searchParams.page ?? "1", 10))
   const pageSize = 50
   const filterAction = searchParams.action

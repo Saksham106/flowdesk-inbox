@@ -17,6 +17,14 @@ export async function POST(request: Request) {
   }
   const tenantId = session.user.tenantId
 
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { accountType: true },
+  })
+  if (tenant?.accountType === "personal") {
+    return NextResponse.json({ error: "Meeting follow-up is only available for business accounts" }, { status: 403 })
+  }
+
   let body: unknown
   try {
     body = await request.json()

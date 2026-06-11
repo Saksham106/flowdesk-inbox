@@ -17,6 +17,14 @@ export async function POST(request: Request) {
   }
   const tenantId = session.user.tenantId
 
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { accountType: true },
+  })
+  if (tenant?.accountType === "personal") {
+    return NextResponse.json({ error: "Meeting prep is only available for business accounts" }, { status: 403 })
+  }
+
   let body: unknown
   try {
     body = await request.json()
@@ -24,8 +32,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
-  const { eventId: _eventId, eventTitle, eventStart, attendeeEmails, calendarEmail } = body as {
-    eventId?: string
+  const { eventTitle, eventStart, attendeeEmails, calendarEmail } = body as {
     eventTitle?: string
     eventStart?: string
     attendeeEmails?: string[]

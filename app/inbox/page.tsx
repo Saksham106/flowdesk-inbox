@@ -11,6 +11,7 @@ import CommandCenterPanel from "@/app/inbox/CommandCenterPanel";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import { StatusBadge, LabelBadge } from "@/app/components/badges";
 import { buildDailyCommandCenter } from "@/lib/agent/command-center";
+import { AppNavigationItem, getInboxNavigation } from "@/lib/app-navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,14 @@ export default async function InboxPage({ searchParams }: Props) {
       : {}),
   };
 
-  const [conversations, statusCounts, commandCenterConversations, ignoredStates, pendingFollowUps] = await Promise.all([
+  const [
+    conversations,
+    statusCounts,
+    commandCenterConversations,
+    ignoredStates,
+    pendingFollowUps,
+    tenant,
+  ] = await Promise.all([
     prisma.conversation.findMany({
       where,
       orderBy: { lastMessageAt: "desc" },
@@ -118,6 +126,10 @@ export default async function InboxPage({ searchParams }: Props) {
       orderBy: { createdAt: "desc" },
       take: 50,
     }),
+    prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { accountType: true },
+    }),
   ]);
 
   const commandCenter = buildDailyCommandCenter(commandCenterConversations);
@@ -160,6 +172,42 @@ export default async function InboxPage({ searchParams }: Props) {
     { label: "All", status: null, count: totalCount },
     ...ALL_STATUSES.map((s) => ({ label: STATUS_LABELS[s], status: s, count: countByStatus[s] ?? 0 })),
   ];
+  const appNavigation = getInboxNavigation(tenant?.accountType);
+
+  function navLink(item: AppNavigationItem, className = "") {
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        className={`rounded-md px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 ${className}`}
+      >
+        {item.label}
+      </Link>
+    );
+  }
+
+  function secondaryNavMenu(className = "") {
+    if (appNavigation.secondary.length === 0) return null;
+
+    return (
+      <details className={`relative ${className}`}>
+        <summary className="cursor-pointer list-none rounded-md px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
+          More
+        </summary>
+        <div className="absolute right-0 z-10 mt-2 min-w-36 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+          {appNavigation.secondary.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="block px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      </details>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -182,55 +230,9 @@ export default async function InboxPage({ searchParams }: Props) {
               </p>
             </div>
             {/* Desktop nav */}
-            <div className="hidden sm:flex items-center gap-3">
-              <Link
-                href="/digest"
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Digest
-              </Link>
-              <Link
-                href="/tasks"
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Tasks
-              </Link>
-              <Link
-                href="/leads"
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Leads
-              </Link>
-              <Link
-                href="/approvals"
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Approvals
-              </Link>
-              <Link
-                href="/reports"
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Reports
-              </Link>
-              <Link
-                href="/meetings"
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Meetings
-              </Link>
-              <Link
-                href="/audit"
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Audit
-              </Link>
-              <Link
-                href="/settings"
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Settings
-              </Link>
+            <div className="hidden items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 sm:flex">
+              {appNavigation.primary.map((item) => navLink(item))}
+              {secondaryNavMenu()}
               <SignOutButton />
             </div>
             {/* Mobile: sign out only */}
@@ -240,55 +242,9 @@ export default async function InboxPage({ searchParams }: Props) {
           </div>
 
           {/* Mobile nav strip */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-3 sm:hidden">
-            <Link
-              href="/digest"
-              className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-            >
-              Digest
-            </Link>
-            <Link
-              href="/tasks"
-              className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-            >
-              Tasks
-            </Link>
-            <Link
-              href="/leads"
-              className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-            >
-              Leads
-            </Link>
-            <Link
-              href="/approvals"
-              className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-            >
-              Approvals
-            </Link>
-            <Link
-              href="/reports"
-              className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-            >
-              Reports
-            </Link>
-            <Link
-              href="/meetings"
-              className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-            >
-              Meetings
-            </Link>
-            <Link
-              href="/audit"
-              className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-            >
-              Audit
-            </Link>
-            <Link
-              href="/settings"
-              className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-            >
-              Settings
-            </Link>
+          <div className="flex flex-wrap items-center gap-1 pb-3 sm:hidden">
+            {appNavigation.primary.map((item) => navLink(item, "shrink-0"))}
+            {secondaryNavMenu("shrink-0")}
           </div>
         </div>
 

@@ -15,6 +15,12 @@ export default async function MeetingsPage() {
   if (!session?.user?.tenantId) redirect("/login")
   const tenantId = session.user.tenantId
 
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { accountType: true },
+  })
+  if (tenant?.accountType === "personal") redirect("/inbox")
+
   const credential = await prisma.googleCalendarCredential.findFirst({
     where: { tenantId },
   })
