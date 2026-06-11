@@ -129,6 +129,16 @@ Phase 1 completion slice implemented (commit `0e5926a`):
 - Follow-up tracker panel on `/inbox` — amber banner listing queued follow-up agent jobs.
 - "Safely ignored" collapsible section on `/inbox` driven by `ConversationState` safely-ignored metadata.
 
+Lead follow-up sequences slice implemented:
+
+- `lib/agent/lead-sequence.ts` — three-step sequence (first follow-up after 2 quiet days, second after 4 more, closing after 7 more) for leads in `new`/`contacted`/`qualified` stages.
+- Sequence state stored in `Lead.metadataJson.followUpSequence`; no schema change.
+- Due steps create `AgentJob` records with trigger `lead_follow_up` (no OpenAI calls from cron; drafting stays on-demand), deduped per conversation per 24h, audited as `lead_sequence.step_queued`.
+- Sequence pauses automatically when the lead replies (inbound last message) and stops for `won`/`lost` leads or closed conversations.
+- Cron endpoint `GET /api/cron/lead-sequence` protected by `CRON_SECRET`.
+- `/leads` rows show sequence progress; the inbox follow-up tracker includes `lead_follow_up` jobs.
+- Tests in `tests/lead-sequence.test.ts`.
+
 Current behavior:
 
 - Opening a conversation syncs deterministic state, open tasks, and a lead record when the thread has matching signals.
@@ -146,7 +156,7 @@ Limitations:
 - Task assignment is not yet implemented.
 - Lead scoring is deterministic; LLM-based scoring is not yet implemented.
 - Person-memory extraction is deterministic (regex heuristics), not LLM-based, and is not user-editable.
-- Follow-up jobs are queued but there are no staged follow-up sequences for leads.
+- Lead sequence step timings are fixed (2/4/7 days); there is no settings UI yet.
 - Full CRM pipeline reporting is not yet implemented.
 
 ## Partial Features
@@ -177,7 +187,6 @@ See `MASTER_PRODUCT_PLAN.md` for phase recommendations and feature statuses.
 
 - Full task management (assignment, manual creation).
 - Full CRM pipeline.
-- Lead follow-up sequences (staged first/second/close follow-ups).
 - Weekly value report / ROI analytics.
 - Thread explanation panel powered by LLM summaries.
 - Attachment intelligence.
@@ -214,12 +223,11 @@ The AI Draft MVP PR handoff was removed. The feature is now part of the baseline
 
 ## Recommended Next Engineering Slice
 
-The follow-up tracker, persisted `PersonMemory`, and conversation relationship panel are now shipped. The remaining Phase 1 gaps, in priority order:
+The follow-up tracker, persisted `PersonMemory`, conversation relationship panel, and lead follow-up sequences are now shipped. The remaining Phase 1 gaps, in priority order:
 
-1. Lead follow-up sequences (first follow-up, second follow-up, close) — the last open item of the follow-up brain slice.
-2. Weekly value report — Phase 1 feature with zero implementation; deterministic aggregation over existing drafts, tasks, leads, follow-ups, and approvals.
-3. Explain This Thread panel — LLM-backed what happened / what they want / what to do / risks summary per thread.
-4. Email risk radar — surface deadline, final-notice, unanswered-thread, and sensitive-content signals as a dedicated view.
+1. Weekly value report — Phase 1 feature with zero implementation; deterministic aggregation over existing drafts, tasks, leads, follow-ups, and approvals.
+2. Explain This Thread panel — LLM-backed what happened / what they want / what to do / risks summary per thread.
+3. Email risk radar — surface deadline, final-notice, unanswered-thread, and sensitive-content signals as a dedicated view.
 
 See `docs/TODO.md` for the full remaining-work roadmap mapped against the master plan.
 

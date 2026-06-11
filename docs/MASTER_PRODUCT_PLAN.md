@@ -260,7 +260,7 @@ Success criteria:
 | 1 | Magic Daily Command Center | `Partial` | Phase 0/1 | First slice shipped; needs persistence and richer source signals. |
 | 2 | Autopilot Modes, Not Just Auto-Reply | `Partial` | Phase 4 | Basic settings exist; needs category rules and UI policy builder. |
 | 3 | Handle This Button | `Partial` | Phase 0/1 | Button exists and triggers draft suggestion; needs task/lead/calendar side effects. |
-| 4 | AI Follow-Up Brain | `Partial` | Phase 1 | Inbox follow-up tracker panel shipped; needs lead follow-up sequences. |
+| 4 | AI Follow-Up Brain | `Partial` | Phase 1 | Tracker panel and three-step lead follow-up sequences shipped; needs sequence settings UI and sent-output visibility. |
 | 5 | Inbox Memory / Relationship Memory | `Partial` | Phase 1 | Persisted `PersonMemory` and conversation relationship panel shipped; extraction is deterministic and not user-editable yet. |
 | 6 | Never Drop the Ball System | `Partial` | Phase 1 | Computed and persisted states exist; needs inbox views, alerts, and task actions. |
 | 7 | Business Lead Capture From Email | `Partial` | Phase 2 | Lead model, extractor, stage controls, pipeline page, and background sync exist; needs scoring refinement and full CRM features. |
@@ -446,6 +446,7 @@ After an AI agent finishes work:
 | 2026-06-11 | Ship review actions and background sync slice. | Task close, lead stage controls, approval queue decisions, /tasks and /leads pages, and background sync after Gmail/Outlook import are now implemented. Next priority is follow-up brain and relationship memory. |
 | 2026-06-11 | Ship Phase 1 completion slice (commit `0e5926a`). | Persisted `PersonMemory` with relationship panel, task due-date editing, approval draft preview and bulk decisions, inbox follow-up tracker, and safely-ignored section. Remaining Phase 1 gaps: lead follow-up sequences, weekly value report, thread explanation, risk radar. |
 | 2026-06-11 | Add `docs/TODO.md` as the canonical remaining-work checklist. | The feature index tracks status, but agents and humans need a single prioritized to-do view of what is not yet built, mapped to the 45-feature brief. |
+| 2026-06-11 | Store lead sequence state in `Lead.metadataJson` instead of a new model. | Avoids a schema migration (local migration workflow needs a running Postgres), keeps the slice small, and the state is two fields. Promote to a dedicated model if sequences grow steps or settings. |
 
 ## Open Product Questions
 
