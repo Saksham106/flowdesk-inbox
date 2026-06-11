@@ -5,12 +5,14 @@ const {
   mockStateUpsert,
   mockTaskUpsert,
   mockLeadUpsert,
+  mockLeadFindFirst,
   mockAuditCreate,
 } = vi.hoisted(() => ({
   mockConversationFindFirst: vi.fn(),
   mockStateUpsert: vi.fn(),
   mockTaskUpsert: vi.fn(),
   mockLeadUpsert: vi.fn(),
+  mockLeadFindFirst: vi.fn(),
   mockAuditCreate: vi.fn(),
 }))
 
@@ -19,7 +21,7 @@ vi.mock("@/lib/prisma", () => ({
     conversation: { findFirst: mockConversationFindFirst },
     conversationState: { upsert: mockStateUpsert },
     inboxTask: { upsert: mockTaskUpsert },
-    lead: { upsert: mockLeadUpsert },
+    lead: { upsert: mockLeadUpsert, findFirst: mockLeadFindFirst },
     auditLog: { create: mockAuditCreate },
   },
 }))
@@ -57,6 +59,7 @@ describe("syncConversationWorkItems", () => {
     mockStateUpsert.mockResolvedValue({ id: "state-1" })
     mockTaskUpsert.mockResolvedValue({ id: "task-1" })
     mockLeadUpsert.mockResolvedValue({ id: "lead-1" })
+    mockLeadFindFirst.mockResolvedValue({ id: "lead-1" })
     mockAuditCreate.mockResolvedValue({})
   })
 
