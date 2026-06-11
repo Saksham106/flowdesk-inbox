@@ -48,6 +48,10 @@ export type CommandCenterInputConversation = {
     startAt: Date
     expiresAt: Date
   }>
+  lead?: {
+    score: number
+    scoreExplanation: string | null
+  } | null
 }
 
 export type CommandCenterConversation = {
@@ -65,6 +69,7 @@ export type CommandCenterConversation = {
   safelyIgnored: boolean
   needsReply: boolean
   opportunity: boolean
+  leadScore: number | null
 }
 
 export type DailyCommandCenter = {
@@ -230,7 +235,7 @@ export function analyzeConversationForCommandCenter(
   } else if (opportunity) {
     state = "opportunity"
     priority = "high"
-    reason = "Potential revenue or booking opportunity."
+    reason = conversation.lead?.scoreExplanation ?? "Potential revenue or booking opportunity."
     nextAction = "Draft a reply and move the opportunity forward."
   } else if (conversation.status === "needs_reply" && latest?.direction !== "outbound") {
     state = "needs_reply"
@@ -269,6 +274,7 @@ export function analyzeConversationForCommandCenter(
     safelyIgnored: state === "done" || safelyIgnored,
     needsReply: conversation.status === "needs_reply" && !safelyIgnored,
     opportunity,
+    leadScore: opportunity && conversation.lead ? conversation.lead.score : null,
   }
 }
 

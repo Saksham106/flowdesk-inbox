@@ -67,9 +67,24 @@ export default function CommandCenterPanel({
                     </p>
                     <p className="mt-0.5 text-sm text-slate-600">{item.reason}</p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium capitalize text-slate-600">
-                    {item.priority}
-                  </span>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium capitalize text-slate-600">
+                      {item.priority}
+                    </span>
+                    {item.leadScore !== null && item.leadScore !== undefined ? (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          item.leadScore >= 70
+                            ? "bg-emerald-100 text-emerald-700"
+                            : item.leadScore >= 40
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        {item.leadScore}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
                 <p className="mt-2 text-xs font-medium text-slate-500">
                   {item.nextAction}

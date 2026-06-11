@@ -108,6 +108,10 @@ export default async function InboxPage({ searchParams }: Props) {
           orderBy: { expiresAt: "asc" },
           take: 3,
         },
+        leads: {
+          select: { score: true, scoreExplanation: true },
+          take: 1,
+        },
       },
     }),
     prisma.conversationState.findMany({
@@ -132,7 +136,12 @@ export default async function InboxPage({ searchParams }: Props) {
     }),
   ]);
 
-  const commandCenter = buildDailyCommandCenter(commandCenterConversations);
+  const commandCenter = buildDailyCommandCenter(
+    commandCenterConversations.map((c) => ({
+      ...c,
+      lead: c.leads[0] ?? null,
+    }))
+  );
 
   const countByStatus = Object.fromEntries(
     statusCounts.map((r) => [r.status, r._count.status])
