@@ -214,6 +214,12 @@ export default async function InboxPage({ searchParams }: Props) {
                 Reports
               </Link>
               <Link
+                href="/meetings"
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Meetings
+              </Link>
+              <Link
                 href="/audit"
                 className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
               >
@@ -264,6 +270,12 @@ export default async function InboxPage({ searchParams }: Props) {
               className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
             >
               Reports
+            </Link>
+            <Link
+              href="/meetings"
+              className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Meetings
             </Link>
             <Link
               href="/audit"
