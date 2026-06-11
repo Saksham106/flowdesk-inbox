@@ -7,8 +7,10 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import SignOutButton from "@/app/inbox/SignOutButton";
 import SearchInput from "@/app/inbox/SearchInput";
+import CommandCenterPanel from "@/app/inbox/CommandCenterPanel";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import { StatusBadge, LabelBadge } from "@/app/components/badges";
+import { buildDailyCommandCenter } from "@/lib/agent/command-center";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +55,7 @@ export default async function InboxPage({ searchParams }: Props) {
       : {}),
   };
 
-  const [conversations, statusCounts] = await Promise.all([
+  const [conversations, statusCounts, commandCenterConversations] = await Promise.all([
     prisma.conversation.findMany({
       where,
       orderBy: { lastMessageAt: "desc" },
@@ -78,7 +80,31 @@ export default async function InboxPage({ searchParams }: Props) {
       },
       _count: { status: true },
     }),
+    prisma.conversation.findMany({
+      where: { tenantId },
+      orderBy: { lastMessageAt: "desc" },
+      take: 75,
+      include: {
+        messages: { orderBy: { createdAt: "asc" }, take: 20 },
+        channel: true,
+        contact: true,
+        draft: true,
+        agentJobs: { orderBy: { createdAt: "desc" }, take: 3 },
+        approvalRequests: {
+          where: { status: "pending" },
+          orderBy: { createdAt: "desc" },
+          take: 3,
+        },
+        calendarHolds: {
+          where: { status: "held" },
+          orderBy: { expiresAt: "asc" },
+          take: 3,
+        },
+      },
+    }),
   ]);
+
+  const commandCenter = buildDailyCommandCenter(commandCenterConversations);
 
   const countByStatus = Object.fromEntries(
     statusCounts.map((r) => [r.status, r._count.status])
@@ -174,6 +200,8 @@ export default async function InboxPage({ searchParams }: Props) {
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-6">
+        <CommandCenterPanel commandCenter={commandCenter} />
+
         {/* Search */}
         <div className="mb-5">
           <Suspense>

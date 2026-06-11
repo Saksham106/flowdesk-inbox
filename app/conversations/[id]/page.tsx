@@ -6,12 +6,17 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import AIDraftPanel from "@/app/conversations/[id]/AIDraftPanel";
 import CalendarHoldPanel from "@/app/conversations/[id]/CalendarHoldPanel";
+import HandleThisPanel from "@/app/conversations/[id]/HandleThisPanel";
 import SendBox from "@/app/conversations/[id]/SendBox";
 import StatusButton from "@/app/conversations/[id]/StatusButton";
 import LabelSelect from "@/app/conversations/[id]/LabelSelect";
 import SaveContactForm from "@/app/conversations/[id]/SaveContactForm";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import { StatusBadge, LabelBadge } from "@/app/components/badges";
+import {
+  analyzeConversationForCommandCenter,
+  buildRelationshipContext,
+} from "@/lib/agent/command-center";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +31,14 @@ export default async function ConversationPage({
     redirect("/login");
   }
 
-  const [conversation, businessProfile, knowledgeDocumentCount, latestAgentJob, activeHold] = await Promise.all([
+  const [
+    conversation,
+    businessProfile,
+    knowledgeDocumentCount,
+    latestAgentJob,
+    activeHold,
+    pendingApprovals,
+  ] = await Promise.all([
     prisma.conversation.findFirst({
       where: {
         id: params.id,
@@ -56,6 +68,11 @@ export default async function ConversationPage({
       where: { conversationId: params.id, tenantId: session.user.tenantId, status: "held" },
       orderBy: { createdAt: "desc" },
     }),
+    prisma.approvalRequest.findMany({
+      where: { conversationId: params.id, tenantId: session.user.tenantId, status: "pending" },
+      orderBy: { createdAt: "desc" },
+      take: 3,
+    }),
   ]);
 
   if (!conversation) {
@@ -63,6 +80,22 @@ export default async function ConversationPage({
   }
 
   const displayName = conversation.contact?.name ?? conversation.externalThreadId;
+  const assistantInput = {
+    id: conversation.id,
+    externalThreadId: conversation.externalThreadId,
+    label: conversation.label,
+    status: conversation.status,
+    lastMessageAt: conversation.lastMessageAt,
+    contact: conversation.contact,
+    channel: conversation.channel,
+    messages: conversation.messages,
+    draft: conversation.draft,
+    agentJobs: latestAgentJob ? [latestAgentJob] : [],
+    approvalRequests: pendingApprovals,
+    calendarHolds: activeHold ? [activeHold] : [],
+  };
+  const assistantState = analyzeConversationForCommandCenter(assistantInput);
+  const relationshipContext = buildRelationshipContext(assistantInput);
   const draftMetadata = (
     conversation.draft as {
       metadataJson?: {
@@ -171,6 +204,14 @@ export default async function ConversationPage({
               currentLabel={conversation.label}
             />
           </div>
+
+          {/* AI Draft */}
+          <HandleThisPanel
+            conversationId={conversation.id}
+            assistantState={assistantState}
+            relationshipContext={relationshipContext}
+            canSuggest={conversation.channel.type === "email" && Boolean(businessProfile)}
+          />
 
           {/* AI Draft */}
           <AIDraftPanel
