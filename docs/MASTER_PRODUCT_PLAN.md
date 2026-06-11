@@ -136,7 +136,7 @@ Next work:
 - Add first-class task and lead models.
 - Add a real approval queue page.
 
-### Phase 1: "Never Drop The Ball" MVP
+### Phase 1: "Never Drop The Ball" MVP — `Shipped`
 
 Goal: deliver the clearest daily value for individuals and solo business users.
 
@@ -305,25 +305,26 @@ Success criteria:
 
 ## Immediate Next Slice Recommendation
 
-The follow-up tracker, persisted `PersonMemory`, and conversation relationship panel shipped in the Phase 1 completion slice. Remaining Phase 1 work, in priority order:
+Phase 1 is complete as of 2026-06-11. All "Never Drop the Ball" MVP features are shipped.
 
-### Next Slice: Finish Phase 1 — Sequences, Value Report, Thread Explanation
+### Next Slice: Phase 2 — Business Revenue Inbox Agent
 
-Why:
+Phase 1 delivers daily individual value. Phase 2 makes FlowDesk obviously worth paying for by connecting email to revenue.
 
-- Lead follow-up sequences are the last open item of the follow-up brain slice.
-- The weekly value report is the only Phase 1 feature with zero implementation; it makes value visible and supports paid packaging later.
-- Explain This Thread is the first LLM summary surface and reuses existing draft-generation infrastructure.
+Why now:
 
-Suggested scope:
+- Phase 1 foundation is solid: tasks, leads, approvals, follow-up brain, relationship memory, weekly report all exist.
+- The Lead model already exists but lacks full CRM pipeline, scoring refinement, and sales agent mode.
+- Meeting prep and post-meeting follow-up are the highest-leverage Phase 2 features — they use existing calendar, thread, and memory infrastructure.
+- ROI analytics (Phase 2) build directly on the weekly value report now shipping.
 
-- Staged lead follow-up sequences (first follow-up, second follow-up, close) built on the existing follow-up job infrastructure.
-- Weekly value report page aggregating drafts, tasks, leads, follow-ups, and approvals from existing records — no new tracking pipeline.
-- Thread explanation panel: what happened, what they want, what you need to do, risks/deadlines.
+Suggested first Phase 2 slice:
 
-See `docs/TODO.md` for the full remaining-work breakdown across all phases.
+- Meeting prep brief: before a calendar event, surface a briefing from prior email threads with the attendee — what they asked about, last tone, suggested talking points.
+- Post-meeting follow-up generator: after a calendar event, draft a recap email using prior thread context and user notes.
+- Lead scoring refinement: use LLM signal to improve score beyond the current heuristic (urgency + budget clues).
 
-Do not build full CRM analytics or broad integrations in this slice.
+See `docs/MASTER_PRODUCT_PLAN.md` Phase 2 section for the full feature list.
 
 ## Data Model Roadmap
 
@@ -449,6 +450,7 @@ After an AI agent finishes work:
 | 2026-06-11 | Store lead sequence state in `Lead.metadataJson` instead of a new model. | Avoids a schema migration (local migration workflow needs a running Postgres), keeps the slice small, and the state is two fields. Promote to a dedicated model if sequences grow steps or settings. |
 | 2026-06-11 | Compute the weekly value report live from existing records instead of adding a `ValueMetric` model. | All eight metrics are cheap tenant-scoped counts; persisted snapshots only become necessary for trends, which are Phase 2 ROI work. |
 | 2026-06-11 | Ship Explain This Thread as an on-demand, non-persisted panel. | First LLM summary surface; reuses the structured-output draft infrastructure. Read-only by design (never sends or mutates state), audited per run. Persistence and inbox surfacing deferred until usage justifies them. |
+| 2026-06-11 | Phase 1 complete. | All "Never Drop the Ball" MVP features shipped: daily command center, explain thread, follow-up brain with sequences, relationship memory, sensitive draft warnings, approval queue, tasks with due-date editing, lead pipeline, weekly value report, safely-ignored mode. Auto-draft-on-follow-up-open added for follow-up tracker magic. |
 
 ## Open Product Questions
 

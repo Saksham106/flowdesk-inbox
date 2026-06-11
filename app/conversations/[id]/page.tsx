@@ -13,6 +13,7 @@ import SendBox from "@/app/conversations/[id]/SendBox";
 import StatusButton from "@/app/conversations/[id]/StatusButton";
 import LabelSelect from "@/app/conversations/[id]/LabelSelect";
 import SaveContactForm from "@/app/conversations/[id]/SaveContactForm";
+import AutoDraftTrigger from "@/app/conversations/[id]/AutoDraftTrigger";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import { StatusBadge, LabelBadge } from "@/app/components/badges";
 import {
@@ -41,6 +42,7 @@ export default async function ConversationPage({
     latestAgentJob,
     activeHold,
     pendingApprovals,
+    pendingFollowUpJob,
   ] = await Promise.all([
     prisma.conversation.findFirst({
       where: {
@@ -75,6 +77,11 @@ export default async function ConversationPage({
       where: { conversationId: params.id, tenantId: session.user.tenantId, status: "pending" },
       orderBy: { createdAt: "desc" },
       take: 3,
+    }),
+    prisma.agentJob.findFirst({
+      where: { conversationId: params.id, tenantId: session.user.tenantId, trigger: "follow_up", status: "pending" },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
     }),
   ]);
 
@@ -138,6 +145,12 @@ export default async function ConversationPage({
       : null,
   ]);
 
+  const shouldAutoFollowUp =
+    Boolean(pendingFollowUpJob) &&
+    !conversation.draft &&
+    conversation.channel.type === "email" &&
+    Boolean(businessProfile);
+
   const displayName = conversation.contact?.name ?? conversation.externalThreadId;
   const assistantInput = {
     id: conversation.id,
@@ -170,6 +183,7 @@ export default async function ConversationPage({
   return (
     <div className="min-h-screen bg-slate-50">
       <AutoRefresh intervalMs={8000} />
+      {shouldAutoFollowUp && <AutoDraftTrigger conversationId={conversation.id} />}
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 sm:px-6 py-4">
           <div>

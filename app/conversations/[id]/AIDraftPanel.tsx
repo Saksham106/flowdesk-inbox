@@ -270,6 +270,15 @@ export default function AIDraftPanel({
           {action === "suggesting" ? "Suggesting..." : "Suggest reply"}
         </button>
 
+        {hasDraftText && (metadata?.riskLevel === "high" || metadata?.escalationReason) ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+            Sensitive content detected. Review carefully before sending.
+            {typeof metadata?.escalationReason === "string" && metadata.escalationReason
+              ? ` ${metadata.escalationReason}`
+              : null}
+          </p>
+        ) : null}
+
         <textarea
           value={text}
           onChange={(event) => setText(event.target.value)}
