@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { summarizeWorkItems, type WorkItemConversationInput } from "@/lib/agent/work-items"
 import { syncPersonMemory } from "@/lib/agent/person-memory"
+import { scoreLeadForConversation } from "@/lib/agent/lead-scoring"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
@@ -176,6 +177,17 @@ export async function syncConversationWorkItems(
     })
 
     leadSynced = true
+
+    // Fire-and-forget LLM scoring — does not block sync
+    const upsertedLead = await prisma.lead.findFirst({
+      where: { tenantId: conversation.tenantId, conversationId: conversation.id },
+      select: { id: true },
+    })
+    if (upsertedLead) {
+      void scoreLeadForConversation(conversation.tenantId, upsertedLead.id).catch(() => {
+        // Scoring failures are silent — the heuristic score remains
+      })
+    }
   }
 
   if (conversation.contactId) {
