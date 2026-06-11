@@ -1,6 +1,7 @@
 import { createHmac } from "crypto"
 import { encryptString, decryptString } from "@/lib/crypto"
 import { prisma } from "@/lib/prisma"
+import { syncConversationWorkItems } from "@/lib/agent/work-item-sync"
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0/me"
 const TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
@@ -323,6 +324,7 @@ export async function syncOutlookChannel(
       })
     }
 
+    syncConversationWorkItems({ tenantId, conversationId: conversation.id }).catch(() => null)
     synced++
   }
 

@@ -21,7 +21,7 @@ export default function Home() {
         <FAQ />
         <FinalCTA />
       </main>
-      <footer className="border-t border-neutral-100 py-6 px-6">
+      <footer className="border-t border-neutral-100 py-6 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-xs text-neutral-400">
             © {new Date().getFullYear()} FlowDesk. All rights reserved.

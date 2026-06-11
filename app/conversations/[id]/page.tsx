@@ -157,7 +157,7 @@ export default async function ConversationPage({
     <div className="min-h-screen bg-slate-50">
       <AutoRefresh intervalMs={8000} />
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 sm:px-6 py-4">
           <div>
             <Link href="/inbox" className="text-sm text-slate-500 hover:text-slate-700">
               ← Back to inbox
@@ -177,7 +177,7 @@ export default async function ConversationPage({
           />
         </div>
       </header>
-      <main className="mx-auto grid max-w-5xl gap-6 px-6 py-8 lg:grid-cols-[1fr_280px]">
+      <main className="mx-auto grid max-w-5xl gap-6 px-4 sm:px-6 py-8 lg:grid-cols-[1fr_280px]">
         <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="space-y-4">
             {conversation.messages.length === 0 ? (

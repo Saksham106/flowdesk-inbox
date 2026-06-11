@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function Hero() {
   return (
-    <section className="pt-20 pb-16 px-6">
+    <section className="pt-20 pb-16 px-4 sm:px-6">
       <div className="max-w-6xl mx-auto">
         <div className="text-center max-w-2xl mx-auto mb-14">
           <span className="inline-block mb-5 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-medium text-neutral-500 tracking-wide uppercase">
@@ -36,8 +36,8 @@ export default function Hero() {
         {/* Product mock */}
         <div className="rounded-2xl border border-neutral-200 shadow-lg shadow-neutral-900/5 overflow-hidden bg-white">
           <div className="flex h-[320px] sm:h-[380px]">
-            {/* Sidebar / inbox list */}
-            <div className="w-64 shrink-0 border-r border-neutral-100 flex flex-col">
+            {/* Sidebar / inbox list — hidden on mobile so the message pane takes full width */}
+            <div className="hidden sm:flex w-64 shrink-0 border-r border-neutral-100 flex-col">
               <div className="p-4 border-b border-neutral-100">
                 <div className="h-5 w-24 rounded bg-neutral-100 animate-pulse" />
               </div>

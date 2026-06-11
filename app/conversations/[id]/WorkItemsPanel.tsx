@@ -1,3 +1,8 @@
+"use client"
+
+import { useRouter } from "next/navigation"
+import { useState } from "react"
+
 type ConversationStateView = {
   state: string
   priority: string
@@ -25,6 +30,8 @@ type LeadView = {
   stage: string
 } | null
 
+const LEAD_STAGES = ["new", "contacted", "qualified", "won", "lost"] as const
+
 export default function WorkItemsPanel({
   state,
   tasks,
@@ -34,6 +41,38 @@ export default function WorkItemsPanel({
   tasks: InboxTaskView[]
   lead: LeadView
 }) {
+  const router = useRouter()
+  const [closingTaskId, setClosingTaskId] = useState<string | null>(null)
+  const [stagingLeadId, setStagingLeadId] = useState<string | null>(null)
+
+  async function closeTask(taskId: string) {
+    setClosingTaskId(taskId)
+    try {
+      await fetch(`/api/tasks/${taskId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "closed" }),
+      })
+      router.refresh()
+    } finally {
+      setClosingTaskId(null)
+    }
+  }
+
+  async function updateLeadStage(leadId: string, stage: string) {
+    setStagingLeadId(leadId)
+    try {
+      await fetch(`/api/leads/${leadId}/stage`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage }),
+      })
+      router.refresh()
+    } finally {
+      setStagingLeadId(null)
+    }
+  }
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -72,11 +111,31 @@ export default function WorkItemsPanel({
           <h3 className="text-xs font-semibold text-slate-600">Tasks</h3>
           <ul className="mt-2 space-y-2">
             {tasks.map((task) => (
-              <li key={task.id} className="rounded-lg border border-slate-100 px-3 py-2 text-xs">
-                <p className="font-medium text-slate-800">{task.title}</p>
-                <p className="mt-1 text-slate-500">
-                  {task.dueAt ? `Due ${task.dueAt.toLocaleDateString()}` : "No due date"}
-                </p>
+              <li
+                key={task.id}
+                className="flex items-start justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-xs"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-800">{task.title}</p>
+                  <p className="mt-1 text-slate-500">
+                    {task.dueAt
+                      ? `Due ${new Date(task.dueAt).toLocaleDateString()}`
+                      : "No due date"}
+                  </p>
+                </div>
+                {task.status === "open" ? (
+                  <button
+                    onClick={() => closeTask(task.id)}
+                    disabled={closingTaskId === task.id}
+                    className="shrink-0 rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                  >
+                    {closingTaskId === task.id ? "…" : "Close"}
+                  </button>
+                ) : (
+                  <span className="shrink-0 rounded bg-slate-100 px-2 py-1 text-xs text-slate-400">
+                    Closed
+                  </span>
+                )}
               </li>
             ))}
           </ul>
@@ -99,6 +158,27 @@ export default function WorkItemsPanel({
           {lead.budgetClue ? (
             <p className="mt-2 text-blue-700">{lead.budgetClue}</p>
           ) : null}
+          <div className="mt-3 flex items-center gap-2">
+            <label
+              htmlFor={`lead-stage-${lead.id}`}
+              className="text-xs text-blue-700"
+            >
+              Stage:
+            </label>
+            <select
+              id={`lead-stage-${lead.id}`}
+              value={lead.stage}
+              disabled={stagingLeadId === lead.id}
+              onChange={(e) => updateLeadStage(lead.id, e.target.value)}
+              className="rounded border border-blue-200 bg-white px-2 py-0.5 text-xs text-blue-900 disabled:opacity-50"
+            >
+              {LEAD_STAGES.map((s) => (
+                <option key={s} value={s}>
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       ) : null}
     </div>

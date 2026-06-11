@@ -130,7 +130,7 @@ export default async function InboxPage({ searchParams }: Props) {
     <div className="min-h-screen bg-slate-50">
       <AutoRefresh intervalMs={10000} />
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 sm:px-6 py-4">
           <div>
             <h1 className="text-xl font-semibold">Inbox</h1>
             <p className="text-sm text-slate-500">
@@ -150,6 +150,18 @@ export default async function InboxPage({ searchParams }: Props) {
               className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
             >
               Digest
+            </Link>
+            <Link
+              href="/tasks"
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Tasks
+            </Link>
+            <Link
+              href="/leads"
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Leads
             </Link>
             <Link
               href="/approvals"
@@ -174,7 +186,7 @@ export default async function InboxPage({ searchParams }: Props) {
         </div>
 
         {/* Status tabs */}
-        <div className="mx-auto max-w-5xl px-6">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6">
           <nav className="-mb-px flex gap-6 overflow-x-auto">
             {tabs.map(({ label, status, count }) => {
               const isActive = status === activeStatus;
@@ -205,7 +217,7 @@ export default async function InboxPage({ searchParams }: Props) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-6 py-6">
+      <main className="mx-auto max-w-5xl px-4 sm:px-6 py-6">
         <CommandCenterPanel commandCenter={commandCenter} />
 
         {/* Search */}

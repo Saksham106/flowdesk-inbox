@@ -2,6 +2,7 @@ import { google } from "googleapis";
 import { createHmac } from "crypto";
 import { encryptString, decryptString } from "@/lib/crypto";
 import { prisma } from "@/lib/prisma";
+import { syncConversationWorkItems } from "@/lib/agent/work-item-sync";
 
 export const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -246,6 +247,7 @@ export async function syncGmailChannel(channelId: string, tenantId: string): Pro
       });
     }
 
+    syncConversationWorkItems({ tenantId, conversationId: conversation.id }).catch(() => null);
     synced++;
   }
 

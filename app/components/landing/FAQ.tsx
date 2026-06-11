@@ -60,14 +60,14 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 
 export default function FAQ() {
   return (
-    <section id="faq" className="py-16 px-6 bg-neutral-50 border-y border-neutral-100">
+    <section id="faq" className="py-16 px-4 sm:px-6 bg-neutral-50 border-y border-neutral-100">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-10">
           <h2 className="font-serif text-3xl sm:text-4xl text-neutral-900">
             Common questions.
           </h2>
         </div>
-        <div className="max-w-2xl mx-auto divide-y divide-neutral-100 rounded-2xl border border-neutral-200 bg-white px-6">
+        <div className="max-w-2xl mx-auto divide-y divide-neutral-100 rounded-2xl border border-neutral-200 bg-white px-4 sm:px-6">
           {faqs.map((item) => (
             <FAQItem key={item.q} q={item.q} a={item.a} />
           ))}

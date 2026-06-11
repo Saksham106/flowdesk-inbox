@@ -104,19 +104,36 @@ First slice implemented:
 - conversation sidebar work-items panel.
 - tests in `tests/work-items.test.ts` and `tests/work-item-sync.test.ts`.
 
+Review actions and background sync slice implemented:
+
+- `app/api/tasks/[id]/status/route.ts` — PATCH to close or reopen a task.
+- `app/api/leads/[id]/stage/route.ts` — PATCH to update lead stage.
+- `app/api/approvals/[id]/decide/route.ts` — POST to approve or reject an approval request.
+- `app/tasks/page.tsx` — task list page with overdue/upcoming/undated grouping.
+- `app/leads/page.tsx` — leads pipeline page sorted by score.
+- `app/approvals/ApprovalActions.tsx` — client component with inline approve/reject buttons.
+- `app/approvals/ApprovalList.tsx` — client component with optimistic row removal.
+- `WorkItemsPanel.tsx` — now a client component with task close button and lead stage dropdown.
+- `lib/google.ts` and `lib/microsoft.ts` — `syncConversationWorkItems` called after each conversation upsert during Gmail and Outlook sync.
+- Inbox nav now includes Tasks and Leads links.
+- Tests in `tests/work-item-actions.test.ts`.
+
 Current behavior:
 
 - Opening a conversation syncs deterministic state, open tasks, and a lead record when the thread has matching signals.
-- Tasks can be extracted from promise, deadline, payment, invoice, and renewal language.
-- Leads can be extracted from pricing, demo, setup, and booking language.
-- Pending approvals can be reviewed from `/approvals` and opened in their source conversation.
+- Gmail and Outlook sync now also triggers work-item sync for each imported conversation (background, fire-and-forget).
+- Tasks can be closed from the conversation sidebar or from `/tasks`.
+- Leads can be moved through stages (new → contacted → qualified → won → lost) from the conversation sidebar or `/leads`.
+- Approval queue supports inline approve/reject decisions without navigating to the conversation.
+- Tasks are extracted from promise, deadline, payment, invoice, and renewal language.
+- Leads are extracted from pricing, demo, setup, and booking language.
 
 Limitations:
 
-- Task and lead extraction is deterministic and intentionally conservative.
-- There is no full task-management workflow yet.
-- There is no full CRM pipeline yet.
-- Approval decisions still happen on the conversation page, not directly in the queue.
+- Task due-date editing and assignment are not yet implemented.
+- Lead scoring is deterministic; LLM-based scoring is not yet implemented.
+- Approval queue does not yet show draft text preview inline.
+- Full CRM pipeline reporting is not yet implemented.
 
 ## Partial Features
 
@@ -182,17 +199,18 @@ The AI Draft MVP PR handoff was removed. The feature is now part of the baseline
 
 ## Recommended Next Engineering Slice
 
-Build the next layer on top of the new foundation:
+Build follow-up brain and relationship memory:
 
-1. task status actions and a task list page.
-2. lead review/edit actions and a lightweight pipeline view.
-3. approval queue decision actions.
-4. background sync of work items when Gmail/Outlook conversations are imported or agent jobs complete.
+1. User-visible follow-up tracker in the inbox and task list.
+2. Persisted `PersonMemory` records updated from conversation history.
+3. Relationship context shown on conversation pages (promises made, last contact, preferences).
+4. Follow-up sequences for leads.
 
 Why this slice:
 
-- The records now exist, but users need controls to review, correct, close, and act on them.
-- Syncing only on conversation open is useful for the first slice, but background sync is needed for a reliable command center.
+- Review actions and background sync are now complete.
+- Follow-up batch infrastructure exists but produces no user-visible output.
+- Relationship memory is lightweight and not persisted per contact, limiting the assistant's usefulness.
 
 ## Verification Baseline
 

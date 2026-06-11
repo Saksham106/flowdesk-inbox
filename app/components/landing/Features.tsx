@@ -51,7 +51,7 @@ const features = [
 
 export default function Features() {
   return (
-    <section id="features" className="py-16 px-6 border-t border-neutral-100">
+    <section id="features" className="py-16 px-4 sm:px-6 border-t border-neutral-100">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-10">
           <h2 className="font-serif text-3xl sm:text-4xl text-neutral-900">
@@ -70,10 +70,12 @@ export default function Features() {
                   {f.badge}
                 </span>
               )}
-              <div className="mb-4 inline-flex items-center justify-center h-9 w-9 rounded-lg border border-neutral-200 bg-neutral-50 text-neutral-700">
-                {f.icon}
+              <div className="flex items-center gap-3 mb-3">
+                <div className="shrink-0 inline-flex items-center justify-center h-9 w-9 rounded-lg border border-neutral-200 bg-neutral-50 text-neutral-700">
+                  {f.icon}
+                </div>
+                <h3 className="text-base font-semibold text-neutral-900">{f.title}</h3>
               </div>
-              <h3 className="text-base font-semibold text-neutral-900 mb-2">{f.title}</h3>
               <p className="text-sm text-neutral-500 leading-relaxed">{f.description}</p>
             </div>
           ))}

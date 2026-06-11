@@ -263,13 +263,13 @@ Success criteria:
 | 4 | AI Follow-Up Brain | `Partial` | Phase 1 | Batch job exists; needs user-visible tracker and sequences. |
 | 5 | Inbox Memory / Relationship Memory | `Partial` | Phase 1 | Context-lite exists; needs persisted person memory. |
 | 6 | Never Drop the Ball System | `Partial` | Phase 1 | Computed and persisted states exist; needs inbox views, alerts, and task actions. |
-| 7 | Business Lead Capture From Email | `Partial` | Phase 2 | Lead model, deterministic extractor, and thread card exist; needs review/edit actions, scoring refinement, and pipeline. |
+| 7 | Business Lead Capture From Email | `Partial` | Phase 2 | Lead model, extractor, stage controls, pipeline page, and background sync exist; needs scoring refinement and full CRM features. |
 | 8 | Knowledge Base Replies | `Partial` | Phase 1/2 | Knowledge documents exist; needs source management and stronger citations. |
 | 9 | Personal Voice Clone, Controlled | `Partial` | Phase 1 | Learned profile exists; needs clearer controls and style feedback. |
 | 10 | Sensitive Email Detection | `Partial` | Phase 1 | Basic detection exists; needs richer categories and highlighted risky draft parts. |
 | 11 | Meeting Prep From Email History | `Planned` | Phase 2 | Depends on calendar events, relationship memory, and thread summaries. |
 | 12 | Post-Meeting Follow-Up Generator | `Planned` | Phase 2 | Depends on calendar events, notes/transcripts, tasks. |
-| 13 | Email-to-Task Extraction | `Partial` | Phase 1 | Task model and deterministic extraction exist; needs task actions, list page, and background sync. |
+| 13 | Email-to-Task Extraction | `Partial` | Phase 1 | Task model, extraction, list page, close action, and background sync exist; needs due-date editing and assignment. |
 | 14 | Smart Scheduling Agent | `Partial` | Phase 4 | Availability/holds exist; needs full back-and-forth booking. |
 | 15 | Explain This Thread Like I’m Busy | `Planned` | Phase 1 | Could be first LLM summary view per thread. |
 | 16 | Smart Attachment Intelligence | `Planned` | Phase 3 | Needs attachment ingestion, extraction, storage, safety. |
@@ -284,7 +284,7 @@ Success criteria:
 | 25 | What Can I Ignore Mode | `Partial` | Phase 1 | Basic safely ignored count exists; needs dedicated view and reasons. |
 | 26 | Outcome-Based Automation | `Discovery` | Phase 4 | Depends on trust, audit, and rule engine. |
 | 27 | Train My Agent With Plain English | `Discovery` | Phase 4 | Needs rule compiler and conflict resolution. |
-| 28 | Approval Queue | `Partial` | Phase 1 | Queue page exists; decision actions still happen on conversation pages. |
+| 28 | Approval Queue | `Partial` | Phase 1 | Queue page has inline approve/reject actions; still needs batch operations and draft preview. |
 | 29 | Confidence Score Before Sending | `Partial` | Phase 1 | Metadata exists; needs visible UX and policy thresholds. |
 | 30 | Auto-Draft Based on User Intent | `Planned` | Phase 1 | Needs fast instruction-to-reply compose flow. |
 | 31 | Multi-Step Email Workflows | `Discovery` | Phase 4 | Depends on tasks, leads, scheduling, audit, approvals. |
@@ -307,29 +307,23 @@ Success criteria:
 
 The durable task/lead/state foundation now exists. The next best slice should make those records directly usable:
 
-### Next Slice: Review Actions And Background Sync
+### Next Slice: Follow-Up Brain And Relationship Memory
 
 Why:
 
-- Tasks need close/snooze/edit actions before users can trust them.
-- Leads need review/edit/stage controls before this becomes a mini CRM.
-- The approval queue should support decisions, not only navigation.
-- Work items should sync on import/agent-job completion, not only when a conversation is opened.
-
-Recommended implementation docs to create next:
-
-1. `docs/superpowers/specs/YYYY-MM-DD-work-item-review-actions-design.md`
-2. `docs/superpowers/plans/YYYY-MM-DD-work-item-review-actions.md`
+- Review actions and background sync are now complete.
+- The next highest-value work is making follow-up reliable and surfacing per-contact relationship context.
+- Follow-up batch infrastructure exists but is not user-visible.
+- Relationship memory is lightweight and not persisted per contact.
 
 Suggested scope:
 
-- Add task status actions.
-- Add lead review/edit/stage actions.
-- Add approval queue approve/reject navigation or direct actions.
-- Trigger `syncConversationWorkItems` from email sync and agent-job completion paths.
-- Add audit logs for user corrections.
+- User-visible follow-up tracker in the inbox and task list.
+- Persisted `PersonMemory` records updated from conversation history.
+- Relationship context shown on conversation pages (promises made, last contact, preferences).
+- Follow-up sequences for leads (first follow-up, second follow-up, close).
 
-Do not build external task sync, full CRM reporting, or autonomous follow-up sequences in this slice.
+Do not build full CRM analytics or broad integrations in this slice.
 
 ## Data Model Roadmap
 
@@ -449,6 +443,7 @@ After an AI agent finishes work:
 | 2026-06-11 | Ship Daily Command Center as the first slice. | It creates the first wow moment and reuses existing conversations, drafts, approvals, jobs, calendar holds, and labels. |
 | 2026-06-11 | Recommend Tasks + Leads + Approval Queue as the next foundation. | These models unlock the largest number of downstream features without overbuilding workflows. |
 | 2026-06-11 | Move next recommendation to review actions and background sync. | The foundation models and first UI surfaces now exist; users need correction/action paths and reliable syncing. |
+| 2026-06-11 | Ship review actions and background sync slice. | Task close, lead stage controls, approval queue decisions, /tasks and /leads pages, and background sync after Gmail/Outlook import are now implemented. Next priority is follow-up brain and relationship memory. |
 
 ## Open Product Questions
 
