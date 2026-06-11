@@ -10,7 +10,7 @@ Feature numbers reference the 45-feature brief in `MASTER_PRODUCT_PLAN.md`.
 
 Most Phase 1 foundations are shipped (command center, task/lead extraction, approval queue with bulk actions and draft preview, persisted person memory, follow-up tracker, safely-ignored view, due-date editing). What remains:
 
-- [ ] **Lead follow-up sequences** (#4) — staged first follow-up, second follow-up, and close steps built on the existing follow-up job infrastructure. The last open item of the follow-up brain slice.
+- [x] **Lead follow-up sequences** (#4) — shipped 2026-06-11: three-step sequence (first/second/closing follow-up) in `lib/agent/lead-sequence.ts`, cron at `/api/cron/lead-sequence`, sequence progress on `/leads`, jobs in the inbox follow-up tracker.
 - [ ] **Weekly value report** (#32-lite) — `/reports` page aggregating replies drafted, tasks extracted, leads detected, follow-ups queued, and approvals processed from existing records. Only Phase 1 feature with zero implementation.
 - [ ] **Explain This Thread Like I'm Busy** (#15) — LLM panel per thread: what happened, what they want, what you need to do, risks/deadlines, suggested reply.
 - [ ] **Email Risk Radar** (#22) — dedicated view for deadline-tomorrow, final-notice, unanswered-N-days, and sensitive-content signals built on the state engine.

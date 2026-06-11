@@ -109,7 +109,11 @@ export default async function InboxPage({ searchParams }: Props) {
       take: 200,
     }),
     prisma.agentJob.findMany({
-      where: { tenantId, trigger: "follow_up", status: { in: ["pending", "running"] } },
+      where: {
+        tenantId,
+        trigger: { in: ["follow_up", "lead_follow_up"] },
+        status: { in: ["pending", "running"] },
+      },
       include: { conversation: { include: { contact: true } } },
       orderBy: { createdAt: "desc" },
       take: 50,
