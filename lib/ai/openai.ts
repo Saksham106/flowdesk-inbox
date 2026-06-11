@@ -36,6 +36,13 @@ import {
   type MeetingFollowUpPromptInput,
   type MeetingFollowUpResult,
 } from "@/lib/ai/prompts/meeting-follow-up"
+import {
+  buildLeadScoringPrompt,
+  leadScoringJsonSchema,
+  normalizeLeadScoringOutput,
+  type LeadScoringPromptInput,
+  type LeadScoringResult,
+} from "@/lib/ai/prompts/lead-scoring"
 
 export async function generateDraftReplyWithOpenAI(
   input: DraftReplyPromptInput
@@ -274,4 +281,32 @@ export async function generateMeetingFollowUpWithOpenAI(
     },
   })
   return normalizeMeetingFollowUpOutput(response.output_text, model)
+}
+
+export async function scoreLeadWithOpenAI(
+  input: LeadScoringPromptInput
+): Promise<LeadScoringResult> {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is not configured")
+  }
+
+  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
+  const client = new OpenAI({ apiKey })
+  const prompt = buildLeadScoringPrompt(input)
+
+  const response = await client.responses.create({
+    model,
+    input: prompt,
+    text: {
+      format: {
+        type: "json_schema",
+        name: "flowdesk_lead_scoring",
+        strict: true,
+        schema: leadScoringJsonSchema,
+      },
+    },
+  })
+
+  return normalizeLeadScoringOutput(response.output_text, model)
 }
