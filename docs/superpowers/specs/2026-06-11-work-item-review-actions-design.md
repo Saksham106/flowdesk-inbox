@@ -36,7 +36,7 @@ Give users the minimum controls needed to trust and act on extracted work items,
 
 ### Out of Scope
 
-- Task assignment or due-date editing (future).
+- Task assignment and manual task creation (future).
 - Full CRM reporting (future).
 - Autonomous follow-up sequences on stage change (future).
 - External task sync (Linear, Notion, etc.) (future).
@@ -82,7 +82,7 @@ Both actions use `router.refresh()` to re-render the server component without a 
 
 ### Approval Queue Page
 
-Each approval row gains **Approve** and **Reject** buttons rendered in a client component (`ApprovalActions`). On success the row is removed from the list client-side (optimistic removal).
+Each approval row gains **Approve** and **Reject** buttons rendered in a client component (`ApprovalActions`). On success the row is removed from the list client-side; failed requests keep the row visible and show an error.
 
 ### Task List Page (/tasks)
 
