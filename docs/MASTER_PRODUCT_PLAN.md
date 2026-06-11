@@ -271,7 +271,7 @@ Success criteria:
 | 12 | Post-Meeting Follow-Up Generator | `Planned` | Phase 2 | Depends on calendar events, notes/transcripts, tasks. |
 | 13 | Email-to-Task Extraction | `Partial` | Phase 1 | Task model, extraction, list page, close action, background sync, and inline due-date editing exist; needs assignment and manual creation. |
 | 14 | Smart Scheduling Agent | `Partial` | Phase 4 | Availability/holds exist; needs full back-and-forth booking. |
-| 15 | Explain This Thread Like I’m Busy | `Planned` | Phase 1 | Could be first LLM summary view per thread. |
+| 15 | Explain This Thread Like I’m Busy | `Partial` | Phase 1 | On-demand LLM explanation panel shipped on conversation pages; needs persistence, inbox-level surfacing, and draft hand-off. |
 | 16 | Smart Attachment Intelligence | `Planned` | Phase 3 | Needs attachment ingestion, extraction, storage, safety. |
 | 17 | Find Anything Natural Language Search | `Planned` | Phase 3 | Needs indexing, embeddings or search schema, permissions. |
 | 18 | Business Inbox Shared Assistant | `Later` | Phase 5 | Needs team model and collaboration primitives. |
@@ -448,6 +448,7 @@ After an AI agent finishes work:
 | 2026-06-11 | Add `docs/TODO.md` as the canonical remaining-work checklist. | The feature index tracks status, but agents and humans need a single prioritized to-do view of what is not yet built, mapped to the 45-feature brief. |
 | 2026-06-11 | Store lead sequence state in `Lead.metadataJson` instead of a new model. | Avoids a schema migration (local migration workflow needs a running Postgres), keeps the slice small, and the state is two fields. Promote to a dedicated model if sequences grow steps or settings. |
 | 2026-06-11 | Compute the weekly value report live from existing records instead of adding a `ValueMetric` model. | All eight metrics are cheap tenant-scoped counts; persisted snapshots only become necessary for trends, which are Phase 2 ROI work. |
+| 2026-06-11 | Ship Explain This Thread as an on-demand, non-persisted panel. | First LLM summary surface; reuses the structured-output draft infrastructure. Read-only by design (never sends or mutates state), audited per run. Persistence and inbox surfacing deferred until usage justifies them. |
 
 ## Open Product Questions
 

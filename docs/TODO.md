@@ -12,7 +12,7 @@ Most Phase 1 foundations are shipped (command center, task/lead extraction, appr
 
 - [x] **Lead follow-up sequences** (#4) — shipped 2026-06-11: three-step sequence (first/second/closing follow-up) in `lib/agent/lead-sequence.ts`, cron at `/api/cron/lead-sequence`, sequence progress on `/leads`, jobs in the inbox follow-up tracker.
 - [x] **Weekly value report** (#32-lite) — shipped 2026-06-11: `/reports` page with rolling 7-day metrics (drafts, sends, tasks, leads, follow-ups, approvals, triage) and a conservative time-saved estimate, computed in `lib/agent/value-report.ts` from existing records.
-- [ ] **Explain This Thread Like I'm Busy** (#15) — LLM panel per thread: what happened, what they want, what you need to do, risks/deadlines, suggested reply.
+- [x] **Explain This Thread Like I'm Busy** (#15) — shipped 2026-06-11: on-demand LLM panel on conversation pages (what happened, what they want, what to do, risks with risk badge, suggested next step) via `POST /api/conversations/[id]/explain`; audited and usage-tracked.
 - [ ] **Email Risk Radar** (#22) — dedicated view for deadline-tomorrow, final-notice, unanswered-N-days, and sensitive-content signals built on the state engine.
 - [ ] **Auto-draft based on user intent** (#30) — messy instruction ("say yes but only next week") → polished reply compose flow.
 - [ ] **Smart labels taxonomy** (#42) — replace limited labels with action-oriented set (needs decision, waiting on me, revenue opportunity, payment issue, urgent deadline, safe to ignore...).

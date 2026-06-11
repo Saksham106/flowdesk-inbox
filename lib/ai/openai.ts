@@ -15,6 +15,13 @@ import {
   type LearnedReplyProfileResult,
   type ReplyLearningSample,
 } from "@/lib/ai/prompts/learned-reply-profile"
+import {
+  buildExplainThreadPrompt,
+  explainThreadJsonSchema,
+  normalizeExplainThreadOutput,
+  type ExplainThreadPromptInput,
+  type ExplainThreadResult,
+} from "@/lib/ai/prompts/explain-thread"
 
 export async function generateDraftReplyWithOpenAI(
   input: DraftReplyPromptInput
@@ -42,6 +49,34 @@ export async function generateDraftReplyWithOpenAI(
   })
 
   return normalizeDraftReplyOutput(response.output_text, model)
+}
+
+export async function explainThreadWithOpenAI(
+  input: ExplainThreadPromptInput
+): Promise<ExplainThreadResult> {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is not configured")
+  }
+
+  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
+  const client = new OpenAI({ apiKey })
+  const prompt = buildExplainThreadPrompt(input)
+
+  const response = await client.responses.create({
+    model,
+    input: prompt,
+    text: {
+      format: {
+        type: "json_schema",
+        name: "flowdesk_explain_thread",
+        strict: true,
+        schema: explainThreadJsonSchema,
+      },
+    },
+  })
+
+  return normalizeExplainThreadOutput(response.output_text, model)
 }
 
 const personalStyleJsonSchema = {

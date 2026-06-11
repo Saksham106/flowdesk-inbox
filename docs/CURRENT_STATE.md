@@ -147,6 +147,16 @@ Weekly value report slice implemented:
 - Computed live from existing records — no new model, no migration, no tracking pipeline.
 - Tests in `tests/value-report.test.ts`.
 
+Explain This Thread slice implemented:
+
+- `lib/ai/prompts/explain-thread.ts` — prompt builder (last 25 messages, per-message truncation, direction labels, no-invented-facts and no-liability-admission safety rules), strict JSON schema, tolerant normalizer.
+- `explainThreadWithOpenAI` / `explainThread` in `lib/ai/openai.ts` and `lib/ai/provider.ts`, mirroring the draft-reply structured-output pattern.
+- `POST /api/conversations/[id]/explain` — tenant-scoped; records `AiUsageEvent` (feature `explain_thread`) on success and failure and writes a `conversation.explained` audit entry with risk level and counts.
+- `ExplainThreadPanel` on conversation pages — what happened, what they want, what you need to do, risks/deadlines with a low/medium/high risk badge, suggested next step, refresh.
+- Read-only by design: never drafts, sends, or mutates state. Explanations are generated on demand and not persisted.
+- Works for both personal and business accounts (no business-profile requirement).
+- Tests in `tests/explain-thread.test.ts`.
+
 Current behavior:
 
 - Opening a conversation syncs deterministic state, open tasks, and a lead record when the thread has matching signals.
@@ -196,7 +206,6 @@ See `MASTER_PRODUCT_PLAN.md` for phase recommendations and feature statuses.
 - Full task management (assignment, manual creation).
 - Full CRM pipeline.
 - ROI analytics with trends and persisted snapshots (weekly value report exists at `/reports`).
-- Thread explanation panel powered by LLM summaries.
 - Attachment intelligence.
 - Natural-language inbox search.
 - Ask My Inbox chat.
@@ -231,11 +240,11 @@ The AI Draft MVP PR handoff was removed. The feature is now part of the baseline
 
 ## Recommended Next Engineering Slice
 
-The follow-up tracker, persisted `PersonMemory`, conversation relationship panel, lead follow-up sequences, and weekly value report are now shipped. The remaining Phase 1 gaps, in priority order:
+The follow-up tracker, persisted `PersonMemory`, conversation relationship panel, lead follow-up sequences, weekly value report, and Explain This Thread panel are now shipped. The remaining Phase 1 gaps, in priority order:
 
-1. Explain This Thread panel — LLM-backed what happened / what they want / what to do / risks summary per thread.
-2. Email risk radar — surface deadline, final-notice, unanswered-thread, and sensitive-content signals as a dedicated view.
-3. Auto-draft based on user intent — messy instruction to polished reply compose flow.
+1. Email risk radar — surface deadline, final-notice, unanswered-thread, and sensitive-content signals as a dedicated view.
+2. Auto-draft based on user intent — messy instruction to polished reply compose flow.
+3. Smart labels taxonomy — action-oriented label set replacing the current limited labels.
 
 See `docs/TODO.md` for the full remaining-work roadmap mapped against the master plan.
 
