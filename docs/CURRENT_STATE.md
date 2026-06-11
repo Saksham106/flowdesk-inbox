@@ -139,6 +139,14 @@ Lead follow-up sequences slice implemented:
 - `/leads` rows show sequence progress; the inbox follow-up tracker includes `lead_follow_up` jobs.
 - Tests in `tests/lead-sequence.test.ts`.
 
+Weekly value report slice implemented:
+
+- `lib/agent/value-report.ts` — rolling 7-day tenant-scoped counts (drafts created/sent, tasks extracted/closed, leads detected, follow-ups queued, approvals decided, conversations triaged) plus a conservative time-saved estimate (4 min/draft, 3 min/follow-up, 2 min/task, 5 min/lead; nothing double-counted).
+- `/reports` page with headline sentence, metric cards, and time-saved card; estimate weights shown transparently in the UI.
+- Reports link in the inbox desktop nav and mobile nav strip.
+- Computed live from existing records — no new model, no migration, no tracking pipeline.
+- Tests in `tests/value-report.test.ts`.
+
 Current behavior:
 
 - Opening a conversation syncs deterministic state, open tasks, and a lead record when the thread has matching signals.
@@ -187,7 +195,7 @@ See `MASTER_PRODUCT_PLAN.md` for phase recommendations and feature statuses.
 
 - Full task management (assignment, manual creation).
 - Full CRM pipeline.
-- Weekly value report / ROI analytics.
+- ROI analytics with trends and persisted snapshots (weekly value report exists at `/reports`).
 - Thread explanation panel powered by LLM summaries.
 - Attachment intelligence.
 - Natural-language inbox search.
@@ -223,11 +231,11 @@ The AI Draft MVP PR handoff was removed. The feature is now part of the baseline
 
 ## Recommended Next Engineering Slice
 
-The follow-up tracker, persisted `PersonMemory`, conversation relationship panel, and lead follow-up sequences are now shipped. The remaining Phase 1 gaps, in priority order:
+The follow-up tracker, persisted `PersonMemory`, conversation relationship panel, lead follow-up sequences, and weekly value report are now shipped. The remaining Phase 1 gaps, in priority order:
 
-1. Weekly value report — Phase 1 feature with zero implementation; deterministic aggregation over existing drafts, tasks, leads, follow-ups, and approvals.
-2. Explain This Thread panel — LLM-backed what happened / what they want / what to do / risks summary per thread.
-3. Email risk radar — surface deadline, final-notice, unanswered-thread, and sensitive-content signals as a dedicated view.
+1. Explain This Thread panel — LLM-backed what happened / what they want / what to do / risks summary per thread.
+2. Email risk radar — surface deadline, final-notice, unanswered-thread, and sensitive-content signals as a dedicated view.
+3. Auto-draft based on user intent — messy instruction to polished reply compose flow.
 
 See `docs/TODO.md` for the full remaining-work roadmap mapped against the master plan.
 

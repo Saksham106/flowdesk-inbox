@@ -288,7 +288,7 @@ Success criteria:
 | 29 | Confidence Score Before Sending | `Partial` | Phase 1 | Metadata exists; needs visible UX and policy thresholds. |
 | 30 | Auto-Draft Based on User Intent | `Planned` | Phase 1 | Needs fast instruction-to-reply compose flow. |
 | 31 | Multi-Step Email Workflows | `Discovery` | Phase 4 | Depends on tasks, leads, scheduling, audit, approvals. |
-| 32 | Email Analytics That Show ROI | `Planned` | Phase 2 | Needs event tracking and weekly report. |
+| 32 | Email Analytics That Show ROI | `Partial` | Phase 2 | Weekly value report shipped at `/reports` (rolling 7-day counts + time-saved estimate); needs trends, persisted snapshots, and revenue attribution. |
 | 33 | VIP Protection | `Planned` | Phase 3 | Needs VIP/contact model and notification policy. |
 | 34 | Reply Later, But Don’t Forget Intelligence | `Planned` | Phase 3 | Needs smart reminder model. |
 | 35 | Context From Connected Apps | `Discovery` | Phase 4 | Integrations should follow use cases, not integration count. |
@@ -447,6 +447,7 @@ After an AI agent finishes work:
 | 2026-06-11 | Ship Phase 1 completion slice (commit `0e5926a`). | Persisted `PersonMemory` with relationship panel, task due-date editing, approval draft preview and bulk decisions, inbox follow-up tracker, and safely-ignored section. Remaining Phase 1 gaps: lead follow-up sequences, weekly value report, thread explanation, risk radar. |
 | 2026-06-11 | Add `docs/TODO.md` as the canonical remaining-work checklist. | The feature index tracks status, but agents and humans need a single prioritized to-do view of what is not yet built, mapped to the 45-feature brief. |
 | 2026-06-11 | Store lead sequence state in `Lead.metadataJson` instead of a new model. | Avoids a schema migration (local migration workflow needs a running Postgres), keeps the slice small, and the state is two fields. Promote to a dedicated model if sequences grow steps or settings. |
+| 2026-06-11 | Compute the weekly value report live from existing records instead of adding a `ValueMetric` model. | All eight metrics are cheap tenant-scoped counts; persisted snapshots only become necessary for trends, which are Phase 2 ROI work. |
 
 ## Open Product Questions
 
