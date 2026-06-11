@@ -84,6 +84,9 @@ model Tenant {
   approvalRequests          ApprovalRequest[]
   agentJobs                 AgentJob[]
   calendarHolds             CalendarHold[]
+  conversationStates        ConversationState[]
+  inboxTasks                InboxTask[]
+  leads                     Lead[]
   followUpSetting           FollowUpSetting?
   autopilotSetting          AutopilotSetting?
 }
@@ -191,6 +194,9 @@ model Conversation {
   approvalRequests ApprovalRequest[]
   agentJobs        AgentJob[]
   calendarHolds    CalendarHold[]
+  stateRecord      ConversationState?
+  inboxTasks       InboxTask[]
+  leads            Lead[]
 
   @@unique([tenantId, channelId, externalThreadId])
   @@index([tenantId, lastMessageAt])
@@ -264,6 +270,73 @@ model AuditLog {
   user        User?    @relation(fields: [userId], references: [id])
 
   @@index([tenantId, createdAt])
+}
+
+model ConversationState {
+  id             String   @id @default(cuid())
+  tenantId       String
+  conversationId String   @unique
+  state          String
+  priority       String
+  reason         String
+  nextAction     String
+  confidence     Float    @default(0)
+  source         String   @default("deterministic")
+  metadataJson   Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, state])
+  @@index([tenantId, priority])
+}
+
+model InboxTask {
+  id                  String    @id @default(cuid())
+  tenantId            String
+  conversationId      String
+  title               String
+  status              String    @default("open")
+  dueAt               DateTime?
+  source              String    @default("deterministic")
+  sourceMessageId     String?
+  deterministicKey    String
+  metadataJson        Json?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  tenant              Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation        Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, deterministicKey])
+  @@index([tenantId, status])
+  @@index([tenantId, dueAt])
+  @@index([conversationId])
+}
+
+model Lead {
+  id             String   @id @default(cuid())
+  tenantId       String
+  conversationId String
+  name           String
+  company        String?
+  need           String
+  urgency        String   @default("medium")
+  budgetClue     String?
+  contactInfo    String?
+  nextAction     String
+  score          Int      @default(0)
+  stage          String   @default("new")
+  source         String   @default("deterministic")
+  metadataJson   Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, conversationId])
+  @@index([tenantId, stage])
+  @@index([tenantId, score])
 }
 
 model ApprovalRequest {

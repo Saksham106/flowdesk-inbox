@@ -69,6 +69,15 @@ Recently shipped first slice:
 - Digest briefing: `app/digest/DailyBriefSections.tsx`
 - Thread assistant context and "Handle this": `app/conversations/[id]/HandleThisPanel.tsx`
 
+Task/lead/approval foundation slice:
+
+- Design doc: `docs/superpowers/specs/2026-06-11-task-lead-approval-foundation-design.md`
+- Implementation plan: `docs/superpowers/plans/2026-06-11-task-lead-approval-foundation.md`
+- Extraction helpers: `lib/agent/work-items.ts`
+- Persistence sync: `lib/agent/work-item-sync.ts`
+- Approval queue: `app/approvals/page.tsx`
+- Conversation work-items panel: `app/conversations/[id]/WorkItemsPanel.tsx`
+
 ## North Star User Experience
 
 ### Morning Brief
@@ -253,14 +262,14 @@ Success criteria:
 | 3 | Handle This Button | `Partial` | Phase 0/1 | Button exists and triggers draft suggestion; needs task/lead/calendar side effects. |
 | 4 | AI Follow-Up Brain | `Partial` | Phase 1 | Batch job exists; needs user-visible tracker and sequences. |
 | 5 | Inbox Memory / Relationship Memory | `Partial` | Phase 1 | Context-lite exists; needs persisted person memory. |
-| 6 | Never Drop the Ball System | `Partial` | Phase 1 | Computed states exist; needs persisted states, inbox views, and alerts. |
-| 7 | Business Lead Capture From Email | `Planned` | Phase 2 | Needs Lead model, extractor, lead cards, and scoring. |
+| 6 | Never Drop the Ball System | `Partial` | Phase 1 | Computed and persisted states exist; needs inbox views, alerts, and task actions. |
+| 7 | Business Lead Capture From Email | `Partial` | Phase 2 | Lead model, deterministic extractor, and thread card exist; needs review/edit actions, scoring refinement, and pipeline. |
 | 8 | Knowledge Base Replies | `Partial` | Phase 1/2 | Knowledge documents exist; needs source management and stronger citations. |
 | 9 | Personal Voice Clone, Controlled | `Partial` | Phase 1 | Learned profile exists; needs clearer controls and style feedback. |
 | 10 | Sensitive Email Detection | `Partial` | Phase 1 | Basic detection exists; needs richer categories and highlighted risky draft parts. |
 | 11 | Meeting Prep From Email History | `Planned` | Phase 2 | Depends on calendar events, relationship memory, and thread summaries. |
 | 12 | Post-Meeting Follow-Up Generator | `Planned` | Phase 2 | Depends on calendar events, notes/transcripts, tasks. |
-| 13 | Email-to-Task Extraction | `Planned` | Phase 1 | Critical next foundation. Needs Task model. |
+| 13 | Email-to-Task Extraction | `Partial` | Phase 1 | Task model and deterministic extraction exist; needs task actions, list page, and background sync. |
 | 14 | Smart Scheduling Agent | `Partial` | Phase 4 | Availability/holds exist; needs full back-and-forth booking. |
 | 15 | Explain This Thread Like I’m Busy | `Planned` | Phase 1 | Could be first LLM summary view per thread. |
 | 16 | Smart Attachment Intelligence | `Planned` | Phase 3 | Needs attachment ingestion, extraction, storage, safety. |
@@ -275,7 +284,7 @@ Success criteria:
 | 25 | What Can I Ignore Mode | `Partial` | Phase 1 | Basic safely ignored count exists; needs dedicated view and reasons. |
 | 26 | Outcome-Based Automation | `Discovery` | Phase 4 | Depends on trust, audit, and rule engine. |
 | 27 | Train My Agent With Plain English | `Discovery` | Phase 4 | Needs rule compiler and conflict resolution. |
-| 28 | Approval Queue | `Planned` | Phase 1 | Approval data exists; needs first-class page and actions. |
+| 28 | Approval Queue | `Partial` | Phase 1 | Queue page exists; decision actions still happen on conversation pages. |
 | 29 | Confidence Score Before Sending | `Partial` | Phase 1 | Metadata exists; needs visible UX and policy thresholds. |
 | 30 | Auto-Draft Based on User Intent | `Planned` | Phase 1 | Needs fast instruction-to-reply compose flow. |
 | 31 | Multi-Step Email Workflows | `Discovery` | Phase 4 | Depends on tasks, leads, scheduling, audit, approvals. |
@@ -287,7 +296,7 @@ Success criteria:
 | 37 | Auto-Generated Snippets and Playbooks | `Planned` | Phase 4 | Needs repeated-pattern mining and user approval. |
 | 38 | Second Brain Inbox | `Planned` | Phase 3 | Depends on memory extraction and natural-language retrieval. |
 | 39 | Auto-Personalized Outreach | `Later` | Phase 4 | Valuable, but avoid spam positioning. |
-| 40 | Email Triage By Money Impact | `Planned` | Phase 2 | Build into command center after lead/payment models. |
+| 40 | Email Triage By Money Impact | `Partial` | Phase 2 | Lead/payment signals exist; needs command-center money-impact ranking and ROI views. |
 | 41 | One-Click Clean My Inbox Experience | `Planned` | Phase 4 | Great onboarding; needs safe bulk operations. |
 | 42 | Smart Email Labels That Matter | `Partial` | Phase 1 | Current labels are limited; needs action-oriented taxonomy. |
 | 43 | Ask My Inbox Chat | `Planned` | Phase 3 | Should answer with actions, not just summaries. |
@@ -296,30 +305,31 @@ Success criteria:
 
 ## Immediate Next Slice Recommendation
 
-The next best slice is not another UI-only feature. It should add durable data that unlocks many roadmap items:
+The durable task/lead/state foundation now exists. The next best slice should make those records directly usable:
 
-### Next Slice: Tasks, Leads, and Approval Queue
+### Next Slice: Review Actions And Background Sync
 
 Why:
 
-- Email-to-task extraction unlocks Never Drop the Ball, Risk Radar, Meeting Prep, Post-Meeting Follow-Up, Smart Snooze, and Personal Admin.
-- Lead capture unlocks Revenue Inbox Agent, Sales Agent Mode, Money Impact Triage, ROI Analytics, and Local Business Concierge.
-- Approval queue unlocks trust, autopilot learning, confidence UX, and paid automation.
+- Tasks need close/snooze/edit actions before users can trust them.
+- Leads need review/edit/stage controls before this becomes a mini CRM.
+- The approval queue should support decisions, not only navigation.
+- Work items should sync on import/agent-job completion, not only when a conversation is opened.
 
 Recommended implementation docs to create next:
 
-1. `docs/superpowers/specs/YYYY-MM-DD-task-lead-approval-foundation-design.md`
-2. `docs/superpowers/plans/YYYY-MM-DD-task-lead-approval-foundation.md`
+1. `docs/superpowers/specs/YYYY-MM-DD-work-item-review-actions-design.md`
+2. `docs/superpowers/plans/YYYY-MM-DD-work-item-review-actions.md`
 
 Suggested scope:
 
-- Add `InboxTask`, `Lead`, and richer `ConversationState` persistence.
-- Add extraction logic from latest messages and draft metadata.
-- Add an approval queue page.
-- Add thread panels for tasks and lead cards.
-- Add audit logs for extracted/updated task and lead records.
+- Add task status actions.
+- Add lead review/edit/stage actions.
+- Add approval queue approve/reject navigation or direct actions.
+- Trigger `syncConversationWorkItems` from email sync and agent-job completion paths.
+- Add audit logs for user corrections.
 
-Do not build full CRM, full workflows, or external sync in this slice.
+Do not build external task sync, full CRM reporting, or autonomous follow-up sequences in this slice.
 
 ## Data Model Roadmap
 
@@ -438,6 +448,7 @@ After an AI agent finishes work:
 | 2026-06-11 | Treat the 45-feature brief as a roadmap, not one implementation batch. | The feature set spans multiple subsystems: tasks, CRM, memory, search, automations, teams, trust, and pricing. |
 | 2026-06-11 | Ship Daily Command Center as the first slice. | It creates the first wow moment and reuses existing conversations, drafts, approvals, jobs, calendar holds, and labels. |
 | 2026-06-11 | Recommend Tasks + Leads + Approval Queue as the next foundation. | These models unlock the largest number of downstream features without overbuilding workflows. |
+| 2026-06-11 | Move next recommendation to review actions and background sync. | The foundation models and first UI surfaces now exist; users need correction/action paths and reliable syncing. |
 
 ## Open Product Questions
 

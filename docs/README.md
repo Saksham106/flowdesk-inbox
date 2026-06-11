@@ -14,6 +14,8 @@ Use this directory as the source of truth for product direction, current impleme
 
 - `superpowers/specs/2026-06-11-daily-command-center-design.md` — design for the first Daily Command Center slice.
 - `superpowers/plans/2026-06-11-daily-command-center.md` — implementation plan and verification notes for the first Daily Command Center slice.
+- `superpowers/specs/2026-06-11-task-lead-approval-foundation-design.md` — design for persisted tasks, leads, conversation state, and approval queue foundations.
+- `superpowers/plans/2026-06-11-task-lead-approval-foundation.md` — implementation plan and verification notes for the task/lead/approval foundation slice.
 
 ## Documentation Rules
 

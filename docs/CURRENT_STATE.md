@@ -93,6 +93,31 @@ Limitation:
 
 - Command-center state is computed at render time. It is not yet persisted in a `ConversationState` table.
 
+### Task, Lead, And Approval Foundations
+
+First slice implemented:
+
+- `ConversationState`, `InboxTask`, and `Lead` models.
+- deterministic extraction helpers in `lib/agent/work-items.ts`.
+- tenant-scoped persistence sync in `lib/agent/work-item-sync.ts`.
+- approval queue page at `/approvals`.
+- conversation sidebar work-items panel.
+- tests in `tests/work-items.test.ts` and `tests/work-item-sync.test.ts`.
+
+Current behavior:
+
+- Opening a conversation syncs deterministic state, open tasks, and a lead record when the thread has matching signals.
+- Tasks can be extracted from promise, deadline, payment, invoice, and renewal language.
+- Leads can be extracted from pricing, demo, setup, and booking language.
+- Pending approvals can be reviewed from `/approvals` and opened in their source conversation.
+
+Limitations:
+
+- Task and lead extraction is deterministic and intentionally conservative.
+- There is no full task-management workflow yet.
+- There is no full CRM pipeline yet.
+- Approval decisions still happen on the conversation page, not directly in the queue.
+
 ## Partial Features
 
 These exist in some form, but are not product-complete:
@@ -110,14 +135,17 @@ These exist in some form, but are not product-complete:
 - Action-oriented labels.
 - Trust/audit infrastructure.
 - Autopilot settings.
+- Persisted conversation state.
+- First-pass task extraction.
+- First-pass lead capture.
+- Approval queue.
 
 See `MASTER_PRODUCT_PLAN.md` for phase recommendations and feature statuses.
 
 ## Not Yet Implemented As Product Features
 
-- First-class task extraction and task management.
-- Lead model, lead cards, lead scoring, and CRM pipeline.
-- Dedicated approval queue page.
+- Full task management.
+- Full CRM pipeline.
 - Persisted relationship/person memory.
 - Thread explanation panel powered by LLM summaries.
 - Attachment intelligence.
@@ -154,26 +182,17 @@ The AI Draft MVP PR handoff was removed. The feature is now part of the baseline
 
 ## Recommended Next Engineering Slice
 
-Build the foundation for:
+Build the next layer on top of the new foundation:
 
-1. `InboxTask`
-2. `Lead`
-3. persisted `ConversationState`
-4. dedicated approval queue
+1. task status actions and a task list page.
+2. lead review/edit actions and a lightweight pipeline view.
+3. approval queue decision actions.
+4. background sync of work items when Gmail/Outlook conversations are imported or agent jobs complete.
 
 Why this slice:
 
-- Tasks unlock Never Drop the Ball, Risk Radar, Personal Admin, Meeting Prep, and Smart Snooze.
-- Leads unlock Revenue Inbox Agent, Sales Agent Mode, Money Impact Triage, ROI Analytics, and Local Business Concierge.
-- Approval queue unlocks safer autopilot, confidence UX, agent training, and trust.
-
-Create a design doc before implementation:
-
-- `docs/superpowers/specs/YYYY-MM-DD-task-lead-approval-foundation-design.md`
-
-Create an implementation plan before code:
-
-- `docs/superpowers/plans/YYYY-MM-DD-task-lead-approval-foundation.md`
+- The records now exist, but users need controls to review, correct, close, and act on them.
+- Syncing only on conversation open is useful for the first slice, but background sync is needed for a reliable command center.
 
 ## Verification Baseline
 
@@ -182,6 +201,8 @@ Recent verification after the Daily Command Center work:
 ```bash
 npm test -- tests/command-center.test.ts
 npm test -- tests/agent-availability.test.ts
+npm test -- tests/work-items.test.ts
+npm test -- tests/work-item-sync.test.ts
 npm test
 npm run lint
 npm run build
@@ -189,7 +210,7 @@ npm run build
 
 Observed result:
 
-- `npm test`: 147 tests passed across 18 files.
+- `npm test`: 158 tests passed across 20 files.
 - `npm run lint`: passed.
 - `npm run build`: passed.
 

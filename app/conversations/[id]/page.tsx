@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import AIDraftPanel from "@/app/conversations/[id]/AIDraftPanel";
 import CalendarHoldPanel from "@/app/conversations/[id]/CalendarHoldPanel";
 import HandleThisPanel from "@/app/conversations/[id]/HandleThisPanel";
+import WorkItemsPanel from "@/app/conversations/[id]/WorkItemsPanel";
 import SendBox from "@/app/conversations/[id]/SendBox";
 import StatusButton from "@/app/conversations/[id]/StatusButton";
 import LabelSelect from "@/app/conversations/[id]/LabelSelect";
@@ -17,6 +18,7 @@ import {
   analyzeConversationForCommandCenter,
   buildRelationshipContext,
 } from "@/lib/agent/command-center";
+import { syncConversationWorkItems } from "@/lib/agent/work-item-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +80,49 @@ export default async function ConversationPage({
   if (!conversation) {
     notFound();
   }
+
+  await syncConversationWorkItems({
+    tenantId: session.user.tenantId,
+    conversationId: conversation.id,
+  }).catch(() => null);
+
+  const [stateRecord, inboxTasks, lead] = await Promise.all([
+    prisma.conversationState.findUnique({
+      where: { conversationId: conversation.id },
+      select: {
+        state: true,
+        priority: true,
+        reason: true,
+        nextAction: true,
+        confidence: true,
+      },
+    }),
+    prisma.inboxTask.findMany({
+      where: { tenantId: session.user.tenantId, conversationId: conversation.id, status: "open" },
+      orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }],
+      take: 5,
+      select: { id: true, title: true, status: true, dueAt: true },
+    }),
+    prisma.lead.findUnique({
+      where: {
+        tenantId_conversationId: {
+          tenantId: session.user.tenantId,
+          conversationId: conversation.id,
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        company: true,
+        need: true,
+        urgency: true,
+        budgetClue: true,
+        nextAction: true,
+        score: true,
+        stage: true,
+      },
+    }),
+  ]);
 
   const displayName = conversation.contact?.name ?? conversation.externalThreadId;
   const assistantInput = {
@@ -211,6 +256,12 @@ export default async function ConversationPage({
             assistantState={assistantState}
             relationshipContext={relationshipContext}
             canSuggest={conversation.channel.type === "email" && Boolean(businessProfile)}
+          />
+
+          <WorkItemsPanel
+            state={stateRecord}
+            tasks={inboxTasks}
+            lead={lead}
           />
 
           {/* AI Draft */}
