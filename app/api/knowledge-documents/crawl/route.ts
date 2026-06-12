@@ -69,6 +69,7 @@ export async function POST(request: Request) {
   try {
     const upstream = await fetch(rawUrl, {
       signal: controller.signal,
+      redirect: "error",
       headers: { "User-Agent": "FlowDesk/1.0 (content-importer)" },
     })
     clearTimeout(timer)

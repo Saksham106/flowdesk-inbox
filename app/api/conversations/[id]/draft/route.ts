@@ -32,6 +32,7 @@ export async function PATCH(
   const payload = await request.json()
   const text = typeof payload?.text === "string" ? payload.text.trim() : undefined
   const status = typeof payload?.status === "string" ? payload.status : undefined
+  const kbDocId = typeof payload?.kbDocId === "string" ? payload.kbDocId : undefined
 
   if (status && !VALID_STATUSES.includes(status as (typeof VALID_STATUSES)[number])) {
     return NextResponse.json({ error: "Invalid draft status" }, { status: 400 })
@@ -55,6 +56,19 @@ export async function PATCH(
         payloadJson: { conversationId: conversation.id, draftId: draft.id },
       },
     })
+
+    if (kbDocId) {
+      await prisma.auditLog.create({
+        data: {
+          tenantId: session.user.tenantId,
+          action: "support.kb_match_draft",
+          payloadJson: {
+            conversationId: params.id,
+            kbDocId,
+          },
+        },
+      })
+    }
 
     return NextResponse.json({ draft })
   }

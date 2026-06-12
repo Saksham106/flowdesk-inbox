@@ -207,40 +207,41 @@ export async function syncConversationWorkItems(
     conversation.label
   )
 
-  if (supportSignals.isSupport) {
-    const existing = (await prisma.conversationState.findUnique({
-      where: { conversationId: conversation.id },
-      select: { metadataJson: true },
-    }))?.metadataJson
+  const existing = (await prisma.conversationState.findUnique({
+    where: { conversationId: conversation.id },
+    select: { metadataJson: true },
+  }))?.metadataJson
 
-    const existingMeta =
-      existing && typeof existing === "object" && !Array.isArray(existing)
-        ? (existing as Record<string, unknown>)
-        : {}
+  const existingMeta =
+    existing && typeof existing === "object" && !Array.isArray(existing)
+      ? (existing as Record<string, unknown>)
+      : {}
 
+  await prisma.auditLog.create({
+    data: {
+      tenantId: input.tenantId,
+      action: "conversation_state.support_classified",
+      payloadJson: {
+        conversationId: conversation.id,
+        isSupport: supportSignals.isSupport,
+        churnRisk: supportSignals.churnRisk,
+        needsEscalation: supportSignals.needsEscalation,
+        suggestedKbDocId: supportSignals.suggestedKbDocId,
+      },
+    },
+  })
+
+  if (supportSignals.isSupport || existingMeta.isSupport === true) {
     await prisma.conversationState.update({
       where: { conversationId: conversation.id },
       data: {
         metadataJson: {
           ...existingMeta,
-          isSupport: true,
+          isSupport: supportSignals.isSupport,
           churnRisk: supportSignals.churnRisk,
           needsEscalation: supportSignals.needsEscalation,
           suggestedKbDocId: supportSignals.suggestedKbDocId,
         } as Prisma.InputJsonValue,
-      },
-    })
-
-    await prisma.auditLog.create({
-      data: {
-        tenantId: input.tenantId,
-        action: "conversation_state.support_classified",
-        payloadJson: {
-          conversationId: conversation.id,
-          churnRisk: supportSignals.churnRisk,
-          needsEscalation: supportSignals.needsEscalation,
-          suggestedKbDocId: supportSignals.suggestedKbDocId,
-        },
       },
     })
   }
