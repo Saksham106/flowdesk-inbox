@@ -37,11 +37,13 @@ export default function WorkItemsPanel({
   tasks,
   lead,
   isPersonal = false,
+  bare = false,
 }: {
   state: ConversationStateView
   tasks: InboxTaskView[]
   lead: LeadView
   isPersonal?: boolean
+  bare?: boolean
 }) {
   const router = useRouter()
   const [closingTaskId, setClosingTaskId] = useState<string | null>(null)
@@ -90,8 +92,8 @@ export default function WorkItemsPanel({
     }
   }
 
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+  const inner = (
+    <div>
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-slate-600">Work items</h2>
@@ -200,6 +202,14 @@ export default function WorkItemsPanel({
       ) : null}
 
       {error ? <p className="mt-3 text-xs text-red-600">{error}</p> : null}
+    </div>
+  )
+
+  if (bare) return inner
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      {inner}
     </div>
   )
 }

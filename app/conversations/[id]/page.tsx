@@ -15,6 +15,7 @@ import LabelSelect from "@/app/conversations/[id]/LabelSelect";
 import SaveContactForm from "@/app/conversations/[id]/SaveContactForm";
 import AutoDraftTrigger from "@/app/conversations/[id]/AutoDraftTrigger";
 import AutoRefresh from "@/app/components/AutoRefresh";
+import CollapsibleCard from "@/app/components/CollapsibleCard";
 import { StatusBadge, LabelBadge } from "@/app/components/badges";
 import {
   analyzeConversationForCommandCenter,
@@ -223,6 +224,8 @@ export default async function ConversationPage({
     <div className="min-h-screen bg-slate-50">
       <AutoRefresh intervalMs={8000} />
       {shouldAutoFollowUp && <AutoDraftTrigger conversationId={conversation.id} />}
+
+      {/* Header */}
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 sm:px-6 py-4">
           <div>
@@ -244,39 +247,131 @@ export default async function ConversationPage({
           />
         </div>
       </header>
-      <main className="mx-auto grid max-w-5xl gap-6 px-4 sm:px-6 py-8 lg:grid-cols-[1fr_280px]">
-        <section className="min-w-0 overflow-x-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="space-y-4">
-            {conversation.messages.length === 0 ? (
-              <p className="text-sm text-slate-500">No messages yet.</p>
-            ) : (
-              conversation.messages.map((message) => {
-                const isOutbound = message.direction === "outbound";
-                return (
-                  <div
-                    key={message.id}
-                    className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
-                  >
+
+      {/* Two-column layout: email thread + composer | context sidebar */}
+      <main className="mx-auto grid max-w-5xl gap-5 px-4 sm:px-6 py-6 lg:grid-cols-[1fr_300px]">
+
+        {/* Left: conversation thread then inline reply composer */}
+        <section className="min-w-0 space-y-4">
+          {/* Email thread */}
+          <div className="overflow-x-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="space-y-4">
+              {conversation.messages.length === 0 ? (
+                <p className="text-sm text-slate-500">No messages yet.</p>
+              ) : (
+                conversation.messages.map((message) => {
+                  const isOutbound = message.direction === "outbound";
+                  return (
                     <div
-                      className={`max-w-[75%] min-w-0 rounded-2xl px-4 py-2 text-sm ${
-                        isOutbound
-                          ? "bg-slate-900 text-white"
-                          : "bg-slate-100 text-slate-900"
-                      }`}
+                      key={message.id}
+                      className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
                     >
-                      <EmailBody body={message.body} />
-                      <p className="mt-1 text-xs opacity-70">
-                        {message.createdAt.toLocaleString()}
-                      </p>
+                      <div
+                        className={`max-w-[75%] min-w-0 rounded-2xl px-4 py-2 text-sm ${
+                          isOutbound
+                            ? "bg-slate-900 text-white"
+                            : "bg-slate-100 text-slate-900"
+                        }`}
+                      >
+                        <EmailBody body={message.body} />
+                        <p className="mt-1 text-xs opacity-70">
+                          {message.createdAt.toLocaleString()}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                );
-              })
-            )}
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Inline reply composer — reads naturally below the last message */}
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-6 py-3">
+              <h2 className="text-sm font-semibold text-slate-800">Reply</h2>
+              <p className="text-xs text-slate-500">
+                Review and approve before anything is sent.
+              </p>
+            </div>
+
+            {/* AI draft section */}
+            <div className="px-6 py-5">
+              <AIDraftPanel
+                conversationId={conversation.id}
+                channelType={conversation.channel.type}
+                hasBusinessProfile={Boolean(businessProfile)}
+                knowledgeDocumentCount={knowledgeDocumentCount}
+                initialDraft={
+                  conversation.draft
+                    ? {
+                        id: conversation.draft.id,
+                        text: conversation.draft.text,
+                        status: conversation.draft.status,
+                        metadataJson: draftMetadata ?? null,
+                      }
+                    : null
+                }
+                inline
+              />
+            </div>
+
+            {/* Quick send — simple direct path below the AI draft */}
+            <div className="border-t border-slate-100 bg-slate-50 px-6 py-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Or send directly
+              </p>
+              <SendBox conversationId={conversation.id} />
+            </div>
           </div>
         </section>
 
-        <aside className="space-y-4">
+        {/* Right: compact context sidebar */}
+        <aside className="space-y-3">
+
+          {/* Contact + Label — combined compact card */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="min-w-0">
+              <p className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Contact
+              </p>
+              {conversation.contact ? (
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-slate-800" title={conversation.contact.name}>
+                    {conversation.contact.name}
+                  </p>
+                  {conversation.contact.phoneE164 && (
+                    <p className="truncate text-xs text-slate-500" title={conversation.contact.phoneE164}>
+                      {conversation.contact.phoneE164}
+                    </p>
+                  )}
+                </div>
+              ) : conversation.channel.type === "email" ? (
+                <p className="text-xs text-slate-500">No contact saved</p>
+              ) : (
+                <SaveContactForm
+                  conversationId={conversation.id}
+                  phoneE164={conversation.externalThreadId}
+                />
+              )}
+            </div>
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <LabelSelect
+                conversationId={conversation.id}
+                currentLabel={conversation.label}
+                isPersonal={isPersonal}
+              />
+            </div>
+          </div>
+
+          {/* Assistant context */}
+          <HandleThisPanel
+            conversationId={conversation.id}
+            assistantState={assistantState}
+            relationshipContext={relationshipContext}
+            canSuggest={conversation.channel.type === "email" && Boolean(businessProfile)}
+          />
+
+          {/* Business-only: support signals */}
           {isSupport && (
             <SupportPanel
               conversationId={conversation.id}
@@ -287,6 +382,8 @@ export default async function ConversationPage({
               repeatContactCount={0}
             />
           )}
+
+          {/* Business-only: sales pipeline */}
           {isSalesLead && !isPersonal && (
             <SalesPanel
               conversationId={conversation.id}
@@ -296,113 +393,6 @@ export default async function ConversationPage({
               suggestedAction={salesSuggestedAction}
             />
           )}
-          {/* Contact */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-slate-600">Contact</h2>
-            {conversation.contact ? (
-              <div className="min-w-0 space-y-0.5">
-                <p
-                  className="truncate text-sm font-medium"
-                  title={conversation.contact.name}
-                >
-                  {conversation.contact.name}
-                </p>
-                <p className="text-xs font-medium text-slate-500">
-                  {conversation.channel.type === "email" ? "Email" : "Phone"}:
-                </p>
-                <p
-                  className="truncate text-xs text-slate-500"
-                  title={conversation.contact.phoneE164}
-                >
-                  {conversation.contact.phoneE164}
-                </p>
-              </div>
-            ) : conversation.channel.type === "email" ? (
-              <p className="text-sm text-slate-500">No contact saved</p>
-            ) : (
-              <SaveContactForm
-                conversationId={conversation.id}
-                phoneE164={conversation.externalThreadId}
-              />
-            )}
-          </div>
-
-          {/* Label */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-slate-600">Label</h2>
-            <LabelSelect
-              conversationId={conversation.id}
-              currentLabel={conversation.label}
-              isPersonal={isPersonal}
-            />
-          </div>
-
-          {/* AI Draft */}
-          <HandleThisPanel
-            conversationId={conversation.id}
-            assistantState={assistantState}
-            relationshipContext={relationshipContext}
-            canSuggest={conversation.channel.type === "email" && Boolean(businessProfile)}
-          />
-
-          <ExplainThreadPanel conversationId={conversation.id} />
-
-          <WorkItemsPanel
-            state={stateRecord}
-            tasks={inboxTasks}
-            lead={lead}
-            isPersonal={isPersonal}
-          />
-
-          {/* Relationship memory */}
-          {personMemory && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-slate-600">Relationship</h2>
-              <p className="text-xs text-slate-600 leading-relaxed">{personMemory.summary}</p>
-              {personMemory.promisedActions && (
-                <div className="mt-3">
-                  <p className="mb-1 text-xs font-semibold text-slate-500">Promises made</p>
-                  <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
-                    {personMemory.promisedActions}
-                  </p>
-                </div>
-              )}
-              {personMemory.openQuestions && (
-                <div className="mt-3">
-                  <p className="mb-1 text-xs font-semibold text-slate-500">Open questions</p>
-                  <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
-                    {personMemory.openQuestions}
-                  </p>
-                </div>
-              )}
-              {personMemory.preferences && (
-                <div className="mt-3">
-                  <p className="mb-1 text-xs font-semibold text-slate-500">Preferences noted</p>
-                  <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
-                    {personMemory.preferences}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* AI Draft */}
-          <AIDraftPanel
-            conversationId={conversation.id}
-            channelType={conversation.channel.type}
-            hasBusinessProfile={Boolean(businessProfile)}
-            knowledgeDocumentCount={knowledgeDocumentCount}
-            initialDraft={
-              conversation.draft
-                ? {
-                    id: conversation.draft.id,
-                    text: conversation.draft.text,
-                    status: conversation.draft.status,
-                    metadataJson: draftMetadata ?? null,
-                  }
-                : null
-            }
-          />
 
           {/* Calendar holds */}
           {conversation.channel.type === "email" && (
@@ -421,11 +411,46 @@ export default async function ConversationPage({
             />
           )}
 
-          {/* Send */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-slate-600">Send reply</h2>
-            <SendBox conversationId={conversation.id} />
-          </div>
+          {/* Explain thread — already starts in minimal "click to expand" state */}
+          <ExplainThreadPanel conversationId={conversation.id} />
+
+          {/* Work items — collapsible to keep sidebar compact */}
+          <CollapsibleCard title="Work items">
+            <WorkItemsPanel
+              state={stateRecord}
+              tasks={inboxTasks}
+              lead={lead}
+              isPersonal={isPersonal}
+              bare
+            />
+          </CollapsibleCard>
+
+          {/* Relationship memory — collapsible */}
+          {personMemory && (
+            <CollapsibleCard title="Relationship">
+              <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
+                <p>{personMemory.summary}</p>
+                {personMemory.promisedActions && (
+                  <div>
+                    <p className="mb-1 font-semibold text-slate-500">Promises made</p>
+                    <p className="whitespace-pre-line">{personMemory.promisedActions}</p>
+                  </div>
+                )}
+                {personMemory.openQuestions && (
+                  <div>
+                    <p className="mb-1 font-semibold text-slate-500">Open questions</p>
+                    <p className="whitespace-pre-line">{personMemory.openQuestions}</p>
+                  </div>
+                )}
+                {personMemory.preferences && (
+                  <div>
+                    <p className="mb-1 font-semibold text-slate-500">Preferences noted</p>
+                    <p className="whitespace-pre-line">{personMemory.preferences}</p>
+                  </div>
+                )}
+              </div>
+            </CollapsibleCard>
+          )}
         </aside>
       </main>
     </div>

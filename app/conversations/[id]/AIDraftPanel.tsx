@@ -50,12 +50,14 @@ export default function AIDraftPanel({
   hasBusinessProfile,
   knowledgeDocumentCount,
   initialDraft,
+  inline = false,
 }: {
   conversationId: string;
   channelType: string;
   hasBusinessProfile: boolean;
   knowledgeDocumentCount: number;
   initialDraft: DraftSnapshot | null;
+  inline?: boolean;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState<DraftSnapshot | null>(initialDraft);
@@ -229,21 +231,30 @@ export default function AIDraftPanel({
     }
   }
 
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-600">AI draft</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Review and approve before anything is sent.
-          </p>
+  const statusBadge =
+    draft?.status && draft.status !== "none" ? (
+      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium capitalize text-slate-600">
+        {draft.status}
+      </span>
+    ) : null;
+
+  const body = (
+    <>
+      {!inline && (
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-600">AI draft</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Review and approve before anything is sent.
+            </p>
+          </div>
+          {statusBadge}
         </div>
-        {draft?.status && draft.status !== "none" ? (
-          <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium capitalize text-slate-600">
-            {draft.status}
-          </span>
-        ) : null}
-      </div>
+      )}
+
+      {inline && statusBadge && (
+        <div className="mb-3 flex justify-end">{statusBadge}</div>
+      )}
 
       {!isEmail ? (
         <p className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
@@ -350,6 +361,14 @@ export default function AIDraftPanel({
           {action === "sending" ? "Sending..." : "Approve & Send"}
         </button>
       </div>
+    </>
+  );
+
+  if (inline) return <div>{body}</div>;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      {body}
     </div>
   );
 }
