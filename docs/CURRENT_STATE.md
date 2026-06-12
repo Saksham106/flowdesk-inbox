@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-12 (email body rendering fix)
+Last updated: 2026-06-12 (personal/business UI separation + email formatting cleanup)
 
 This file is the codebase-facing companion to `MASTER_PRODUCT_PLAN.md`. It answers: what exists today, what is partial, and what should not be treated as active scope.
 
@@ -50,12 +50,26 @@ Email is the active channel. SMS/Twilio is not part of the active product path.
 
 Email body rendering (2026-06-12):
 
-- `lib/email-body.ts` — `isHtmlBody`, `sanitizeEmailHtml` (sanitize-html allow-list, scheme-restricted links/images, enforced `target="_blank" rel="noopener noreferrer"`), `linkifyText` (HTML escape, newline→`<br>`, URL auto-link), `renderEmailBodyHtml` dispatcher.
+- `lib/email-body.ts` — `isHtmlBody`, `sanitizeEmailHtml` (sanitize-html allow-list, scheme-restricted links/images, enforced `target="_blank" rel="noopener noreferrer"`), `linkifyText` (HTML escape, basic markdown rendering, newline→`<br>`, URL auto-link), `renderEmailBodyHtml` dispatcher.
+  - Plain-text emails with `**bold**` or `_italic_` markers now render as `<strong>`/`<em>` instead of showing raw markers. Lookbehind guard prevents underscore-in-word false matches.
 - `app/components/EmailBody.tsx` — server component rendering sanitized HTML or linkified plain text via `dangerouslySetInnerHTML`.
 - `app/globals.css` — `.email-body` scoped CSS: `overflow-wrap: anywhere`, `word-break: break-word`, `max-width: 100%`, image/table/pre/link constraints.
 - `app/conversations/[id]/page.tsx` — message bubbles use `EmailBody`; main section has `min-w-0 overflow-x-hidden` so the sidebar stays visible on desktop even with long/HTML content.
 - `lib/google.ts` — `extractBody` now checks `mimeType` on root body (strips HTML when `text/html` or content starts with `<`), recurses into nested `multipart/*` via `findPart`, and has a depth guard (max 8) against malformed payloads.
 - Tests in `tests/email-body.test.ts` — 26 tests covering detection, sanitization (XSS, iframe, event handlers, scheme restriction), linkification, and BOM handling.
+
+Personal vs business account UI separation (2026-06-12):
+
+- `app/conversations/[id]/page.tsx` — reads `accountType` from the NextAuth session (set during login from `Tenant.accountType`); derives `isPersonal` flag; passes it to `LabelSelect` and `WorkItemsPanel`; gates `SalesPanel` with `isSalesLead && !isPersonal`.
+- `app/conversations/[id]/LabelSelect.tsx` — accepts `isPersonal` prop; personal accounts see only "No label" (no CRM labels); business accounts see Lead, Reschedule, Pricing, Complaint as before.
+- `app/conversations/[id]/WorkItemsPanel.tsx` — accepts `isPersonal` prop; lead card (blue, with stage dropdown and score) is hidden for personal accounts.
+- `app/conversations/[id]/SalesPanel.tsx` — unchanged; already hidden for personal accounts via the page-level gate above.
+- `lib/agent/command-center.ts` — added `stripHtml` and `plainBody` helpers; `bodyText` now strips HTML from HTML email bodies before pattern matching; `lastConversationSummary` and `pastPromises` in `buildRelationshipContext` use `plainBody` so the Assistant Context "Summary" row never shows raw HTML/CSS/template markup.
+
+Limitations:
+
+- Personal accounts have no configurable label set yet; the label dropdown simply shows "No label" only. A future slice can add a personal label taxonomy (e.g. To-do, Waiting, FYI).
+- The `isPersonal` flag is derived from session at render time; no separate UI exists to switch account type without an admin re-seed.
 
 ### AI Drafting
 
@@ -312,7 +326,7 @@ See `docs/TODO.md` for the full remaining-work roadmap mapped against the master
 
 ## Verification Baseline
 
-Recent verification (2026-06-12, after email body rendering fix):
+Recent verification (2026-06-12, after personal/business UI separation + formatting cleanup):
 
 ```bash
 npm test
