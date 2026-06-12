@@ -21,6 +21,9 @@ import {
   buildRelationshipContext,
 } from "@/lib/agent/command-center";
 import { syncConversationWorkItems } from "@/lib/agent/work-item-sync";
+import SupportPanel from "@/app/conversations/[id]/SupportPanel";
+import SalesPanel from "@/app/conversations/[id]/SalesPanel";
+import { SALES_SUGGESTED_ACTIONS } from "@/lib/agent/sales-classifier";
 
 export const dynamic = "force-dynamic";
 
@@ -103,6 +106,7 @@ export default async function ConversationPage({
         reason: true,
         nextAction: true,
         confidence: true,
+        metadataJson: true,
       },
     }),
     prisma.inboxTask.findMany({
@@ -144,6 +148,37 @@ export default async function ConversationPage({
         })
       : null,
   ]);
+
+  const convMeta =
+    stateRecord?.metadataJson &&
+    typeof stateRecord.metadataJson === "object" &&
+    !Array.isArray(stateRecord.metadataJson)
+      ? (stateRecord.metadataJson as Record<string, unknown>)
+      : {}
+
+  const isSupport = convMeta.isSupport === true
+  const churnRisk = convMeta.churnRisk === true
+  const needsEscalation = convMeta.needsEscalation === true
+  const suggestedKbDocId =
+    typeof convMeta.suggestedKbDocId === "string" ? convMeta.suggestedKbDocId : null
+
+  const isSalesLead = convMeta.isSalesLead === true
+  const closingStage =
+    typeof convMeta.closingStage === "string" ? convMeta.closingStage : "prospect"
+  const extractedBudget =
+    typeof convMeta.extractedBudget === "string" ? convMeta.extractedBudget : null
+  const extractedTimeline =
+    typeof convMeta.extractedTimeline === "string" ? convMeta.extractedTimeline : null
+  const salesSuggestedAction = isSalesLead
+    ? (SALES_SUGGESTED_ACTIONS[closingStage as keyof typeof SALES_SUGGESTED_ACTIONS] ?? "")
+    : ""
+
+  const suggestedKbDoc = suggestedKbDocId
+    ? await prisma.knowledgeDocument.findFirst({
+        where: { id: suggestedKbDocId, tenantId: session.user.tenantId },
+        select: { id: true, title: true, content: true, sourceType: true },
+      })
+    : null
 
   const shouldAutoFollowUp =
     Boolean(pendingFollowUpJob) &&
@@ -238,6 +273,25 @@ export default async function ConversationPage({
         </section>
 
         <aside className="space-y-4">
+          {isSupport && (
+            <SupportPanel
+              conversationId={conversation.id}
+              isSupport={isSupport}
+              churnRisk={churnRisk}
+              needsEscalation={needsEscalation}
+              suggestedKbDoc={suggestedKbDoc}
+              repeatContactCount={0}
+            />
+          )}
+          {isSalesLead && (
+            <SalesPanel
+              conversationId={conversation.id}
+              closingStage={closingStage}
+              extractedBudget={extractedBudget}
+              extractedTimeline={extractedTimeline}
+              suggestedAction={salesSuggestedAction}
+            />
+          )}
           {/* Contact */}
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="mb-3 text-sm font-semibold text-slate-600">Contact</h2>
