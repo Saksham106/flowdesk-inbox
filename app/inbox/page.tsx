@@ -142,6 +142,7 @@ export default async function InboxPage({ searchParams }: Props) {
   const commandCenter = buildDailyCommandCenter(
     commandCenterConversations.map((c) => ({
       ...c,
+      conversationState: c.stateRecord,
       lead: c.leads[0] ?? null,
     }))
   );

@@ -33,7 +33,7 @@ export default function SalesPanel({
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/conversations/${conversationId}/draft`, {
+      const res = await fetch(`/api/conversations/${conversationId}/draft/suggest`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ intent: "close_sale" }),
