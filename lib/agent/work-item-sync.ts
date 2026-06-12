@@ -221,7 +221,7 @@ export async function syncConversationWorkItems(
 
   await prisma.auditLog.create({
     data: {
-      tenantId: input.tenantId,
+      tenantId: conversation.tenantId,
       action: "conversation_state.support_classified",
       payloadJson: {
         conversationId: conversation.id,
@@ -233,19 +233,23 @@ export async function syncConversationWorkItems(
     },
   })
 
+  let postSupportMeta: Record<string, unknown> = existingMeta
+
   if (supportSignals.isSupport || existingMeta.isSupport === true) {
+    const updatedSupportMeta = {
+      ...existingMeta,
+      isSupport: supportSignals.isSupport,
+      churnRisk: supportSignals.churnRisk,
+      needsEscalation: supportSignals.needsEscalation,
+      suggestedKbDocId: supportSignals.suggestedKbDocId,
+    }
     await prisma.conversationState.update({
       where: { conversationId: conversation.id },
       data: {
-        metadataJson: {
-          ...existingMeta,
-          isSupport: supportSignals.isSupport,
-          churnRisk: supportSignals.churnRisk,
-          needsEscalation: supportSignals.needsEscalation,
-          suggestedKbDocId: supportSignals.suggestedKbDocId,
-        } as Prisma.InputJsonValue,
+        metadataJson: updatedSupportMeta as Prisma.InputJsonValue,
       },
     })
+    postSupportMeta = updatedSupportMeta
   }
 
   const salesSignals = classifySalesSignals(
@@ -254,7 +258,7 @@ export async function syncConversationWorkItems(
 
   await prisma.auditLog.create({
     data: {
-      tenantId: input.tenantId,
+      tenantId: conversation.tenantId,
       action: "conversation_state.sales_classified",
       payloadJson: {
         conversationId: conversation.id,
@@ -265,26 +269,16 @@ export async function syncConversationWorkItems(
   })
 
   if (salesSignals.isSalesLead) {
-    const currentState = await prisma.conversationState.findUnique({
-      where: { conversationId: conversation.id },
-      select: { metadataJson: true },
-    })
-    const currentMeta =
-      currentState?.metadataJson &&
-      typeof currentState.metadataJson === "object" &&
-      !Array.isArray(currentState.metadataJson)
-        ? (currentState.metadataJson as Record<string, unknown>)
-        : {}
-
     await prisma.conversationState.update({
       where: { conversationId: conversation.id },
       data: {
         metadataJson: {
-          ...currentMeta,
+          ...postSupportMeta,
           isSalesLead: true,
           extractedBudget: salesSignals.extractedBudget,
           extractedTimeline: salesSignals.extractedTimeline,
           closingStage: salesSignals.closingStage,
+          suggestedAction: salesSignals.suggestedAction,
         } as Prisma.InputJsonValue,
       },
     })

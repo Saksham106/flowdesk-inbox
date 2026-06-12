@@ -168,4 +168,60 @@ describe("syncConversationWorkItems", () => {
     expect(mockTaskUpsert).not.toHaveBeenCalled()
     expect(mockLeadUpsert).not.toHaveBeenCalled()
   })
+
+  it("preserves existing metadata keys when merging sales fields (metadata merge path)", async () => {
+    // Seed the state row with a pre-existing key that is not written by either
+    // the support or sales classifier (customTag).  The key must survive
+    // through both classification spreads into the final sales update.
+    mockStateFindUnique.mockResolvedValue({
+      metadataJson: { isSupport: true, customTag: "vip" },
+    })
+
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    // The sales update (the last mockStateUpdate call) must contain both the
+    // pre-existing customTag key and the new sales-specific keys.
+    const allUpdateCalls = mockStateUpdate.mock.calls
+    const salesUpdateCall = allUpdateCalls[allUpdateCalls.length - 1]
+    const metadataJson = salesUpdateCall[0].data.metadataJson
+
+    expect(metadataJson).toMatchObject({
+      customTag: "vip",
+      isSalesLead: true,
+      closingStage: "prospect",
+    })
+  })
+
+  it("does not call the sales state update for a non-sales conversation", async () => {
+    const nonSalesConversation = {
+      ...conversation,
+      messages: [
+        {
+          id: "msg-2",
+          direction: "inbound",
+          body: "Hi there, just following up on the project.",
+          createdAt: now,
+        },
+      ],
+    }
+    mockConversationFindFirst.mockResolvedValue(nonSalesConversation)
+
+    const result = await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    expect(result.salesClassified).toBe(false)
+    // mockStateUpdate may be called for the support path, but must never be
+    // called with isSalesLead in its payload.
+    const updateCallsWithSales = mockStateUpdate.mock.calls.filter(
+      (call) => call[0]?.data?.metadataJson?.isSalesLead === true
+    )
+    expect(updateCallsWithSales).toHaveLength(0)
+  })
 })
