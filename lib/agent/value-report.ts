@@ -131,7 +131,7 @@ export async function buildValueSnapshot(
     where: { tenantId, stage: { not: "closed" } },
     _sum: { estimatedValue: true },
   })
-  const pipelineValue = agg._sum.estimatedValue ?? 0
+  const pipelineValue = Math.round(agg._sum.estimatedValue ?? 0)
   const weekEnding = getWeekEnding(now)
 
   return prisma.valueSnapshot.upsert({
