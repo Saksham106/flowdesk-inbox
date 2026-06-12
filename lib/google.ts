@@ -126,15 +126,15 @@ type GmailPart = {
 // Extracts the best plain-text body from a Gmail message payload.
 // Prefers text/plain; strips tags from text/html; recurses into multipart.
 // Always returns plain text so raw HTML is never stored in the DB.
-function extractBody(payload: GmailPart | null | undefined): string {
-  if (!payload) return "";
+function extractBody(payload: GmailPart | null | undefined, depth = 0): string {
+  if (!payload || depth > 8) return "";
 
   const mime = payload.mimeType ?? "";
 
   // Single-part payload: body data is at root level
   if (payload.body?.data) {
     const text = Buffer.from(payload.body.data, "base64url").toString("utf8");
-    if (mime === "text/html") {
+    if (mime === "text/html" || (mime !== "text/plain" && /^\s*</.test(text))) {
       return text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
     }
     return text;
@@ -142,11 +142,11 @@ function extractBody(payload: GmailPart | null | undefined): string {
 
   // Multipart payload: search parts, preferring text/plain
   if (payload.parts) {
-    const textPart = findPart(payload.parts, "text/plain");
+    const textPart = findPart(payload.parts, "text/plain", depth + 1);
     if (textPart?.body?.data) {
       return Buffer.from(textPart.body.data, "base64url").toString("utf8");
     }
-    const htmlPart = findPart(payload.parts, "text/html");
+    const htmlPart = findPart(payload.parts, "text/html", depth + 1);
     if (htmlPart?.body?.data) {
       return Buffer.from(htmlPart.body.data, "base64url").toString("utf8")
         .replace(/<[^>]+>/g, " ")
@@ -156,7 +156,7 @@ function extractBody(payload: GmailPart | null | undefined): string {
     // Recurse into nested multipart containers (multipart/alternative, etc.)
     for (const part of payload.parts) {
       if (part.mimeType?.startsWith("multipart/")) {
-        const nested = extractBody(part);
+        const nested = extractBody(part, depth + 1);
         if (nested) return nested;
       }
     }
@@ -165,11 +165,12 @@ function extractBody(payload: GmailPart | null | undefined): string {
   return "";
 }
 
-function findPart(parts: GmailPart[], mimeType: string): GmailPart | null {
+function findPart(parts: GmailPart[], mimeType: string, depth = 0): GmailPart | null {
+  if (depth > 8) return null;
   for (const part of parts) {
     if (part.mimeType === mimeType && part.body?.data) return part;
     if (part.parts) {
-      const found = findPart(part.parts, mimeType);
+      const found = findPart(part.parts, mimeType, depth + 1);
       if (found) return found;
     }
   }
