@@ -117,27 +117,63 @@ function getHeader(
   return headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
 }
 
-// Extracts the best plain-text body from a Gmail message payload
-function extractBody(payload: {
+type GmailPart = {
+  mimeType?: string | null;
   body?: { data?: string | null } | null;
-  parts?: Array<{ mimeType?: string | null; body?: { data?: string | null } | null }> | null;
-} | null | undefined): string {
+  parts?: GmailPart[] | null;
+};
+
+// Extracts the best plain-text body from a Gmail message payload.
+// Prefers text/plain; strips tags from text/html; recurses into multipart.
+// Always returns plain text so raw HTML is never stored in the DB.
+function extractBody(payload: GmailPart | null | undefined): string {
   if (!payload) return "";
+
+  const mime = payload.mimeType ?? "";
+
+  // Single-part payload: body data is at root level
   if (payload.body?.data) {
-    return Buffer.from(payload.body.data, "base64url").toString("utf8");
+    const text = Buffer.from(payload.body.data, "base64url").toString("utf8");
+    if (mime === "text/html") {
+      return text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    }
+    return text;
   }
-  const textPart = payload.parts?.find((p) => p.mimeType === "text/plain");
-  if (textPart?.body?.data) {
-    return Buffer.from(textPart.body.data, "base64url").toString("utf8");
+
+  // Multipart payload: search parts, preferring text/plain
+  if (payload.parts) {
+    const textPart = findPart(payload.parts, "text/plain");
+    if (textPart?.body?.data) {
+      return Buffer.from(textPart.body.data, "base64url").toString("utf8");
+    }
+    const htmlPart = findPart(payload.parts, "text/html");
+    if (htmlPart?.body?.data) {
+      return Buffer.from(htmlPart.body.data, "base64url").toString("utf8")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+    // Recurse into nested multipart containers (multipart/alternative, etc.)
+    for (const part of payload.parts) {
+      if (part.mimeType?.startsWith("multipart/")) {
+        const nested = extractBody(part);
+        if (nested) return nested;
+      }
+    }
   }
-  const htmlPart = payload.parts?.find((p) => p.mimeType === "text/html");
-  if (htmlPart?.body?.data) {
-    return Buffer.from(htmlPart.body.data, "base64url").toString("utf8")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
+
   return "";
+}
+
+function findPart(parts: GmailPart[], mimeType: string): GmailPart | null {
+  for (const part of parts) {
+    if (part.mimeType === mimeType && part.body?.data) return part;
+    if (part.parts) {
+      const found = findPart(part.parts, mimeType);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 export async function fetchThread(
