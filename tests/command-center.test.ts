@@ -253,3 +253,39 @@ describe("buildRelationshipContext", () => {
     expect(context.lastConversationSummary).toContain("pricing and demo request")
   })
 })
+
+describe('estimatedValue in CommandCenterConversation', () => {
+  it('populates estimatedValue from lead when conversation is an opportunity', () => {
+    const result = analyzeConversationForCommandCenter(
+      conversation({
+        label: 'Lead',
+        lead: { score: 55, scoreExplanation: 'High intent', estimatedValue: 3000 },
+      }),
+      now
+    )
+    expect(result.estimatedValue).toBe(3000)
+  })
+
+  it('sets estimatedValue to null when no lead exists', () => {
+    const result = analyzeConversationForCommandCenter(conversation(), now)
+    expect(result.estimatedValue).toBeNull()
+  })
+})
+
+describe('revenue-weighted score()', () => {
+  it('a high-value opportunity outranks a zero-value opportunity in topActions', () => {
+    const highValue = conversation({
+      id: 'conv-high',
+      label: 'Lead',
+      lead: { score: 60, scoreExplanation: 'Budget confirmed', estimatedValue: 10000 },
+    })
+    const noValue = conversation({
+      id: 'conv-low',
+      label: 'Lead',
+      lead: { score: 60, scoreExplanation: 'Inquiry only', estimatedValue: 0 },
+    })
+    const center = buildDailyCommandCenter([highValue, noValue], now)
+    const ids = center.topActions.map((a) => a.id)
+    expect(ids.indexOf('conv-high')).toBeLessThan(ids.indexOf('conv-low'))
+  })
+})
