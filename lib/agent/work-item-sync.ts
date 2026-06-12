@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { summarizeWorkItems, type WorkItemConversationInput } from "@/lib/agent/work-items"
 import { syncPersonMemory } from "@/lib/agent/person-memory"
 import { scoreLeadForConversation } from "@/lib/agent/lead-scoring"
+import { classifySupportSignals } from "@/lib/agent/support-classifier"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
@@ -15,6 +16,7 @@ export type SyncConversationWorkItemsResult = {
   stateSynced: boolean
   tasksSynced: number
   leadSynced: boolean
+  supportClassified: boolean
 }
 
 export async function syncConversationWorkItems(
@@ -43,6 +45,12 @@ export async function syncConversationWorkItems(
   if (!conversation) {
     throw new Error("Conversation not found or does not belong to this tenant")
   }
+
+  const kbDocs = (await prisma.knowledgeDocument.findMany({
+    where: { tenantId: input.tenantId },
+    select: { id: true, title: true, content: true },
+    take: 50,
+  })) ?? []
 
   const summary = summarizeWorkItems(conversation as WorkItemConversationInput, input.now)
 
@@ -193,5 +201,49 @@ export async function syncConversationWorkItems(
     await syncPersonMemory(conversation.tenantId, conversation.contactId)
   }
 
-  return { stateSynced: true, tasksSynced, leadSynced }
+  const supportSignals = classifySupportSignals(
+    conversation.messages.map((m) => ({ direction: m.direction, body: m.body })),
+    kbDocs,
+    conversation.label
+  )
+
+  if (supportSignals.isSupport) {
+    const existing = (await prisma.conversationState.findUnique({
+      where: { conversationId: conversation.id },
+      select: { metadataJson: true },
+    }))?.metadataJson
+
+    const existingMeta =
+      existing && typeof existing === "object" && !Array.isArray(existing)
+        ? (existing as Record<string, unknown>)
+        : {}
+
+    await prisma.conversationState.update({
+      where: { conversationId: conversation.id },
+      data: {
+        metadataJson: {
+          ...existingMeta,
+          isSupport: true,
+          churnRisk: supportSignals.churnRisk,
+          needsEscalation: supportSignals.needsEscalation,
+          suggestedKbDocId: supportSignals.suggestedKbDocId,
+        } as Prisma.InputJsonValue,
+      },
+    })
+
+    await prisma.auditLog.create({
+      data: {
+        tenantId: input.tenantId,
+        action: "conversation_state.support_classified",
+        payloadJson: {
+          conversationId: conversation.id,
+          churnRisk: supportSignals.churnRisk,
+          needsEscalation: supportSignals.needsEscalation,
+          suggestedKbDocId: supportSignals.suggestedKbDocId,
+        },
+      },
+    })
+  }
+
+  return { stateSynced: true, tasksSynced, leadSynced, supportClassified: supportSignals.isSupport }
 }
