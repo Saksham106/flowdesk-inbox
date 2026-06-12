@@ -55,6 +55,7 @@ Email is the active channel. SMS/Twilio is not part of the active product path.
 - Business-profile and knowledge-document context.
 - Learned reply profile support.
 - AI draft panel on conversation pages.
+- Optional rough user instructions in the AI draft panel ("say yes but only next week") are passed into draft generation and stored in draft metadata as `userInstruction`.
 - Draft save, clear, approve, and approved-send flows.
 - Draft metadata stores intent, confidence, risk, suggested label, escalation reason, model, prompt version, and context IDs.
 
@@ -292,11 +293,11 @@ The AI Draft MVP PR handoff was removed. The feature is now part of the baseline
 
 ## Recommended Next Engineering Slice
 
-The follow-up tracker, persisted `PersonMemory`, conversation relationship panel, lead follow-up sequences, weekly value report, Explain This Thread panel, and Email Risk Radar are now shipped. The remaining Phase 1 gaps, in priority order:
+The follow-up tracker, persisted `PersonMemory`, conversation relationship panel, lead follow-up sequences, weekly value report, Explain This Thread panel, Email Risk Radar, and intent-guided auto-draft compose flow are now shipped. The remaining Phase 1 gaps, in priority order:
 
-1. Auto-draft based on user intent — messy instruction to polished reply compose flow.
-2. Smart labels taxonomy — action-oriented label set replacing the current limited labels.
-3. Richer sensitive detection — more categories and highlighted risky parts inside drafts.
+1. Smart labels taxonomy — action-oriented label set replacing the current limited labels.
+2. Richer sensitive detection — more categories and highlighted risky parts inside drafts.
+3. Command-center source signals — meetings-needing-prep and bills/deadlines sections need calendar events and attachment/deadline signals.
 
 See `docs/TODO.md` for the full remaining-work roadmap mapped against the master plan.
 

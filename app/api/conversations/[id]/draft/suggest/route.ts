@@ -11,9 +11,10 @@ import { prisma } from "@/lib/prisma"
 export const runtime = "nodejs"
 
 const VALID_LABELS = ["Lead", "Reschedule", "Pricing", "Complaint"] as const
+const MAX_USER_INSTRUCTION_LENGTH = 500
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   const session = await getServerSession(authOptions)
@@ -44,6 +45,11 @@ export async function POST(
     return NextResponse.json({ error: "AI drafts are only available for email conversations" }, { status: 400 })
   }
 
+  const userInstruction = await parseUserInstruction(request)
+  if (userInstruction instanceof NextResponse) {
+    return userInstruction
+  }
+
   const context = await getReplyGenerationContext({
     tenantId: session.user.tenantId,
     channelId: conversation.channelId,
@@ -69,6 +75,7 @@ export async function POST(
     const prompt = buildPersonalDraftReplyPrompt({
       personalProfile: learnedProfileToPersonalStyle(context.learnedProfile),
       messages: conversation.messages,
+      userInstruction,
     })
 
     let rawResponse: OpenAI.Responses.Response
@@ -114,6 +121,7 @@ export async function POST(
         learnedReplyProfile: context.learnedProfile,
         messages: conversation.messages,
         availableSlots,
+        userInstruction,
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to generate AI draft"
@@ -136,6 +144,7 @@ export async function POST(
     autoSendEligible: false,
     autoSendHoldReason: "manual_draft_suggestion",
     knowledgeDocumentIds,
+    ...(userInstruction ? { userInstruction } : {}),
   }
 
   const draft = await prisma.draft.upsert({
@@ -175,6 +184,40 @@ export async function POST(
   })
 
   return NextResponse.json({ draft, meta: metadataJson })
+}
+
+async function parseUserInstruction(request: Request): Promise<string | null | NextResponse> {
+  let body: unknown
+
+  try {
+    body = await request.json()
+  } catch {
+    return null
+  }
+
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return null
+  }
+
+  const value = (body as Record<string, unknown>).userInstruction
+  if (value === undefined || value === null) {
+    return null
+  }
+
+  if (typeof value !== "string") {
+    return NextResponse.json({ error: "User instruction must be text" }, { status: 400 })
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  if (trimmed.length > MAX_USER_INSTRUCTION_LENGTH) {
+    return NextResponse.json({ error: "User instruction must be 500 characters or fewer" }, { status: 400 })
+  }
+
+  return trimmed
 }
 
 function learnedProfileToPersonalStyle(profile: {

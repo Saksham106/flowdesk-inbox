@@ -195,6 +195,61 @@ describe('POST /api/conversations/[id]/draft/suggest', () => {
       action: 'draft.suggest',
     })
   })
+
+  it('passes rough user instructions into generation and draft metadata', async () => {
+    mockConversationFindFirst.mockResolvedValue(emailConversation)
+    mockGenerateDraftReply.mockResolvedValue({
+      draftText: 'Yes, we can help next week. What day works best?',
+      intent: 'scheduling with constraint',
+      confidence: 0.88,
+      riskLevel: 'low',
+      suggestedLabel: 'Reschedule',
+      escalationReason: null,
+      model: 'gpt-test',
+    })
+    mockDraftUpsert.mockResolvedValue({
+      id: 'draft1',
+      conversationId: 'conv1',
+      text: 'Yes, we can help next week. What day works best?',
+      status: 'proposed',
+      metadataJson: { userInstruction: 'say yes but only next week' },
+    })
+    mockConversationUpdate.mockResolvedValue({})
+    mockAuditCreate.mockResolvedValue({})
+
+    const res = await suggestDraft(
+      makeReq({ userInstruction: '  say yes but only next week  ' }) as never,
+      { params: { id: 'conv1' } }
+    )
+
+    expect(res.status).toBe(200)
+    expect(mockGenerateDraftReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userInstruction: 'say yes but only next week',
+      })
+    )
+    const upsertArg = mockDraftUpsert.mock.calls[0][0]
+    expect(upsertArg.create.metadataJson).toMatchObject({
+      userInstruction: 'say yes but only next week',
+    })
+    expect(mockAuditCreate.mock.calls[0][0].data.payloadJson.metadata).toMatchObject({
+      userInstruction: 'say yes but only next week',
+    })
+  })
+
+  it('rejects overlong rough user instructions', async () => {
+    mockConversationFindFirst.mockResolvedValue(emailConversation)
+
+    const res = await suggestDraft(
+      makeReq({ userInstruction: 'x'.repeat(501) }) as never,
+      { params: { id: 'conv1' } }
+    )
+
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: 'User instruction must be 500 characters or fewer' })
+    expect(mockGenerateDraftReply).not.toHaveBeenCalled()
+    expect(mockDraftUpsert).not.toHaveBeenCalled()
+  })
 })
 
 describe('PATCH /api/conversations/[id]/draft', () => {
