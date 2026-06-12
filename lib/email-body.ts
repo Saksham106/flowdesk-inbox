@@ -25,7 +25,8 @@ export function sanitizeEmailHtml(html: string): string {
       a: (_tagName, attribs) => ({
         tagName: "a",
         attribs: {
-          ...attribs,
+          ...(attribs.href ? { href: attribs.href } : {}),
+          ...(attribs.title ? { title: attribs.title } : {}),
           target: "_blank",
           rel: "noopener noreferrer",
         },
