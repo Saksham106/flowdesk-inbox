@@ -1,7 +1,7 @@
 import sanitizeHtml from "sanitize-html";
 
 export function isHtmlBody(body: string): boolean {
-  return body.trimStart().startsWith("<");
+  return /^\s*</.test(body);
 }
 
 export function sanitizeEmailHtml(html: string): string {
@@ -16,6 +16,10 @@ export function sanitizeEmailHtml(html: string): string {
     allowedAttributes: {
       a: ["href", "title", "target", "rel"],
       img: ["src", "alt", "width", "height"],
+    },
+    allowedSchemesByTag: {
+      a: ["http", "https", "mailto"],
+      img: ["https"],
     },
     transformTags: {
       a: (_tagName, attribs) => ({

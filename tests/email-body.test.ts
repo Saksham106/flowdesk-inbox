@@ -30,6 +30,10 @@ describe("isHtmlBody", () => {
   it("ignores leading whitespace when detecting HTML", () => {
     expect(isHtmlBody("  \n<!DOCTYPE html>")).toBe(true);
   });
+
+  it("detects HTML even with BOM prefix", () => {
+    expect(isHtmlBody("﻿<!DOCTYPE html>")).toBe(true);
+  });
 });
 
 describe("sanitizeEmailHtml", () => {
@@ -77,6 +81,16 @@ describe("sanitizeEmailHtml", () => {
       '<a href="https://docs.google.com/abc">open doc</a>'
     );
     expect(result).toContain('href="https://docs.google.com/abc"');
+  });
+
+  it("strips javascript: href on links", () => {
+    const result = sanitizeEmailHtml('<a href="javascript:alert(1)">click</a>');
+    expect(result).not.toContain("javascript:");
+  });
+
+  it("strips http:// src from images (only https allowed)", () => {
+    const result = sanitizeEmailHtml('<img src="http://tracker.com/pixel.gif" alt="t">');
+    expect(result).not.toContain('src="http://');
   });
 });
 
