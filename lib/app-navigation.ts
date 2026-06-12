@@ -24,6 +24,7 @@ const BUSINESS_PRIMARY: AppNavigationItem[] = [
 const BUSINESS_SECONDARY: AppNavigationItem[] = [
   { label: "Leads", href: "/leads" },
   { label: "Approvals", href: "/approvals" },
+  { label: "Risk Radar", href: "/risk-radar" },
   { label: "Reports", href: "/reports" },
   { label: "Meetings", href: "/meetings" },
   { label: "Audit", href: "/audit" },
