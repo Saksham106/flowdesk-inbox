@@ -288,4 +288,12 @@ describe('revenue-weighted score()', () => {
     const ids = center.topActions.map((a) => a.id)
     expect(ids.indexOf('conv-high')).toBeLessThan(ids.indexOf('conv-low'))
   })
+
+  it('null estimatedValue does not corrupt sort order', () => {
+    const withNull = conversation({ id: 'null-val', label: 'Lead', lead: { score: 60, scoreExplanation: 'x', estimatedValue: null } })
+    const withZero = conversation({ id: 'zero-val', label: 'Lead', lead: { score: 60, scoreExplanation: 'x', estimatedValue: 0 } })
+    const center = buildDailyCommandCenter([withNull, withZero], now)
+    expect(center.topActions).toHaveLength(2)
+    expect(center.topActions.every(a => a.estimatedValue !== undefined)).toBe(true)
+  })
 })
