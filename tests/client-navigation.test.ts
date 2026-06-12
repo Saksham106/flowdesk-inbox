@@ -57,6 +57,7 @@ describe("getInboxNavigation", () => {
       secondary: [
         { label: "Leads", href: "/leads" },
         { label: "Approvals", href: "/approvals" },
+        { label: "Risk Radar", href: "/risk-radar" },
         { label: "Reports", href: "/reports" },
         { label: "Meetings", href: "/meetings" },
         { label: "Audit", href: "/audit" },

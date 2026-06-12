@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-11
+Last updated: 2026-06-12
 
 This file is the codebase-facing companion to `MASTER_PRODUCT_PLAN.md`. It answers: what exists today, what is partial, and what should not be treated as active scope.
 
@@ -157,6 +157,14 @@ Explain This Thread slice implemented:
 - Works for both personal and business accounts (no business-profile requirement).
 - Tests in `tests/explain-thread.test.ts`.
 
+Email Risk Radar slice implemented (2026-06-12, Phase 1):
+
+- `lib/agent/risk-radar.ts` — pure deterministic scanner for deadline-soon, final-notice, unanswered-thread, and sensitive-content signals.
+- `/risk-radar` page — tenant-scoped, read-only grouped view of the latest 200 conversations with summary counts and conversation links.
+- Business inbox navigation includes Risk Radar in the secondary menu.
+- No schema changes; computes live from existing conversation messages, draft metadata, labels, and status.
+- Tests in `tests/risk-radar.test.ts` and `tests/client-navigation.test.ts`.
+
 Current behavior:
 
 - Opening a conversation syncs deterministic state, open tasks, and a lead record when the thread has matching signals.
@@ -195,6 +203,7 @@ Limitations:
 - Batch re-scoring of all existing leads is not implemented; scoring runs per lead after each sync.
 - CRM filter/search by score range is not yet implemented.
 - Full pipeline trend analytics and value forecasting are not yet implemented.
+- Risk Radar thresholds are deterministic and not user-configurable yet.
 
 ## Partial Features
 
@@ -232,7 +241,6 @@ See `MASTER_PRODUCT_PLAN.md` for phase recommendations and feature statuses.
 - Customer support mode.
 - Sales agent mode.
 - Personal life admin mode.
-- Risk radar dashboard.
 - Phishing/scam/fraud protection.
 - Auto-unsubscribe and bulk safe archive.
 - Outcome-based automation.
@@ -259,11 +267,11 @@ The AI Draft MVP PR handoff was removed. The feature is now part of the baseline
 
 ## Recommended Next Engineering Slice
 
-The follow-up tracker, persisted `PersonMemory`, conversation relationship panel, lead follow-up sequences, weekly value report, and Explain This Thread panel are now shipped. The remaining Phase 1 gaps, in priority order:
+The follow-up tracker, persisted `PersonMemory`, conversation relationship panel, lead follow-up sequences, weekly value report, Explain This Thread panel, and Email Risk Radar are now shipped. The remaining Phase 1 gaps, in priority order:
 
-1. Email risk radar — surface deadline, final-notice, unanswered-thread, and sensitive-content signals as a dedicated view.
-2. Auto-draft based on user intent — messy instruction to polished reply compose flow.
-3. Smart labels taxonomy — action-oriented label set replacing the current limited labels.
+1. Auto-draft based on user intent — messy instruction to polished reply compose flow.
+2. Smart labels taxonomy — action-oriented label set replacing the current limited labels.
+3. Richer sensitive detection — more categories and highlighted risky parts inside drafts.
 
 See `docs/TODO.md` for the full remaining-work roadmap mapped against the master plan.
 

@@ -1,6 +1,6 @@
 # FlowDesk Inbox Master Product Plan
 
-Last updated: 2026-06-11
+Last updated: 2026-06-12
 
 This is the living master plan for FlowDesk Inbox. It exists so humans and AI agents can share the same product map, update it as reality changes, and avoid treating one feature request as the whole product.
 
@@ -278,7 +278,7 @@ Success criteria:
 | 19 | Customer Support Agent Mode | `Planned` | Phase 2 | Should build on task, KB, sentiment, and support labels. |
 | 20 | Sales Agent Mode | `Planned` | Phase 2 | Build after lead model and follow-up sequences. |
 | 21 | Personal Life Admin Mode | `Planned` | Phase 3 | Needs personal category detection and safer privacy UX. |
-| 22 | Email Risk Radar | `Planned` | Phase 1 | Good paid value; build on state engine and sensitive detection. |
+| 22 | Email Risk Radar | `Shipped` | Phase 1 | `/risk-radar` ships a read-only deterministic scan for deadline-soon, final-notice, unanswered, and sensitive-content signals. Spec: `docs/superpowers/specs/2026-06-12-email-risk-radar-design.md`. Plan: `docs/superpowers/plans/2026-06-12-email-risk-radar.md`. |
 | 23 | Phishing, Scam, and Fraud Protection | `Discovery` | Phase 3 | Needs careful security heuristics and false-positive UX. |
 | 24 | Auto-Unsubscribe and Noise Killer | `Planned` | Phase 3/4 | Needs safe archive/unsubscribe permissions. |
 | 25 | What Can I Ignore Mode | `Partial` | Phase 1 | Collapsible safely-ignored inbox section shipped; needs per-item reasons and bulk archive action. |
@@ -461,6 +461,7 @@ After an AI agent finishes work:
 | 2026-06-11 | Phase 1 complete. | All "Never Drop the Ball" MVP features shipped: daily command center, explain thread, follow-up brain with sequences, relationship memory, sensitive draft warnings, approval queue, tasks with due-date editing, lead pipeline, weekly value report, safely-ignored mode. Auto-draft-on-follow-up-open added for follow-up tracker magic. |
 | 2026-06-11 | Ship meeting prep + post-meeting follow-up as first Phase 2 slice. | Reuses existing calendar credentials, PersonMemory, and ApprovalRequest infrastructure. No schema changes. On-demand generation (briefs not persisted). Contact matching via `Contact.phoneE164` (email stored there for Gmail contacts). Follow-up attaches to existing conversation or falls back to inline copy. |
 | 2026-06-11 | Ship lead intelligence slice: LLM scorer + CRM funnel header + command center score badge. | Lead model already existed with deterministic heuristic. LLM replaces heuristic, adds explanation and estimated value, fires fire-and-forget after each sync with stale-guard. Next Phase 2 slice: KB replies + customer support mode. |
+| 2026-06-12 | Ship Email Risk Radar as a deterministic read-only page. | Reuses conversation, message, draft metadata, and navigation foundations; avoids a schema migration until trend history, user-tunable thresholds, or alerting is needed. |
 
 ## Open Product Questions
 
