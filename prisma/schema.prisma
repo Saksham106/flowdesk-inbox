@@ -89,6 +89,7 @@ model Tenant {
   conversationStates        ConversationState[]
   inboxTasks                InboxTask[]
   leads                     Lead[]
+  valueSnapshots            ValueSnapshot[]
   personMemories            PersonMemory[]
   followUpSetting           FollowUpSetting?
   autopilotSetting          AutopilotSetting?
@@ -364,6 +365,28 @@ model Lead {
   @@unique([tenantId, conversationId])
   @@index([tenantId, stage])
   @@index([tenantId, score])
+}
+
+model ValueSnapshot {
+  id                    String   @id @default(cuid())
+  tenantId              String
+  weekEnding            DateTime
+  draftsCreated         Int
+  draftsSent            Int
+  tasksExtracted        Int
+  tasksClosed           Int
+  leadsDetected         Int
+  followUpsQueued       Int
+  approvalsDecided      Int
+  conversationsTriaged  Int
+  estimatedMinutesSaved Int
+  pipelineValue         Float
+  createdAt             DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, weekEnding])
+  @@index([tenantId, weekEnding])
 }
 
 model ApprovalRequest {
