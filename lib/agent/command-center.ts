@@ -10,6 +10,7 @@ export type CommandCenterState =
   | "delegated"
   | "risky_urgent"
   | "opportunity"
+  | "support"
   | "fyi_only"
 
 export type CommandCenterPriority = "urgent" | "high" | "medium" | "low" | "none"
@@ -52,6 +53,9 @@ export type CommandCenterInputConversation = {
     score: number
     scoreExplanation: string | null
   } | null
+  conversationState?: {
+    metadataJson?: unknown
+  } | null
 }
 
 export type CommandCenterConversation = {
@@ -83,6 +87,7 @@ export type DailyCommandCenter = {
     approvals: number
     opportunities: number
     potentialProblems: number
+    support: number
     safelyIgnored: number
   }
   topActions: CommandCenterConversation[]
@@ -93,6 +98,7 @@ export type DailyCommandCenter = {
     approvals: CommandCenterConversation[]
     opportunities: CommandCenterConversation[]
     potentialProblems: CommandCenterConversation[]
+    support: CommandCenterConversation[]
     safelyIgnored: CommandCenterConversation[]
   }
   conversations: CommandCenterConversation[]
@@ -180,6 +186,18 @@ function isSafelyIgnorable(conversation: CommandCenterInputConversation): boolea
   )
 }
 
+function isClassifiedSupport(conversation: CommandCenterInputConversation): boolean {
+  const state = conversation.conversationState
+  if (!state?.metadataJson || typeof state.metadataJson !== "object" || Array.isArray(state.metadataJson)) return false
+  return (state.metadataJson as Record<string, unknown>).isSupport === true
+}
+
+function isChurnRisk(conversation: CommandCenterInputConversation): boolean {
+  const state = conversation.conversationState
+  if (!state?.metadataJson || typeof state.metadataJson !== "object" || Array.isArray(state.metadataJson)) return false
+  return (state.metadataJson as Record<string, unknown>).churnRisk === true
+}
+
 function approvalReason(conversation: CommandCenterInputConversation): string | null {
   const meta = metadata(conversation)
   if (typeof meta.escalationReason === "string" && meta.escalationReason.trim()) {
@@ -202,6 +220,8 @@ export function analyzeConversationForCommandCenter(
   const sensitive = isSensitive(conversation)
   const opportunity = isOpportunity(conversation)
   const safelyIgnored = isSafelyIgnorable(conversation)
+  const support = isClassifiedSupport(conversation)
+  const churnRisk = isChurnRisk(conversation)
   const outboundStale =
     latest?.direction === "outbound" &&
     conversation.status !== "closed" &&
@@ -217,6 +237,16 @@ export function analyzeConversationForCommandCenter(
     priority = "urgent"
     reason = approvalReason(conversation) ?? "Sensitive conversation needs review."
     nextAction = "Review carefully before sending anything."
+  } else if (churnRisk) {
+    state = "support"
+    priority = "urgent"
+    reason = "Churn risk detected — customer may cancel."
+    nextAction = "Reply promptly and address the core issue."
+  } else if (support) {
+    state = "support"
+    priority = "high"
+    reason = "Customer support request detected."
+    nextAction = "Reply using the knowledge base or escalate."
   } else if (hold) {
     state = "scheduled"
     priority = hold.expiresAt.getTime() <= now.getTime() + 24 * 60 * 60 * 1000 ? "high" : "medium"
@@ -310,6 +340,7 @@ export function buildDailyCommandCenter(
       approvals: approvals.length,
       opportunities: analyzed.filter((conversation) => conversation.opportunity).length,
       potentialProblems: analyzed.filter((conversation) => conversation.sensitive).length,
+      support: analyzed.filter((conversation) => conversation.state === "support").length,
       safelyIgnored: analyzed.filter((conversation) => conversation.safelyIgnored).length,
     },
     topActions,
@@ -320,6 +351,7 @@ export function buildDailyCommandCenter(
       approvals,
       opportunities: analyzed.filter((conversation) => conversation.opportunity),
       potentialProblems: analyzed.filter((conversation) => conversation.sensitive),
+      support: analyzed.filter((conversation) => conversation.state === "support"),
       safelyIgnored: analyzed.filter((conversation) => conversation.safelyIgnored),
     },
     conversations: analyzed,
@@ -400,6 +432,7 @@ function score(conversation: CommandCenterConversation): number {
     priorityScore[conversation.priority] +
     (conversation.opportunity ? 25 : 0) +
     (conversation.sensitive ? 20 : 0) +
-    (conversation.needsReply ? 10 : 0)
+    (conversation.needsReply ? 10 : 0) +
+    (conversation.state === "support" ? 30 : 0)
   )
 }
