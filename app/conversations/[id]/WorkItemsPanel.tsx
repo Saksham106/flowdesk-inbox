@@ -36,10 +36,12 @@ export default function WorkItemsPanel({
   state,
   tasks,
   lead,
+  isPersonal = false,
 }: {
   state: ConversationStateView
   tasks: InboxTaskView[]
   lead: LeadView
+  isPersonal?: boolean
 }) {
   const router = useRouter()
   const [closingTaskId, setClosingTaskId] = useState<string | null>(null)
@@ -157,7 +159,7 @@ export default function WorkItemsPanel({
         </div>
       ) : null}
 
-      {lead ? (
+      {lead && !isPersonal ? (
         <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs">
           <div className="flex items-center justify-between gap-3">
             <h3 className="font-semibold text-blue-900">Lead</h3>

@@ -140,8 +140,16 @@ function latestMessage(conversation: CommandCenterInputConversation) {
   return [...conversation.messages].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0]
 }
 
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim();
+}
+
+function plainBody(message: { body: string }): string {
+  return /^\s*</.test(message.body) ? stripHtml(message.body) : message.body;
+}
+
 function bodyText(conversation: CommandCenterInputConversation): string {
-  return conversation.messages.map((message) => message.body).join("\n")
+  return conversation.messages.map((message) => plainBody(message)).join("\n")
 }
 
 function displayName(conversation: CommandCenterInputConversation): string {
@@ -389,7 +397,7 @@ export function buildRelationshipContext(
   )
   const pastPromises = conversation.messages
     .filter((message) => PROMISE_PATTERN.test(message.body))
-    .map((message) => message.body)
+    .map((message) => plainBody(message).slice(0, 200))
     .slice(-3)
   const state = analyzeConversationForCommandCenter(conversation, now)
   const intent = typeof meta.intent === "string" ? meta.intent : null
@@ -400,7 +408,7 @@ export function buildRelationshipContext(
     lastConversationSummary: intent
       ? `Last classified as ${intent}.`
       : latest
-        ? latest.body.slice(0, 160)
+        ? plainBody(latest).slice(0, 160)
         : "No recent conversation summary yet.",
     openTasks: buildOpenTasks(conversation, state, pastPromises),
     tonePreference: "Use a concise, warm, approval-first reply.",

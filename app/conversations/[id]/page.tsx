@@ -39,6 +39,9 @@ export default async function ConversationPage({
     redirect("/login");
   }
 
+  const isPersonal =
+    (session.user as Record<string, unknown>).accountType === "personal";
+
   const [
     conversation,
     businessProfile,
@@ -284,7 +287,7 @@ export default async function ConversationPage({
               repeatContactCount={0}
             />
           )}
-          {isSalesLead && (
+          {isSalesLead && !isPersonal && (
             <SalesPanel
               conversationId={conversation.id}
               closingStage={closingStage}
@@ -330,6 +333,7 @@ export default async function ConversationPage({
             <LabelSelect
               conversationId={conversation.id}
               currentLabel={conversation.label}
+              isPersonal={isPersonal}
             />
           </div>
 
@@ -347,6 +351,7 @@ export default async function ConversationPage({
             state={stateRecord}
             tasks={inboxTasks}
             lead={lead}
+            isPersonal={isPersonal}
           />
 
           {/* Relationship memory */}

@@ -36,6 +36,14 @@ export function sanitizeEmailHtml(html: string): string {
 }
 
 const URL_RE = /https?:\/\/[^\s<>"]+/g;
+const BOLD_RE = /\*\*([^*\n]+)\*\*/g;
+const ITALIC_RE = /(?<![a-zA-Z0-9])_([^_\n]+)_(?![a-zA-Z0-9])/g;
+
+function applyBasicMarkdown(text: string): string {
+  return text
+    .replace(BOLD_RE, "<strong>$1</strong>")
+    .replace(ITALIC_RE, "<em>$1</em>");
+}
 
 export function linkifyText(text: string): string {
   const escaped = text
@@ -43,7 +51,7 @@ export function linkifyText(text: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-  return escaped
+  return applyBasicMarkdown(escaped)
     .replace(/\n/g, "<br>")
     .replace(
       URL_RE,
