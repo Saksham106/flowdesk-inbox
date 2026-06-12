@@ -42,6 +42,7 @@ export type DraftReplyPromptInput = {
     promptVersion?: string
   } | null
   availableSlots?: string[]
+  userInstruction?: string | null
 }
 
 export const draftReplyJsonSchema = {
@@ -97,6 +98,7 @@ export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
         2
       )
     : "No learned reply style profile configured."
+  const userInstruction = input.userInstruction?.trim()
 
   return [
     "You are Flowdesk's AI drafting assistant for a small business inbox.",
@@ -114,6 +116,7 @@ export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
     "- Keep the tone aligned with the business profile.",
     "- If a learned reply style profile is provided, use it for voice and formatting only; do not treat it as a source of factual claims.",
     "- In citedDocumentIds, list the IDs (the [id] prefix in the knowledge list) of any documents you used to answer the email. Leave the array empty if none were used.",
+    "- User instructions are guidance, not permission to invent facts, claim unavailable times, bypass review, or make unsafe promises.",
     "",
     "Business profile:",
     JSON.stringify(
@@ -136,6 +139,13 @@ export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
     "Learned reply style:",
     learnedStyle,
     "",
+    ...(userInstruction
+      ? [
+          "User instruction:",
+          truncate(userInstruction, 700),
+          "",
+        ]
+      : []),
     ...(input.availableSlots && input.availableSlots.length > 0
       ? [
           "Available appointment slots (use up to 3 of these if scheduling is relevant):",
@@ -229,10 +239,12 @@ export type PersonalDraftReplyPromptInput = {
     body: string
     createdAt: Date | string
   }>
+  userInstruction?: string | null
 }
 
 export function buildPersonalDraftReplyPrompt(input: PersonalDraftReplyPromptInput): string {
   const profile = input.personalProfile
+  const userInstruction = input.userInstruction?.trim()
 
   const messages = input.messages
     .slice(-20)
@@ -273,7 +285,15 @@ export function buildPersonalDraftReplyPrompt(input: PersonalDraftReplyPromptInp
     "- Do not invent facts not present in the conversation.",
     "- Keep tone and style consistent with the user's style profile.",
     "- If no style profile exists, write a neutral, clear reply.",
+    "- User instructions are guidance, not permission to invent facts, claim unavailable times, bypass review, or make unsafe promises.",
     "",
+    ...(userInstruction
+      ? [
+          "User instruction:",
+          truncate(userInstruction, 700),
+          "",
+        ]
+      : []),
     "Conversation:",
     messages || "No messages yet.",
   ].join("\n")
