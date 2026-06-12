@@ -288,7 +288,7 @@ Success criteria:
 | 29 | Confidence Score Before Sending | `Partial` | Phase 1 | Metadata exists; needs visible UX and policy thresholds. |
 | 30 | Auto-Draft Based on User Intent | `Shipped` | Phase 1 | AI draft panel accepts optional rough instructions and turns them into proposed drafts through the existing approval-gated flow. Spec: `docs/superpowers/specs/2026-06-12-intent-auto-draft-design.md`. Plan: `docs/superpowers/plans/2026-06-12-intent-auto-draft.md`. |
 | 31 | Multi-Step Email Workflows | `Discovery` | Phase 4 | Depends on tasks, leads, scheduling, audit, approvals. |
-| 32 | Email Analytics That Show ROI | `Partial` | Phase 2 | Weekly value report shipped at `/reports` (rolling 7-day counts + time-saved estimate); needs trends, persisted snapshots, and revenue attribution. |
+| 32 | Email Analytics That Show ROI | `Shipped` | Phase 2 | 4-week trend bars, pipeline value summary, revenue opportunities on `/reports`; `ValueSnapshot` model with weekly cron; `buildValueSnapshot`/`getWeeklyTrend` in `value-report.ts`. |
 | 33 | VIP Protection | `Planned` | Phase 3 | Needs VIP/contact model and notification policy. |
 | 34 | Reply Later, But Don’t Forget Intelligence | `Planned` | Phase 3 | Needs smart reminder model. |
 | 35 | Context From Connected Apps | `Discovery` | Phase 4 | Integrations should follow use cases, not integration count. |
@@ -296,7 +296,7 @@ Success criteria:
 | 37 | Auto-Generated Snippets and Playbooks | `Planned` | Phase 4 | Needs repeated-pattern mining and user approval. |
 | 38 | Second Brain Inbox | `Planned` | Phase 3 | Depends on memory extraction and natural-language retrieval. |
 | 39 | Auto-Personalized Outreach | `Later` | Phase 4 | Valuable, but avoid spam positioning. |
-| 40 | Email Triage By Money Impact | `Partial` | Phase 2 | Lead score explanation surfaces in command center opportunity cards. Full money-impact ranking beyond lead signal TBD. |
+| 40 | Email Triage By Money Impact | `Shipped` | Phase 2 | Revenue-weighted score bonus (+up to 50) in command center; Revenue at Risk subsection (amber cards for stale high-value leads); `analyzeRevenueAtRisk` in `lib/agent/revenue-at-risk.ts`. |
 | 41 | One-Click Clean My Inbox Experience | `Planned` | Phase 4 | Great onboarding; needs safe bulk operations. |
 | 42 | Smart Email Labels That Matter | `Partial` | Phase 1 | Current labels are limited; needs action-oriented taxonomy. |
 | 43 | Ask My Inbox Chat | `Planned` | Phase 3 | Should answer with actions, not just summaries. |
@@ -337,9 +337,14 @@ Shipped Phase 2 slice v2.2 (2026-06-12):
 - Sales agent mode: `classifySalesSignals` pure regex classifier (budget/timeline/proposal/closing signals), wired into work-item-sync fire-and-forget, `SalesPanel` on conversation pages, `?sales=1` inbox filter tab, Sales Qualified count chip in command center, `sales_qualified` state with score boost 35.
 - Mini CRM pipeline reporting: score/stage filter form on `/leads`, week-over-week stats table, dynamic section titles, `allLeads`/`displayLeads` split.
 
-### Next Slice: v2.3 — ROI Analytics + Email Triage by Money Impact
+Shipped Phase 2 slice v2.3 (2026-06-13):
 
-See `docs/MASTER_PRODUCT_PLAN.md` Phase 2 section for the full feature list.
+- ROI analytics: `ValueSnapshot` Prisma model, weekly cron at `/api/cron/value-snapshot`, `buildValueSnapshot`/`getWeeklyTrend` in `value-report.ts`, 4-week CSS trend bars + pipeline value summary + revenue opportunities on `/reports`.
+- Email triage by money impact: `analyzeRevenueAtRisk` (stale high-value lead detection), revenue-weighted `score()` bonus in command center, Revenue at Risk amber subsection in `CommandCenterPanel`.
+
+### Next Slice: v2.4 — TBD
+
+See `docs/TODO.md` for remaining Phase 2 items.
 
 ## Data Model Roadmap
 
@@ -471,6 +476,7 @@ After an AI agent finishes work:
 | 2026-06-12 | Ship Email Risk Radar as a deterministic read-only page. | Reuses conversation, message, draft metadata, and navigation foundations; avoids a schema migration until trend history, user-tunable thresholds, or alerting is needed. |
 | 2026-06-12 | Ship v2.1: KB source management + customer support mode. | URL crawl → KB doc extends existing KnowledgeDocument model. Support classification added to work-item-sync fire-and-forget. Citations stored in Draft.metadataJson. No new Prisma models. Next: v2.2 sales agent mode + CRM analytics. |
 | 2026-06-12 | Ship v2.2: sales agent mode + mini CRM pipeline reporting. | Regex `classifySalesSignals` wired into work-item-sync alongside support classifier; both write into same metadataJson blob. `sales_qualified` state in command center. Score/stage filters and WoW table on /leads. No new Prisma models. Next: v2.3 ROI analytics + money-impact triage. |
+| 2026-06-13 | Ship v2.3: ROI analytics + email triage by money impact. | `ValueSnapshot` model + weekly cron; 4-week trend bars + pipeline summary + revenue opportunities on /reports; `analyzeRevenueAtRisk`; revenue-weighted score bonus; Revenue at Risk panel in command center. |
 | 2026-06-12 | Ship intent-guided draft suggestions in the existing AI draft panel. | Keeps rough instructions inside the manual draft suggestion path, records the instruction in metadata, and preserves all existing review/send safeguards instead of creating a separate compose workflow. |
 
 ## Open Product Questions

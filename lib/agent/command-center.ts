@@ -53,6 +53,7 @@ export type CommandCenterInputConversation = {
   lead?: {
     score: number
     scoreExplanation: string | null
+    estimatedValue?: number | null
   } | null
   conversationState?: {
     metadataJson?: unknown
@@ -75,6 +76,7 @@ export type CommandCenterConversation = {
   needsReply: boolean
   opportunity: boolean
   leadScore: number | null
+  estimatedValue: number | null
 }
 
 export type DailyCommandCenter = {
@@ -319,6 +321,7 @@ export function analyzeConversationForCommandCenter(
     needsReply: conversation.status === "needs_reply" && !safelyIgnored,
     opportunity,
     leadScore: opportunity && conversation.lead ? conversation.lead.score : null,
+    estimatedValue: conversation.lead?.estimatedValue ?? null,
   }
 }
 
@@ -444,12 +447,14 @@ function score(conversation: CommandCenterConversation): number {
     low: 200,
     none: 0,
   }
+  const revenueBonus = Math.min(Math.floor((conversation.estimatedValue ?? 0) / 200), 50)
   return (
     priorityScore[conversation.priority] +
     (conversation.opportunity ? 25 : 0) +
     (conversation.sensitive ? 20 : 0) +
     (conversation.needsReply ? 10 : 0) +
     (conversation.state === "support" ? 30 : 0) +
-    (conversation.state === "sales_qualified" ? 35 : 0)
+    (conversation.state === "sales_qualified" ? 35 : 0) +
+    revenueBonus
   )
 }

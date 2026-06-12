@@ -32,8 +32,8 @@ Most Phase 1 foundations are shipped (command center, task/lead extraction, appr
 - [x] **Mini CRM pipeline reporting** (#7) — shipped 2026-06-12: score/stage filters, week-over-week stats table, and pipeline funnel summary on `/leads`.
 - [x] **Sales agent mode** (#20) — shipped 2026-06-12: regex-based `classifySalesSignals` in work-item-sync, `SalesPanel` on conversation pages, `?sales=1` filter tab in inbox, Sales Qualified count chip in command center.
 - [x] **Customer support agent mode** (#19) — shipped 2026-06-12: `classifySupportSignals` in work-item-sync, SupportPanel on conversation pages, support filter in inbox, support count in command center.
-- [ ] **Email triage by money impact** (#40) — money-impact ranking in command center beyond current lead signal.
-- [ ] **Full ROI analytics dashboard** (#32) — builds on the weekly value report; needs trends, persisted snapshots, revenue attribution.
+- [x] **Email triage by money impact** (#40) — shipped 2026-06-13: revenue-weighted `score()` bonus (+up to 50) in command center, Revenue at Risk subsection (amber cards for stale high-value leads) in `CommandCenterPanel`, `analyzeRevenueAtRisk` in `lib/agent/revenue-at-risk.ts`.
+- [x] **Full ROI analytics dashboard** (#32) — shipped 2026-06-13: `ValueSnapshot` model, weekly cron at `/api/cron/value-snapshot`, `buildValueSnapshot`/`getWeeklyTrend` in `value-report.ts`, 4-week trend bars + pipeline value summary + revenue opportunities on `/reports`.
 - [x] **Knowledge base source management** (#8) — shipped 2026-06-12: URL crawl endpoint, `sourceUrl`/`crawledAt` fields, `/knowledge-base` page, `"webpage"` source type, citations in draft replies.
 - [ ] **Local-business concierge templates** (#36).
 
