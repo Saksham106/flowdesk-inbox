@@ -24,6 +24,7 @@ import { syncConversationWorkItems } from "@/lib/agent/work-item-sync";
 import SupportPanel from "@/app/conversations/[id]/SupportPanel";
 import SalesPanel from "@/app/conversations/[id]/SalesPanel";
 import { SALES_SUGGESTED_ACTIONS } from "@/lib/agent/sales-classifier";
+import EmailBody from "@/app/components/EmailBody";
 
 export const dynamic = "force-dynamic";
 
@@ -241,7 +242,7 @@ export default async function ConversationPage({
         </div>
       </header>
       <main className="mx-auto grid max-w-5xl gap-6 px-4 sm:px-6 py-8 lg:grid-cols-[1fr_280px]">
-        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="min-w-0 overflow-x-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="space-y-4">
             {conversation.messages.length === 0 ? (
               <p className="text-sm text-slate-500">No messages yet.</p>
@@ -254,13 +255,13 @@ export default async function ConversationPage({
                     className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm ${
+                      className={`max-w-[75%] min-w-0 rounded-2xl px-4 py-2 text-sm ${
                         isOutbound
                           ? "bg-slate-900 text-white"
                           : "bg-slate-100 text-slate-900"
                       }`}
                     >
-                      <p>{message.body}</p>
+                      <EmailBody body={message.body} />
                       <p className="mt-1 text-xs opacity-70">
                         {message.createdAt.toLocaleString()}
                       </p>
