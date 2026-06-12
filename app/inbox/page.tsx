@@ -26,7 +26,7 @@ const STATUS_LABELS: Record<ConversationStatus, string> = {
 const ALL_STATUSES = Object.keys(STATUS_LABELS) as ConversationStatus[];
 
 interface Props {
-  searchParams: { status?: string; q?: string };
+  searchParams: { status?: string; q?: string; sales?: string };
 }
 
 export default async function InboxPage({ searchParams }: Props) {
@@ -41,6 +41,7 @@ export default async function InboxPage({ searchParams }: Props) {
     ? (searchParams.status as ConversationStatus)
     : null;
   const q = searchParams.q?.trim() ?? "";
+  const salesFilter = searchParams.sales === "1";
 
   // Build where clause
   const where = {
@@ -71,6 +72,7 @@ export default async function InboxPage({ searchParams }: Props) {
         messages: { orderBy: { createdAt: "desc" }, take: 1 },
         channel: true,
         contact: true,
+        stateRecord: { select: { metadataJson: true } },
       },
     }),
     prisma.conversation.groupBy({
@@ -112,6 +114,7 @@ export default async function InboxPage({ searchParams }: Props) {
           select: { score: true, scoreExplanation: true },
           take: 1,
         },
+        stateRecord: { select: { metadataJson: true } },
       },
     }),
     prisma.conversationState.findMany({
@@ -142,6 +145,18 @@ export default async function InboxPage({ searchParams }: Props) {
       lead: c.leads[0] ?? null,
     }))
   );
+
+  const displayConversations = salesFilter
+    ? conversations.filter((c) => {
+        const meta = c.stateRecord?.metadataJson
+        return (
+          meta !== null &&
+          typeof meta === "object" &&
+          !Array.isArray(meta) &&
+          (meta as Record<string, unknown>).isSalesLead === true
+        )
+      })
+    : conversations;
 
   const countByStatus = Object.fromEntries(
     statusCounts.map((r) => [r.status, r._count.status])
@@ -285,6 +300,23 @@ export default async function InboxPage({ searchParams }: Props) {
                 </Link>
               );
             })}
+            <Link
+              href={q ? `/inbox?sales=1&q=${encodeURIComponent(q)}` : "/inbox?sales=1"}
+              className={`whitespace-nowrap border-b-2 pb-3 pt-2 text-sm font-medium transition ${
+                salesFilter
+                  ? "border-emerald-600 text-emerald-700"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Sales
+              <span
+                className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs ${
+                  salesFilter ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {commandCenter.counts.salesQualified}
+              </span>
+            </Link>
           </nav>
         </div>
       </header>
@@ -346,14 +378,14 @@ export default async function InboxPage({ searchParams }: Props) {
         </div>
 
         <div className="space-y-3">
-          {conversations.length === 0 ? (
+          {displayConversations.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-sm text-slate-500">
-              {q || activeStatus
+              {q || activeStatus || salesFilter
                 ? "No conversations match your search."
                 : "No conversations yet. Connect Gmail in Settings to import threads."}
             </div>
           ) : (
-            conversations.map((conversation) => {
+            displayConversations.map((conversation) => {
               const lastMessage = conversation.messages[0];
               const displayName =
                 conversation.contact?.name ?? conversation.externalThreadId;
