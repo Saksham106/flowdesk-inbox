@@ -5,6 +5,7 @@ import { summarizeWorkItems, type WorkItemConversationInput } from "@/lib/agent/
 import { syncPersonMemory } from "@/lib/agent/person-memory"
 import { scoreLeadForConversation } from "@/lib/agent/lead-scoring"
 import { classifySupportSignals } from "@/lib/agent/support-classifier"
+import { classifySalesSignals } from "@/lib/agent/sales-classifier"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
@@ -17,6 +18,7 @@ export type SyncConversationWorkItemsResult = {
   tasksSynced: number
   leadSynced: boolean
   supportClassified: boolean
+  salesClassified: boolean
 }
 
 export async function syncConversationWorkItems(
@@ -246,5 +248,53 @@ export async function syncConversationWorkItems(
     })
   }
 
-  return { stateSynced: true, tasksSynced, leadSynced, supportClassified: supportSignals.isSupport }
+  const salesSignals = classifySalesSignals(
+    conversation.messages.map((m) => ({ direction: m.direction, body: m.body }))
+  )
+
+  await prisma.auditLog.create({
+    data: {
+      tenantId: input.tenantId,
+      action: "conversation_state.sales_classified",
+      payloadJson: {
+        conversationId: conversation.id,
+        isSalesLead: salesSignals.isSalesLead,
+        closingStage: salesSignals.closingStage,
+      },
+    },
+  })
+
+  if (salesSignals.isSalesLead) {
+    const currentState = await prisma.conversationState.findUnique({
+      where: { conversationId: conversation.id },
+      select: { metadataJson: true },
+    })
+    const currentMeta =
+      currentState?.metadataJson &&
+      typeof currentState.metadataJson === "object" &&
+      !Array.isArray(currentState.metadataJson)
+        ? (currentState.metadataJson as Record<string, unknown>)
+        : {}
+
+    await prisma.conversationState.update({
+      where: { conversationId: conversation.id },
+      data: {
+        metadataJson: {
+          ...currentMeta,
+          isSalesLead: true,
+          extractedBudget: salesSignals.extractedBudget,
+          extractedTimeline: salesSignals.extractedTimeline,
+          closingStage: salesSignals.closingStage,
+        } as Prisma.InputJsonValue,
+      },
+    })
+  }
+
+  return {
+    stateSynced: true,
+    tasksSynced,
+    leadSynced,
+    supportClassified: supportSignals.isSupport,
+    salesClassified: salesSignals.isSalesLead,
+  }
 }

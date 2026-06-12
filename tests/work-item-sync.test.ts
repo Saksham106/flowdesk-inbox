@@ -94,7 +94,7 @@ describe("syncConversationWorkItems", () => {
       now,
     })
 
-    expect(result).toEqual({ stateSynced: true, tasksSynced: 1, leadSynced: true, supportClassified: false })
+    expect(result).toEqual({ stateSynced: true, tasksSynced: 1, leadSynced: true, supportClassified: false, salesClassified: true })
     expect(mockStateUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { conversationId: "conv-1" },
