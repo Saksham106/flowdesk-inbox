@@ -5,6 +5,7 @@ export const SOURCE_TYPE_OPTIONS = [
   { value: "pricing", label: "Pricing" },
   { value: "prep_instructions", label: "Prep Instructions" },
   { value: "cancellation", label: "Cancellation" },
+  { value: "webpage", label: "Webpage" },
   { value: "other", label: "Other" },
 ] as const
 
