@@ -12,14 +12,12 @@ CREATE TABLE "ValueSnapshot" (
     "approvalsDecided" INTEGER NOT NULL,
     "conversationsTriaged" INTEGER NOT NULL,
     "estimatedMinutesSaved" INTEGER NOT NULL,
-    "pipelineValue" DOUBLE PRECISION NOT NULL,
+    "pipelineValue" INTEGER NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ValueSnapshot_pkey" PRIMARY KEY ("id")
 );
-
--- CreateIndex
-CREATE INDEX "ValueSnapshot_tenantId_weekEnding_idx" ON "ValueSnapshot"("tenantId", "weekEnding");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ValueSnapshot_tenantId_weekEnding_key" ON "ValueSnapshot"("tenantId", "weekEnding");

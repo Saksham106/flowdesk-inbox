@@ -380,13 +380,13 @@ model ValueSnapshot {
   approvalsDecided      Int
   conversationsTriaged  Int
   estimatedMinutesSaved Int
-  pipelineValue         Float
+  pipelineValue         Int
+  updatedAt             DateTime @updatedAt
   createdAt             DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, weekEnding])
-  @@index([tenantId, weekEnding])
 }
 
 model ApprovalRequest {
