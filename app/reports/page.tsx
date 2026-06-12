@@ -3,7 +3,7 @@ import { redirect } from "next/navigation"
 import { getServerSession } from "next-auth"
 
 import { authOptions } from "@/lib/auth"
-import { buildWeeklyValueReport } from "@/lib/agent/value-report"
+import { buildWeeklyValueReport, getWeeklyTrend } from "@/lib/agent/value-report"
 import { prisma } from "@/lib/prisma"
 
 export const dynamic = "force-dynamic"
@@ -14,17 +14,54 @@ function formatMinutes(minutes: number): string {
   return `${hours.toFixed(1)} hours`
 }
 
+function formatPipelineValue(value: number): string {
+  if (value >= 1000) return `$${(value / 1000).toFixed(1)}k`
+  return `$${value}`
+}
+
+const PIPELINE_STAGES = ["qualified", "contacted", "proposal", "closing", "won"] as const
+
+function capitalizeFirst(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1)
+}
+
 export default async function ReportsPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.tenantId) redirect("/login")
 
+  const tenantId = session.user.tenantId
+
   const tenant = await prisma.tenant.findUnique({
-    where: { id: session.user.tenantId },
+    where: { id: tenantId },
     select: { accountType: true },
   })
   if (tenant?.accountType === "personal") redirect("/inbox")
 
-  const report = await buildWeeklyValueReport(session.user.tenantId)
+  const report = await buildWeeklyValueReport(tenantId)
+
+  const [trendSnapshots, pipelineLeads, recentLeads] = await Promise.all([
+    getWeeklyTrend(tenantId, 4),
+    prisma.lead.findMany({
+      where: { tenantId, stage: { not: "closed" } },
+      select: { stage: true, estimatedValue: true },
+    }),
+    prisma.lead.findMany({
+      where: {
+        tenantId,
+        createdAt: { gte: report.periodStart },
+        estimatedValue: { gt: 0 },
+      },
+      select: {
+        estimatedValue: true,
+        score: true,
+        scoreExplanation: true,
+        conversationId: true,
+        conversation: { select: { contact: { select: { name: true } } } },
+      },
+      orderBy: { estimatedValue: "desc" },
+      take: 6,
+    }),
+  ])
 
   const headline =
     report.draftsCreated + report.followUpsQueued + report.tasksExtracted + report.leadsDetected > 0
@@ -42,23 +79,46 @@ export default async function ReportsPage() {
     { label: "Conversations triaged", value: report.conversationsTriaged, note: "states kept up to date" },
   ]
 
+  // --- Section 1: trend data ---
+  type TrendKey = "draftsCreated" | "leadsDetected" | "followUpsQueued" | "approvalsDecided"
+  const trendMetrics: Array<{ label: string; key: TrendKey }> = [
+    { label: "Drafts created", key: "draftsCreated" },
+    { label: "Leads detected", key: "leadsDetected" },
+    { label: "Follow-ups queued", key: "followUpsQueued" },
+    { label: "Approvals decided", key: "approvalsDecided" },
+  ]
+
+  // --- Section 2: pipeline data ---
+  const totalLeads = pipelineLeads.length
+  const totalValue = pipelineLeads.reduce((sum, l) => sum + (l.estimatedValue ?? 0), 0)
+  const formattedPipelineValue = formatPipelineValue(totalValue)
+
+  type StageGroup = { count: number; sum: number }
+  const stageGroups: Record<string, StageGroup> = {}
+  for (const lead of pipelineLeads) {
+    if (!stageGroups[lead.stage]) stageGroups[lead.stage] = { count: 0, sum: 0 }
+    stageGroups[lead.stage].count += 1
+    stageGroups[lead.stage].sum += lead.estimatedValue ?? 0
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <div>
             <Link href="/inbox" className="text-sm text-slate-500 hover:text-slate-700">
-              ← Back to inbox
+              &larr; Back to inbox
             </Link>
             <h1 className="mt-1 text-xl font-semibold">Weekly value report</h1>
             <p className="text-sm text-slate-500">
-              {report.periodStart.toLocaleDateString()} – {report.periodEnd.toLocaleDateString()}
+              {report.periodStart.toLocaleDateString()} &ndash; {report.periodEnd.toLocaleDateString()}
             </p>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-6 py-8">
+        {/* Headline card */}
         <section className="mb-8 rounded-xl border border-blue-100 bg-blue-50 p-5">
           <p className="text-sm font-medium text-blue-900">{headline}</p>
           <p className="mt-2 text-xs text-blue-700">
@@ -67,6 +127,7 @@ export default async function ReportsPage() {
           </p>
         </section>
 
+        {/* Metric grid */}
         <section className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {metrics.map((metric) => (
             <div
@@ -80,6 +141,7 @@ export default async function ReportsPage() {
           ))}
         </section>
 
+        {/* Time saved card */}
         <section className="mt-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-700">Estimated time saved</h2>
           <p className="mt-2 text-3xl font-semibold text-emerald-600">
@@ -89,6 +151,141 @@ export default async function ReportsPage() {
             Counted over the last 7 days from drafts, follow-ups, tasks, and leads.
           </p>
         </section>
+
+        {/* Section 1: 4-week trend bars */}
+        {trendSnapshots.length >= 2 && (
+          <section className="mt-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-4 text-sm font-semibold text-slate-700">4-week trend</h2>
+            {trendMetrics.map(({ label, key }) => {
+              const values = trendSnapshots.map((snap) => snap[key] ?? 0)
+              const maxInRow = Math.max(...values)
+              return (
+                <div key={key} className="flex items-start gap-2 mb-3">
+                  <span className="w-40 shrink-0 text-sm text-slate-600 pt-5">{label}</span>
+                  <div className="flex gap-2 flex-1">
+                    {trendSnapshots.map((snap) => {
+                      const value = snap[key] ?? 0
+                      const pct = maxInRow === 0 ? 0 : Math.round((value / maxInRow) * 100)
+                      const weekLabel = snap.weekEnding.toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })
+                      return (
+                        <div
+                          key={snap.weekEnding.toISOString()}
+                          className="flex flex-col items-center flex-1"
+                        >
+                          <span className="text-xs text-slate-500 mb-1">{weekLabel}</span>
+                          <div className="w-full bg-slate-100 rounded h-6 flex items-end">
+                            <div
+                              className="bg-blue-400 rounded"
+                              style={{
+                                width: `${pct}%`,
+                                height: "100%",
+                                minWidth: value > 0 ? "4px" : "0",
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs text-slate-600 mt-1">{value}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </section>
+        )}
+
+        {/* Section 2: Pipeline value summary */}
+        {totalLeads > 0 && (
+          <section className="mt-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-3 text-sm font-semibold text-slate-700">Pipeline value summary</h2>
+            <p className="text-xl font-bold text-slate-900">
+              {formattedPipelineValue} across {totalLeads} lead{totalLeads === 1 ? "" : "s"}
+            </p>
+            <div className="mt-4 space-y-3">
+              {PIPELINE_STAGES.filter((stage) => stageGroups[stage]?.count > 0).map((stage) => {
+                const { count, sum } = stageGroups[stage]
+                const barPct = Math.round((count / totalLeads) * 100)
+                return (
+                  <div key={stage}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm text-slate-600">{capitalizeFirst(stage)}</span>
+                      <span className="text-sm text-slate-500">
+                        {count} lead{count === 1 ? "" : "s"}
+                        {sum > 0 ? ` · ${formatPipelineValue(sum)}` : ""}
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-2">
+                      <div
+                        className="bg-emerald-400 h-2 rounded-full"
+                        style={{ width: `${barPct}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Section 3: Revenue opportunities this week */}
+        {recentLeads.length > 0 && (
+          <section className="mt-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-4 text-sm font-semibold text-slate-700">
+              Revenue opportunities this week
+            </h2>
+            <div className="divide-y divide-slate-100">
+              {recentLeads.map((lead) => {
+                const contactName = lead.conversation?.contact?.name ?? "Unknown"
+                const scoreColor =
+                  lead.score >= 70
+                    ? "bg-green-100 text-green-700"
+                    : lead.score >= 40
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-slate-100 text-slate-600"
+                const snippet = lead.scoreExplanation
+                  ? lead.scoreExplanation.slice(0, 80)
+                  : null
+                return (
+                  <div key={lead.conversationId} className="py-3 flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Link
+                          href={`/conversations/${lead.conversationId}`}
+                          className="text-sm font-medium text-slate-800 hover:text-blue-600"
+                        >
+                          {contactName}
+                        </Link>
+                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                          ${(lead.estimatedValue ?? 0).toLocaleString()}
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${scoreColor}`}
+                        >
+                          Score {lead.score}
+                        </span>
+                      </div>
+                      {snippet && (
+                        <p className="mt-1 text-xs text-slate-500 truncate">
+                          {snippet}
+                          {lead.scoreExplanation && lead.scoreExplanation.length > 80 ? "…" : ""}
+                        </p>
+                      )}
+                    </div>
+                    <Link
+                      href={`/conversations/${lead.conversationId}`}
+                      className="shrink-0 text-xs text-blue-500 hover:text-blue-700"
+                    >
+                      View &rarr;
+                    </Link>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   )
