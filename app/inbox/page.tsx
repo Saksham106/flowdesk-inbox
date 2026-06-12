@@ -11,6 +11,7 @@ import CommandCenterPanel from "@/app/inbox/CommandCenterPanel";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import { StatusBadge, LabelBadge } from "@/app/components/badges";
 import { buildDailyCommandCenter } from "@/lib/agent/command-center";
+import { analyzeRevenueAtRisk } from "@/lib/agent/revenue-at-risk";
 import { AppNavigationItem, getInboxNavigation } from "@/lib/app-navigation";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +65,7 @@ export default async function InboxPage({ searchParams }: Props) {
     ignoredStates,
     pendingFollowUps,
     tenant,
+    revenueAtRisk,
   ] = await Promise.all([
     prisma.conversation.findMany({
       where,
@@ -111,7 +113,7 @@ export default async function InboxPage({ searchParams }: Props) {
           take: 3,
         },
         leads: {
-          select: { score: true, scoreExplanation: true },
+          select: { score: true, scoreExplanation: true, estimatedValue: true },
           take: 1,
         },
         stateRecord: { select: { metadataJson: true } },
@@ -137,6 +139,7 @@ export default async function InboxPage({ searchParams }: Props) {
       where: { id: tenantId },
       select: { accountType: true },
     }),
+    analyzeRevenueAtRisk(tenantId),
   ]);
 
   const commandCenter = buildDailyCommandCenter(
@@ -323,7 +326,7 @@ export default async function InboxPage({ searchParams }: Props) {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 sm:px-6 py-6">
-        <CommandCenterPanel commandCenter={commandCenter} />
+        <CommandCenterPanel commandCenter={commandCenter} revenueAtRisk={revenueAtRisk} />
 
         {/* Follow-up tracker */}
         {followUpConversations.length > 0 && (

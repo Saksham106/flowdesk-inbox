@@ -1,6 +1,7 @@
 import Link from "next/link"
 
 import type { DailyCommandCenter } from "@/lib/agent/command-center"
+import type { RevenueAtRiskItem } from "@/lib/agent/revenue-at-risk"
 
 const countItems = [
   ["needsReply", "Needs reply"],
@@ -16,8 +17,10 @@ const countItems = [
 
 export default function CommandCenterPanel({
   commandCenter,
+  revenueAtRisk,
 }: {
   commandCenter: DailyCommandCenter
+  revenueAtRisk: RevenueAtRiskItem[]
 }) {
   return (
     <section className="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -53,6 +56,41 @@ export default function CommandCenterPanel({
           </div>
         ))}
       </div>
+
+      {revenueAtRisk.length > 0 && (
+        <div className="border-t border-slate-100 px-4 py-3 sm:px-5">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-600">
+            Revenue at Risk
+          </p>
+          <ul className="space-y-2">
+            {revenueAtRisk.map((item) => (
+              <li key={item.conversationId}>
+                <Link
+                  href={`/conversations/${item.conversationId}`}
+                  className="flex items-start justify-between gap-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 transition hover:bg-amber-100"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">
+                      {item.contactName}
+                    </p>
+                    <p className="mt-0.5 text-xs text-amber-700">
+                      No reply in {item.daysSinceLastMessage} day{item.daysSinceLastMessage === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                      At Risk
+                    </span>
+                    <span className="text-xs font-medium text-emerald-700">
+                      ${item.estimatedValue.toLocaleString()}
+                    </span>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {commandCenter.topActions.length > 0 ? (
         <ul className="divide-y divide-slate-100 border-t border-slate-100">
