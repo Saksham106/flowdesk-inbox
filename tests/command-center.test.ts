@@ -195,6 +195,29 @@ describe("buildDailyCommandCenter", () => {
   })
 })
 
+describe("sales_qualified state", () => {
+  it("classifies conversation as sales_qualified when isSalesLead is true in metadataJson", () => {
+    const conv = conversation({
+      id: "sales-1",
+      status: "needs_reply",
+      conversationState: {
+        metadataJson: {
+          isSalesLead: true,
+          closingStage: "proposal",
+        },
+      },
+    })
+
+    const analyzed = analyzeConversationForCommandCenter(conv, now)
+    expect(analyzed.state).toBe("sales_qualified")
+
+    const result = buildDailyCommandCenter([conv], now)
+    expect(result.sections.salesQualified).toHaveLength(1)
+    expect(result.sections.salesQualified[0].id).toBe("sales-1")
+    expect(result.counts.salesQualified).toBe(1)
+  })
+})
+
 describe("buildRelationshipContext", () => {
   it("extracts person context and business signals", () => {
     const context = buildRelationshipContext(

@@ -209,13 +209,23 @@ v2.1: Knowledge Base Source Management + Customer Support Mode (2026-06-12):
 - `app/inbox/page.tsx` + `CommandCenterPanel.tsx` — Support count chip in command center grid; Support filter tab in inbox.
 - `lib/agent/command-center.ts` — `"support"` state; churn-risk threads get `urgent` priority; `counts.support` and `sections.support`.
 
+v2.2: Sales Agent Mode + Mini CRM Pipeline Reporting (2026-06-12):
+
+- `lib/agent/sales-classifier.ts` — `classifySalesSignals` pure function: detects budget/timeline/proposal/closing signals via regex, infers stage (prospect → qualified → proposal → closing), extracts dollar budget and timeline phrase, returns `suggestedAction` from a static action map.
+- `lib/agent/work-item-sync.ts` — runs sales classification after every sync; writes `isSalesLead`, `closingStage`, `extractedBudget`, `extractedTimeline`, `suggestedAction` into `ConversationState.metadataJson` alongside support signals (spreads preserve both).
+- `lib/agent/command-center.ts` — `"sales_qualified"` state (score boost 35, takes priority over `"opportunity"`); `counts.salesQualified` and `sections.salesQualified`.
+- `app/conversations/[id]/SalesPanel.tsx` — shows stage badge (color-coded), budget, timeline, suggested action, and "Generate closing draft" CTA.
+- `app/conversations/[id]/page.tsx` — both `SupportPanel` and `SalesPanel` wired into conversation sidebar; metadataJson parsed for both support and sales signals; KB doc fetched when `suggestedKbDocId` present.
+- `app/inbox/CommandCenterPanel.tsx` — Support and Sales Qualified count chips added to command center grid.
+- `app/inbox/page.tsx` — `?sales=1` filter tab; `stateRecord` mapped to `conversationState` before `buildDailyCommandCenter` so both `isClassifiedSupport` and `isSalesQualified` helpers read correctly.
+- `app/leads/page.tsx` — score/stage filter form with Clear link; week-over-week stats table (new leads + avg score); dynamic section titles when filters active; `allLeads`/`displayLeads` split so funnel always shows totals.
+
 Limitations:
 
 - Task assignment is not yet implemented.
 - Person-memory extraction is deterministic (regex heuristics), not LLM-based, and is not user-editable.
 - Lead sequence step timings are fixed (2/4/7 days); there is no settings UI yet.
 - Batch re-scoring of all existing leads is not implemented; scoring runs per lead after each sync.
-- CRM filter/search by score range is not yet implemented.
 - Full pipeline trend analytics and value forecasting are not yet implemented.
 - Risk Radar thresholds are deterministic and not user-configurable yet.
 - URL crawl is single-page only (no sitemap, no re-crawl scheduling).
@@ -255,8 +265,7 @@ See `MASTER_PRODUCT_PLAN.md` for phase recommendations and feature statuses.
 - Natural-language inbox search.
 - Ask My Inbox chat.
 - Team inbox collaboration.
-- Customer support mode.
-- Sales agent mode.
+- Full pipeline trend analytics and value forecasting (score/stage filters and WoW table shipped; forecasting not yet built).
 - Personal life admin mode.
 - Phishing/scam/fraud protection.
 - Auto-unsubscribe and bulk safe archive.

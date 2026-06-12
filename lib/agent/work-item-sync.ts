@@ -5,6 +5,7 @@ import { summarizeWorkItems, type WorkItemConversationInput } from "@/lib/agent/
 import { syncPersonMemory } from "@/lib/agent/person-memory"
 import { scoreLeadForConversation } from "@/lib/agent/lead-scoring"
 import { classifySupportSignals } from "@/lib/agent/support-classifier"
+import { classifySalesSignals } from "@/lib/agent/sales-classifier"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
@@ -17,6 +18,7 @@ export type SyncConversationWorkItemsResult = {
   tasksSynced: number
   leadSynced: boolean
   supportClassified: boolean
+  salesClassified: boolean
 }
 
 export async function syncConversationWorkItems(
@@ -219,7 +221,7 @@ export async function syncConversationWorkItems(
 
   await prisma.auditLog.create({
     data: {
-      tenantId: input.tenantId,
+      tenantId: conversation.tenantId,
       action: "conversation_state.support_classified",
       payloadJson: {
         conversationId: conversation.id,
@@ -231,20 +233,62 @@ export async function syncConversationWorkItems(
     },
   })
 
+  let postSupportMeta: Record<string, unknown> = existingMeta
+
   if (supportSignals.isSupport || existingMeta.isSupport === true) {
+    const updatedSupportMeta = {
+      ...existingMeta,
+      isSupport: supportSignals.isSupport,
+      churnRisk: supportSignals.churnRisk,
+      needsEscalation: supportSignals.needsEscalation,
+      suggestedKbDocId: supportSignals.suggestedKbDocId,
+    }
+    await prisma.conversationState.update({
+      where: { conversationId: conversation.id },
+      data: {
+        metadataJson: updatedSupportMeta as Prisma.InputJsonValue,
+      },
+    })
+    postSupportMeta = updatedSupportMeta
+  }
+
+  const salesSignals = classifySalesSignals(
+    conversation.messages.map((m) => ({ direction: m.direction, body: m.body }))
+  )
+
+  await prisma.auditLog.create({
+    data: {
+      tenantId: conversation.tenantId,
+      action: "conversation_state.sales_classified",
+      payloadJson: {
+        conversationId: conversation.id,
+        isSalesLead: salesSignals.isSalesLead,
+        closingStage: salesSignals.closingStage,
+      },
+    },
+  })
+
+  if (salesSignals.isSalesLead) {
     await prisma.conversationState.update({
       where: { conversationId: conversation.id },
       data: {
         metadataJson: {
-          ...existingMeta,
-          isSupport: supportSignals.isSupport,
-          churnRisk: supportSignals.churnRisk,
-          needsEscalation: supportSignals.needsEscalation,
-          suggestedKbDocId: supportSignals.suggestedKbDocId,
+          ...postSupportMeta,
+          isSalesLead: true,
+          extractedBudget: salesSignals.extractedBudget,
+          extractedTimeline: salesSignals.extractedTimeline,
+          closingStage: salesSignals.closingStage,
+          suggestedAction: salesSignals.suggestedAction,
         } as Prisma.InputJsonValue,
       },
     })
   }
 
-  return { stateSynced: true, tasksSynced, leadSynced, supportClassified: supportSignals.isSupport }
+  return {
+    stateSynced: true,
+    tasksSynced,
+    leadSynced,
+    supportClassified: supportSignals.isSupport,
+    salesClassified: salesSignals.isSalesLead,
+  }
 }

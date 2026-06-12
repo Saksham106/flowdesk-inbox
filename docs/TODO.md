@@ -29,8 +29,8 @@ Most Phase 1 foundations are shipped (command center, task/lead extraction, appr
 - [x] **Meeting prep from email history** (#11) — shipped 2026-06-11: `/meetings` page with on-demand brief from PersonMemory + email threads; digest shows today's meetings.
 - [x] **Post-meeting follow-up generator** (#12) — shipped 2026-06-11: notes + prior threads → follow-up draft → ApprovalRequest; falls back to inline copy.
 - [x] **Lead scoring refinement** (#7) — shipped 2026-06-11: LLM-based scorer replacing heuristic; `scoreExplanation`, `estimatedValue`, `scoredAt` fields; fire-and-forget sync integration; on-demand re-score API + RescoreButton; funnel header + color-coded score badge on `/leads`; command center opportunity cards use LLM explanation.
-- [ ] **Mini CRM pipeline reporting** (#7) — filter/search by score range, pipeline trend analytics, value forecasting.
-- [ ] **Sales agent mode** (#20) — qualify, ask budget/timeline, suggest closing language.
+- [x] **Mini CRM pipeline reporting** (#7) — shipped 2026-06-12: score/stage filters, week-over-week stats table, and pipeline funnel summary on `/leads`.
+- [x] **Sales agent mode** (#20) — shipped 2026-06-12: regex-based `classifySalesSignals` in work-item-sync, `SalesPanel` on conversation pages, `?sales=1` filter tab in inbox, Sales Qualified count chip in command center.
 - [x] **Customer support agent mode** (#19) — shipped 2026-06-12: `classifySupportSignals` in work-item-sync, SupportPanel on conversation pages, support filter in inbox, support count in command center.
 - [ ] **Email triage by money impact** (#40) — money-impact ranking in command center beyond current lead signal.
 - [ ] **Full ROI analytics dashboard** (#32) — builds on the weekly value report; needs trends, persisted snapshots, revenue attribution.

@@ -332,11 +332,12 @@ Shipped Phase 2 slice v2.1 (2026-06-12):
 
 - Knowledge base source management + customer support mode: URL crawl endpoint, `sourceUrl`/`crawledAt` fields, `/knowledge-base` page, `classifySupportSignals` in work-item-sync, SupportPanel on conversations, support filter in inbox, support count in command center, `citedDocumentIds` in draft replies.
 
-### Next Slice: v2.2 — Sales Agent Mode + CRM Analytics
+Shipped Phase 2 slice v2.2 (2026-06-12):
 
-- Sales agent mode: qualification panel on conversation pages (budget/timeline extraction, closing language suggestions).
-- Mini CRM pipeline reporting: score-range filter on `/leads`, week-over-week trend on `/reports`.
-- ROI analytics: persist weekly `ValueMetric` snapshots for trend charts.
+- Sales agent mode: `classifySalesSignals` pure regex classifier (budget/timeline/proposal/closing signals), wired into work-item-sync fire-and-forget, `SalesPanel` on conversation pages, `?sales=1` inbox filter tab, Sales Qualified count chip in command center, `sales_qualified` state with score boost 35.
+- Mini CRM pipeline reporting: score/stage filter form on `/leads`, week-over-week stats table, dynamic section titles, `allLeads`/`displayLeads` split.
+
+### Next Slice: v2.3 — ROI Analytics + Email Triage by Money Impact
 
 See `docs/MASTER_PRODUCT_PLAN.md` Phase 2 section for the full feature list.
 
@@ -469,6 +470,7 @@ After an AI agent finishes work:
 | 2026-06-11 | Ship lead intelligence slice: LLM scorer + CRM funnel header + command center score badge. | Lead model already existed with deterministic heuristic. LLM replaces heuristic, adds explanation and estimated value, fires fire-and-forget after each sync with stale-guard. Next Phase 2 slice: KB replies + customer support mode. |
 | 2026-06-12 | Ship Email Risk Radar as a deterministic read-only page. | Reuses conversation, message, draft metadata, and navigation foundations; avoids a schema migration until trend history, user-tunable thresholds, or alerting is needed. |
 | 2026-06-12 | Ship v2.1: KB source management + customer support mode. | URL crawl → KB doc extends existing KnowledgeDocument model. Support classification added to work-item-sync fire-and-forget. Citations stored in Draft.metadataJson. No new Prisma models. Next: v2.2 sales agent mode + CRM analytics. |
+| 2026-06-12 | Ship v2.2: sales agent mode + mini CRM pipeline reporting. | Regex `classifySalesSignals` wired into work-item-sync alongside support classifier; both write into same metadataJson blob. `sales_qualified` state in command center. Score/stage filters and WoW table on /leads. No new Prisma models. Next: v2.3 ROI analytics + money-impact triage. |
 | 2026-06-12 | Ship intent-guided draft suggestions in the existing AI draft panel. | Keeps rough instructions inside the manual draft suggestion path, records the instruction in metadata, and preserves all existing review/send safeguards instead of creating a separate compose workflow. |
 
 ## Open Product Questions

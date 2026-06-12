@@ -9,6 +9,8 @@ const countItems = [
   ["meetings", "Meetings"],
   ["opportunities", "Opportunities"],
   ["potentialProblems", "Problems"],
+  ["support", "Support"],
+  ["salesQualified", "Sales Qualified"],
   ["safelyIgnored", "Ignored"],
 ] as const
 
