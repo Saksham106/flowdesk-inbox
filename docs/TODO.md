@@ -31,10 +31,10 @@ Most Phase 1 foundations are shipped (command center, task/lead extraction, appr
 - [x] **Lead scoring refinement** (#7) — shipped 2026-06-11: LLM-based scorer replacing heuristic; `scoreExplanation`, `estimatedValue`, `scoredAt` fields; fire-and-forget sync integration; on-demand re-score API + RescoreButton; funnel header + color-coded score badge on `/leads`; command center opportunity cards use LLM explanation.
 - [ ] **Mini CRM pipeline reporting** (#7) — filter/search by score range, pipeline trend analytics, value forecasting.
 - [ ] **Sales agent mode** (#20) — qualify, ask budget/timeline, suggest closing language.
-- [ ] **Customer support agent mode** (#19) — FAQ answers, escalation, churn-risk detection, repeated-issue tracking.
+- [x] **Customer support agent mode** (#19) — shipped 2026-06-12: `classifySupportSignals` in work-item-sync, SupportPanel on conversation pages, support filter in inbox, support count in command center.
 - [ ] **Email triage by money impact** (#40) — money-impact ranking in command center beyond current lead signal.
 - [ ] **Full ROI analytics dashboard** (#32) — builds on the weekly value report; needs trends, persisted snapshots, revenue attribution.
-- [ ] **Knowledge base source management** (#8) — website/page crawling, citations in drafts.
+- [x] **Knowledge base source management** (#8) — shipped 2026-06-12: URL crawl endpoint, `sourceUrl`/`crawledAt` fields, `/knowledge-base` page, `"webpage"` source type, citations in draft replies.
 - [ ] **Local-business concierge templates** (#36).
 
 ## Phase 3: Personal Chief Of Staff — Not Started

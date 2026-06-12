@@ -27,6 +27,7 @@ const BUSINESS_SECONDARY: AppNavigationItem[] = [
   { label: "Risk Radar", href: "/risk-radar" },
   { label: "Reports", href: "/reports" },
   { label: "Meetings", href: "/meetings" },
+  { label: "Knowledge Base", href: "/knowledge-base" },
   { label: "Audit", href: "/audit" },
   { label: "Settings", href: "/settings" },
 ]

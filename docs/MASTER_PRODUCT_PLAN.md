@@ -264,7 +264,7 @@ Success criteria:
 | 5 | Inbox Memory / Relationship Memory | `Partial` | Phase 1 | Persisted `PersonMemory` and conversation relationship panel shipped; extraction is deterministic and not user-editable yet. |
 | 6 | Never Drop the Ball System | `Partial` | Phase 1 | Computed and persisted states exist; needs inbox views, alerts, and task actions. |
 | 7 | Business Lead Capture From Email | `Partial` | Phase 2 | LLM-based scoring, scoreExplanation, estimatedValue, funnel header, and score badge shipped. CRM filter/search and value forecasting remain. |
-| 8 | Knowledge Base Replies | `Partial` | Phase 1/2 | Knowledge documents exist; needs source management and stronger citations. |
+| 8 | Knowledge Base Replies | `Partial` | Phase 1/2 | URL import + webpage sourceType + citations in drafts shipped. Website re-crawl and semantic search remain. |
 | 9 | Personal Voice Clone, Controlled | `Partial` | Phase 1 | Learned profile exists; needs clearer controls and style feedback. |
 | 10 | Sensitive Email Detection | `Partial` | Phase 1 | Basic detection exists; needs richer categories and highlighted risky draft parts. |
 | 11 | Meeting Prep From Email History | `Partial` | Phase 2 | On-demand brief from PersonMemory + email threads; `/meetings` page + digest card. Briefs not persisted. Spec: `docs/superpowers/specs/2026-06-11-meeting-prep-design.md`. Plan: `docs/superpowers/plans/2026-06-11-meeting-prep.md`. |
@@ -275,7 +275,7 @@ Success criteria:
 | 16 | Smart Attachment Intelligence | `Planned` | Phase 3 | Needs attachment ingestion, extraction, storage, safety. |
 | 17 | Find Anything Natural Language Search | `Planned` | Phase 3 | Needs indexing, embeddings or search schema, permissions. |
 | 18 | Business Inbox Shared Assistant | `Later` | Phase 5 | Needs team model and collaboration primitives. |
-| 19 | Customer Support Agent Mode | `Planned` | Phase 2 | Should build on task, KB, sentiment, and support labels. |
+| 19 | Customer Support Agent Mode | `Partial` | Phase 2 | Auto-detect via work-item-sync; churn-risk + escalation flags; KB-match draft suggestion; SupportPanel on conversations; support filter in inbox; command center count. |
 | 20 | Sales Agent Mode | `Planned` | Phase 2 | Build after lead model and follow-up sequences. |
 | 21 | Personal Life Admin Mode | `Planned` | Phase 3 | Needs personal category detection and safer privacy UX. |
 | 22 | Email Risk Radar | `Shipped` | Phase 1 | `/risk-radar` ships a read-only deterministic scan for deadline-soon, final-notice, unanswered, and sensitive-content signals. Spec: `docs/superpowers/specs/2026-06-12-email-risk-radar-design.md`. Plan: `docs/superpowers/plans/2026-06-12-email-risk-radar.md`. |
@@ -328,9 +328,15 @@ Shipped Phase 2 slices (2026-06-11):
 - Meeting prep brief: `/meetings` page, digest card, on-demand brief from PersonMemory + email threads, post-meeting follow-up generator.
 - Lead intelligence: LLM-based scorer with `scoreExplanation` / `estimatedValue`, fire-and-forget sync integration, on-demand re-score API, funnel header + score badge on `/leads`, lead score badge on command center opportunity cards.
 
-Suggested next Phase 2 slice:
+Shipped Phase 2 slice v2.1 (2026-06-12):
 
-- Knowledge base replies + customer support mode: build on existing KnowledgeDocument model; add source management, website crawling, citation display in drafts, and FAQ-answer + escalation logic.
+- Knowledge base source management + customer support mode: URL crawl endpoint, `sourceUrl`/`crawledAt` fields, `/knowledge-base` page, `classifySupportSignals` in work-item-sync, SupportPanel on conversations, support filter in inbox, support count in command center, `citedDocumentIds` in draft replies.
+
+### Next Slice: v2.2 — Sales Agent Mode + CRM Analytics
+
+- Sales agent mode: qualification panel on conversation pages (budget/timeline extraction, closing language suggestions).
+- Mini CRM pipeline reporting: score-range filter on `/leads`, week-over-week trend on `/reports`.
+- ROI analytics: persist weekly `ValueMetric` snapshots for trend charts.
 
 See `docs/MASTER_PRODUCT_PLAN.md` Phase 2 section for the full feature list.
 
@@ -462,6 +468,7 @@ After an AI agent finishes work:
 | 2026-06-11 | Ship meeting prep + post-meeting follow-up as first Phase 2 slice. | Reuses existing calendar credentials, PersonMemory, and ApprovalRequest infrastructure. No schema changes. On-demand generation (briefs not persisted). Contact matching via `Contact.phoneE164` (email stored there for Gmail contacts). Follow-up attaches to existing conversation or falls back to inline copy. |
 | 2026-06-11 | Ship lead intelligence slice: LLM scorer + CRM funnel header + command center score badge. | Lead model already existed with deterministic heuristic. LLM replaces heuristic, adds explanation and estimated value, fires fire-and-forget after each sync with stale-guard. Next Phase 2 slice: KB replies + customer support mode. |
 | 2026-06-12 | Ship Email Risk Radar as a deterministic read-only page. | Reuses conversation, message, draft metadata, and navigation foundations; avoids a schema migration until trend history, user-tunable thresholds, or alerting is needed. |
+| 2026-06-12 | Ship v2.1: KB source management + customer support mode. | URL crawl → KB doc extends existing KnowledgeDocument model. Support classification added to work-item-sync fire-and-forget. Citations stored in Draft.metadataJson. No new Prisma models. Next: v2.2 sales agent mode + CRM analytics. |
 | 2026-06-12 | Ship intent-guided draft suggestions in the existing AI draft panel. | Keeps rough instructions inside the manual draft suggestion path, records the instruction in metadata, and preserves all existing review/send safeguards instead of creating a separate compose workflow. |
 
 ## Open Product Questions

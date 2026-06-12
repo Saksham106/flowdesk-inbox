@@ -3,26 +3,33 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const {
   mockConversationFindFirst,
   mockStateUpsert,
+  mockStateUpdate,
+  mockStateFindUnique,
   mockTaskUpsert,
   mockLeadUpsert,
   mockLeadFindFirst,
   mockAuditCreate,
+  mockKbDocFindMany,
 } = vi.hoisted(() => ({
   mockConversationFindFirst: vi.fn(),
   mockStateUpsert: vi.fn(),
+  mockStateUpdate: vi.fn(),
+  mockStateFindUnique: vi.fn(),
   mockTaskUpsert: vi.fn(),
   mockLeadUpsert: vi.fn(),
   mockLeadFindFirst: vi.fn(),
   mockAuditCreate: vi.fn(),
+  mockKbDocFindMany: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     conversation: { findFirst: mockConversationFindFirst },
-    conversationState: { upsert: mockStateUpsert },
+    conversationState: { upsert: mockStateUpsert, update: mockStateUpdate, findUnique: mockStateFindUnique },
     inboxTask: { upsert: mockTaskUpsert },
     lead: { upsert: mockLeadUpsert, findFirst: mockLeadFindFirst },
     auditLog: { create: mockAuditCreate },
+    knowledgeDocument: { findMany: mockKbDocFindMany },
   },
 }))
 
@@ -57,10 +64,13 @@ describe("syncConversationWorkItems", () => {
     vi.clearAllMocks()
     mockConversationFindFirst.mockResolvedValue(conversation)
     mockStateUpsert.mockResolvedValue({ id: "state-1" })
+    mockStateUpdate.mockResolvedValue({ id: "state-1" })
+    mockStateFindUnique.mockResolvedValue(null)
     mockTaskUpsert.mockResolvedValue({ id: "task-1" })
     mockLeadUpsert.mockResolvedValue({ id: "lead-1" })
     mockLeadFindFirst.mockResolvedValue({ id: "lead-1" })
     mockAuditCreate.mockResolvedValue({})
+    mockKbDocFindMany.mockResolvedValue([])
   })
 
   it("loads the conversation scoped to the tenant", async () => {
@@ -84,7 +94,7 @@ describe("syncConversationWorkItems", () => {
       now,
     })
 
-    expect(result).toEqual({ stateSynced: true, tasksSynced: 1, leadSynced: true })
+    expect(result).toEqual({ stateSynced: true, tasksSynced: 1, leadSynced: true, supportClassified: false })
     expect(mockStateUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { conversationId: "conv-1" },

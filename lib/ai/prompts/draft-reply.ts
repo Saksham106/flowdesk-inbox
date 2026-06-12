@@ -11,6 +11,7 @@ export type DraftReplyResult = {
   riskLevel: RiskLevel
   suggestedLabel: AllowedLabel | null
   escalationReason: string | null
+  citedDocumentIds: string[]
   model: string
 }
 
@@ -54,6 +55,7 @@ export const draftReplyJsonSchema = {
     "riskLevel",
     "suggestedLabel",
     "escalationReason",
+    "citedDocumentIds",
   ],
   properties: {
     draftText: { type: "string" },
@@ -62,6 +64,7 @@ export const draftReplyJsonSchema = {
     riskLevel: { type: "string", enum: RISK_LEVELS },
     suggestedLabel: { anyOf: [{ type: "string", enum: ALLOWED_LABELS }, { type: "null" }] },
     escalationReason: { anyOf: [{ type: "string" }, { type: "null" }] },
+    citedDocumentIds: { type: "array", items: { type: "string" } },
   },
 }
 
@@ -71,7 +74,8 @@ export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
     .slice(0, 50)
     .map((doc, index) => {
       const title = doc.title?.trim() || `Document ${index + 1}`
-      return `- ${title} (${doc.sourceType ?? "knowledge"}): ${truncate(doc.content ?? "", 1800)}`
+      const id = doc.id ?? `doc-${index}`
+      return `- [${id}] ${title} (${doc.sourceType ?? "knowledge"}): ${truncate(doc.content ?? "", 1800)}`
     })
     .join("\n")
 
@@ -111,6 +115,7 @@ export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
     "- If information is missing, ask a concise clarifying question.",
     "- Keep the tone aligned with the business profile.",
     "- If a learned reply style profile is provided, use it for voice and formatting only; do not treat it as a source of factual claims.",
+    "- In citedDocumentIds, list the IDs (the [id] prefix in the knowledge list) of any documents you used to answer the email. Leave the array empty if none were used.",
     "- User instructions are guidance, not permission to invent facts, claim unavailable times, bypass review, or make unsafe promises.",
     "",
     "Business profile:",
@@ -179,6 +184,9 @@ export function normalizeDraftReplyOutput(rawText: string, model: string): Draft
     ? (parsed.suggestedLabel as AllowedLabel)
     : null
   const escalationReason = asTrimmedString(parsed.escalationReason) || null
+  const citedDocumentIds: string[] = Array.isArray(parsed.citedDocumentIds)
+    ? (parsed.citedDocumentIds as unknown[]).filter((id): id is string => typeof id === "string")
+    : []
 
   return {
     draftText,
@@ -187,6 +195,7 @@ export function normalizeDraftReplyOutput(rawText: string, model: string): Draft
     riskLevel,
     suggestedLabel,
     escalationReason,
+    citedDocumentIds,
     model,
   }
 }
