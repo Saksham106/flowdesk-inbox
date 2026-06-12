@@ -11,6 +11,7 @@ export type CommandCenterState =
   | "risky_urgent"
   | "opportunity"
   | "support"
+  | "sales_qualified"
   | "fyi_only"
 
 export type CommandCenterPriority = "urgent" | "high" | "medium" | "low" | "none"
@@ -88,6 +89,7 @@ export type DailyCommandCenter = {
     opportunities: number
     potentialProblems: number
     support: number
+    salesQualified: number
     safelyIgnored: number
   }
   topActions: CommandCenterConversation[]
@@ -99,6 +101,7 @@ export type DailyCommandCenter = {
     opportunities: CommandCenterConversation[]
     potentialProblems: CommandCenterConversation[]
     support: CommandCenterConversation[]
+    salesQualified: CommandCenterConversation[]
     safelyIgnored: CommandCenterConversation[]
   }
   conversations: CommandCenterConversation[]
@@ -198,6 +201,12 @@ function isChurnRisk(conversation: CommandCenterInputConversation): boolean {
   return (state.metadataJson as Record<string, unknown>).churnRisk === true
 }
 
+function isSalesQualified(conversation: CommandCenterInputConversation): boolean {
+  const state = conversation.conversationState
+  if (!state?.metadataJson || typeof state.metadataJson !== "object" || Array.isArray(state.metadataJson)) return false
+  return (state.metadataJson as Record<string, unknown>).isSalesLead === true
+}
+
 function approvalReason(conversation: CommandCenterInputConversation): string | null {
   const meta = metadata(conversation)
   if (typeof meta.escalationReason === "string" && meta.escalationReason.trim()) {
@@ -262,6 +271,11 @@ export function analyzeConversationForCommandCenter(
     priority = "high"
     reason = "Draft is waiting for your approval."
     nextAction = "Review and approve the draft."
+  } else if (isSalesQualified(conversation)) {
+    state = "sales_qualified"
+    priority = "high"
+    reason = "Qualified sales lead detected."
+    nextAction = "Follow up to advance the deal."
   } else if (opportunity) {
     state = "opportunity"
     priority = "high"
@@ -341,6 +355,7 @@ export function buildDailyCommandCenter(
       opportunities: analyzed.filter((conversation) => conversation.opportunity).length,
       potentialProblems: analyzed.filter((conversation) => conversation.sensitive).length,
       support: analyzed.filter((conversation) => conversation.state === "support").length,
+      salesQualified: analyzed.filter((conversation) => conversation.state === "sales_qualified").length,
       safelyIgnored: analyzed.filter((conversation) => conversation.safelyIgnored).length,
     },
     topActions,
@@ -352,6 +367,7 @@ export function buildDailyCommandCenter(
       opportunities: analyzed.filter((conversation) => conversation.opportunity),
       potentialProblems: analyzed.filter((conversation) => conversation.sensitive),
       support: analyzed.filter((conversation) => conversation.state === "support"),
+      salesQualified: analyzed.filter((conversation) => conversation.state === "sales_qualified"),
       safelyIgnored: analyzed.filter((conversation) => conversation.safelyIgnored),
     },
     conversations: analyzed,
@@ -433,6 +449,7 @@ function score(conversation: CommandCenterConversation): number {
     (conversation.opportunity ? 25 : 0) +
     (conversation.sensitive ? 20 : 0) +
     (conversation.needsReply ? 10 : 0) +
-    (conversation.state === "support" ? 30 : 0)
+    (conversation.state === "support" ? 30 : 0) +
+    (conversation.state === "sales_qualified" ? 35 : 0)
   )
 }
