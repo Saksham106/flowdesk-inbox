@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-12 (personal/business UI separation + email formatting cleanup)
+Last updated: 2026-06-12 (conversation page layout redesign)
 
 This file is the codebase-facing companion to `MASTER_PRODUCT_PLAN.md`. It answers: what exists today, what is partial, and what should not be treated as active scope.
 
@@ -57,6 +57,17 @@ Email body rendering (2026-06-12):
 - `app/conversations/[id]/page.tsx` — message bubbles use `EmailBody`; main section has `min-w-0 overflow-x-hidden` so the sidebar stays visible on desktop even with long/HTML content.
 - `lib/google.ts` — `extractBody` now checks `mimeType` on root body (strips HTML when `text/html` or content starts with `<`), recurses into nested `multipart/*` via `findPart`, and has a depth guard (max 8) against malformed payloads.
 - Tests in `tests/email-body.test.ts` — 26 tests covering detection, sanitization (XSS, iframe, event handlers, scheme restriction), linkification, and BOM handling.
+
+Conversation page layout redesign (2026-06-12):
+
+- `app/conversations/[id]/page.tsx` — two-column grid changed to `lg:grid-cols-[1fr_300px]`; main column is now `section.space-y-4` containing the email thread card and a new inline Reply card below it; sidebar reduced to context-only cards.
+- Reply card (bottom of main column) — contains `AIDraftPanel` (inline variant) followed by a "Or send directly" `SendBox` section; the user reads the thread then composes naturally below the last message without hunting through the sidebar.
+- `app/components/CollapsibleCard.tsx` — new reusable client component: animated chevron toggle, `defaultOpen` prop, renders children inside a `border-t` content area; used for Work items and Relationship memory in the sidebar.
+- `AIDraftPanel` — `inline?: boolean` prop added; when true, skips the outer `rounded-xl border` card wrapper and the "AI draft" title/subtitle (the parent Reply card provides that context); status badge is repositioned inline.
+- `WorkItemsPanel` — `bare?: boolean` prop added; when true, skips the outer card wrapper so it renders cleanly inside `CollapsibleCard` without double borders.
+- Sidebar order (top to bottom): Contact + Label (combined compact card) → Assistant context (`HandleThisPanel`) → Support signals (conditional) → Sales panel (conditional, business only) → Calendar holds → Explain thread → Work items (collapsible, default closed) → Relationship memory (collapsible, default closed).
+- Contact and Label merged into one card, eliminating one always-visible sidebar item.
+- Sidebar widened from 280px to 300px; main grid gap reduced from 6 to 5.
 
 Personal vs business account UI separation (2026-06-12):
 
@@ -326,7 +337,7 @@ See `docs/TODO.md` for the full remaining-work roadmap mapped against the master
 
 ## Verification Baseline
 
-Recent verification (2026-06-12, after personal/business UI separation + formatting cleanup):
+Recent verification (2026-06-12, after conversation page layout redesign):
 
 ```bash
 npm test
