@@ -1,15 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 const {
   mockGetServerSession,
   mockCreate,
   mockAuditCreate,
   mockTransaction,
+  mockFetch,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockCreate: vi.fn(),
   mockAuditCreate: vi.fn(),
   mockTransaction: vi.fn(),
+  mockFetch: vi.fn(),
 }))
 
 vi.mock("next-auth", () => ({ getServerSession: mockGetServerSession }))
@@ -40,6 +42,11 @@ describe("POST /api/knowledge-documents/crawl", () => {
     vi.clearAllMocks()
     mockGetServerSession.mockResolvedValue(SESSION)
     mockTransaction.mockResolvedValue([CREATED_DOC])
+    vi.stubGlobal("fetch", mockFetch)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it("returns 401 when unauthenticated", async () => {
@@ -81,5 +88,17 @@ describe("POST /api/knowledge-documents/crawl", () => {
     expect(res.status).toBe(400)
     const body = await res.json()
     expect(body.error).toBe("Private or loopback URLs are not allowed")
+  })
+
+  it("returns 201 with document on successful crawl", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      text: async () => "<html><head><title>My FAQ</title></head><body>Some content here that is readable</body></html>",
+    })
+    const res = await POST(makeRequest({ url: "https://example.com/faq" }))
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body.document).toBeDefined()
+    expect(mockTransaction).toHaveBeenCalledTimes(1)
   })
 })

@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma"
 export const runtime = "nodejs"
 
 const PRIVATE_IP_RE =
-  /^(localhost|127\.|10\.|192\.168\.|169\.254\.|0\.0\.0\.0|::1)/i
+  /^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|0\.0\.0\.0|::1|::ffff:|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:)/i
 
 function isPrivateHostname(hostname: string): boolean {
   return PRIVATE_IP_RE.test(hostname)
@@ -64,22 +64,20 @@ export async function POST(request: Request) {
   }
 
   let html: string
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 10_000)
   try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 10_000)
     const upstream = await fetch(rawUrl, {
       signal: controller.signal,
       headers: { "User-Agent": "FlowDesk/1.0 (content-importer)" },
     })
     clearTimeout(timer)
     if (!upstream.ok) {
-      return NextResponse.json(
-        { error: `Upstream returned ${upstream.status}` },
-        { status: 502 }
-      )
+      return NextResponse.json({ error: "Failed to fetch URL" }, { status: 502 })
     }
     html = await upstream.text()
   } catch {
+    clearTimeout(timer)
     return NextResponse.json({ error: "Failed to fetch URL" }, { status: 502 })
   }
 
