@@ -11,6 +11,7 @@ type DraftMetadata = {
   riskLevel?: unknown;
   suggestedLabel?: unknown;
   escalationReason?: unknown;
+  userInstruction?: unknown;
 };
 
 type DraftSnapshot = {
@@ -62,6 +63,7 @@ export default function AIDraftPanel({
   const [metadata, setMetadata] = useState<DraftMetadata | null>(
     initialDraft?.metadataJson ?? null,
   );
+  const [userInstruction, setUserInstruction] = useState("");
   const [action, setAction] = useState<ActionState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -80,6 +82,7 @@ export default function AIDraftPanel({
       ["Risk", metadataText(metadata?.riskLevel)],
       ["Suggested label", metadataText(metadata?.suggestedLabel)],
       ["Escalation", metadataText(metadata?.escalationReason)],
+      ["User instruction", metadataText(metadata?.userInstruction)],
     ],
     [metadata],
   );
@@ -119,7 +122,7 @@ export default function AIDraftPanel({
     try {
       const response = await requestDraft(
         `/api/conversations/${conversationId}/draft/suggest`,
-        { method: "POST" },
+        buildSuggestRequest(userInstruction),
         "Failed to suggest a reply.",
       );
       applyDraftResponse(response);
@@ -261,6 +264,21 @@ export default function AIDraftPanel({
       ) : null}
 
       <div className="space-y-3">
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-slate-600">
+            Rough instruction
+          </span>
+          <textarea
+            value={userInstruction}
+            onChange={(event) => setUserInstruction(event.target.value)}
+            rows={2}
+            maxLength={500}
+            placeholder="Example: say yes, but only next week"
+            className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
+            disabled={isBusy}
+          />
+        </label>
+
         <button
           type="button"
           onClick={suggestReply}
@@ -334,4 +352,17 @@ export default function AIDraftPanel({
       </div>
     </div>
   );
+}
+
+function buildSuggestRequest(userInstruction: string): RequestInit {
+  const trimmed = userInstruction.trim();
+  if (!trimmed) {
+    return { method: "POST" };
+  }
+
+  return {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userInstruction: trimmed }),
+  };
 }
