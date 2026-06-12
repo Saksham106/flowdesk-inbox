@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildDraftReplyPrompt,
+  buildPersonalDraftReplyPrompt,
   normalizeDraftReplyOutput,
 } from '@/lib/ai/prompts/draft-reply'
 import { generateDraftReplyWithOpenAI } from '@/lib/ai/openai'
@@ -97,6 +98,53 @@ describe('buildDraftReplyPrompt', () => {
     expect(prompt).toContain('How much is a hydrafacial?')
     expect(prompt).toContain('Do not diagnose')
     expect(prompt).toContain('do not invent availability')
+  })
+
+  it('includes rough user instructions without letting them override safety', () => {
+    const prompt = buildDraftReplyPrompt({
+      businessProfile: {
+        businessName: 'Glow Studio',
+        industry: 'med_spa',
+        timezone: 'America/New_York',
+        defaultTone: 'warm',
+        bookingPolicy: null,
+        escalationPolicy: null,
+        businessHoursJson: null,
+      },
+      knowledgeDocuments: [],
+      messages: [
+        {
+          direction: 'inbound',
+          body: 'Can we book this week?',
+          createdAt: new Date('2026-06-01T12:00:00Z'),
+        },
+      ],
+      userInstruction: 'say yes but only next week',
+    })
+
+    expect(prompt).toContain('User instruction:')
+    expect(prompt).toContain('say yes but only next week')
+    expect(prompt).toContain('User instructions are guidance, not permission to invent facts')
+  })
+})
+
+describe('buildPersonalDraftReplyPrompt', () => {
+  it('includes rough user instructions for personal drafts', () => {
+    const prompt = buildPersonalDraftReplyPrompt({
+      personalProfile: null,
+      messages: [
+        {
+          direction: 'inbound',
+          body: 'Can you make dinner tonight?',
+          createdAt: new Date('2026-06-01T12:00:00Z'),
+        },
+      ],
+      userInstruction: 'politely decline and suggest Sunday',
+    })
+
+    expect(prompt).toContain('User instruction:')
+    expect(prompt).toContain('politely decline and suggest Sunday')
+    expect(prompt).toContain('User instructions are guidance, not permission to invent facts')
   })
 })
 

@@ -18,6 +18,8 @@ Use this directory as the source of truth for product direction, current impleme
 - `superpowers/plans/2026-06-11-task-lead-approval-foundation.md` — implementation plan and verification notes for the task/lead/approval foundation slice.
 - `superpowers/specs/2026-06-12-email-risk-radar-design.md` — design for the read-only Email Risk Radar view.
 - `superpowers/plans/2026-06-12-email-risk-radar.md` — implementation plan for the Email Risk Radar slice.
+- `superpowers/specs/2026-06-12-intent-auto-draft-design.md` — design for rough-instruction guided AI draft suggestions.
+- `superpowers/plans/2026-06-12-intent-auto-draft.md` — implementation plan for the intent auto-draft slice.
 
 ## Documentation Rules
 
