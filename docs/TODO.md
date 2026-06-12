@@ -14,7 +14,7 @@ Most Phase 1 foundations are shipped (command center, task/lead extraction, appr
 - [x] **Weekly value report** (#32-lite) — shipped 2026-06-11: `/reports` page with rolling 7-day metrics (drafts, sends, tasks, leads, follow-ups, approvals, triage) and a conservative time-saved estimate, computed in `lib/agent/value-report.ts` from existing records.
 - [x] **Explain This Thread Like I'm Busy** (#15) — shipped 2026-06-11: on-demand LLM panel on conversation pages (what happened, what they want, what to do, risks with risk badge, suggested next step) via `POST /api/conversations/[id]/explain`; audited and usage-tracked.
 - [x] **Email Risk Radar** (#22) — shipped 2026-06-12: `/risk-radar` read-only view with deadline-soon, final-notice, unanswered-N-days, and sensitive-content signal groups built on `lib/agent/risk-radar.ts`.
-- [ ] **Auto-draft based on user intent** (#30) — messy instruction ("say yes but only next week") → polished reply compose flow.
+- [x] **Auto-draft based on user intent** (#30) — shipped 2026-06-12: AI draft panel accepts an optional rough instruction ("say yes but only next week"), passes it into draft generation, and records it in draft metadata while preserving approval-gated sending.
 - [ ] **Smart labels taxonomy** (#42) — replace limited labels with action-oriented set (needs decision, waiting on me, revenue opportunity, payment issue, urgent deadline, safe to ignore...).
 - [ ] **Richer sensitive detection** (#10) — more categories (legal, immigration, tax, medical, HR, emotional) and highlighted risky parts inside drafts.
 - [ ] **Command-center source signals** (#1) — meetings-needing-prep and bills/deadlines sections need calendar events and attachment/deadline signals.

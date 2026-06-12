@@ -18,29 +18,29 @@
 - Modify: `tests/ai-draft-provider.test.ts`
 - Modify: `tests/ai-draft-routes.test.ts`
 
-- [ ] **Step 1: Write failing prompt tests**
+- [x] **Step 1: Write failing prompt tests**
 
 Add tests proving `buildDraftReplyPrompt` and `buildPersonalDraftReplyPrompt` include a trimmed user instruction and warn that instructions cannot override safety or factual constraints.
 
-- [ ] **Step 2: Run prompt tests and verify RED**
+- [x] **Step 2: Run prompt tests and verify RED**
 
 Run: `npx vitest run tests/ai-draft-provider.test.ts`
 Expected: fail because prompt builders do not accept or include `userInstruction`.
 
-- [ ] **Step 3: Write failing route tests**
+- [x] **Step 3: Write failing route tests**
 
 Add tests proving `POST /api/conversations/[id]/draft/suggest` passes `userInstruction` into `generateDraftReply`, stores it in `metadataJson`, and rejects instructions over 500 characters.
 
-- [ ] **Step 4: Run route tests and verify RED**
+- [x] **Step 4: Run route tests and verify RED**
 
 Run: `npx vitest run tests/ai-draft-routes.test.ts`
 Expected: fail because the route ignores request JSON and has no instruction validation.
 
-- [ ] **Step 5: Implement prompt and route changes**
+- [x] **Step 5: Implement prompt and route changes**
 
 Add optional `userInstruction?: string | null` to business and personal prompt input types. Render a "User instruction" block only when present. In the route, parse request JSON safely, trim `userInstruction`, reject values over 500 chars, pass the normalized value into prompt generation, and add it to metadata only when present.
 
-- [ ] **Step 6: Run focused tests and verify GREEN**
+- [x] **Step 6: Run focused tests and verify GREEN**
 
 Run: `npx vitest run tests/ai-draft-provider.test.ts tests/ai-draft-routes.test.ts`
 Expected: pass.
@@ -50,19 +50,19 @@ Expected: pass.
 **Files:**
 - Modify: `app/conversations/[id]/AIDraftPanel.tsx`
 
-- [ ] **Step 1: Add instruction UI**
+- [x] **Step 1: Add instruction UI**
 
 Add a controlled `userInstruction` textarea above the suggest button. Keep it optional, disabled while busy, and capped at 500 characters with `maxLength={500}`.
 
-- [ ] **Step 2: Send instruction with suggest request**
+- [x] **Step 2: Send instruction with suggest request**
 
 Update `suggestReply` so it sends JSON only when the trimmed instruction is non-empty. Keep blank behavior as a plain `POST` equivalent.
 
-- [ ] **Step 3: Show instruction metadata**
+- [x] **Step 3: Show instruction metadata**
 
 Add `User instruction` to the metadata rows so users can see what guided the current draft.
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 Run: `npx vitest run tests/ai-draft-provider.test.ts tests/ai-draft-routes.test.ts`
 Expected: pass.
@@ -76,11 +76,11 @@ Expected: pass.
 - Modify: `docs/README.md`
 - Modify: `docs/superpowers/plans/2026-06-12-intent-auto-draft.md`
 
-- [ ] **Step 1: Update docs**
+- [x] **Step 1: Update docs**
 
 Mark Auto-draft based on user intent shipped, add current-state behavior, update master plan feature #30, add a decision-log row, and add spec/plan links to `docs/README.md`.
 
-- [ ] **Step 2: Run full verification**
+- [x] **Step 2: Run full verification**
 
 Run:
 

@@ -286,7 +286,7 @@ Success criteria:
 | 27 | Train My Agent With Plain English | `Discovery` | Phase 4 | Needs rule compiler and conflict resolution. |
 | 28 | Approval Queue | `Partial` | Phase 1 | Inline approve/reject, collapsible draft preview, and batch approve/reject shipped; needs edit-before-send and teach-the-agent actions. |
 | 29 | Confidence Score Before Sending | `Partial` | Phase 1 | Metadata exists; needs visible UX and policy thresholds. |
-| 30 | Auto-Draft Based on User Intent | `Planned` | Phase 1 | Needs fast instruction-to-reply compose flow. |
+| 30 | Auto-Draft Based on User Intent | `Shipped` | Phase 1 | AI draft panel accepts optional rough instructions and turns them into proposed drafts through the existing approval-gated flow. Spec: `docs/superpowers/specs/2026-06-12-intent-auto-draft-design.md`. Plan: `docs/superpowers/plans/2026-06-12-intent-auto-draft.md`. |
 | 31 | Multi-Step Email Workflows | `Discovery` | Phase 4 | Depends on tasks, leads, scheduling, audit, approvals. |
 | 32 | Email Analytics That Show ROI | `Partial` | Phase 2 | Weekly value report shipped at `/reports` (rolling 7-day counts + time-saved estimate); needs trends, persisted snapshots, and revenue attribution. |
 | 33 | VIP Protection | `Planned` | Phase 3 | Needs VIP/contact model and notification policy. |
@@ -462,6 +462,7 @@ After an AI agent finishes work:
 | 2026-06-11 | Ship meeting prep + post-meeting follow-up as first Phase 2 slice. | Reuses existing calendar credentials, PersonMemory, and ApprovalRequest infrastructure. No schema changes. On-demand generation (briefs not persisted). Contact matching via `Contact.phoneE164` (email stored there for Gmail contacts). Follow-up attaches to existing conversation or falls back to inline copy. |
 | 2026-06-11 | Ship lead intelligence slice: LLM scorer + CRM funnel header + command center score badge. | Lead model already existed with deterministic heuristic. LLM replaces heuristic, adds explanation and estimated value, fires fire-and-forget after each sync with stale-guard. Next Phase 2 slice: KB replies + customer support mode. |
 | 2026-06-12 | Ship Email Risk Radar as a deterministic read-only page. | Reuses conversation, message, draft metadata, and navigation foundations; avoids a schema migration until trend history, user-tunable thresholds, or alerting is needed. |
+| 2026-06-12 | Ship intent-guided draft suggestions in the existing AI draft panel. | Keeps rough instructions inside the manual draft suggestion path, records the instruction in metadata, and preserves all existing review/send safeguards instead of creating a separate compose workflow. |
 
 ## Open Product Questions
 
