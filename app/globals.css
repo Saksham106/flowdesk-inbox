@@ -25,3 +25,29 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
+
+/* ── Email body rendering ──────────────────────────────────── */
+.email-body {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
+}
+.email-body img {
+  max-width: 100%;
+  height: auto;
+}
+.email-body table {
+  max-width: 100%;
+  table-layout: fixed;
+  overflow-x: auto;
+  display: block;
+}
+.email-body pre,
+.email-body code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.email-body a {
+  color: #2563eb;
+  text-decoration: underline;
+}
