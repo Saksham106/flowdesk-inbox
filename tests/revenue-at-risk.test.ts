@@ -51,6 +51,7 @@ describe('analyzeRevenueAtRisk', () => {
     expect(result[0].estimatedValue).toBe(5000)
     expect(result[0].conversationId).toBe('conv-1')
     expect(result[0].daysSinceLastMessage).toBe(4) // 2026-06-08 → 2026-06-12
+    expect(result[0].stage).toBe('qualified')
   })
 
   it('queries with correct tenantId and orders by estimatedValue desc', async () => {

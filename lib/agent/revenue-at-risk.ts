@@ -39,14 +39,15 @@ export async function analyzeRevenueAtRisk(
     take: 5,
   })
 
+  // DB takes top 5 by value; post-filter may return fewer if drafts are pending
   return leads
     .filter(
-      (l) => !l.conversation.draft || l.conversation.draft.status === "sent"
+      (l) => !l.conversation.draft || l.conversation.draft.status === "sent" || l.conversation.draft.status === "none"
     )
     .map((l) => ({
       conversationId: l.conversationId,
       contactName: l.conversation.contact?.name ?? "Unknown",
-      estimatedValue: l.estimatedValue!,
+      estimatedValue: l.estimatedValue ?? 0,
       daysSinceLastMessage: Math.floor(
         (now.getTime() - l.conversation.lastMessageAt.getTime()) / DAY_MS
       ),
