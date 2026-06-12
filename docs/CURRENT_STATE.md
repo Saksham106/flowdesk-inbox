@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-12
+Last updated: 2026-06-12 (email body rendering fix)
 
 This file is the codebase-facing companion to `MASTER_PRODUCT_PLAN.md`. It answers: what exists today, what is partial, and what should not be treated as active scope.
 
@@ -47,6 +47,15 @@ Email is the active channel. SMS/Twilio is not part of the active product path.
 - Labels for common AI classifications.
 - Manual send path through shared send helper.
 - Audit log model and audit page.
+
+Email body rendering (2026-06-12):
+
+- `lib/email-body.ts` — `isHtmlBody`, `sanitizeEmailHtml` (sanitize-html allow-list, scheme-restricted links/images, enforced `target="_blank" rel="noopener noreferrer"`), `linkifyText` (HTML escape, newline→`<br>`, URL auto-link), `renderEmailBodyHtml` dispatcher.
+- `app/components/EmailBody.tsx` — server component rendering sanitized HTML or linkified plain text via `dangerouslySetInnerHTML`.
+- `app/globals.css` — `.email-body` scoped CSS: `overflow-wrap: anywhere`, `word-break: break-word`, `max-width: 100%`, image/table/pre/link constraints.
+- `app/conversations/[id]/page.tsx` — message bubbles use `EmailBody`; main section has `min-w-0 overflow-x-hidden` so the sidebar stays visible on desktop even with long/HTML content.
+- `lib/google.ts` — `extractBody` now checks `mimeType` on root body (strips HTML when `text/html` or content starts with `<`), recurses into nested `multipart/*` via `findPart`, and has a depth guard (max 8) against malformed payloads.
+- Tests in `tests/email-body.test.ts` — 26 tests covering detection, sanitization (XSS, iframe, event handlers, scheme restriction), linkification, and BOM handling.
 
 ### AI Drafting
 
@@ -260,7 +269,7 @@ See `MASTER_PRODUCT_PLAN.md` for phase recommendations and feature statuses.
 
 - Full task management (assignment, manual creation).
 - Full CRM pipeline.
-- ROI analytics with trends and persisted snapshots (weekly value report exists at `/reports`).
+- Full pipeline trend analytics and value forecasting (score/stage filters and WoW table shipped in v2.2; forecasting not yet built).
 - Attachment intelligence.
 - Natural-language inbox search.
 - Ask My Inbox chat.
@@ -303,19 +312,15 @@ See `docs/TODO.md` for the full remaining-work roadmap mapped against the master
 
 ## Verification Baseline
 
-Recent verification (2026-06-11, after the Phase 1 completion slice):
+Recent verification (2026-06-12, after email body rendering fix):
 
 ```bash
 npm test
-npm run lint
-npm run build
 ```
 
 Observed result:
 
-- `npm test`: 216 tests passed across 24 files.
-- `npm run lint`: passed.
-- `npm run build`: passed.
+- `npm test`: 349 tests passed across 33 files.
 
 Browser smoke-test note:
 
