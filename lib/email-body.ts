@@ -16,8 +16,6 @@ export function sanitizeEmailHtml(html: string): string {
     allowedAttributes: {
       a: ["href", "title", "target", "rel"],
       img: ["src", "alt", "width", "height"],
-      td: ["colspan", "rowspan"],
-      th: ["colspan", "rowspan"],
     },
     transformTags: {
       a: (_tagName, attribs) => ({
