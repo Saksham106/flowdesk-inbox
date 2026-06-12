@@ -195,6 +195,19 @@ Lead intelligence + CRM pipeline slice implemented (2026-06-11, Phase 2):
 - Command center — opportunity cards use `lead.scoreExplanation` as the reason text; lead score badge shown alongside the priority badge on high-intent opportunity cards.
 - Tests in `tests/lead-scoring.test.ts`.
 
+v2.1: Knowledge Base Source Management + Customer Support Mode (2026-06-12):
+
+- `prisma/schema.prisma` — `sourceUrl String?` and `crawledAt DateTime?` added to `KnowledgeDocument`; `"webpage"` added to valid source types.
+- `POST /api/knowledge-documents/crawl` — server-side URL fetch with SSRF prevention (https-only, no private IPs, 172.16/12 + IPv6 blocked), 10s timeout, HTML-to-text stripping, 8000-char truncation. Creates `KnowledgeDocument` with `sourceType: "webpage"`.
+- `/knowledge-base` management page — URL import form, document list with source-type badge and word count, delete. Business accounts only.
+- `lib/agent/support-classifier.ts` — `classifySupportSignals` pure function: detects support, churn risk, escalation need, and best KB-doc match by keyword overlap.
+- `lib/agent/work-item-sync.ts` — runs support classification fire-and-forget after each sync; writes `isSupport`, `churnRisk`, `needsEscalation`, `suggestedKbDocId` into `ConversationState.metadataJson`.
+- `lib/ai/prompts/draft-reply.ts` — `citedDocumentIds: string[]` added to schema, result type, and prompt. Doc IDs now included in knowledge-section format.
+- `app/conversations/[id]/SupportPanel.tsx` — shows Support / Churn Risk / Needs Escalation badges, KB suggestion with "Use this answer", repeat-contact count.
+- `app/conversations/[id]/AIDraftPanel.tsx` — citation chips below draft text; clicking a chip shows KB doc content in a popover.
+- `app/inbox/page.tsx` + `CommandCenterPanel.tsx` — Support count chip in command center grid; Support filter tab in inbox.
+- `lib/agent/command-center.ts` — `"support"` state; churn-risk threads get `urgent` priority; `counts.support` and `sections.support`.
+
 Limitations:
 
 - Task assignment is not yet implemented.
@@ -204,6 +217,9 @@ Limitations:
 - CRM filter/search by score range is not yet implemented.
 - Full pipeline trend analytics and value forecasting are not yet implemented.
 - Risk Radar thresholds are deterministic and not user-configurable yet.
+- URL crawl is single-page only (no sitemap, no re-crawl scheduling).
+- KB matching uses keyword overlap, not semantic/embedding search.
+- No ticket numbering, SLA tracking, or team assignment (Phase 5).
 
 ## Partial Features
 
