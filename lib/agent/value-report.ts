@@ -39,10 +39,18 @@ export function estimateMinutesSaved(counts: ValueReportCounts): number {
   )
 }
 
-export async function buildWeeklyValueReport(
+export function getWeekEnding(now: Date = new Date()): Date {
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  const day = d.getUTCDay() // 0=Sun, 1=Mon ... 6=Sat
+  const daysToAdd = day === 0 ? 0 : 7 - day
+  d.setUTCDate(d.getUTCDate() + daysToAdd)
+  return d
+}
+
+async function fetchValueCounts(
   tenantId: string,
-  now: Date = new Date()
-): Promise<WeeklyValueReport> {
+  now: Date
+): Promise<ValueReportCounts> {
   const { start, end } = getReportPeriod(now)
   const window = { gte: start, lt: end }
 
@@ -86,7 +94,7 @@ export async function buildWeeklyValueReport(
     }),
   ])
 
-  const counts: ValueReportCounts = {
+  return {
     draftsCreated,
     draftsSent,
     tasksExtracted,
@@ -96,11 +104,48 @@ export async function buildWeeklyValueReport(
     approvalsDecided,
     conversationsTriaged,
   }
+}
 
+export async function buildWeeklyValueReport(
+  tenantId: string,
+  now: Date = new Date()
+): Promise<WeeklyValueReport> {
+  const { start, end } = getReportPeriod(now)
+  const counts = await fetchValueCounts(tenantId, now)
   return {
     ...counts,
     periodStart: start,
     periodEnd: end,
     estimatedMinutesSaved: estimateMinutesSaved(counts),
   }
+}
+
+export async function buildValueSnapshot(
+  tenantId: string,
+  now: Date = new Date()
+) {
+  const counts = await fetchValueCounts(tenantId, now)
+  const minutesSaved = estimateMinutesSaved(counts)
+
+  const agg = await prisma.lead.aggregate({
+    where: { tenantId, stage: { not: "closed" } },
+    _sum: { estimatedValue: true },
+  })
+  const pipelineValue = agg._sum.estimatedValue ?? 0
+  const weekEnding = getWeekEnding(now)
+
+  return prisma.valueSnapshot.upsert({
+    where: { tenantId_weekEnding: { tenantId, weekEnding } },
+    create: { tenantId, weekEnding, ...counts, estimatedMinutesSaved: minutesSaved, pipelineValue },
+    update: { ...counts, estimatedMinutesSaved: minutesSaved, pipelineValue },
+  })
+}
+
+export async function getWeeklyTrend(tenantId: string, weeks = 4) {
+  const snapshots = await prisma.valueSnapshot.findMany({
+    where: { tenantId },
+    orderBy: { weekEnding: "desc" },
+    take: weeks,
+  })
+  return snapshots.reverse()
 }

@@ -10,23 +10,30 @@ const {
   mockJobCount,
   mockApprovalCount,
   mockStateCount,
+  mockLeadAggregate,
+  mockSnapshotUpsert,
+  mockSnapshotFindMany,
 } = vi.hoisted(() => ({
-  mockDraftCount:    vi.fn(),
-  mockTaskCount:     vi.fn(),
-  mockLeadCount:     vi.fn(),
-  mockJobCount:      vi.fn(),
-  mockApprovalCount: vi.fn(),
-  mockStateCount:    vi.fn(),
+  mockDraftCount:       vi.fn(),
+  mockTaskCount:        vi.fn(),
+  mockLeadCount:        vi.fn(),
+  mockJobCount:         vi.fn(),
+  mockApprovalCount:    vi.fn(),
+  mockStateCount:       vi.fn(),
+  mockLeadAggregate:    vi.fn(),
+  mockSnapshotUpsert:   vi.fn(),
+  mockSnapshotFindMany: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     draft:             { count: mockDraftCount },
     inboxTask:         { count: mockTaskCount },
-    lead:              { count: mockLeadCount },
+    lead:              { count: mockLeadCount, aggregate: mockLeadAggregate },
     agentJob:          { count: mockJobCount },
     approvalRequest:   { count: mockApprovalCount },
     conversationState: { count: mockStateCount },
+    valueSnapshot:     { upsert: mockSnapshotUpsert, findMany: mockSnapshotFindMany },
   },
 }))
 
@@ -34,6 +41,9 @@ import {
   getReportPeriod,
   estimateMinutesSaved,
   buildWeeklyValueReport,
+  getWeekEnding,
+  buildValueSnapshot,
+  getWeeklyTrend,
   MINUTES_PER_DRAFT,
   MINUTES_PER_FOLLOW_UP,
   MINUTES_PER_TASK,
@@ -168,6 +178,123 @@ describe('buildWeeklyValueReport', () => {
           trigger: { in: ['follow_up', 'lead_follow_up'] },
         }),
       })
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// getWeekEnding
+// ---------------------------------------------------------------------------
+
+describe('getWeekEnding', () => {
+  it('returns the following Sunday at UTC midnight for a mid-week date', () => {
+    // 2026-06-11 is a Thursday
+    const result = getWeekEnding(new Date('2026-06-11T14:00:00Z'))
+    expect(result.toISOString()).toBe('2026-06-14T00:00:00.000Z') // Sunday
+  })
+
+  it('returns the same day at UTC midnight when today is Sunday', () => {
+    // 2026-06-14 is a Sunday
+    const result = getWeekEnding(new Date('2026-06-14T08:00:00Z'))
+    expect(result.toISOString()).toBe('2026-06-14T00:00:00.000Z')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// buildValueSnapshot
+// ---------------------------------------------------------------------------
+
+describe('buildValueSnapshot', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockDraftCount.mockResolvedValue(0)
+    mockTaskCount.mockResolvedValue(0)
+    mockLeadCount.mockResolvedValue(0)
+    mockJobCount.mockResolvedValue(0)
+    mockApprovalCount.mockResolvedValue(0)
+    mockStateCount.mockResolvedValue(0)
+    mockLeadAggregate.mockResolvedValue({ _sum: { estimatedValue: 0 } })
+    mockSnapshotUpsert.mockResolvedValue({})
+  })
+
+  it('upserts a snapshot with correct weekEnding and pipelineValue', async () => {
+    // Thursday 2026-06-11 → weekEnding Sunday 2026-06-14
+    mockDraftCount.mockResolvedValueOnce(3).mockResolvedValueOnce(1)
+    mockTaskCount.mockResolvedValueOnce(2).mockResolvedValueOnce(1)
+    mockLeadCount.mockResolvedValue(4)
+    mockJobCount.mockResolvedValue(5)
+    mockApprovalCount.mockResolvedValue(2)
+    mockStateCount.mockResolvedValue(30)
+    mockLeadAggregate.mockResolvedValue({ _sum: { estimatedValue: 8500 } })
+
+    await buildValueSnapshot(TENANT, new Date('2026-06-11T12:00:00Z'))
+
+    expect(mockSnapshotUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          tenantId_weekEnding: {
+            tenantId: TENANT,
+            weekEnding: new Date('2026-06-14T00:00:00.000Z'),
+          },
+        },
+        create: expect.objectContaining({
+          tenantId: TENANT,
+          draftsCreated: 3,
+          leadsDetected: 4,
+          pipelineValue: 8500,
+        }),
+        update: expect.objectContaining({
+          draftsCreated: 3,
+          pipelineValue: 8500,
+        }),
+      })
+    )
+  })
+
+  it('uses 0 for pipelineValue when aggregate returns null', async () => {
+    mockLeadAggregate.mockResolvedValue({ _sum: { estimatedValue: null } })
+    await buildValueSnapshot(TENANT, NOW)
+    expect(mockSnapshotUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ pipelineValue: 0 }),
+      })
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// getWeeklyTrend
+// ---------------------------------------------------------------------------
+
+describe('getWeeklyTrend', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('returns snapshots in ascending weekEnding order', async () => {
+    const snapshots = [
+      { id: 's2', weekEnding: new Date('2026-06-14T00:00:00Z') },
+      { id: 's1', weekEnding: new Date('2026-06-07T00:00:00Z') },
+    ]
+    mockSnapshotFindMany.mockResolvedValue(snapshots)
+
+    const result = await getWeeklyTrend(TENANT, 4)
+
+    expect(mockSnapshotFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { tenantId: TENANT },
+        orderBy: { weekEnding: 'desc' },
+        take: 4,
+      })
+    )
+    // returned in ascending order
+    expect(result[0].id).toBe('s1')
+    expect(result[1].id).toBe('s2')
+  })
+
+  it('defaults to 4 weeks', async () => {
+    mockSnapshotFindMany.mockResolvedValue([])
+    await getWeeklyTrend(TENANT)
+    expect(mockSnapshotFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 4 })
     )
   })
 })
