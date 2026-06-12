@@ -539,3 +539,41 @@ export async function patchCalendarEventStatus(
     requestBody: { status, ...(summary ? { summary } : {}) },
   });
 }
+
+// Fetches recent sent messages from Gmail SENT label for reply-style training.
+// Does not write to the DB — used only at training time.
+export async function fetchGmailSentSamples(
+  channelId: string,
+  limit = 60
+): Promise<Array<{ text: string; createdAt: Date }>> {
+  const gmail = await getGmailClient(channelId)
+
+  const listRes = await gmail.users.messages.list({
+    userId: "me",
+    labelIds: ["SENT"],
+    maxResults: limit,
+  })
+
+  const messages = listRes.data.messages ?? []
+  const samples: Array<{ text: string; createdAt: Date }> = []
+
+  for (const msg of messages) {
+    if (!msg.id) continue
+    try {
+      const res = await gmail.users.messages.get({
+        userId: "me",
+        id: msg.id,
+        format: "full",
+      })
+      const text = extractBody(res.data.payload)
+      const createdAt = new Date(parseInt(res.data.internalDate ?? "0"))
+      if (text.trim()) {
+        samples.push({ text, createdAt })
+      }
+    } catch {
+      // Skip messages that cannot be fetched
+    }
+  }
+
+  return samples
+}
