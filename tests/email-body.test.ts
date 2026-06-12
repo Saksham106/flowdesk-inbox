@@ -1,0 +1,147 @@
+import { describe, it, expect } from "vitest";
+import {
+  isHtmlBody,
+  sanitizeEmailHtml,
+  linkifyText,
+  renderEmailBodyHtml,
+} from "@/lib/email-body";
+
+describe("isHtmlBody", () => {
+  it("detects DOCTYPE as HTML", () => {
+    expect(isHtmlBody('<!DOCTYPE html PUBLIC "-//W3C//DTD...">')).toBe(true);
+  });
+
+  it("detects opening div tag as HTML", () => {
+    expect(isHtmlBody("<div>hello</div>")).toBe(true);
+  });
+
+  it("detects html tag as HTML", () => {
+    expect(isHtmlBody("<html><body>hi</body></html>")).toBe(true);
+  });
+
+  it("treats plain text as not HTML", () => {
+    expect(isHtmlBody("Hello, here is your Google Doc link")).toBe(false);
+  });
+
+  it("treats empty string as not HTML", () => {
+    expect(isHtmlBody("")).toBe(false);
+  });
+
+  it("ignores leading whitespace when detecting HTML", () => {
+    expect(isHtmlBody("  \n<!DOCTYPE html>")).toBe(true);
+  });
+});
+
+describe("sanitizeEmailHtml", () => {
+  it("strips script tags entirely", () => {
+    const result = sanitizeEmailHtml("<p>Hello</p><script>alert(1)</script>");
+    expect(result).not.toContain("<script");
+    expect(result).not.toContain("alert(1)");
+    expect(result).toContain("Hello");
+  });
+
+  it("strips event handler attributes", () => {
+    const result = sanitizeEmailHtml('<img src="x.jpg" onerror="xss()">');
+    expect(result).not.toContain("onerror");
+  });
+
+  it("strips iframe tags", () => {
+    const result = sanitizeEmailHtml(
+      '<p>text</p><iframe src="https://evil.com"></iframe>'
+    );
+    expect(result).not.toContain("<iframe");
+  });
+
+  it("enforces target=_blank on links", () => {
+    const result = sanitizeEmailHtml(
+      '<a href="https://example.com">click</a>'
+    );
+    expect(result).toContain('target="_blank"');
+  });
+
+  it("enforces rel=noopener noreferrer on links", () => {
+    const result = sanitizeEmailHtml(
+      '<a href="https://example.com">click</a>'
+    );
+    expect(result).toContain('rel="noopener noreferrer"');
+  });
+
+  it("preserves safe formatting tags", () => {
+    const result = sanitizeEmailHtml("<p><strong>Bold</strong> and <em>italic</em></p>");
+    expect(result).toContain("<strong>Bold</strong>");
+    expect(result).toContain("<em>italic</em>");
+  });
+
+  it("preserves anchor href attribute", () => {
+    const result = sanitizeEmailHtml(
+      '<a href="https://docs.google.com/abc">open doc</a>'
+    );
+    expect(result).toContain('href="https://docs.google.com/abc"');
+  });
+});
+
+describe("linkifyText", () => {
+  it("converts https URLs to anchor tags", () => {
+    const result = linkifyText("Check this: https://example.com today");
+    expect(result).toContain('<a href="https://example.com"');
+  });
+
+  it("opens links in new tab", () => {
+    const result = linkifyText("https://example.com");
+    expect(result).toContain('target="_blank"');
+    expect(result).toContain('rel="noopener noreferrer"');
+  });
+
+  it("does not alter text without URLs", () => {
+    const result = linkifyText("Just plain text here");
+    expect(result).not.toContain("<a");
+    expect(result).toContain("Just plain text here");
+  });
+
+  it("converts newlines to <br>", () => {
+    const result = linkifyText("Line 1\nLine 2");
+    expect(result).toContain("<br>");
+    expect(result).not.toContain("\n");
+  });
+
+  it("escapes < and > characters", () => {
+    const result = linkifyText("Hello <World>");
+    expect(result).toContain("&lt;World&gt;");
+    expect(result).not.toContain("<World>");
+  });
+
+  it("escapes & character", () => {
+    const result = linkifyText("cats & dogs");
+    expect(result).toContain("&amp;");
+  });
+
+  it("escapes double quotes", () => {
+    const result = linkifyText('Say "hello"');
+    expect(result).toContain("&quot;");
+  });
+});
+
+describe("renderEmailBodyHtml", () => {
+  it("sanitizes HTML bodies (strips script)", () => {
+    const result = renderEmailBodyHtml(
+      "<p>Hello</p><script>bad()</script>"
+    );
+    expect(result).not.toContain("<script");
+    expect(result).toContain("Hello");
+  });
+
+  it("linkifies plain text bodies", () => {
+    const result = renderEmailBodyHtml(
+      "I've shared an item: https://docs.google.com/document/d/abc"
+    );
+    expect(result).toContain('<a href="https://docs.google.com/document/d/abc"');
+  });
+
+  it("routes DOCTYPE body through HTML sanitizer not linkifier", () => {
+    const result = renderEmailBodyHtml(
+      '<!DOCTYPE html><html><body><p>Hi</p></body></html>'
+    );
+    expect(result).toContain("Hi");
+    expect(result).not.toContain("DOCTYPE");
+  });
+});
