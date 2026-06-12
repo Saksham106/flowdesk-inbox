@@ -7,6 +7,7 @@ const {
   mockProfileUpdate,
   mockSummarize,
   mockUsageCreate,
+  mockFetchGmailSentSamples,
 } = vi.hoisted(() => ({
   mockMessageFindMany: vi.fn(),
   mockProfileFindFirst: vi.fn(),
@@ -14,6 +15,7 @@ const {
   mockProfileUpdate: vi.fn(),
   mockSummarize: vi.fn(),
   mockUsageCreate: vi.fn(),
+  mockFetchGmailSentSamples: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -30,6 +32,10 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/lib/ai/provider', () => ({
   summarizeLearnedReplyProfile: mockSummarize,
+}))
+
+vi.mock('@/lib/google', () => ({
+  fetchGmailSentSamples: mockFetchGmailSentSamples,
 }))
 
 import {
@@ -95,28 +101,35 @@ describe('collectOutboundReplySamples', () => {
   })
 })
 
+const mockSummarizeResult = {
+  styleSummaryJson: { tone: 'warm', averageLength: 'short' },
+  exampleSnippetsJson: ['Hey Alex, sounds good.'],
+  sourceStatsJson: { sampleCount: 1 },
+  promptVersion: 'reply-learning-v1',
+  model: 'gpt-test',
+  estimatedInputTokens: 30,
+  estimatedOutputTokens: 20,
+}
+
+function makeBody(index: number) {
+  return `Hey Alex, sounds good. I will send this over today. Sample ${index + 1}.`
+}
+
 describe('trainLearnedReplyProfile', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('stores a compact learned profile instead of raw historical email bodies', async () => {
     mockMessageFindMany.mockResolvedValue(
       Array.from({ length: 5 }, (_, index) => ({
-        body: `Hey Alex, sounds good. I will send this over today. Sample ${index + 1}.`,
+        body: makeBody(index),
         createdAt: new Date(`2026-06-0${index + 1}T12:00:00Z`),
       }))
     )
-    mockSummarize.mockResolvedValue({
-      styleSummaryJson: { tone: 'warm', averageLength: 'short' },
-      exampleSnippetsJson: ['Hey Alex, sounds good.'],
-      sourceStatsJson: { sampleCount: 1 },
-      promptVersion: 'reply-learning-v1',
-      model: 'gpt-test',
-      estimatedInputTokens: 30,
-      estimatedOutputTokens: 20,
-    })
+    mockSummarize.mockResolvedValue(mockSummarizeResult)
     mockProfileFindFirst.mockResolvedValue(null)
     mockProfileCreate.mockResolvedValue({ id: 'profile-1' })
     mockUsageCreate.mockResolvedValue({})
+    mockFetchGmailSentSamples.mockResolvedValue([])
 
     await trainLearnedReplyProfile({
       tenantId: 'tenant-A',
@@ -137,5 +150,71 @@ describe('trainLearnedReplyProfile', () => {
         }),
       })
     )
+  })
+
+  it('falls back to Gmail sent history when DB has fewer than 5 samples', async () => {
+    // DB returns only 2 messages
+    mockMessageFindMany.mockResolvedValue([
+      { body: makeBody(0), createdAt: new Date('2026-06-01T12:00:00Z') },
+      { body: makeBody(1), createdAt: new Date('2026-06-02T12:00:00Z') },
+    ])
+    // Gmail SENT returns 5 samples
+    mockFetchGmailSentSamples.mockResolvedValue(
+      Array.from({ length: 5 }, (_, index) => ({
+        text: `Gmail sent sample ${index + 1}. This is a real email I wrote to someone.`,
+        createdAt: new Date(`2026-05-0${index + 1}T12:00:00Z`),
+      }))
+    )
+    mockSummarize.mockResolvedValue(mockSummarizeResult)
+    mockProfileFindFirst.mockResolvedValue(null)
+    mockProfileCreate.mockResolvedValue({ id: 'profile-2' })
+    mockUsageCreate.mockResolvedValue({})
+
+    const result = await trainLearnedReplyProfile({
+      tenantId: 'tenant-A',
+      channelId: 'channel-1',
+      profileType: 'personal',
+    })
+
+    expect(mockFetchGmailSentSamples).toHaveBeenCalledWith('channel-1', 60)
+    expect(result.fromDb).toBe(2)
+    expect(result.fromGmail).toBeGreaterThan(0)
+    expect(result.sampleCount).toBeGreaterThanOrEqual(5)
+  })
+
+  it('throws with informative message when both DB and Gmail have fewer than 5 usable samples', async () => {
+    mockMessageFindMany.mockResolvedValue([
+      { body: makeBody(0), createdAt: new Date('2026-06-01T12:00:00Z') },
+    ])
+    mockFetchGmailSentSamples.mockResolvedValue([
+      { text: 'Short.', createdAt: new Date() }, // too short, will be filtered by sanitize
+      { text: 'Ok', createdAt: new Date() },
+    ])
+
+    await expect(
+      trainLearnedReplyProfile({ tenantId: 'tenant-A', channelId: 'channel-1', profileType: 'business' })
+    ).rejects.toThrow(/Not enough sent emails/)
+
+    // Error should mention Gmail was checked
+    await expect(
+      trainLearnedReplyProfile({ tenantId: 'tenant-A', channelId: 'channel-1', profileType: 'business' })
+    ).rejects.toThrow(/Gmail sent history/)
+  })
+
+  it('does not call fetchGmailSentSamples when DB already has 5+ samples', async () => {
+    mockMessageFindMany.mockResolvedValue(
+      Array.from({ length: 6 }, (_, index) => ({
+        body: makeBody(index),
+        createdAt: new Date(`2026-06-0${index + 1}T12:00:00Z`),
+      }))
+    )
+    mockSummarize.mockResolvedValue(mockSummarizeResult)
+    mockProfileFindFirst.mockResolvedValue(null)
+    mockProfileCreate.mockResolvedValue({ id: 'profile-3' })
+    mockUsageCreate.mockResolvedValue({})
+
+    await trainLearnedReplyProfile({ tenantId: 'tenant-A', channelId: 'channel-1', profileType: 'business' })
+
+    expect(mockFetchGmailSentSamples).not.toHaveBeenCalled()
   })
 })

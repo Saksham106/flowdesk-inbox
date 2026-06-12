@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client"
 import { recordAiUsageEvent } from "@/lib/ai/usage"
 import { summarizeLearnedReplyProfile } from "@/lib/ai/provider"
 import { prisma } from "@/lib/prisma"
+import { fetchGmailSentSamples } from "@/lib/google"
 
 export type ReplyProfileTypeValue = "personal" | "business"
 
@@ -78,14 +79,35 @@ export async function trainLearnedReplyProfile(input: {
   tenantId: string
   channelId?: string | null
   profileType: ReplyProfileTypeValue
-}): Promise<{ profileId: string; sampleCount: number }> {
-  const samples = await collectOutboundReplySamples({
+}): Promise<{ profileId: string; sampleCount: number; fromDb: number; fromGmail: number }> {
+  const dbSamples = await collectOutboundReplySamples({
     tenantId: input.tenantId,
     channelId: input.channelId,
   })
 
+  let gmailSamples: OutboundReplySample[] = []
+  if (dbSamples.length < 5 && input.channelId) {
+    const raw = await fetchGmailSentSamples(input.channelId, 60)
+    gmailSamples = raw
+      .map((s) => {
+        const text = sanitizeOutboundReply(s.text)
+        return text ? { text, createdAt: s.createdAt } : null
+      })
+      .filter((s): s is OutboundReplySample => s !== null)
+  }
+
+  // Merge: Gmail supplements DB; deduplicate by text content
+  const seen = new Set(dbSamples.map((s) => s.text))
+  const freshGmail = gmailSamples.filter((s) => !seen.has(s.text))
+  const samples = [...dbSamples, ...freshGmail]
+
   if (samples.length < 5) {
-    throw new Error("Not enough sent messages to learn from. Send at least 5 emails first.")
+    const triedGmail = input.channelId
+      ? " FlowDesk also checked your Gmail sent history."
+      : ""
+    throw new Error(
+      `Not enough sent emails to learn from.${triedGmail} At least 5 usable sent emails are required.`
+    )
   }
 
   let result: Awaited<ReturnType<typeof summarizeLearnedReplyProfile>>
@@ -118,6 +140,8 @@ export async function trainLearnedReplyProfile(input: {
     sourceStatsJson: {
       ...result.sourceStatsJson,
       sampleCount: samples.length,
+      fromDb: dbSamples.length,
+      fromGmail: freshGmail.length,
     } as Prisma.InputJsonValue,
     promptVersion: result.promptVersion,
     lastTrainedAt: new Date(),
@@ -138,5 +162,10 @@ export async function trainLearnedReplyProfile(input: {
       })
     : await prisma.learnedReplyProfile.create({ data })
 
-  return { profileId: profile.id, sampleCount: samples.length }
+  return {
+    profileId: profile.id,
+    sampleCount: samples.length,
+    fromDb: dbSamples.length,
+    fromGmail: freshGmail.length,
+  }
 }
