@@ -14,6 +14,7 @@ export type ClassifyResult = {
 }
 
 export type ClassifyPromptInput = {
+  accountType?: "personal" | "business" | null
   businessProfile: {
     businessName?: string | null
     industry?: string | null
@@ -53,7 +54,7 @@ export const classifyJsonSchema = {
 }
 
 export function buildClassifyPrompt(input: ClassifyPromptInput): string {
-  const profile = input.businessProfile
+  const isPersonal = input.accountType === "personal"
   const messages = input.messages
     .slice(-20)
     .map((m) => {
@@ -62,6 +63,31 @@ export function buildClassifyPrompt(input: ClassifyPromptInput): string {
     })
     .join("\n")
 
+  if (isPersonal) {
+    return [
+      "You are FlowDesk's email assistant for a personal inbox.",
+      "Classify the email thread and return only JSON matching the schema.",
+      "Do not generate a reply. Do not include markdown.",
+      "",
+      "Focus on:",
+      "- Does this email genuinely need a personal reply from the user?",
+      "- How urgent is it?",
+      "- What task or action is required, if any?",
+      "- Is this scheduling, follow-up, or purely informational?",
+      "",
+      "Always set suggestedLabel to null — personal inboxes do not use CRM labels.",
+      "Set requiresApproval true only for sensitive topics: medical, legal, financial conflict, or personal conflict.",
+      "",
+      "Safety rules:",
+      "- Do not mention leads, sales potential, CRM pipeline, prospects, or revenue.",
+      "- When in doubt, set riskLevel to medium.",
+      "",
+      "Conversation:",
+      messages || "No messages.",
+    ].join("\n")
+  }
+
+  const profile = input.businessProfile
   return [
     "You are FlowDesk's AI classifier for a small business inbox.",
     "Classify the conversation intent and return only JSON matching the schema.",
