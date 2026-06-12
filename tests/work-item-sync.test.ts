@@ -104,6 +104,21 @@ describe("syncConversationWorkItems", () => {
     )
   })
 
+  it("does not overwrite an existing lead score during deterministic sync", async () => {
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    expect(mockLeadUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ score: expect.any(Number) }),
+        update: expect.not.objectContaining({ score: expect.any(Number) }),
+      })
+    )
+  })
+
   it("writes audit logs for synced records", async () => {
     await syncConversationWorkItems({
       tenantId: "tenant-1",

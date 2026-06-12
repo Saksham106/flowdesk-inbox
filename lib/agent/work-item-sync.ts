@@ -158,7 +158,6 @@ export async function syncConversationWorkItems(
         budgetClue: summary.lead.budgetClue,
         contactInfo: summary.lead.contactInfo,
         nextAction: summary.lead.nextAction,
-        score: summary.lead.score,
         source: summary.lead.source,
         metadataJson: summary.lead.metadata as Prisma.InputJsonValue,
       },
