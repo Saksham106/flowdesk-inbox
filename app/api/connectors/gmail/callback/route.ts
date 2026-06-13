@@ -64,8 +64,12 @@ export async function GET(request: Request) {
   let channelId: string;
 
   if (existing) {
-    // Already connected — refresh credentials
+    // Already connected — refresh credentials, and reassign tenant if needed
     channelId = existing.id;
+    await prisma.channel.update({
+      where: { id: channelId },
+      data: { tenantId },
+    });
     await prisma.gmailCredential.update({
       where: { channelId },
       data: {
