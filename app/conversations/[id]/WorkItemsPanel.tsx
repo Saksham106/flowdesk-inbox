@@ -98,7 +98,7 @@ export default function WorkItemsPanel({
         <div>
           <h2 className="text-sm font-semibold text-slate-600">Work items</h2>
           <p className="mt-1 text-xs text-slate-500">
-            Persisted state, tasks, and lead signals for this thread.
+            {isPersonal ? "Tasks and context for this thread." : "Persisted state, tasks, and lead signals for this thread."}
           </p>
         </div>
         {state ? (
