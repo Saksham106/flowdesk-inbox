@@ -10,7 +10,7 @@ import SearchInput from "@/app/inbox/SearchInput";
 import CommandCenterPanel from "@/app/inbox/CommandCenterPanel";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import { StatusBadge, LabelBadge } from "@/app/components/badges";
-import { buildDailyCommandCenter } from "@/lib/agent/command-center";
+import { buildDailyCommandCenter, CommandCenterInputConversation } from "@/lib/agent/command-center";
 import { analyzeRevenueAtRisk } from "@/lib/agent/revenue-at-risk";
 import { AppNavigationItem, getInboxNavigation } from "@/lib/app-navigation";
 
@@ -174,15 +174,17 @@ export default async function InboxPage({ searchParams }: Props) {
         ])
       : [[], [], [], [] as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>];
 
+  type ConversationForBrief = CommandCenterInputConversation & {
+    stateRecord: { metadataJson: unknown } | null;
+    leads: { score: number; scoreExplanation: string | null; estimatedValue: number | null }[];
+  };
+
   const commandCenter = isHomeView
     ? buildDailyCommandCenter(
-        (commandCenterConversations as Awaited<ReturnType<typeof prisma.conversation.findMany>> & {
-          leads: { score: number; scoreExplanation: string | null; estimatedValue: number | null }[];
-          stateRecord: { metadataJson: unknown } | null;
-        }[]).map((c: any) => ({
+        (commandCenterConversations as ConversationForBrief[]).map((c) => ({
           ...c,
           conversationState: c.stateRecord,
-          lead: c.leads?.[0] ?? null,
+          lead: c.leads[0] ?? null,
         }))
       )
     : null;
@@ -206,7 +208,20 @@ export default async function InboxPage({ searchParams }: Props) {
   const totalCount = statusCounts.reduce((sum, r) => sum + r._count.status, 0);
   const needsReplyCount = countByStatus["needs_reply"] ?? 0;
 
-  const ignoredConversations = (ignoredStates as any[])
+  type IgnoredStateRow = {
+    metadataJson: unknown;
+    conversationId: string;
+    conversation: { contact: { name: string } | null; externalThreadId: string };
+    reason: string | null;
+  };
+
+  type FollowUpJobRow = {
+    conversationId: string;
+    conversation: { contact: { name: string } | null; externalThreadId: string };
+    createdAt: Date;
+  };
+
+  const ignoredConversations = (ignoredStates as IgnoredStateRow[])
     .filter((s) => {
       const meta = s.metadataJson as Record<string, unknown> | null;
       return meta?.safelyIgnored === true;
@@ -218,7 +233,7 @@ export default async function InboxPage({ searchParams }: Props) {
       href: `/conversations/${s.conversationId}`,
     }));
 
-  const followUpConversations = (pendingFollowUps as any[]).map((job) => ({
+  const followUpConversations = (pendingFollowUps as FollowUpJobRow[]).map((job) => ({
     id: job.conversationId,
     displayName: job.conversation.contact?.name ?? job.conversation.externalThreadId,
     scheduledAt: job.createdAt,
