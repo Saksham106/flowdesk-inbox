@@ -297,6 +297,7 @@ export default async function InboxPage({ searchParams }: Props) {
           accountType={accountType}
           status={activeStatus}
           q={q || undefined}
+          sales={salesFilter}
         />
         {/* Main pane */}
         <main className="flex-1 overflow-y-auto bg-slate-50">

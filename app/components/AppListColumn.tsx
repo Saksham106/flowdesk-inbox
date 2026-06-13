@@ -10,6 +10,7 @@ interface Props {
   activeConversationId?: string
   status?: string | null
   q?: string
+  sales?: boolean
 }
 
 type ConvRow = {
@@ -68,11 +69,22 @@ export default async function AppListColumn({
   activeConversationId,
   status,
   q,
+  sales = false,
 }: Props) {
   const isBusiness = accountType === "business"
 
   const where: Record<string, unknown> = { tenantId }
   if (status) where.status = status
+  if (sales && isBusiness) {
+    where.stateRecord = {
+      is: {
+        metadataJson: {
+          path: ["isSalesLead"],
+          equals: true,
+        },
+      },
+    }
+  }
   if (q) {
     where.OR = [
       { externalThreadId: { contains: q, mode: "insensitive" } },
@@ -141,8 +153,12 @@ export default async function AppListColumn({
           })}
           {isBusiness && (
             <Link
-              href="/inbox?sales=1"
-              className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600 hover:bg-slate-200"
+              href={q ? `/inbox?sales=1&q=${encodeURIComponent(q)}` : "/inbox?sales=1"}
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold transition ${
+                sales
+                  ? "bg-emerald-600 text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
             >
               Sales
             </Link>
@@ -154,7 +170,7 @@ export default async function AppListColumn({
       <div className="flex-1 overflow-y-auto">
         {conversations.length === 0 ? (
           <p className="px-4 py-8 text-xs text-slate-400">
-            {q || status ? "No results." : "No conversations yet."}
+            {q || status || sales ? "No results." : "No conversations yet."}
           </p>
         ) : (
           conversations.map((conv) => {
