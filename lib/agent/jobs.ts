@@ -118,12 +118,16 @@ export async function runAgentJob(jobId: string): Promise<AgentJobResult> {
 async function _executeJob(
   job: AgentJob
 ): Promise<{ intent: string; confidence: number; requiresApproval: boolean; classification: ClassifyResult; policyRequiresApproval: boolean }> {
-  const [conversation, businessContext] = await Promise.all([
+  const [conversation, businessContext, tenant] = await Promise.all([
     prisma.conversation.findFirst({
       where: { id: job.conversationId, tenantId: job.tenantId },
       include: { messages: { orderBy: { createdAt: "asc" } } },
     }),
     getFullBusinessContext(job.tenantId),
+    prisma.tenant.findUnique({
+      where: { id: job.tenantId },
+      select: { accountType: true },
+    }),
   ])
 
   if (!conversation) {
@@ -146,6 +150,7 @@ async function _executeJob(
     classification = await classifyConversation({
       messages: conversation.messages,
       businessProfile: businessContext.profile,
+      accountType: tenant?.accountType === "personal" ? "personal" : "business",
     })
 
     await prisma.agentToolCall.update({

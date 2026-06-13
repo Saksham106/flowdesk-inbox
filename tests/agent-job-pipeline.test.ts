@@ -14,6 +14,7 @@ const {
   mockGetFullBusinessContext,
   mockClassify,
   mockCheckAvailability,
+  mockTenantFindUnique,
 } = vi.hoisted(() => ({
   mockConvFindFirst:          vi.fn(),
   mockJobCreate:              vi.fn(),
@@ -25,6 +26,7 @@ const {
   mockGetFullBusinessContext: vi.fn(),
   mockClassify:               vi.fn(),
   mockCheckAvailability:      vi.fn(),
+  mockTenantFindUnique:       vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -33,6 +35,7 @@ vi.mock('@/lib/prisma', () => ({
     agentJob:      { create: mockJobCreate, findUnique: mockJobFindUnique, update: mockJobUpdate },
     agentToolCall: { create: mockToolCallCreate, update: mockToolCallUpdate },
     auditLog:      { create: mockAuditCreate },
+    tenant:        { findUnique: mockTenantFindUnique },
   },
 }))
 
@@ -51,7 +54,7 @@ vi.mock('@/lib/agent/availability', () => ({
 
 import { createAgentJob, runAgentJob } from '@/lib/agent/jobs'
 import { checkPolicy } from '@/lib/agent/policy'
-import { normalizeClassifyOutput } from '@/lib/ai/prompts/classify'
+import { normalizeClassifyOutput, buildClassifyPrompt } from '@/lib/ai/prompts/classify'
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -201,6 +204,7 @@ describe('runAgentJob', () => {
       messages: [{ direction: 'inbound', body: 'Hello', createdAt: new Date() }],
     })
     mockGetFullBusinessContext.mockResolvedValue({ profile: null, documents: [] })
+    mockTenantFindUnique.mockResolvedValue({ accountType: 'business' })
     mockToolCallCreate.mockResolvedValue({ id: 'tc-1' })
     mockToolCallUpdate.mockResolvedValue({})
     mockAuditCreate.mockResolvedValue({})
@@ -334,5 +338,44 @@ describe('runAgentJob', () => {
     await runAgentJob(JOB_ID)
 
     expect(mockCheckAvailability).not.toHaveBeenCalled()
+  })
+})
+
+describe("personal vs business classify prompt", () => {
+  it("personal account prompt does not mention sales or leads", () => {
+    // buildClassifyPrompt imported at top of file
+    const prompt = buildClassifyPrompt({
+      accountType: "personal",
+      businessProfile: null,
+      messages: [{ direction: "inbound", body: "Hey can we meet?", createdAt: new Date() }],
+    })
+    expect(prompt).not.toMatch(/lead/i)
+    expect(prompt).not.toMatch(/sales potential/i)
+    expect(prompt).not.toMatch(/business owner/i)
+    expect(prompt).not.toMatch(/CRM/i)
+    expect(prompt).toMatch(/personal inbox/i)
+    expect(prompt).toMatch(/suggestedLabel to null/i)
+  })
+
+  it("business account prompt includes business framing and CRM labels", () => {
+    // buildClassifyPrompt imported at top of file
+    const prompt = buildClassifyPrompt({
+      accountType: "business",
+      businessProfile: null,
+      messages: [{ direction: "inbound", body: "I want pricing info", createdAt: new Date() }],
+    })
+    expect(prompt).toMatch(/small business inbox/i)
+    expect(prompt).toMatch(/Lead/i)
+    expect(prompt).toMatch(/Complaint/i)
+  })
+
+  it("null accountType defaults to business prompt", () => {
+    // buildClassifyPrompt imported at top of file
+    const prompt = buildClassifyPrompt({
+      accountType: null,
+      businessProfile: null,
+      messages: [{ direction: "inbound", body: "Hello", createdAt: new Date() }],
+    })
+    expect(prompt).toMatch(/small business inbox/i)
   })
 })
