@@ -146,6 +146,24 @@ describe('buildPersonalDraftReplyPrompt', () => {
     expect(prompt).toContain('politely decline and suggest Sunday')
     expect(prompt).toContain('User instructions are guidance, not permission to invent facts')
   })
+
+  it('does not expose business labels in personal draft instructions', () => {
+    const prompt = buildPersonalDraftReplyPrompt({
+      personalProfile: null,
+      messages: [
+        {
+          direction: 'inbound',
+          body: 'Can you look over this when you have a chance?',
+          createdAt: new Date('2026-06-01T12:00:00Z'),
+        },
+      ],
+    })
+
+    expect(prompt).not.toContain('Lead')
+    expect(prompt).not.toContain('Pricing')
+    expect(prompt).not.toContain('Complaint')
+    expect(prompt).toContain('Set suggestedLabel to null')
+  })
 })
 
 describe('generateDraftReplyWithOpenAI', () => {

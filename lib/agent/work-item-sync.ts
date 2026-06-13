@@ -56,13 +56,17 @@ export async function syncConversationWorkItems(
   })
   const isPersonal = tenant?.accountType === "personal"
 
-  const kbDocs = (await prisma.knowledgeDocument.findMany({
-    where: { tenantId: input.tenantId },
-    select: { id: true, title: true, content: true },
-    take: 50,
-  })) ?? []
+  const kbDocs = isPersonal
+    ? []
+    : ((await prisma.knowledgeDocument.findMany({
+        where: { tenantId: input.tenantId },
+        select: { id: true, title: true, content: true },
+        take: 50,
+      })) ?? [])
 
-  const summary = summarizeWorkItems(conversation as WorkItemConversationInput, input.now)
+  const summary = summarizeWorkItems(conversation as WorkItemConversationInput, input.now, {
+    accountType: tenant?.accountType,
+  })
 
   await prisma.conversationState.upsert({
     where: { conversationId: conversation.id },
@@ -226,11 +230,18 @@ export async function syncConversationWorkItems(
     await syncPersonMemory(conversation.tenantId, conversation.contactId)
   }
 
-  const supportSignals = classifySupportSignals(
-    conversation.messages.map((m) => ({ direction: m.direction, body: m.body })),
-    kbDocs,
-    conversation.label
-  )
+  const supportSignals = isPersonal
+    ? {
+        isSupport: false,
+        churnRisk: false,
+        needsEscalation: false,
+        suggestedKbDocId: null,
+      }
+    : classifySupportSignals(
+        conversation.messages.map((m) => ({ direction: m.direction, body: m.body })),
+        kbDocs,
+        conversation.label
+      )
 
   const existing = (await prisma.conversationState.findUnique({
     where: { conversationId: conversation.id },
@@ -242,19 +253,21 @@ export async function syncConversationWorkItems(
       ? (existing as Record<string, unknown>)
       : {}
 
-  await prisma.auditLog.create({
-    data: {
-      tenantId: conversation.tenantId,
-      action: "conversation_state.support_classified",
-      payloadJson: {
-        conversationId: conversation.id,
-        isSupport: supportSignals.isSupport,
-        churnRisk: supportSignals.churnRisk,
-        needsEscalation: supportSignals.needsEscalation,
-        suggestedKbDocId: supportSignals.suggestedKbDocId,
+  if (!isPersonal) {
+    await prisma.auditLog.create({
+      data: {
+        tenantId: conversation.tenantId,
+        action: "conversation_state.support_classified",
+        payloadJson: {
+          conversationId: conversation.id,
+          isSupport: supportSignals.isSupport,
+          churnRisk: supportSignals.churnRisk,
+          needsEscalation: supportSignals.needsEscalation,
+          suggestedKbDocId: supportSignals.suggestedKbDocId,
+        },
       },
-    },
-  })
+    })
+  }
 
   let postSupportMeta: Record<string, unknown> = existingMeta
 

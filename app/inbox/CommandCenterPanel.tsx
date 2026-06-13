@@ -18,10 +18,22 @@ const countItems = [
 export default function CommandCenterPanel({
   commandCenter,
   revenueAtRisk,
+  accountType = "personal",
 }: {
   commandCenter: DailyCommandCenter
   revenueAtRisk: RevenueAtRiskItem[]
+  accountType?: string | null
 }) {
+  const isBusiness = accountType === "business"
+  const visibleCountItems = isBusiness
+    ? countItems
+    : countItems.filter(
+        ([key]) =>
+          key !== "opportunities" &&
+          key !== "support" &&
+          key !== "salesQualified"
+      )
+
   return (
     <section className="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 px-4 py-3 sm:px-5 sm:py-4">
@@ -47,7 +59,7 @@ export default function CommandCenterPanel({
       </div>
 
       <div className="grid grid-cols-2 gap-2 px-4 py-3 sm:gap-3 sm:px-5 sm:py-4 lg:grid-cols-4">
-        {countItems.map(([key, label]) => (
+        {visibleCountItems.map(([key, label]) => (
           <div key={key} className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2 sm:px-3">
             <p className="text-lg font-semibold text-slate-950 sm:text-xl">
               {commandCenter.counts[key]}
@@ -57,7 +69,7 @@ export default function CommandCenterPanel({
         ))}
       </div>
 
-      {revenueAtRisk.length > 0 && (
+      {isBusiness && revenueAtRisk.length > 0 && (
         <div className="border-t border-slate-100 px-4 py-3 sm:px-5">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-600">
             Revenue at Risk
@@ -111,7 +123,7 @@ export default function CommandCenterPanel({
                     <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium capitalize text-slate-600">
                       {item.priority}
                     </span>
-                    {item.leadScore !== null && item.leadScore !== undefined ? (
+                    {isBusiness && item.leadScore !== null && item.leadScore !== undefined ? (
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                           item.leadScore >= 70

@@ -130,11 +130,13 @@ export async function POST(
     }
   }
 
+  const suggestedLabel = accountType === "business" ? result.suggestedLabel : null
+
   const metadataJson = {
     intent: result.intent,
     confidence: result.confidence,
     riskLevel: result.riskLevel,
-    suggestedLabel: result.suggestedLabel,
+    suggestedLabel,
     escalationReason: result.escalationReason,
     model: result.model,
     promptVersion,
@@ -162,10 +164,10 @@ export async function POST(
     },
   })
 
-  if (result.suggestedLabel && VALID_LABELS.includes(result.suggestedLabel)) {
+  if (accountType === "business" && suggestedLabel && VALID_LABELS.includes(suggestedLabel)) {
     await prisma.conversation.update({
       where: { id: conversation.id },
-      data: { label: result.suggestedLabel },
+      data: { label: suggestedLabel },
     })
   }
 

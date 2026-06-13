@@ -26,6 +26,7 @@ import SupportPanel from "@/app/conversations/[id]/SupportPanel";
 import SalesPanel from "@/app/conversations/[id]/SalesPanel";
 import { SALES_SUGGESTED_ACTIONS } from "@/lib/agent/sales-classifier";
 import EmailBody from "@/app/components/EmailBody";
+import { resolveAccountMode } from "@/lib/account-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -40,8 +41,8 @@ export default async function ConversationPage({
     redirect("/login");
   }
 
-  const isPersonal =
-    (session.user as Record<string, unknown>).accountType === "personal";
+  const accountMode = resolveAccountMode((session.user as Record<string, unknown>).accountType);
+  const isPersonal = accountMode === "personal";
 
   const [
     conversation,
@@ -189,7 +190,9 @@ export default async function ConversationPage({
     Boolean(pendingFollowUpJob) &&
     !conversation.draft &&
     conversation.channel.type === "email" &&
-    Boolean(businessProfile);
+    (isPersonal || Boolean(businessProfile));
+  const canSuggestReply =
+    conversation.channel.type === "email" && (isPersonal || Boolean(businessProfile));
 
   const displayName = conversation.contact?.name ?? conversation.externalThreadId;
   const emailType =
@@ -212,8 +215,8 @@ export default async function ConversationPage({
     calendarHolds: activeHold ? [activeHold] : [],
     conversationState: stateRecord ?? null,
   };
-  const assistantState = analyzeConversationForCommandCenter(assistantInput);
-  const relationshipContext = buildRelationshipContext(assistantInput);
+  const assistantState = analyzeConversationForCommandCenter(assistantInput, new Date(), accountMode);
+  const relationshipContext = buildRelationshipContext(assistantInput, new Date(), accountMode);
   const draftMetadata = (
     conversation.draft as {
       metadataJson?: {
@@ -241,7 +244,7 @@ export default async function ConversationPage({
             <div className="mt-1 flex items-center gap-2">
               <h1 className="text-xl font-semibold">{displayName}</h1>
               <StatusBadge status={isAutoEmailConversation || stateRecord?.state === "fyi_only" ? "closed" : conversation.status} />
-              {conversation.label && <LabelBadge label={conversation.label} />}
+              {conversation.label && !isPersonal && <LabelBadge label={conversation.label} />}
             </div>
             <p className="min-w-0 break-all text-sm text-slate-500">
               {conversation.channel.emailAddress ?? conversation.externalThreadId}
@@ -260,31 +263,53 @@ export default async function ConversationPage({
         {/* Left: conversation thread then inline reply composer */}
         <section className="min-w-0 space-y-4 overflow-hidden">
           {/* Email thread */}
-          <div className="overflow-x-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="space-y-4">
+          <div className="overflow-x-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-6 py-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Email thread
+              </p>
+              <h2 className="mt-1 min-w-0 break-words text-lg font-semibold text-slate-950 [overflow-wrap:anywhere]">
+                {displayName}
+              </h2>
+              <p className="mt-1 min-w-0 break-all text-sm text-slate-500">
+                {conversation.channel.emailAddress
+                  ? `Inbox: ${conversation.channel.emailAddress}`
+                  : `Thread: ${conversation.externalThreadId}`}
+              </p>
+            </div>
+            <div className="divide-y divide-slate-100">
               {conversation.messages.length === 0 ? (
-                <p className="text-sm text-slate-500">No messages yet.</p>
+                <p className="px-6 py-5 text-sm text-slate-500">No messages yet.</p>
               ) : (
                 conversation.messages.map((message) => {
                   const isOutbound = message.direction === "outbound";
                   return (
-                    <div
-                      key={message.id}
-                      className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`max-w-[75%] min-w-0 rounded-2xl px-4 py-2 text-sm ${
-                          isOutbound
-                            ? "bg-slate-900 text-white"
-                            : "bg-slate-100 text-slate-900"
-                        }`}
-                      >
-                        <EmailBody body={message.body} />
-                        <p className="mt-1 text-xs opacity-70">
+                    <article key={message.id} className="px-6 py-5">
+                      <div className="mb-4 grid gap-2 text-sm sm:grid-cols-[auto_1fr_auto] sm:items-start">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+                          {isOutbound ? "Me" : initialsFor(message.fromE164)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+                            <p className="min-w-0 break-all font-semibold text-slate-900">
+                              {isOutbound ? "You" : message.fromE164}
+                            </p>
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+                              {isOutbound ? "Sent" : "Received"}
+                            </span>
+                          </div>
+                          <p className="mt-1 min-w-0 break-all text-xs text-slate-500">
+                            To: {message.toE164}
+                          </p>
+                        </div>
+                        <time className="text-xs text-slate-400 sm:text-right" dateTime={message.createdAt.toISOString()}>
                           {message.createdAt.toLocaleString()}
-                        </p>
+                        </time>
                       </div>
-                    </div>
+                      <div className="min-w-0 text-sm leading-6 text-slate-900">
+                        <EmailBody body={message.body} />
+                      </div>
+                    </article>
                   );
                 })
               )}
@@ -305,7 +330,7 @@ export default async function ConversationPage({
               <AIDraftPanel
                 conversationId={conversation.id}
                 channelType={conversation.channel.type}
-                hasBusinessProfile={Boolean(businessProfile)}
+                canSuggest={canSuggestReply}
                 knowledgeDocumentCount={knowledgeDocumentCount}
                 isPersonal={isPersonal}
                 initialDraft={
@@ -361,13 +386,15 @@ export default async function ConversationPage({
                 />
               )}
             </div>
-            <div className="mt-3 border-t border-slate-100 pt-3">
-              <LabelSelect
-                conversationId={conversation.id}
-                currentLabel={conversation.label}
-                isPersonal={isPersonal}
-              />
-            </div>
+            {!isPersonal && (
+              <div className="mt-3 border-t border-slate-100 pt-3">
+                <LabelSelect
+                  conversationId={conversation.id}
+                  currentLabel={conversation.label}
+                  isPersonal={isPersonal}
+                />
+              </div>
+            )}
           </div>
 
           {/* Assistant context */}
@@ -387,13 +414,13 @@ export default async function ConversationPage({
               conversationId={conversation.id}
               assistantState={assistantState}
               relationshipContext={relationshipContext}
-              canSuggest={conversation.channel.type === "email" && Boolean(businessProfile)}
+              canSuggest={canSuggestReply}
               isPersonal={isPersonal}
             />
           )}
 
           {/* Business-only: support signals */}
-          {isSupport && (
+          {isSupport && !isPersonal && (
             <SupportPanel
               conversationId={conversation.id}
               isSupport={isSupport}
@@ -416,7 +443,7 @@ export default async function ConversationPage({
           )}
 
           {/* Calendar holds */}
-          {conversation.channel.type === "email" && (
+          {conversation.channel.type === "email" && !isPersonal && (
             <CalendarHoldPanel
               conversationId={conversation.id}
               availableSlots={
@@ -476,4 +503,10 @@ export default async function ConversationPage({
       </main>
     </div>
   );
+}
+
+function initialsFor(value: string): string {
+  const name = value.replace(/<.*?>/g, "").trim() || value
+  const first = name.match(/[A-Za-z0-9]/)?.[0] ?? "?"
+  return first.toUpperCase()
 }

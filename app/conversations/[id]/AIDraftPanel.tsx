@@ -47,7 +47,7 @@ function getMetadata(response: DraftResponse): DraftMetadata | null {
 export default function AIDraftPanel({
   conversationId,
   channelType,
-  hasBusinessProfile,
+  canSuggest,
   knowledgeDocumentCount,
   initialDraft,
   inline = false,
@@ -55,7 +55,7 @@ export default function AIDraftPanel({
 }: {
   conversationId: string;
   channelType: string;
-  hasBusinessProfile: boolean;
+  canSuggest: boolean;
   knowledgeDocumentCount: number;
   initialDraft: DraftSnapshot | null;
   inline?: boolean;
@@ -73,7 +73,7 @@ export default function AIDraftPanel({
   const [notice, setNotice] = useState<string | null>(null);
 
   const isEmail = channelType === "email";
-  const canSuggest = isEmail && hasBusinessProfile;
+  const canRequestSuggestion = isEmail && canSuggest;
   const isBusy = action !== "idle";
   const trimmedText = text.trim();
   const hasDraftText = trimmedText.length > 0;
@@ -115,7 +115,7 @@ export default function AIDraftPanel({
   }
 
   async function suggestReply() {
-    if (!canSuggest || isBusy) {
+    if (!canRequestSuggestion || isBusy) {
       return;
     }
 
@@ -264,15 +264,15 @@ export default function AIDraftPanel({
         </p>
       ) : null}
 
-      {isEmail && !hasBusinessProfile ? (
+      {isEmail && !canSuggest ? (
         <p className="mb-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
           {isPersonal
-            ? "Add reply preferences in Settings to enable suggestions."
+            ? "AI suggestions are temporarily unavailable for this account."
             : "Add a business profile in Settings to enable suggestions."}
         </p>
       ) : null}
 
-      {isEmail && hasBusinessProfile && knowledgeDocumentCount === 0 ? (
+      {isEmail && !isPersonal && canSuggest && knowledgeDocumentCount === 0 ? (
         <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           No knowledge documents yet. Suggestions may be less specific.
         </p>
@@ -297,7 +297,7 @@ export default function AIDraftPanel({
         <button
           type="button"
           onClick={suggestReply}
-          disabled={!canSuggest || isBusy}
+          disabled={!canRequestSuggestion || isBusy}
           className="w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {action === "suggesting" ? "Suggesting..." : "Suggest reply"}

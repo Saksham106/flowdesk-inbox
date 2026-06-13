@@ -467,11 +467,13 @@ export default async function SettingsPage({ searchParams }: Props) {
           <div className="border-b border-slate-100 px-6 py-4">
             <h2 className="font-semibold">Follow-Up Automation</h2>
             <p className="mt-0.5 text-sm text-slate-500">
-              Surface quiet leads in your{" "}
+              {isPersonal ? "Surface quiet conversations in your " : "Surface quiet leads in your "}
               <a href="/digest" className="underline hover:text-slate-700">
                 daily digest
               </a>{" "}
-              so you never let a hot lead go cold.
+              {isPersonal
+                ? "so important replies do not slip."
+                : "so you never let a hot lead go cold."}
             </p>
           </div>
           <div className="px-6 py-5">

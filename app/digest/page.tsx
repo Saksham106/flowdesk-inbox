@@ -24,6 +24,7 @@ export default async function DigestPage() {
   if (!session?.user?.tenantId) redirect("/login")
 
   const tenantId = session.user.tenantId
+  const accountType = (session.user as { accountType?: string | null }).accountType ?? "personal"
   const now = new Date()
   const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000)
 
@@ -121,7 +122,8 @@ export default async function DigestPage() {
       ...c,
       conversationState: c.stateRecord,
     })),
-    now
+    now,
+    accountType
   )
 
   let todayMeetings: CalendarEvent[] = []

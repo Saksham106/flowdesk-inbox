@@ -262,7 +262,7 @@ export function buildPersonalDraftReplyPrompt(input: PersonalDraftReplyPromptInp
     "",
     "Return only JSON matching the schema. Do not include markdown.",
     "",
-    "Allowed suggestedLabel values: Lead, Reschedule, Pricing, Complaint, or null.",
+    "Set suggestedLabel to null. Personal inboxes do not use business labels.",
     "",
     "Personal style profile:",
     JSON.stringify(

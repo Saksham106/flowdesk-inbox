@@ -133,6 +133,26 @@ describe("syncConversationWorkItems", () => {
     )
   })
 
+  it("does not create lead records for personal accounts", async () => {
+    mockTenantFindUnique.mockResolvedValue({ accountType: "personal" })
+
+    const result = await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    expect(result.leadSynced).toBe(false)
+    expect(result.salesClassified).toBe(false)
+    expect(mockLeadUpsert).not.toHaveBeenCalled()
+    expect(mockLeadFindFirst).not.toHaveBeenCalled()
+    expect(mockAuditCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "lead.synced" }),
+      })
+    )
+  })
+
   it("writes audit logs for synced records", async () => {
     await syncConversationWorkItems({
       tenantId: "tenant-1",

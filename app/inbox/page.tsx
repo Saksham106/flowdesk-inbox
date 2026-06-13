@@ -108,6 +108,7 @@ export default async function InboxPage({ searchParams }: Props) {
   ]);
 
   const isBusiness = tenant?.accountType === "business";
+  const accountType = tenant?.accountType ?? "personal";
 
   // Fetch email list only on non-home views
   const conversations = isHomeView
@@ -170,7 +171,7 @@ export default async function InboxPage({ searchParams }: Props) {
             orderBy: { createdAt: "desc" },
             take: 50,
           }),
-          analyzeRevenueAtRisk(tenantId),
+          isBusiness ? analyzeRevenueAtRisk(tenantId) : Promise.resolve([]),
         ])
       : [[], [], [], [] as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>];
 
@@ -185,7 +186,9 @@ export default async function InboxPage({ searchParams }: Props) {
           ...c,
           conversationState: c.stateRecord,
           lead: c.leads[0] ?? null,
-        }))
+        })),
+        new Date(),
+        accountType
       )
     : null;
 
@@ -413,6 +416,7 @@ export default async function InboxPage({ searchParams }: Props) {
               <CommandCenterPanel
                 commandCenter={commandCenter}
                 revenueAtRisk={revenueAtRisk as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>}
+                accountType={accountType}
               />
             )}
 
@@ -498,7 +502,7 @@ export default async function InboxPage({ searchParams }: Props) {
                           </p>
                           <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                             <StatusBadge status={isFyiConversation(conversation) ? "closed" : conversation.status} />
-                            {conversation.label && <LabelBadge label={conversation.label} />}
+                            {isBusiness && conversation.label && <LabelBadge label={conversation.label} />}
                           </div>
                         </div>
                         <span className="shrink-0 whitespace-nowrap text-xs text-slate-400">

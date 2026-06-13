@@ -1,3 +1,5 @@
+import { resolveAccountMode, type AccountMode } from "@/lib/account-mode"
+
 type MessageDirection = "inbound" | "outbound" | string
 
 export type CommandCenterState =
@@ -174,8 +176,6 @@ function activeHold(conversation: CommandCenterInputConversation) {
 }
 
 function isSensitive(conversation: CommandCenterInputConversation): boolean {
-  // Automated/marketing emails are never personally sensitive
-  if (isAutoEmail(conversation)) return false
   const meta = metadata(conversation)
   return (
     meta.riskLevel === "high" ||
@@ -185,7 +185,8 @@ function isSensitive(conversation: CommandCenterInputConversation): boolean {
   )
 }
 
-function isOpportunity(conversation: CommandCenterInputConversation): boolean {
+function isOpportunity(conversation: CommandCenterInputConversation, accountMode: AccountMode): boolean {
+  if (accountMode !== "business") return false
   // Automated/marketing emails are never real opportunities
   if (isAutoEmail(conversation)) return false
   const meta = metadata(conversation)
@@ -231,7 +232,8 @@ function isAutoEmail(conversation: CommandCenterInputConversation): boolean {
   return emailType !== null && AUTO_EMAIL_TYPES.has(emailType)
 }
 
-function isClassifiedSupport(conversation: CommandCenterInputConversation): boolean {
+function isClassifiedSupport(conversation: CommandCenterInputConversation, accountMode: AccountMode): boolean {
+  if (accountMode !== "business") return false
   const state = conversation.conversationState
   if (!state?.metadataJson || typeof state.metadataJson !== "object" || Array.isArray(state.metadataJson)) return false
   return (state.metadataJson as Record<string, unknown>).isSupport === true
@@ -243,7 +245,8 @@ function isChurnRisk(conversation: CommandCenterInputConversation): boolean {
   return (state.metadataJson as Record<string, unknown>).churnRisk === true
 }
 
-function isSalesQualified(conversation: CommandCenterInputConversation): boolean {
+function isSalesQualified(conversation: CommandCenterInputConversation, accountMode: AccountMode): boolean {
+  if (accountMode !== "business") return false
   const state = conversation.conversationState
   if (!state?.metadataJson || typeof state.metadataJson !== "object" || Array.isArray(state.metadataJson)) return false
   return (state.metadataJson as Record<string, unknown>).isSalesLead === true
@@ -263,16 +266,18 @@ function approvalReason(conversation: CommandCenterInputConversation): string | 
 
 export function analyzeConversationForCommandCenter(
   conversation: CommandCenterInputConversation,
-  now = new Date()
+  now = new Date(),
+  accountType?: unknown
 ): CommandCenterConversation {
+  const accountMode = resolveAccountMode(accountType ?? "business")
   const latest = latestMessage(conversation)
   const pendingApproval = hasPendingApproval(conversation)
   const hold = activeHold(conversation)
   const sensitive = isSensitive(conversation)
-  const opportunity = isOpportunity(conversation)
+  const opportunity = isOpportunity(conversation, accountMode)
   const autoEmail = isAutoEmail(conversation)
   const safelyIgnored = isSafelyIgnorable(conversation)
-  const support = isClassifiedSupport(conversation)
+  const support = isClassifiedSupport(conversation, accountMode)
   const churnRisk = isChurnRisk(conversation)
   const outboundStale =
     latest?.direction === "outbound" &&
@@ -328,7 +333,7 @@ export function analyzeConversationForCommandCenter(
     priority = "high"
     reason = "Draft is waiting for your approval."
     nextAction = "Review and approve the draft."
-  } else if (isSalesQualified(conversation)) {
+  } else if (isSalesQualified(conversation, accountMode)) {
     state = "sales_qualified"
     priority = "high"
     reason = "Qualified sales lead detected."
@@ -382,10 +387,12 @@ export function analyzeConversationForCommandCenter(
 
 export function buildDailyCommandCenter(
   conversations: CommandCenterInputConversation[],
-  now = new Date()
+  now = new Date(),
+  accountType?: unknown
 ): DailyCommandCenter {
+  const accountMode = resolveAccountMode(accountType ?? "business")
   const analyzed = conversations.map((conversation) =>
-    analyzeConversationForCommandCenter(conversation, now)
+    analyzeConversationForCommandCenter(conversation, now, accountMode)
   )
   const approvals = analyzed.filter(
     (conversation) => conversation.state === "waiting_on_you" || conversation.approvalReason
@@ -434,8 +441,10 @@ export function buildDailyCommandCenter(
 
 export function buildRelationshipContext(
   conversation: CommandCenterInputConversation,
-  now = new Date()
+  now = new Date(),
+  accountType?: unknown
 ): RelationshipContext {
+  const accountMode = resolveAccountMode(accountType ?? "business")
   const meta = metadata(conversation)
   const text = bodyText(conversation)
   const latest = latestMessage(conversation)
@@ -446,7 +455,7 @@ export function buildRelationshipContext(
     .filter((message) => PROMISE_PATTERN.test(message.body))
     .map((message) => plainBody(message).slice(0, 200))
     .slice(-3)
-  const state = analyzeConversationForCommandCenter(conversation, now)
+  const state = analyzeConversationForCommandCenter(conversation, now, accountMode)
   const intent = typeof meta.intent === "string" ? meta.intent : null
   const label = typeof meta.suggestedLabel === "string" ? meta.suggestedLabel : conversation.label
 

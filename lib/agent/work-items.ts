@@ -4,6 +4,7 @@ import {
   type CommandCenterPriority,
   type CommandCenterState,
 } from "@/lib/agent/command-center"
+import { resolveAccountMode, type AccountMode } from "@/lib/account-mode"
 
 type MessageDirection = "inbound" | "outbound" | string
 
@@ -63,6 +64,10 @@ export type WorkItemSummary = {
   lead: LeadDraft | null
 }
 
+export type WorkItemSummaryOptions = {
+  accountType?: unknown
+}
+
 const FYI_PATTERN = /\b(fyi|newsletter|for your records|no action needed|all set)\b/i
 const SEND_PATTERN = /\b(send|share|provide|forward)\b/i
 const CONTRACT_PATTERN = /\b(contract|proposal|form|evidence|document|paperwork)\b/i
@@ -77,9 +82,11 @@ const HIGH_URGENCY_PATTERN = /\b(today|tomorrow|by friday|by monday|this week|ne
 
 export function buildConversationStateDraft(
   conversation: WorkItemConversationInput,
-  now = new Date()
+  now = new Date(),
+  options: WorkItemSummaryOptions = {}
 ): ConversationStateDraft {
-  const analysis = analyzeConversationForCommandCenter(conversation, now)
+  const accountMode = resolveAccountMode(options.accountType ?? "business")
+  const analysis = analyzeConversationForCommandCenter(conversation, now, accountMode)
 
   return {
     conversationId: conversation.id,
@@ -200,12 +207,14 @@ export function extractLeadDraft(
 
 export function summarizeWorkItems(
   conversation: WorkItemConversationInput,
-  now = new Date()
+  now = new Date(),
+  options: WorkItemSummaryOptions = {}
 ): WorkItemSummary {
+  const accountMode: AccountMode = resolveAccountMode(options.accountType ?? "business")
   return {
-    state: buildConversationStateDraft(conversation, now),
+    state: buildConversationStateDraft(conversation, now, { accountType: accountMode }),
     tasks: extractInboxTaskDrafts(conversation, now),
-    lead: extractLeadDraft(conversation),
+    lead: accountMode === "business" ? extractLeadDraft(conversation) : null,
   }
 }
 
