@@ -1,9 +1,11 @@
 import sanitizeHtml from "sanitize-html";
 
 export function isHtmlBody(body: string): boolean {
-  return /^\s*</.test(body);
+  // Strip BOM and whitespace, then check for HTML
+  return /^\s*</.test(body.replace(/^﻿/, ""));
 }
 
+// Strict sanitizer for rendering HTML inline in the app (strips all CSS to prevent bleed)
 export function sanitizeEmailHtml(html: string): string {
   return sanitizeHtml(html, {
     allowedTags: [
@@ -33,6 +35,63 @@ export function sanitizeEmailHtml(html: string): string {
       }),
     },
   });
+}
+
+// Permissive sanitizer for rendering inside a sandboxed iframe
+// Keeps CSS (style tags + inline styles) for visual fidelity; removes only dangerous elements
+export function sanitizeEmailHtmlForIframe(html: string): string {
+  const cleaned = sanitizeHtml(html, {
+    allowedTags: [
+      // Structure
+      "html", "head", "body", "title", "meta",
+      // Formatting
+      "p", "br", "b", "i", "u", "strong", "em", "s", "sub", "sup",
+      "a", "ul", "ol", "li", "dl", "dt", "dd",
+      // Tables (email layouts rely heavily on tables)
+      "table", "thead", "tbody", "tfoot", "tr", "td", "th", "caption", "colgroup", "col",
+      // Headings & semantic
+      "h1", "h2", "h3", "h4", "h5", "h6",
+      "div", "span", "section", "article", "header", "footer", "main", "aside",
+      "blockquote", "pre", "code", "hr",
+      // Media
+      "img", "picture", "source", "figure", "figcaption",
+      // Email-specific legacy tags
+      "center", "font",
+      // Styles (preserved so email CSS works)
+      "style",
+    ],
+    allowedAttributes: {
+      "*": ["style", "class", "id", "align", "valign", "bgcolor", "border",
+            "cellpadding", "cellspacing", "color", "height", "width", "role",
+            "aria-label", "aria-hidden", "dir", "lang"],
+      a: ["href", "title", "target", "rel", "name"],
+      img: ["src", "alt", "width", "height", "border", "loading"],
+      td: ["colspan", "rowspan"],
+      th: ["colspan", "rowspan", "scope"],
+      meta: ["charset", "name", "content"],
+      table: ["summary"],
+      col: ["span"],
+      colgroup: ["span"],
+    },
+    allowedSchemesByTag: {
+      a: ["http", "https", "mailto"],
+      img: ["http", "https", "cid", "data"],
+    },
+    // Completely remove dangerous tags and their content
+    nonTextTags: ["script", "iframe", "frame", "object", "embed", "applet", "base"],
+    transformTags: {
+      a: (_tagName, attribs) => ({
+        tagName: "a",
+        attribs: {
+          ...attribs,
+          target: "_blank",
+          rel: "noopener noreferrer",
+        },
+      }),
+    },
+    disallowedTagsMode: "discard",
+  });
+  return cleaned;
 }
 
 const URL_RE = /https?:\/\/[^\s<>"]+/g;
@@ -71,15 +130,24 @@ export function stripHtmlToText(body: string, maxLength = 80): string {
   let text: string;
   if (isHtmlBody(body)) {
     text = body
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+      // Remove entire head section (includes <title>, <style>, <meta>, etc.)
+      .replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, "")
+      // Remove style blocks (including type attributes and CDATA wrappers)
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
+      // Remove script blocks
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+      // Strip all remaining tags
       .replace(/<[^>]+>/g, " ")
+      // Decode common HTML entities
       .replace(/&nbsp;/g, " ")
       .replace(/&amp;/g, "&")
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'")
+      .replace(/&#x27;/g, "'")
+      .replace(/&apos;/g, "'")
+      // Collapse whitespace
       .replace(/\s+/g, " ")
       .trim();
   } else {

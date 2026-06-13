@@ -4,12 +4,11 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import AIDraftPanel from "@/app/conversations/[id]/AIDraftPanel";
+import ReplyComposer from "@/app/conversations/[id]/ReplyComposer";
 import CalendarHoldPanel from "@/app/conversations/[id]/CalendarHoldPanel";
 import ExplainThreadPanel from "@/app/conversations/[id]/ExplainThreadPanel";
 import HandleThisPanel from "@/app/conversations/[id]/HandleThisPanel";
 import WorkItemsPanel from "@/app/conversations/[id]/WorkItemsPanel";
-import SendBox from "@/app/conversations/[id]/SendBox";
 import StatusButton from "@/app/conversations/[id]/StatusButton";
 import LabelSelect from "@/app/conversations/[id]/LabelSelect";
 import SaveContactForm from "@/app/conversations/[id]/SaveContactForm";
@@ -49,7 +48,6 @@ export default async function ConversationPage({
     tenant,
     conversation,
     businessProfile,
-    knowledgeDocumentCount,
     latestAgentJob,
     activeHold,
     pendingApprovals,
@@ -77,9 +75,6 @@ export default async function ConversationPage({
     prisma.businessProfile.findUnique({
       where: { tenantId: session.user.tenantId },
       select: { id: true, primaryCalendarEmail: true },
-    }),
-    prisma.knowledgeDocument.count({
-      where: { tenantId: session.user.tenantId },
     }),
     prisma.agentJob.findFirst({
       where: { conversationId: params.id, tenantId: session.user.tenantId, status: "completed" },
@@ -378,34 +373,24 @@ export default async function ConversationPage({
   )
 
   const replyComposer = (
-    <>
-      <div className="px-6 py-5">
-        <AIDraftPanel
-          conversationId={conversation.id}
-          channelType={conversation.channel.type}
-          canSuggest={canSuggestReply}
-          knowledgeDocumentCount={knowledgeDocumentCount}
-          isPersonal={isPersonal}
-          initialDraft={
-            conversation.draft
-              ? {
-                  id: conversation.draft.id,
-                  text: conversation.draft.text,
-                  status: conversation.draft.status,
-                  metadataJson: draftMetadata ?? null,
-                }
-              : null
-          }
-          inline
-        />
-      </div>
-      <div className="border-t border-slate-100 bg-slate-50 px-6 py-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          Or send directly
-        </p>
-        <SendBox conversationId={conversation.id} />
-      </div>
-    </>
+    <div className="px-5 py-4">
+      <ReplyComposer
+        conversationId={conversation.id}
+        channelType={conversation.channel.type}
+        canSuggest={canSuggestReply}
+        isPersonal={isPersonal}
+        initialDraft={
+          conversation.draft
+            ? {
+                id: conversation.draft.id,
+                text: conversation.draft.text,
+                status: conversation.draft.status,
+                metadataJson: draftMetadata ?? null,
+              }
+            : null
+        }
+      />
+    </div>
   )
 
   return (
@@ -445,7 +430,7 @@ export default async function ConversationPage({
 
             {/* Scrollable messages */}
             <div className="flex-1 overflow-y-auto px-5 py-4">
-              <div className="mx-auto max-w-2xl space-y-4">
+              <div className="mx-auto max-w-3xl space-y-4">
                 {conversation.messages.length === 0 ? (
                   <p className="text-sm text-slate-500">No messages yet.</p>
                 ) : (
@@ -486,15 +471,10 @@ export default async function ConversationPage({
               </div>
             </div>
 
-            {/* Reply composer — anchored at bottom */}
-            <div className="mx-auto w-full max-w-2xl shrink-0 border-t-2 border-slate-200 bg-white">
-              <div className="flex items-center justify-between px-6 pt-3">
+            {/* Reply composer — anchored at bottom, full thread-column width */}
+            <div className="shrink-0 border-t-2 border-slate-200 bg-white">
+              <div className="flex items-center px-5 pt-3">
                 <h2 className="text-sm font-bold text-slate-900">Reply to {displayName}</h2>
-                {conversation.draft && conversation.draft.status !== "none" && (
-                  <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-[10px] font-bold text-blue-700">
-                    {conversation.draft.status === "sent" ? "Sent" : "Draft ready"}
-                  </span>
-                )}
               </div>
               {replyComposer}
             </div>
@@ -585,9 +565,8 @@ export default async function ConversationPage({
             </div>
 
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-100 px-6 py-3">
+              <div className="border-b border-slate-100 px-5 py-3">
                 <h2 className="text-sm font-semibold text-slate-800">Reply</h2>
-                <p className="text-xs text-slate-500">Review and approve before anything is sent.</p>
               </div>
               {replyComposer}
             </div>
