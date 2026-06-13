@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   isHtmlBody,
   sanitizeEmailHtml,
+  sanitizeEmailHtmlForIframe,
   linkifyText,
   renderEmailBodyHtml,
   stripHtmlToText,
@@ -95,6 +96,26 @@ describe("sanitizeEmailHtml", () => {
   });
 });
 
+describe("sanitizeEmailHtmlForIframe", () => {
+  it("removes scripts, event handlers, and javascript URLs before iframe rendering", () => {
+    const result = sanitizeEmailHtmlForIframe(
+      '<div onclick="steal()"><a href="javascript:alert(1)">bad</a><img src="https://example.com/a.png" onerror="xss()"><script>alert(1)</script></div>'
+    );
+    expect(result).not.toContain("<script");
+    expect(result).not.toContain("onclick");
+    expect(result).not.toContain("onerror");
+    expect(result).not.toContain("javascript:");
+    expect(result).toContain('src="https://example.com/a.png"');
+  });
+
+  it("does not allow data image URLs in rendered email HTML", () => {
+    const result = sanitizeEmailHtmlForIframe(
+      '<img src="data:image/svg+xml,<svg onload=alert(1)>" alt="x">'
+    );
+    expect(result).not.toContain("data:image");
+  });
+});
+
 describe("linkifyText", () => {
   it("converts https URLs to anchor tags", () => {
     const result = linkifyText("Check this: https://example.com today");
@@ -174,6 +195,13 @@ describe("stripHtmlToText", () => {
     expect(result).not.toContain(".foo");
     expect(result).not.toContain("alert");
     expect(result).toBe("Content");
+  });
+
+  it("generates readable text from sanitized content, not raw comments or CSS", () => {
+    const result = stripHtmlToText(
+      '<html><head><style>.preview{display:none}</style></head><body><!-- hidden --><p>Hello&nbsp;<strong>world</strong></p><script>bad()</script></body></html>'
+    );
+    expect(result).toBe("Hello world");
   });
 
   it("decodes common HTML entities", () => {

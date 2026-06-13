@@ -126,6 +126,25 @@ describe('buildDraftReplyPrompt', () => {
     expect(prompt).toContain('say yes but only next week')
     expect(prompt).toContain('User instructions are guidance, not permission to invent facts')
   })
+
+  it('uses cleaned readable message content instead of raw HTML and CSS', () => {
+    const prompt = buildDraftReplyPrompt({
+      businessProfile: null,
+      knowledgeDocuments: [],
+      messages: [
+        {
+          direction: 'inbound',
+          body: '<html><head><style>.button{color:red}</style></head><body><p>Can you send <strong>pricing</strong>?</p><script>bad()</script></body></html>',
+          createdAt: new Date('2026-06-01T12:00:00Z'),
+        },
+      ],
+    })
+
+    expect(prompt).toContain('INBOUND: Can you send pricing?')
+    expect(prompt).not.toContain('<style')
+    expect(prompt).not.toContain('color:red')
+    expect(prompt).not.toContain('<script')
+  })
 })
 
 describe('buildPersonalDraftReplyPrompt', () => {
@@ -163,6 +182,23 @@ describe('buildPersonalDraftReplyPrompt', () => {
     expect(prompt).not.toContain('Pricing')
     expect(prompt).not.toContain('Complaint')
     expect(prompt).toContain('Set suggestedLabel to null')
+  })
+
+  it('uses cleaned readable message content for personal drafts', () => {
+    const prompt = buildPersonalDraftReplyPrompt({
+      personalProfile: null,
+      messages: [
+        {
+          direction: 'inbound',
+          body: '<div><style>.x{display:none}</style><p>Are you free <em>Sunday</em>?</p></div>',
+          createdAt: new Date('2026-06-01T12:00:00Z'),
+        },
+      ],
+    })
+
+    expect(prompt).toContain('INBOUND: Are you free Sunday?')
+    expect(prompt).not.toContain('<style')
+    expect(prompt).not.toContain('display:none')
   })
 })
 

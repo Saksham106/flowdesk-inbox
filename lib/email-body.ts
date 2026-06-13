@@ -75,7 +75,7 @@ export function sanitizeEmailHtmlForIframe(html: string): string {
     },
     allowedSchemesByTag: {
       a: ["http", "https", "mailto"],
-      img: ["http", "https", "cid", "data"],
+      img: ["http", "https", "cid"],
     },
     // Completely remove dangerous tags and their content
     nonTextTags: ["script", "iframe", "frame", "object", "embed", "applet", "base"],
@@ -90,6 +90,7 @@ export function sanitizeEmailHtmlForIframe(html: string): string {
       }),
     },
     disallowedTagsMode: "discard",
+    allowVulnerableTags: true,
   });
   return cleaned;
 }
@@ -129,16 +130,24 @@ export function renderEmailBodyHtml(body: string): string {
 export function stripHtmlToText(body: string, maxLength = 80): string {
   let text: string;
   if (isHtmlBody(body)) {
-    text = body
-      // Remove entire head section (includes <title>, <style>, <meta>, etc.)
-      .replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, "")
-      // Remove style blocks (including type attributes and CDATA wrappers)
-      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
-      // Remove script blocks
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
-      // Strip all remaining tags
-      .replace(/<[^>]+>/g, " ")
-      // Decode common HTML entities
+    text = sanitizeHtml(body, {
+      allowedTags: [],
+      allowedAttributes: {},
+      nonTextTags: [
+        "head",
+        "style",
+        "script",
+        "template",
+        "iframe",
+        "frame",
+        "object",
+        "embed",
+        "applet",
+        "base",
+        "noscript",
+      ],
+      disallowedTagsMode: "discard",
+    })
       .replace(/&nbsp;/g, " ")
       .replace(/&amp;/g, "&")
       .replace(/&lt;/g, "<")
@@ -147,7 +156,6 @@ export function stripHtmlToText(body: string, maxLength = 80): string {
       .replace(/&#39;/g, "'")
       .replace(/&#x27;/g, "'")
       .replace(/&apos;/g, "'")
-      // Collapse whitespace
       .replace(/\s+/g, " ")
       .trim();
   } else {

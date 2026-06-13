@@ -61,8 +61,7 @@ describe("extractInboxTaskDrafts", () => {
             createdAt: now,
           },
         ],
-      }),
-      now
+      })
     )
 
     expect(tasks).toHaveLength(1)
@@ -82,8 +81,7 @@ describe("extractInboxTaskDrafts", () => {
             createdAt: now,
           },
         ],
-      }),
-      now
+      })
     )
 
     expect(tasks).toEqual([])
@@ -103,8 +101,7 @@ describe("extractLeadDraft", () => {
             createdAt: now,
           },
         ],
-      }),
-      now
+      })
     )
 
     expect(lead).toMatchObject({
@@ -131,8 +128,7 @@ describe("extractLeadDraft", () => {
             createdAt: now,
           },
         ],
-      }),
-      now
+      })
     )
 
     expect(lead).toBeNull()

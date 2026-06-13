@@ -78,7 +78,7 @@ describe('GET /api/business-profile', () => {
 
   it('returns 401 when there is no session', async () => {
     mockSession = null
-    const res = await GET(makeReq() as never)
+    const res = await GET()
     expect(res.status).toBe(401)
   })
 
@@ -86,7 +86,7 @@ describe('GET /api/business-profile', () => {
     mockSession = { user: { id: 'user1', tenantId: 'tenant-A' } }
     mockFindUnique.mockResolvedValue({ id: 'bp1', tenantId: 'tenant-A', businessName: 'Spa' })
 
-    await GET(makeReq() as never)
+    await GET()
 
     expect(mockFindUnique).toHaveBeenCalledOnce()
     expect(mockFindUnique.mock.calls[0][0].where).toMatchObject({ tenantId: 'tenant-A' })
@@ -96,7 +96,7 @@ describe('GET /api/business-profile', () => {
     mockSession = { user: { id: 'user1', tenantId: 'tenant-A' } }
     mockFindUnique.mockResolvedValue(null)
 
-    const res = await GET(makeReq() as never)
+    const res = await GET()
     expect(res.status).toBe(200)
     await expect(res.json()).resolves.toEqual({ profile: null })
   })

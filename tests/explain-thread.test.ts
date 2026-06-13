@@ -62,6 +62,23 @@ describe('buildExplainThreadPrompt', () => {
     expect(prompt).not.toContain('message-number-0')
     expect(prompt).toContain('message-number-29')
   })
+
+  it('uses cleaned readable message content instead of raw HTML and CSS', () => {
+    const prompt = buildExplainThreadPrompt({
+      messages: [
+        {
+          direction: 'inbound',
+          body: '<html><head><style>.x{display:none}</style></head><body><p>Hello <b>there</b></p><script>alert(1)</script></body></html>',
+          createdAt: new Date('2026-06-12T09:00:00Z'),
+        },
+      ],
+    })
+
+    expect(prompt).toContain('INBOUND: Hello there')
+    expect(prompt).not.toContain('<style')
+    expect(prompt).not.toContain('display:none')
+    expect(prompt).not.toContain('<script')
+  })
 })
 
 // ---------------------------------------------------------------------------
