@@ -43,11 +43,10 @@ export default async function ConversationPage({
     redirect("/login");
   }
 
-  const accountMode = resolveAccountMode((session.user as Record<string, unknown>).accountType);
-  const isPersonal = accountMode === "personal";
-  const accountType = (session.user as Record<string, unknown>).accountType as string | null;
+  const sessionAccountType = (session.user as Record<string, unknown>).accountType as string | null;
 
   const [
+    tenant,
     conversation,
     businessProfile,
     knowledgeDocumentCount,
@@ -57,6 +56,10 @@ export default async function ConversationPage({
     pendingFollowUpJob,
     needsReplyCount,
   ] = await Promise.all([
+    prisma.tenant.findUnique({
+      where: { id: session.user.tenantId },
+      select: { accountType: true },
+    }),
     prisma.conversation.findFirst({
       where: {
         id: params.id,
@@ -73,7 +76,7 @@ export default async function ConversationPage({
     }),
     prisma.businessProfile.findUnique({
       where: { tenantId: session.user.tenantId },
-      select: { id: true },
+      select: { id: true, primaryCalendarEmail: true },
     }),
     prisma.knowledgeDocument.count({
       where: { tenantId: session.user.tenantId },
@@ -104,6 +107,10 @@ export default async function ConversationPage({
   if (!conversation) {
     notFound();
   }
+
+  const accountType = tenant?.accountType ?? sessionAccountType ?? "personal";
+  const accountMode = resolveAccountMode(accountType);
+  const isPersonal = accountMode === "personal";
 
   await syncConversationWorkItems({
     tenantId: session.user.tenantId,
@@ -322,8 +329,7 @@ export default async function ConversationPage({
               : []
           }
           primaryCalendarEmail={
-            (businessProfile as { primaryCalendarEmail?: string | null } | null)
-              ?.primaryCalendarEmail ?? null
+            businessProfile?.primaryCalendarEmail ?? null
           }
           activeHold={activeHold}
         />
