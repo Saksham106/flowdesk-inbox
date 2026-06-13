@@ -8,7 +8,7 @@ export default function DisconnectOutlookButton({ channelId }: { channelId: stri
   const [loading, setLoading] = useState(false);
 
   async function handleDisconnect() {
-    if (!confirm("Disconnect this Outlook account? Its conversations will remain in your inbox.")) return;
+    if (!confirm("Disconnect this Outlook account? All synced conversations and messages will be permanently deleted from your inbox.")) return;
     setLoading(true);
     await fetch("/api/connectors/outlook/disconnect", {
       method: "POST",
