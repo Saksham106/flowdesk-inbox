@@ -4,6 +4,7 @@ import {
   sanitizeEmailHtml,
   linkifyText,
   renderEmailBodyHtml,
+  stripHtmlToText,
 } from "@/lib/email-body";
 
 describe("isHtmlBody", () => {
@@ -157,5 +158,52 @@ describe("renderEmailBodyHtml", () => {
     );
     expect(result).toContain("Hi");
     expect(result).not.toContain("DOCTYPE");
+  });
+});
+
+describe("stripHtmlToText", () => {
+  it("strips HTML tags from an HTML body", () => {
+    const result = stripHtmlToText("<p>Hello <b>world</b></p>");
+    expect(result).toBe("Hello world");
+  });
+
+  it("strips style and script blocks entirely", () => {
+    const result = stripHtmlToText(
+      "<style>.foo{color:red}</style><p>Content</p><script>alert(1)</script>"
+    );
+    expect(result).not.toContain(".foo");
+    expect(result).not.toContain("alert");
+    expect(result).toBe("Content");
+  });
+
+  it("decodes common HTML entities", () => {
+    const result = stripHtmlToText("<p>cats &amp; dogs &lt;3&gt;</p>");
+    expect(result).toBe("cats & dogs <3>");
+  });
+
+  it("truncates at maxLength and appends ellipsis", () => {
+    const result = stripHtmlToText("<p>" + "a".repeat(100) + "</p>", 20);
+    expect(result.endsWith("…")).toBe(true);
+    expect([...result].length).toBe(21); // 20 chars + ellipsis char
+  });
+
+  it("does not truncate short HTML bodies", () => {
+    const result = stripHtmlToText("<p>Short</p>", 80);
+    expect(result).toBe("Short");
+  });
+
+  it("strips markdown syntax from plain text", () => {
+    const result = stripHtmlToText("**Bold** and _italic_ text");
+    expect(result).toBe("Bold and italic text");
+  });
+
+  it("collapses newlines in plain text", () => {
+    const result = stripHtmlToText("Line 1\nLine 2\nLine 3");
+    expect(result).toBe("Line 1 Line 2 Line 3");
+  });
+
+  it("returns empty string for blank input", () => {
+    expect(stripHtmlToText("")).toBe("");
+    expect(stripHtmlToText("   ")).toBe("");
   });
 });
