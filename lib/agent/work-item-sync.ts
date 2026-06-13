@@ -6,6 +6,8 @@ import { syncPersonMemory } from "@/lib/agent/person-memory"
 import { scoreLeadForConversation } from "@/lib/agent/lead-scoring"
 import { classifySupportSignals } from "@/lib/agent/support-classifier"
 import { classifySalesSignals } from "@/lib/agent/sales-classifier"
+import { classifyEmailType } from "@/lib/agent/email-classifier"
+import { extractEmail } from "@/lib/google"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
@@ -47,6 +49,12 @@ export async function syncConversationWorkItems(
   if (!conversation) {
     throw new Error("Conversation not found or does not belong to this tenant")
   }
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: input.tenantId },
+    select: { accountType: true },
+  })
+  const isPersonal = tenant?.accountType === "personal"
 
   const kbDocs = (await prisma.knowledgeDocument.findMany({
     where: { tenantId: input.tenantId },
@@ -187,15 +195,17 @@ export async function syncConversationWorkItems(
 
     leadSynced = true
 
-    // Fire-and-forget LLM scoring — does not block sync
-    const upsertedLead = await prisma.lead.findFirst({
-      where: { tenantId: conversation.tenantId, conversationId: conversation.id },
-      select: { id: true },
-    })
-    if (upsertedLead) {
-      void scoreLeadForConversation(conversation.tenantId, upsertedLead.id).catch(() => {
-        // Scoring failures are silent — the heuristic score remains
+    // Fire-and-forget LLM scoring — business accounts only, does not block sync
+    if (!isPersonal) {
+      const upsertedLead = await prisma.lead.findFirst({
+        where: { tenantId: conversation.tenantId, conversationId: conversation.id },
+        select: { id: true },
       })
+      if (upsertedLead) {
+        void scoreLeadForConversation(conversation.tenantId, upsertedLead.id).catch(() => {
+          // Scoring failures are silent — the heuristic score remains
+        })
+      }
     }
   }
 
@@ -252,36 +262,69 @@ export async function syncConversationWorkItems(
     postSupportMeta = updatedSupportMeta
   }
 
-  const salesSignals = classifySalesSignals(
-    conversation.messages.map((m) => ({ direction: m.direction, body: m.body }))
-  )
+  let salesClassified = false
+  if (!isPersonal) {
+    const salesSignals = classifySalesSignals(
+      conversation.messages.map((m) => ({ direction: m.direction, body: m.body }))
+    )
 
-  await prisma.auditLog.create({
-    data: {
-      tenantId: conversation.tenantId,
-      action: "conversation_state.sales_classified",
-      payloadJson: {
-        conversationId: conversation.id,
-        isSalesLead: salesSignals.isSalesLead,
-        closingStage: salesSignals.closingStage,
-      },
-    },
-  })
-
-  if (salesSignals.isSalesLead) {
-    await prisma.conversationState.update({
-      where: { conversationId: conversation.id },
+    await prisma.auditLog.create({
       data: {
-        metadataJson: {
-          ...postSupportMeta,
-          isSalesLead: true,
-          extractedBudget: salesSignals.extractedBudget,
-          extractedTimeline: salesSignals.extractedTimeline,
+        tenantId: conversation.tenantId,
+        action: "conversation_state.sales_classified",
+        payloadJson: {
+          conversationId: conversation.id,
+          isSalesLead: salesSignals.isSalesLead,
           closingStage: salesSignals.closingStage,
-          suggestedAction: salesSignals.suggestedAction,
-        } as Prisma.InputJsonValue,
+        },
       },
     })
+
+    if (salesSignals.isSalesLead) {
+      await prisma.conversationState.update({
+        where: { conversationId: conversation.id },
+        data: {
+          metadataJson: {
+            ...postSupportMeta,
+            isSalesLead: true,
+            extractedBudget: salesSignals.extractedBudget,
+            extractedTimeline: salesSignals.extractedTimeline,
+            closingStage: salesSignals.closingStage,
+            suggestedAction: salesSignals.suggestedAction,
+          } as Prisma.InputJsonValue,
+        },
+      })
+      salesClassified = true
+    }
+  }
+
+  // Classify email type (notification / newsletter / marketing) for all accounts
+  const firstInbound = conversation.messages.find((m) => m.direction === "inbound")
+  if (firstInbound) {
+    const fromEmail = extractEmail(firstInbound.fromE164 ?? "")
+    const { emailType } = classifyEmailType({
+      fromEmail,
+      subject: "",
+      body: firstInbound.body,
+    })
+
+    if (emailType !== "needs_reply") {
+      const currentState = await prisma.conversationState.findUnique({
+        where: { conversationId: conversation.id },
+        select: { metadataJson: true },
+      })
+      const currentMeta =
+        currentState?.metadataJson &&
+        typeof currentState.metadataJson === "object" &&
+        !Array.isArray(currentState.metadataJson)
+          ? (currentState.metadataJson as Record<string, unknown>)
+          : {}
+
+      await prisma.conversationState.update({
+        where: { conversationId: conversation.id },
+        data: { metadataJson: { ...currentMeta, emailType } as Prisma.InputJsonValue },
+      })
+    }
   }
 
   return {
@@ -289,6 +332,6 @@ export async function syncConversationWorkItems(
     tasksSynced,
     leadSynced,
     supportClassified: supportSignals.isSupport,
-    salesClassified: salesSignals.isSalesLead,
+    salesClassified,
   }
 }

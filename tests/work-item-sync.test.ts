@@ -10,6 +10,7 @@ const {
   mockLeadFindFirst,
   mockAuditCreate,
   mockKbDocFindMany,
+  mockTenantFindUnique,
 } = vi.hoisted(() => ({
   mockConversationFindFirst: vi.fn(),
   mockStateUpsert: vi.fn(),
@@ -20,6 +21,7 @@ const {
   mockLeadFindFirst: vi.fn(),
   mockAuditCreate: vi.fn(),
   mockKbDocFindMany: vi.fn(),
+  mockTenantFindUnique: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -30,6 +32,7 @@ vi.mock("@/lib/prisma", () => ({
     lead: { upsert: mockLeadUpsert, findFirst: mockLeadFindFirst },
     auditLog: { create: mockAuditCreate },
     knowledgeDocument: { findMany: mockKbDocFindMany },
+    tenant: { findUnique: mockTenantFindUnique },
   },
 }))
 
@@ -71,6 +74,7 @@ describe("syncConversationWorkItems", () => {
     mockLeadFindFirst.mockResolvedValue({ id: "lead-1" })
     mockAuditCreate.mockResolvedValue({})
     mockKbDocFindMany.mockResolvedValue([])
+    mockTenantFindUnique.mockResolvedValue({ accountType: "business" })
   })
 
   it("loads the conversation scoped to the tenant", async () => {
