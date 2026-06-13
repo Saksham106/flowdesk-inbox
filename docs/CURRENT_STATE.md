@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-13 (inbox nav refactor, channel disconnect fixes, FYI classifier hardening)
+Last updated: 2026-06-13 (email-only thread UI and personal/business account-mode hardening)
 
 This file is the codebase-facing companion to `MASTER_PRODUCT_PLAN.md`. It answers: what exists today, what is partial, and what should not be treated as active scope.
 
@@ -20,7 +20,7 @@ If this file and the code disagree, fix the doc in the same branch as the code c
 
 ## Product Position
 
-FlowDesk is currently an email-first AI inbox agent for individuals and small businesses. The product is moving from "AI draft replies" toward an "AI chief of staff for your inbox": daily command center, safe handling, follow-ups, relationship context, task extraction, lead detection, and approval-gated automation.
+FlowDesk is currently an email-first AI inbox agent for individuals and small businesses. The MVP direction is personal/work-email friendly by default, with business revenue/support features available only when the account is in business mode. The product is moving from "AI draft replies" toward an "AI chief of staff for your inbox": daily command center, safe handling, follow-ups, relationship context, task extraction, account-appropriate classification, and approval-gated automation.
 
 Email is the active channel. SMS/Twilio is not part of the active product path.
 
@@ -31,6 +31,9 @@ Email is the active channel. SMS/Twilio is not part of the active product path.
 - Credentials-based auth with NextAuth.
 - Tenant-scoped user model.
 - Most server reads and writes are scoped by `tenantId`.
+- `Tenant.accountType` (`personal` or `business`) is the current source of truth for account mode.
+- `lib/account-mode.ts` provides the shared account-mode helper. Unknown or missing account types default to personal-safe behavior.
+- The storage model still uses `Tenant` internally for isolation. Product-facing UI should say account/workspace/profile where possible; do not rename the Prisma model without a dedicated migration plan.
 
 ### Email And Calendar Connectors
 
@@ -44,7 +47,7 @@ Email is the active channel. SMS/Twilio is not part of the active product path.
 - Conversation inbox at `/inbox`.
 - Conversation detail pages at `/conversations/[id]`.
 - Conversation statuses: `needs_reply`, `in_progress`, `closed`.
-- Labels for common AI classifications.
+- Business labels for common AI classifications. Personal accounts do not show CRM labels in the inbox or conversation detail.
 - Manual send path through shared send helper.
 - Audit log model and audit page.
 
@@ -62,7 +65,7 @@ Email body rendering (2026-06-12):
   - Plain-text emails with `**bold**` or `_italic_` markers now render as `<strong>`/`<em>` instead of showing raw markers. Lookbehind guard prevents underscore-in-word false matches.
 - `app/components/EmailBody.tsx` — server component rendering sanitized HTML or linkified plain text via `dangerouslySetInnerHTML`.
 - `app/globals.css` — `.email-body` scoped CSS: `overflow-wrap: anywhere`, `word-break: break-word`, `max-width: 100%`, image/table/pre/link constraints.
-- `app/conversations/[id]/page.tsx` — message bubbles use `EmailBody`; main section has `min-w-0 overflow-x-hidden` so the sidebar stays visible on desktop even with long/HTML content.
+- `app/conversations/[id]/page.tsx` — email thread blocks use `EmailBody`; main section has `min-w-0 overflow-x-hidden` so the sidebar stays visible on desktop even with long/HTML content.
 - `lib/google.ts` — `extractBody` now checks `mimeType` on root body (strips HTML when `text/html` or content starts with `<`), recurses into nested `multipart/*` via `findPart`, and has a depth guard (max 8) against malformed payloads.
 - Tests in `tests/email-body.test.ts` — 26 tests covering detection, sanitization (XSS, iframe, event handlers, scheme restriction), linkification, and BOM handling.
 
@@ -77,17 +80,33 @@ Conversation page layout redesign (2026-06-12):
 - Contact and Label merged into one card, eliminating one always-visible sidebar item.
 - Sidebar widened from 280px to 300px; main grid gap reduced from 6 to 5.
 
-Personal vs business account UI separation (2026-06-12):
+Email-only thread UI hardening (2026-06-13):
 
-- `app/conversations/[id]/page.tsx` — reads `accountType` from the NextAuth session (set during login from `Tenant.accountType`); derives `isPersonal` flag; passes it to `LabelSelect` and `WorkItemsPanel`; gates `SalesPanel` with `isSalesLead && !isPersonal`.
+- `app/conversations/[id]/page.tsx` — the message renderer no longer uses left/right chat bubbles. Messages render as full-width email blocks in chronological order with sender, recipient, timestamp, direction badge, and `EmailBody` content.
+- Reply composition remains connected to the thread below the messages through the inline Reply card containing `AIDraftPanel` and `SendBox`.
+- The existing email-body sanitization, linkification, wrapping, and layout constraints remain in use through `EmailBody`.
+- Personal accounts hide existing business labels in the thread header/contact card even if old data has a label value.
+
+Personal vs business account separation (updated 2026-06-13):
+
+- `app/conversations/[id]/page.tsx` — reads `accountType` from the NextAuth session (set during login from `Tenant.accountType`); derives account mode through `resolveAccountMode`; gates business-only panels and labels.
 - `app/conversations/[id]/LabelSelect.tsx` — accepts `isPersonal` prop; personal accounts see only "No label" (no CRM labels); business accounts see Lead, Reschedule, Pricing, Complaint as before.
 - `app/conversations/[id]/WorkItemsPanel.tsx` — accepts `isPersonal` prop; lead card (blue, with stage dropdown and score) is hidden for personal accounts.
-- `app/conversations/[id]/SalesPanel.tsx` — unchanged; already hidden for personal accounts via the page-level gate above.
+- `app/conversations/[id]/AIDraftPanel.tsx` — receives a mode-aware `canSuggest` capability instead of treating business-profile presence as the generic draft gate. Personal accounts can draft without a business profile.
+- `app/conversations/[id]/HandleThisPanel.tsx` — receives the same mode-aware suggestion capability.
+- `app/inbox/page.tsx` and `app/inbox/CommandCenterPanel.tsx` — personal accounts do not render Sales, Support, Opportunities, lead-score badges, CRM labels, or Revenue at Risk widgets in the normal inbox flow.
+- `app/digest/page.tsx` — passes account type into command-center analysis so digest sections do not classify personal conversations as sales/support opportunities.
+- `app/settings/page.tsx` — Follow-Up Automation copy says quiet conversations for personal accounts and quiet leads for business accounts.
+- `lib/agent/command-center.ts` — accepts account type for analysis. Opportunity, support, and sales-qualified states are business-only; sensitive email signals still override auto-email classification for both modes.
+- `lib/agent/work-items.ts` and `lib/agent/work-item-sync.ts` — personal accounts still get state/task/person-memory sync, but deterministic lead extraction, support classification, sales classification, lead scoring, and lead audit records are business-only.
+- `app/api/conversations/[id]/draft/suggest/route.ts` — personal draft metadata forcibly stores `suggestedLabel: null` and never writes business labels to the conversation.
+- `lib/ai/prompts/draft-reply.ts` — personal draft prompt tells the model to keep `suggestedLabel` null instead of listing business labels.
 - `lib/agent/command-center.ts` — added `stripHtml` and `plainBody` helpers; `bodyText` now strips HTML from HTML email bodies before pattern matching; `lastConversationSummary` and `pastPromises` in `buildRelationshipContext` use `plainBody` so the Assistant Context "Summary" row never shows raw HTML/CSS/template markup.
+- Tests: `tests/work-item-sync.test.ts` covers personal accounts not creating lead records; `tests/ai-draft-provider.test.ts` covers personal draft prompt label separation; command-center tests cover account-mode-safe behavior and sensitive override.
 
 Limitations:
 
-- Personal accounts have no configurable label set yet; the label dropdown simply shows "No label" only. A future slice can add a personal label taxonomy (e.g. To-do, Waiting, FYI).
+- Personal accounts have no configurable label set yet; CRM labels are hidden rather than replaced. A future slice can add a personal label taxonomy (e.g. To-do, Waiting, FYI).
 - The `isPersonal` flag is derived from session at render time; no separate UI exists to switch account type without an admin re-seed.
 
 ### AI Drafting
@@ -134,7 +153,7 @@ Current behavior:
 
 Limitation:
 
-- Command-center state is computed at render time. It is not yet persisted in a `ConversationState` table.
+- Some command-center data is persisted through `ConversationState`, but the rendered brief still recomputes several rollups and rankings at request time.
 
 ### Task, Lead, And Approval Foundations
 
@@ -210,13 +229,13 @@ Email Risk Radar slice implemented (2026-06-12, Phase 1):
 
 Current behavior:
 
-- Opening a conversation syncs deterministic state, open tasks, and a lead record when the thread has matching signals.
+- Opening a conversation syncs deterministic state and open tasks. Business accounts also sync a lead record when the thread has matching business signals.
 - Gmail and Outlook sync now also triggers work-item sync for each imported conversation (background, fire-and-forget).
 - Tasks can be closed from the conversation sidebar and due dates can be edited from `/tasks`.
-- Leads can be moved through stages (new → contacted → qualified → won → lost) from the conversation sidebar or `/leads`.
+- Business leads can be moved through stages (new → contacted → qualified → won → lost) from the conversation sidebar or `/leads`.
 - Approval queue supports inline approve/reject decisions, bulk decisions, and inline draft previews without navigating to the conversation.
 - Tasks are extracted from promise, deadline, payment, invoice, and renewal language.
-- Leads are extracted from pricing, demo, setup, and booking language.
+- Leads are extracted from pricing, demo, setup, and booking language for business accounts only.
 - Every contact gets a persisted `PersonMemory` record after sync, surfaced as a relationship panel on conversation pages.
 - The inbox shows queued follow-up jobs and a collapsible safely-ignored section.
 
@@ -267,8 +286,8 @@ Conversation page layout and UX polish (2026-06-12):
 - `app/conversations/[id]/page.tsx` — page-level max width widened from `max-w-5xl` (1024px) to `max-w-[1200px]`; applies to both the header bar and the main grid; sidebar column widened from 300px to 320px; grid gap increased from 5 to 6. On a typical 1440px desktop the main email column gains ~170px, eliminating the empty-canvas feeling.
 - `app/conversations/[id]/page.tsx` — `isPersonal` is now forwarded to `AIDraftPanel` and `HandleThisPanel` (previously only passed to `LabelSelect` and `WorkItemsPanel`).
 - Text overflow hardening: `min-w-0 overflow-hidden` added to sidebar Contact card, the "No reply needed" auto-email card, and `HandleThisPanel` outer div; `break-words [overflow-wrap:anywhere]` added to `HandleThisPanel` `ContextRow <dd>`, `ContextList <li>`, the Relationship memory content block, and `CollapsibleCard` inner content; header email address line uses `break-all` to handle bare email/thread addresses.
-- `app/conversations/[id]/AIDraftPanel.tsx` — `isPersonal?: boolean` prop added (default `false`); personal accounts see "Add reply preferences in Settings to enable suggestions." instead of "Add a business profile in Settings…"; setup warning style changed from amber to neutral slate (less visually dominant when the card is in a disabled state); instruction textarea reduced from `rows={2}` to `rows={1}`; draft textarea uses `rows={hasDraftText ? 6 : 3}` — collapses when empty, expands once a draft exists.
-- `app/conversations/[id]/HandleThisPanel.tsx` — `isPersonal?: boolean` prop added (default `false`); personal accounts see "Complete your profile in Settings before FlowDesk can draft a response." instead of "Add a business profile in Settings…"; `ContextRow` and `ContextList` get `min-w-0 break-words [overflow-wrap:anywhere]` for long summaries and bare URLs; outer card gets `min-w-0 overflow-hidden`.
+- `app/conversations/[id]/AIDraftPanel.tsx` — `isPersonal?: boolean` prop added (default `false`); setup warning style changed from amber to neutral slate (less visually dominant when the card is in a disabled state); instruction textarea reduced from `rows={2}` to `rows={1}`; draft textarea uses `rows={hasDraftText ? 6 : 3}` — collapses when empty, expands once a draft exists. Draft availability is now governed by mode-aware `canSuggest`.
+- `app/conversations/[id]/HandleThisPanel.tsx` — `isPersonal?: boolean` prop added (default `false`); `ContextRow` and `ContextList` get `min-w-0 break-words [overflow-wrap:anywhere]` for long summaries and bare URLs; outer card gets `min-w-0 overflow-hidden`. Draft availability is now governed by mode-aware `canSuggest`.
 - `app/components/CollapsibleCard.tsx` — inner content div gets `min-w-0 break-words [overflow-wrap:anywhere]` so all collapsible card content is overflow-safe.
 
 AI Classification Quality improvements (2026-06-12):
@@ -373,17 +392,21 @@ See `docs/TODO.md` for the full remaining-work roadmap mapped against the master
 
 ## Verification Baseline
 
-Recent verification (2026-06-12, after conversation page layout redesign):
+Recent verification (2026-06-13, after email thread UI and account-mode hardening):
 
 ```bash
 npm test
+npm run lint
+npm run build
 ```
 
 Observed result:
 
-- `npm test`: 349 tests passed across 33 files.
+- `npm test`: 383 tests passed across 34 files.
+- `npm run lint`: passed.
+- `npm run build`: passed.
 
 Browser smoke-test note:
 
-- The unauthenticated app shell rendered at `http://localhost:3000/login` with no console errors.
-- Authenticated visual QA was blocked because local Postgres was not running at `localhost:5432`, so the documented seed user could not be created in that environment.
+- Production build server rendered `http://localhost:3100/login` with the expected email/password fields and no framework overlay.
+- Authenticated conversation-thread visual QA was not completed because the browser session had no logged-in account/conversation data. `next dev` was also unreliable in this environment due local `EMFILE` watcher limits, so the smoke check used `next start` after a successful production build.

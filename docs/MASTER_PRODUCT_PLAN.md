@@ -1,6 +1,6 @@
 # FlowDesk Inbox Master Product Plan
 
-Last updated: 2026-06-12
+Last updated: 2026-06-13
 
 This is the living master plan for FlowDesk Inbox. It exists so humans and AI agents can share the same product map, update it as reality changes, and avoid treating one feature request as the whole product.
 
@@ -54,10 +54,12 @@ Existing foundations in the codebase:
 - Gmail and Outlook connector surfaces.
 - Google Calendar credential and calendar hold support.
 - Conversations, messages, contacts, labels, and statuses.
+- Email-style conversation detail page: full-width chronological email blocks plus reply composer below the thread.
 - AI draft generation with knowledge documents and learned reply profiles.
 - Approval requests and audit logs.
 - Agent jobs, classification, follow-up batch jobs, autopilot settings.
-- Business and personal profile settings.
+- `Tenant.accountType` personal/business mode, with personal-safe defaults and business-only gates for CRM, sales, support, lead, and revenue surfaces.
+- Business and personal reply/profile settings.
 - Daily command center first slice.
 
 Recently shipped first slice:
@@ -100,6 +102,7 @@ It should show:
 
 Every thread should answer:
 
+- Who sent each email, who received it, and when?
 - What happened?
 - What do they want?
 - What do I need to do?
@@ -276,7 +279,7 @@ Success criteria:
 | 17 | Find Anything Natural Language Search | `Planned` | Phase 3 | Needs indexing, embeddings or search schema, permissions. |
 | 18 | Business Inbox Shared Assistant | `Later` | Phase 5 | Needs team model and collaboration primitives. |
 | 19 | Customer Support Agent Mode | `Partial` | Phase 2 | Auto-detect via work-item-sync; churn-risk + escalation flags; KB-match draft suggestion; SupportPanel on conversations; support filter in inbox; command center count. |
-| 20 | Sales Agent Mode | `Planned` | Phase 2 | Build after lead model and follow-up sequences. |
+| 20 | Sales Agent Mode | `Partial` | Phase 2 | Business-mode sales signals, SalesPanel, Sales tab, and sales-qualified state shipped; needs richer sales workflows and settings. |
 | 21 | Personal Life Admin Mode | `Planned` | Phase 3 | Needs personal category detection and safer privacy UX. |
 | 22 | Email Risk Radar | `Shipped` | Phase 1 | `/risk-radar` ships a read-only deterministic scan for deadline-soon, final-notice, unanswered, and sensitive-content signals. Spec: `docs/superpowers/specs/2026-06-12-email-risk-radar-design.md`. Plan: `docs/superpowers/plans/2026-06-12-email-risk-radar.md`. |
 | 23 | Phishing, Scam, and Fraud Protection | `Discovery` | Phase 3 | Needs careful security heuristics and false-positive UX. |
@@ -341,6 +344,11 @@ Shipped Phase 2 slice v2.3 (2026-06-13):
 
 - ROI analytics: `ValueSnapshot` Prisma model, weekly cron at `/api/cron/value-snapshot`, `buildValueSnapshot`/`getWeeklyTrend` in `value-report.ts`, 4-week CSS trend bars + pipeline value summary + revenue opportunities on `/reports`.
 - Email triage by money impact: `analyzeRevenueAtRisk` (stale high-value lead detection), revenue-weighted `score()` bonus in command center, Revenue at Risk amber subsection in `CommandCenterPanel`.
+
+Shipped MVP direction hardening slice (2026-06-13):
+
+- Email-only conversation detail: opened conversations now render as top-to-bottom email threads instead of chat-style bubbles, with sender/recipient/timestamp metadata and a reply composer below the thread.
+- Account-mode boundary: `Tenant.accountType` is the current source of truth. Personal accounts default to personal/work-email behavior and do not show CRM labels, lead/opportunity cards, sales/support widgets, Revenue at Risk, business-profile requirements, or business labels in personal draft prompts. Business accounts retain business profile, knowledge base, sales/support, lead scoring, and revenue features.
 
 ### Next Slice: v2.4 — TBD
 
@@ -479,6 +487,7 @@ After an AI agent finishes work:
 | 2026-06-13 | Ship v2.3: ROI analytics + email triage by money impact. | `ValueSnapshot` model + weekly cron; 4-week trend bars + pipeline summary + revenue opportunities on /reports; `analyzeRevenueAtRisk`; revenue-weighted score bonus; Revenue at Risk panel in command center. |
 | 2026-06-12 | Ship intent-guided draft suggestions in the existing AI draft panel. | Keeps rough instructions inside the manual draft suggestion path, records the instruction in metadata, and preserves all existing review/send safeguards instead of creating a separate compose workflow. |
 | 2026-06-12 | Fix email body rendering: sanitize HTML, auto-link plain-text URLs, fix sidebar overflow layout. | Gmail `extractBody` was storing raw HTML for single-part HTML-only emails (mimeType not checked). Conversation detail page was rendering `message.body` as escaped text unconditionally. Added `lib/email-body.ts` with `sanitize-html` allow-list + linkification; `EmailBody` server component; `min-w-0` layout fix. Both the sync source (extractBody) and the render layer (EmailBody) were fixed: source fix prevents new raw HTML from entering the DB; render fix handles existing rows. |
+| 2026-06-13 | Make the MVP email-only and personal-safe by default while preserving business mode. | Conversation detail moved away from chat bubbles to email-thread blocks. `Tenant.accountType` remains the source of truth; business CRM/sales/support/revenue behavior is gated behind business mode. Renaming `Tenant` is deferred because it is the storage isolation model and a broad migration would be risky. |
 
 ## Open Product Questions
 

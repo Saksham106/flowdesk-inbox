@@ -6,13 +6,15 @@ FlowDesk is an email-first AI inbox agent for individuals and small businesses. 
 
 ## Current Product Scope
 
-- **Gmail and Outlook sync** — connect an email account and import conversations into FlowDesk
-- **Google Calendar support** — connect Google Calendar for availability and calendar holds
-- **Conversation inbox** — view conversations with status, labels, drafts, and assistant context
+- **Gmail and Outlook sync** — connect an email account and import email threads into FlowDesk
+- **Conversation inbox** — view email threads with status, drafts, and assistant context
+- **Email-style thread view** — opened conversations read top-to-bottom like an email client, with sender/recipient/timestamp metadata and a reply composer below the thread
 - **Daily Command Center** — see the conversations that actually matter today, plus what can be safely ignored
 - **Handle This** — ask FlowDesk to draft the next step from a thread-level assistant panel
 - **AI draft suggestions (human-approved)** — generate, edit, approve, and send replies through the email provider
-- **Business profile + knowledge base** — store approved facts, policies, tone, and FAQs for better replies
+- **Personal mode by default** — personal/work-email accounts use personal writing style and inbox classification without CRM or sales language
+- **Business mode** — business accounts can use business profile, knowledge base, CRM labels, sales/support signals, lead scoring, and revenue reporting
+- **Google Calendar support for business accounts** — connect Google Calendar for availability and calendar holds
 - **Follow-up and autopilot foundations** — classify work, queue follow-up jobs, and gate automation behind policy
 - **Audit logs** — record agent, human, and send actions for review
 
@@ -106,7 +108,7 @@ Default login:
 
 ## Connectors
 
-Connectors are configured per-tenant from the **Settings** page (`/settings`).
+Connectors are configured per account from the **Settings** page (`/settings`). The database still uses `Tenant` as the isolation model internally; product-facing behavior is controlled by `Tenant.accountType` (`personal` or `business`).
 
 ### Gmail
 
@@ -119,6 +121,8 @@ Connectors are configured per-tenant from the **Settings** page (`/settings`).
 
 ### Google Calendar
 
+Google Calendar is currently exposed for business accounts.
+
 1. Same Google Cloud project as Gmail
 2. Enable the **Google Calendar API**
 3. Add redirect URI: `http://localhost:3000/api/connectors/google-calendar/callback`
@@ -128,6 +132,8 @@ Connectors are configured per-tenant from the **Settings** page (`/settings`).
 > **Note:** While your Google app is in Testing mode, add users at APIs & Services → OAuth consent screen → Test users before they can connect.
 
 ### MindBody (optional)
+
+MindBody is business-mode only.
 
 1. Register at `developers.mindbodyonline.com` and create an app to get your source password (API key)
 2. Set `MINDBODY_API_KEY` in `.env`
@@ -154,6 +160,8 @@ Credentials are verified live against MindBody's API before being saved. Use Sit
 | `SEED_EMAIL` | No | Override default login email |
 | `SEED_PASSWORD` | No | Override default login password |
 | `SEED_TENANT_NAME` | No | Override default tenant name |
+
+Seeded tenants default to the schema default account type unless changed by code or database update. Signup requires an explicit `accountType` of `personal` or `business`.
 
 ---
 
@@ -182,5 +190,5 @@ Set `NEXTAUTH_URL` to the same public app URL users visit in production.
 | `npm run build` | Production build |
 | `npm run db:migrate` | Create/update schema (dev only) |
 | `npm run db:deploy` | Apply pending migrations (production-safe) |
-| `npm run db:seed` | Seed tenant and user |
+| `npm run db:seed` | Seed tenant/account and user |
 | `npm run db:studio` | Open Prisma Studio |

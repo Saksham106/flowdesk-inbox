@@ -1,6 +1,6 @@
 # FlowDesk Documentation Index
 
-Last updated: 2026-06-11
+Last updated: 2026-06-13
 
 Use this directory as the source of truth for product direction, current implementation state, and feature-level plans.
 
@@ -20,6 +20,7 @@ Use this directory as the source of truth for product direction, current impleme
 - `superpowers/plans/2026-06-12-email-risk-radar.md` — implementation plan for the Email Risk Radar slice.
 - `superpowers/specs/2026-06-12-intent-auto-draft-design.md` — design for rough-instruction guided AI draft suggestions.
 - `superpowers/plans/2026-06-12-intent-auto-draft.md` — implementation plan for the intent auto-draft slice.
+- Current email-only thread UI and personal/business account-mode behavior are documented in `CURRENT_STATE.md` under Inbox Core and Personal vs business account separation.
 
 ## Documentation Rules
 
