@@ -174,6 +174,8 @@ function activeHold(conversation: CommandCenterInputConversation) {
 }
 
 function isSensitive(conversation: CommandCenterInputConversation): boolean {
+  // Automated/marketing emails are never personally sensitive
+  if (isAutoEmail(conversation)) return false
   const meta = metadata(conversation)
   return (
     meta.riskLevel === "high" ||
@@ -184,6 +186,8 @@ function isSensitive(conversation: CommandCenterInputConversation): boolean {
 }
 
 function isOpportunity(conversation: CommandCenterInputConversation): boolean {
+  // Automated/marketing emails are never real opportunities
+  if (isAutoEmail(conversation)) return false
   const meta = metadata(conversation)
   return (
     conversation.label === "Lead" ||
@@ -194,19 +198,25 @@ function isOpportunity(conversation: CommandCenterInputConversation): boolean {
 
 function isSafelyIgnorable(conversation: CommandCenterInputConversation): boolean {
   if (isAutoEmail(conversation)) return true
-  const latest = latestMessage(conversation)
   if (conversation.status === "closed") return true
-  if (hasPendingApproval(conversation) || isSensitive(conversation)) return false
+
+  const latest = latestMessage(conversation)
   if (latest?.direction !== "inbound") return false
 
   const senderEmail = conversation.contact?.phoneE164 ?? ""
   const body = latest.body
 
-  return (
+  // Check automated patterns before the sensitive guard so that marketing emails
+  // containing words like "refund", "tax", or "collections" are not misclassified.
+  if (
     AUTOMATED_SENDER_PATTERN.test(senderEmail) ||
     AUTOMATED_BODY_PATTERN.test(body) ||
     FYI_PATTERN.test(body)
-  )
+  ) return true
+
+  if (hasPendingApproval(conversation) || isSensitive(conversation)) return false
+
+  return false
 }
 
 function getEmailType(conversation: CommandCenterInputConversation): string | null {

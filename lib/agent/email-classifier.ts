@@ -32,7 +32,34 @@ const NOTIFICATION_DOMAINS = new Set([
   "twilio.com",
   "sendgrid.net",
   "mailchimp.com",
+  // Social / professional networks
+  "linkedin.com",
+  "e.linkedin.com",
+  "bounces.linkedin.com",
+  "facebookmail.com",
+  "twitter.com",
+  "notifications.google.com",
+  // Common e-commerce / marketing platforms
+  "target.com",
+  "amazon.com",
+  "amazonses.com",
+  "klaviyo.com",
+  "constantcontact.com",
+  "hubspot.com",
+  "salesforce.com",
+  "marketo.net",
+  "exacttarget.com",
+  // Education / test-prep platforms (typically automated)
+  "nextadmit.com",
+  "collegeboard.org",
+  "act.org",
+  "khanacademy.org",
+  "coursera.org",
+  "udemy.com",
 ])
+
+// Subdomains used by marketing email platforms: em.company.com, e.company.com, email.company.com
+const MARKETING_SUBDOMAIN_PATTERN = /^(em|e|email|mail|go|info|news|newsletter|promo|campaign|offers?|marketing|updates?|alerts?|notifications?)\./i
 
 const GOOGLE_NOTIFICATION_DOMAIN_PATTERN = /^(docs|drive|accounts|no-reply|mail)\.google\.com$/
 
@@ -82,6 +109,11 @@ export function classifyEmailType(input: EmailClassifierInput): EmailClassifierR
     MICROSOFT_NOTIFICATION_DOMAIN_PATTERN.test(domain)
   ) {
     return { emailType: "notification" }
+  }
+
+  // Rule 2b: Marketing subdomains (em.company.com, e.company.com, email.company.com, etc.)
+  if (MARKETING_SUBDOMAIN_PATTERN.test(domain)) {
+    return { emailType: "marketing" }
   }
 
   // Rule 3: Subject-based notification patterns
