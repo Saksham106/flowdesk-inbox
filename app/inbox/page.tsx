@@ -26,6 +26,25 @@ const STATUS_LABELS: Record<ConversationStatus, string> = {
 
 const ALL_STATUSES = Object.keys(STATUS_LABELS) as ConversationStatus[];
 
+const AUTOMATED_SENDER_RE = /\b(no-?reply|noreply|notifications?|alerts?|do-not-reply|automated)\b/i
+const AUTOMATED_BODY_RE =
+  /\b(unsubscribe|you'?re receiving this|this is an automated (email|message|notification)|do not reply to this email)\b/i
+const FYI_RE = /\b(fyi|newsletter|for your records|no action|all set|thanks, all set)\b/i
+
+function isFyiConversation(conversation: {
+  status: string
+  stateRecord: { state: string } | null
+  contact: { phoneE164: string } | null
+  messages: { direction: string; body: string }[]
+}): boolean {
+  if (conversation.stateRecord?.state === "fyi_only") return true
+  if (conversation.status !== "needs_reply") return false
+  const msg = conversation.messages[0]
+  if (!msg || msg.direction !== "inbound") return false
+  const email = conversation.contact?.phoneE164 ?? ""
+  return AUTOMATED_SENDER_RE.test(email) || AUTOMATED_BODY_RE.test(msg.body) || FYI_RE.test(msg.body)
+}
+
 interface Props {
   searchParams: { status?: string; q?: string; sales?: string };
 }
@@ -74,7 +93,7 @@ export default async function InboxPage({ searchParams }: Props) {
         messages: { orderBy: { createdAt: "desc" }, take: 1 },
         channel: true,
         contact: true,
-        stateRecord: { select: { metadataJson: true } },
+        stateRecord: { select: { metadataJson: true, state: true } },
       },
     }),
     prisma.conversation.groupBy({
@@ -413,7 +432,7 @@ export default async function InboxPage({ searchParams }: Props) {
                   </div>
                   {/* Row 2: badges */}
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    <StatusBadge status={conversation.status} />
+                    <StatusBadge status={isFyiConversation(conversation) ? "closed" : conversation.status} />
                     {conversation.label && <LabelBadge label={conversation.label} />}
                   </div>
                   {/* Row 3: preview */}
