@@ -210,7 +210,7 @@ model Conversation {
   lastMessageAt    DateTime           @default(now())
   createdAt        DateTime           @default(now())
   tenant           Tenant             @relation(fields: [tenantId], references: [id])
-  channel          Channel            @relation(fields: [channelId], references: [id])
+  channel          Channel            @relation(fields: [channelId], references: [id], onDelete: Cascade)
   contact          Contact?           @relation(fields: [contactId], references: [id])
   messages         Message[]
   draft            Draft?
@@ -234,7 +234,7 @@ model Message {
   body              String
   providerMessageId String
   createdAt         DateTime         @default(now())
-  conversation      Conversation     @relation(fields: [conversationId], references: [id])
+  conversation      Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@unique([providerMessageId])
   @@index([conversationId, createdAt])
@@ -248,7 +248,7 @@ model Draft {
   metadataJson   Json?
   createdAt      DateTime    @default(now())
   updatedAt        DateTime         @updatedAt
-  conversation     Conversation     @relation(fields: [conversationId], references: [id])
+  conversation     Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   approvalRequests ApprovalRequest[]
 }
 
@@ -401,7 +401,7 @@ model ApprovalRequest {
   createdAt      DateTime       @default(now())
   decidedAt      DateTime?
   tenant         Tenant         @relation(fields: [tenantId], references: [id])
-  conversation   Conversation   @relation(fields: [conversationId], references: [id])
+  conversation   Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   agentJob       AgentJob?      @relation(fields: [agentJobId], references: [id])
   draft          Draft?         @relation(fields: [draftId], references: [id])
   reviewer       User?          @relation(fields: [reviewerUserId], references: [id])
@@ -425,7 +425,7 @@ model AgentJob {
   startedAt        DateTime?
   completedAt      DateTime?
   tenant           Tenant          @relation(fields: [tenantId], references: [id])
-  conversation     Conversation    @relation(fields: [conversationId], references: [id])
+  conversation     Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   toolCalls        AgentToolCall[]
   approvalRequests ApprovalRequest[]
 
@@ -459,7 +459,7 @@ model CalendarHold {
   expiresAt       DateTime
   createdAt       DateTime           @default(now())
   tenant          Tenant             @relation(fields: [tenantId], references: [id])
-  conversation    Conversation       @relation(fields: [conversationId], references: [id])
+  conversation    Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, status])
   @@index([conversationId])

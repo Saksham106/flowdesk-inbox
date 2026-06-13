@@ -8,7 +8,7 @@ export default function DisconnectGmailButton({ channelId }: { channelId: string
   const [loading, setLoading] = useState(false);
 
   async function handleDisconnect() {
-    if (!confirm("Disconnect this Gmail account? Its conversations will remain in your inbox.")) return;
+    if (!confirm("Disconnect this Gmail account? All synced conversations and messages will be permanently deleted from your inbox.")) return;
     setLoading(true);
     await fetch("/api/connectors/gmail/disconnect", {
       method: "POST",
