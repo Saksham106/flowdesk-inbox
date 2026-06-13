@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-12 (conversation page layout and UX polish)
+Last updated: 2026-06-13 (inbox nav refactor, channel disconnect fixes, FYI classifier hardening)
 
 This file is the codebase-facing companion to `MASTER_PRODUCT_PLAN.md`. It answers: what exists today, what is partial, and what should not be treated as active scope.
 
@@ -47,6 +47,14 @@ Email is the active channel. SMS/Twilio is not part of the active product path.
 - Labels for common AI classifications.
 - Manual send path through shared send helper.
 - Audit log model and audit page.
+
+Inbox navigation refactor (2026-06-13):
+
+- `/inbox` (no params) = **Home** tab — shows `CommandCenterPanel` (Today's Inbox Brief), follow-ups tracker, and safely-ignored section only; no email list.
+- Email list tabs — **All** (`?status=all`), **Needs Reply**, **In Progress**, **Closed** — show search + conversation list only; no brief.
+- **Sales** tab (`?sales=1`) is gated on `tenant.accountType === "business"`; personal accounts never see it.
+- Brief data queries (`commandCenterConversations`, `ignoredStates`, `pendingFollowUps`, `revenueAtRisk`) are skipped when rendering list tabs, making those pages faster.
+- Tab active-state logic: Home active when no params; All active on `?status=all`; status tabs active on matching `?status=`; Sales active on `?sales=1`.
 
 Email body rendering (2026-06-12):
 
@@ -275,13 +283,21 @@ AI Classification Quality improvements (2026-06-12):
 - `app/conversations/[id]/page.tsx` — passes `conversationState` to `assistantInput`; derives `isAutoEmailConversation`; renders a simple "No reply needed" card instead of `HandleThisPanel` when emailType is notification/newsletter/marketing.
 - Tests: `tests/email-classifier.test.ts` (15 tests), `tests/reply-learning.test.ts` (3 new tests), `tests/agent-job-pipeline.test.ts` (3 new tests for personal/business/null prompt), `tests/work-item-sync.test.ts` (tenant mock added), `tests/command-center.test.ts` (4 new tests for emailType override). Total: 374 tests passing.
 
+Bug fixes and hardening (2026-06-13):
+
+- **Channel disconnect cascade** — `Conversation` now has `onDelete: Cascade` on its `Channel` foreign key; all children (`Message`, `Draft`, `ApprovalRequest`, `AgentJob`, `CalendarHold`) cascade from `Conversation`. Disconnecting a Gmail or Outlook account cleanly removes all associated data. Migration: `prisma/migrations/…/migration.sql`.
+- **Gmail reconnect tenant re-assignment** — if a Gmail address previously connected under a different tenant is reconnected, the `Channel.tenantId` is updated so the settings page reflects the correct tenant.
+- **FYI auto-close second pass** — `work-item-sync.ts` runs a second-pass auto-close after `classifyEmailType` so emails the pattern matcher missed (emailType set after state was initially saved) are caught and marked closed.
+- **Auto-email classifier hardening** — `isSensitive` and `isOpportunity` in `command-center.ts` short-circuit on auto-emails; `isSafelyIgnorable` checks automated body/sender patterns before the sensitive guard; `email-classifier.ts` adds LinkedIn, Target, common social/edu/marketing domains, and a subdomain pattern for `em./e./email.` senders.
+- **Digest page stateRecord** — `app/digest/page.tsx` now includes `stateRecord` in its Prisma query so `isAutoEmail()` reads correctly on the full brief page.
+- **FYI badge suppression** — inbox and detail pages correctly suppress FYI badges using `metadataJson.emailType` in addition to `stateRecord.state` and body/sender patterns.
+
 Limitations:
 
 - Task assignment is not yet implemented.
 - Person-memory extraction is deterministic (regex heuristics), not LLM-based, and is not user-editable.
 - Lead sequence step timings are fixed (2/4/7 days); there is no settings UI yet.
 - Batch re-scoring of all existing leads is not implemented; scoring runs per lead after each sync.
-- Full pipeline trend analytics and value forecasting are not yet implemented.
 - Risk Radar thresholds are deterministic and not user-configurable yet.
 - URL crawl is single-page only (no sitemap, no re-crawl scheduling).
 - KB matching uses keyword overlap, not semantic/embedding search.
@@ -315,12 +331,11 @@ See `MASTER_PRODUCT_PLAN.md` for phase recommendations and feature statuses.
 
 - Full task management (assignment, manual creation).
 - Full CRM pipeline.
-- Full pipeline trend analytics and value forecasting (score/stage filters and WoW table shipped in v2.2; forecasting not yet built).
+- Full pipeline trend analytics and value forecasting (score/stage filters and WoW stats table shipped in v2.2; deeper forecasting not yet built).
 - Attachment intelligence.
 - Natural-language inbox search.
 - Ask My Inbox chat.
 - Team inbox collaboration.
-- Full pipeline trend analytics and value forecasting (score/stage filters and WoW table shipped; forecasting not yet built).
 - Personal life admin mode.
 - Phishing/scam/fraud protection.
 - Auto-unsubscribe and bulk safe archive.

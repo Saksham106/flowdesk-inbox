@@ -68,7 +68,10 @@ export default async function InboxPage({ searchParams }: Props) {
   const q = searchParams.q?.trim() ?? "";
   const salesFilter = searchParams.sales === "1";
 
-  // Build where clause
+  // Home view = no status param and no sales filter (default landing)
+  const isHomeView = !searchParams.status && !salesFilter;
+
+  // Build where clause for email list queries
   const where = {
     tenantId,
     ...(activeStatus ? { status: activeStatus } : {}),
@@ -82,24 +85,10 @@ export default async function InboxPage({ searchParams }: Props) {
       : {}),
   };
 
-  const [
-    conversations,
-    statusCounts,
-    commandCenterConversations,
-    ignoredStates,
-    pendingFollowUps,
-    tenant,
-    revenueAtRisk,
-  ] = await Promise.all([
-    prisma.conversation.findMany({
-      where,
-      orderBy: { lastMessageAt: "desc" },
-      include: {
-        messages: { orderBy: { createdAt: "desc" }, take: 1 },
-        channel: true,
-        contact: true,
-        stateRecord: { select: { metadataJson: true, state: true } },
-      },
+  const [tenant, statusCounts] = await Promise.all([
+    prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { accountType: true },
     }),
     prisma.conversation.groupBy({
       by: ["status"],
@@ -116,73 +105,97 @@ export default async function InboxPage({ searchParams }: Props) {
       },
       _count: { status: true },
     }),
-    prisma.conversation.findMany({
-      where: { tenantId },
-      orderBy: { lastMessageAt: "desc" },
-      take: 75,
-      include: {
-        messages: { orderBy: { createdAt: "asc" }, take: 20 },
-        channel: true,
-        contact: true,
-        draft: true,
-        agentJobs: { orderBy: { createdAt: "desc" }, take: 3 },
-        approvalRequests: {
-          where: { status: "pending" },
-          orderBy: { createdAt: "desc" },
-          take: 3,
-        },
-        calendarHolds: {
-          where: { status: "held" },
-          orderBy: { expiresAt: "asc" },
-          take: 3,
-        },
-        leads: {
-          select: { score: true, scoreExplanation: true, estimatedValue: true },
-          take: 1,
-        },
-        stateRecord: { select: { metadataJson: true } },
-      },
-    }),
-    prisma.conversationState.findMany({
-      where: { tenantId },
-      include: { conversation: { include: { contact: true } } },
-      orderBy: { updatedAt: "desc" },
-      take: 200,
-    }),
-    prisma.agentJob.findMany({
-      where: {
-        tenantId,
-        trigger: { in: ["follow_up", "lead_follow_up"] },
-        status: { in: ["pending", "running"] },
-      },
-      include: { conversation: { include: { contact: true } } },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    }),
-    prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { accountType: true },
-    }),
-    analyzeRevenueAtRisk(tenantId),
   ]);
 
-  const commandCenter = buildDailyCommandCenter(
-    commandCenterConversations.map((c) => ({
-      ...c,
-      conversationState: c.stateRecord,
-      lead: c.leads[0] ?? null,
-    }))
-  );
+  const isBusiness = tenant?.accountType === "business";
+
+  // Fetch email list only on non-home views
+  const conversations = isHomeView
+    ? []
+    : await prisma.conversation.findMany({
+        where,
+        orderBy: { lastMessageAt: "desc" },
+        include: {
+          messages: { orderBy: { createdAt: "desc" }, take: 1 },
+          channel: true,
+          contact: true,
+          stateRecord: { select: { metadataJson: true, state: true } },
+        },
+      });
+
+  // Fetch brief data only on home view
+  const [commandCenterConversations, ignoredStates, pendingFollowUps, revenueAtRisk] =
+    isHomeView
+      ? await Promise.all([
+          prisma.conversation.findMany({
+            where: { tenantId },
+            orderBy: { lastMessageAt: "desc" },
+            take: 75,
+            include: {
+              messages: { orderBy: { createdAt: "asc" }, take: 20 },
+              channel: true,
+              contact: true,
+              draft: true,
+              agentJobs: { orderBy: { createdAt: "desc" }, take: 3 },
+              approvalRequests: {
+                where: { status: "pending" },
+                orderBy: { createdAt: "desc" },
+                take: 3,
+              },
+              calendarHolds: {
+                where: { status: "held" },
+                orderBy: { expiresAt: "asc" },
+                take: 3,
+              },
+              leads: {
+                select: { score: true, scoreExplanation: true, estimatedValue: true },
+                take: 1,
+              },
+              stateRecord: { select: { metadataJson: true } },
+            },
+          }),
+          prisma.conversationState.findMany({
+            where: { tenantId },
+            include: { conversation: { include: { contact: true } } },
+            orderBy: { updatedAt: "desc" },
+            take: 200,
+          }),
+          prisma.agentJob.findMany({
+            where: {
+              tenantId,
+              trigger: { in: ["follow_up", "lead_follow_up"] },
+              status: { in: ["pending", "running"] },
+            },
+            include: { conversation: { include: { contact: true } } },
+            orderBy: { createdAt: "desc" },
+            take: 50,
+          }),
+          analyzeRevenueAtRisk(tenantId),
+        ])
+      : [[], [], [], [] as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>];
+
+  const commandCenter = isHomeView
+    ? buildDailyCommandCenter(
+        (commandCenterConversations as Awaited<ReturnType<typeof prisma.conversation.findMany>> & {
+          leads: { score: number; scoreExplanation: string | null; estimatedValue: number | null }[];
+          stateRecord: { metadataJson: unknown } | null;
+        }[]).map((c: any) => ({
+          ...c,
+          conversationState: c.stateRecord,
+          lead: c.leads?.[0] ?? null,
+        }))
+      )
+    : null;
 
   const displayConversations = salesFilter
     ? conversations.filter((c) => {
-        const meta = c.stateRecord?.metadataJson
+        const meta = c.stateRecord?.metadataJson;
         return (
           meta !== null &&
           typeof meta === "object" &&
           !Array.isArray(meta) &&
           (meta as Record<string, unknown>).isSalesLead === true
-        )
+        );
       })
     : conversations;
 
@@ -193,7 +206,7 @@ export default async function InboxPage({ searchParams }: Props) {
   const totalCount = statusCounts.reduce((sum, r) => sum + r._count.status, 0);
   const needsReplyCount = countByStatus["needs_reply"] ?? 0;
 
-  const ignoredConversations = ignoredStates
+  const ignoredConversations = (ignoredStates as any[])
     .filter((s) => {
       const meta = s.metadataJson as Record<string, unknown> | null;
       return meta?.safelyIgnored === true;
@@ -205,25 +218,31 @@ export default async function InboxPage({ searchParams }: Props) {
       href: `/conversations/${s.conversationId}`,
     }));
 
-  const followUpConversations = pendingFollowUps.map((job) => ({
+  const followUpConversations = (pendingFollowUps as any[]).map((job) => ({
     id: job.conversationId,
     displayName: job.conversation.contact?.name ?? job.conversation.externalThreadId,
     scheduledAt: job.createdAt,
     href: `/conversations/${job.conversationId}`,
   }));
 
-  function tabHref(status: ConversationStatus | null) {
+  // "all" maps to ?status=all so it's distinct from the home view (no params)
+  function tabHref(status: ConversationStatus | "all" | null, sales = false) {
     const params = new URLSearchParams();
-    if (status) params.set("status", status);
+    if (sales) {
+      params.set("sales", "1");
+    } else if (status) {
+      params.set("status", status);
+    }
     if (q) params.set("q", q);
     const qs = params.toString();
     return qs ? `/inbox?${qs}` : "/inbox";
   }
 
-  const tabs = [
-    { label: "All", status: null, count: totalCount },
+  const listTabs = [
+    { label: "All", status: "all" as const, count: totalCount },
     ...ALL_STATUSES.map((s) => ({ label: STATUS_LABELS[s], status: s, count: countByStatus[s] ?? 0 })),
   ];
+
   const appNavigation = getInboxNavigation(tenant?.accountType);
 
   function navLink(item: AppNavigationItem, className = "") {
@@ -300,11 +319,27 @@ export default async function InboxPage({ searchParams }: Props) {
           </div>
         </div>
 
-        {/* Status tabs */}
+        {/* View tabs */}
         <div className="mx-auto max-w-5xl px-4 sm:px-6">
           <nav className="-mb-px flex gap-6 overflow-x-auto">
-            {tabs.map(({ label, status, count }) => {
-              const isActive = status === activeStatus;
+            {/* Home tab */}
+            <Link
+              href="/inbox"
+              className={`whitespace-nowrap border-b-2 pb-3 pt-2 text-sm font-medium transition ${
+                isHomeView
+                  ? "border-slate-900 text-slate-900"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Home
+            </Link>
+
+            {/* Email list tabs */}
+            {listTabs.map(({ label, status, count }) => {
+              const isActive =
+                !isHomeView &&
+                !salesFilter &&
+                (status === "all" ? activeStatus === null : activeStatus === status);
               return (
                 <Link
                   key={label}
@@ -328,128 +363,144 @@ export default async function InboxPage({ searchParams }: Props) {
                 </Link>
               );
             })}
-            <Link
-              href={q ? `/inbox?sales=1&q=${encodeURIComponent(q)}` : "/inbox?sales=1"}
-              className={`whitespace-nowrap border-b-2 pb-3 pt-2 text-sm font-medium transition ${
-                salesFilter
-                  ? "border-emerald-600 text-emerald-700"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              Sales
-              <span
-                className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs ${
-                  salesFilter ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600"
+
+            {/* Sales tab — business accounts only */}
+            {isBusiness && (
+              <Link
+                href={tabHref(null, true)}
+                className={`whitespace-nowrap border-b-2 pb-3 pt-2 text-sm font-medium transition ${
+                  salesFilter
+                    ? "border-emerald-600 text-emerald-700"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
                 }`}
               >
-                {commandCenter.counts.salesQualified}
-              </span>
-            </Link>
+                Sales
+                {(commandCenter?.counts.salesQualified ?? 0) > 0 && (
+                  <span
+                    className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs ${
+                      salesFilter ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {commandCenter?.counts.salesQualified}
+                  </span>
+                )}
+              </Link>
+            )}
           </nav>
         </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-4 sm:px-6 py-6">
-        <CommandCenterPanel commandCenter={commandCenter} revenueAtRisk={revenueAtRisk} />
+        {isHomeView ? (
+          /* ── Home / Dashboard view ── */
+          <>
+            {commandCenter && (
+              <CommandCenterPanel
+                commandCenter={commandCenter}
+                revenueAtRisk={revenueAtRisk as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>}
+              />
+            )}
 
-        {/* Follow-up tracker */}
-        {followUpConversations.length > 0 && (
-          <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700">
-              Follow-ups queued ({followUpConversations.length})
-            </p>
-            <ul className="space-y-1">
-              {followUpConversations.map((c) => (
-                <li key={c.id}>
-                  <Link
-                    href={c.href}
-                    className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-amber-100"
-                  >
-                    <span className="font-medium text-amber-900">{c.displayName}</span>
-                    <span className="text-xs text-amber-600">
-                      Queued {c.scheduledAt.toLocaleDateString()}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* What can I ignore */}
-        {ignoredConversations.length > 0 && (
-          <details className="mb-5 rounded-xl border border-slate-200 bg-white shadow-sm">
-            <summary className="cursor-pointer select-none px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700">
-              Safely ignored ({ignoredConversations.length})
-            </summary>
-            <ul className="divide-y divide-slate-100 border-t border-slate-100">
-              {ignoredConversations.map((c) => (
-                <li key={c.id}>
-                  <Link
-                    href={c.href}
-                    className="flex items-start justify-between gap-4 px-4 py-3 text-sm hover:bg-slate-50"
-                  >
-                    <span className="font-medium text-slate-700">{c.displayName}</span>
-                    <span className="text-xs text-slate-400">{c.reason}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
-
-        {/* Search */}
-        <div className="mb-5">
-          <Suspense>
-            <SearchInput defaultValue={q} />
-          </Suspense>
-        </div>
-
-        <div className="space-y-3">
-          {displayConversations.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-sm text-slate-500">
-              {q || activeStatus || salesFilter
-                ? "No conversations match your search."
-                : "No conversations yet. Connect Gmail in Settings to import threads."}
-            </div>
-          ) : (
-            displayConversations.map((conversation) => {
-              const lastMessage = conversation.messages[0];
-              const displayName =
-                conversation.contact?.name ?? conversation.externalThreadId;
-              return (
-                <Link
-                  key={conversation.id}
-                  href={`/conversations/${conversation.id}`}
-                  className="block rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:border-slate-300 sm:px-5 sm:py-4"
-                >
-                  {/* Row 1: name + date; badges inline on sm+ */}
-                  <div className="flex items-start justify-between gap-2 sm:items-center">
-                    <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-1.5 sm:gap-y-0">
-                      <p
-                        className="min-w-0 truncate text-sm font-medium"
-                        title={displayName}
+            {followUpConversations.length > 0 && (
+              <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700">
+                  Follow-ups queued ({followUpConversations.length})
+                </p>
+                <ul className="space-y-1">
+                  {followUpConversations.map((c) => (
+                    <li key={c.id}>
+                      <Link
+                        href={c.href}
+                        className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-amber-100"
                       >
-                        {displayName}
-                      </p>
-                      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                        <StatusBadge status={isFyiConversation(conversation) ? "closed" : conversation.status} />
-                        {conversation.label && <LabelBadge label={conversation.label} />}
+                        <span className="font-medium text-amber-900">{c.displayName}</span>
+                        <span className="text-xs text-amber-600">
+                          Queued {c.scheduledAt.toLocaleDateString()}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {ignoredConversations.length > 0 && (
+              <details className="mb-5 rounded-xl border border-slate-200 bg-white shadow-sm">
+                <summary className="cursor-pointer select-none px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700">
+                  Safely ignored ({ignoredConversations.length})
+                </summary>
+                <ul className="divide-y divide-slate-100 border-t border-slate-100">
+                  {ignoredConversations.map((c) => (
+                    <li key={c.id}>
+                      <Link
+                        href={c.href}
+                        className="flex items-start justify-between gap-4 px-4 py-3 text-sm hover:bg-slate-50"
+                      >
+                        <span className="font-medium text-slate-700">{c.displayName}</span>
+                        <span className="text-xs text-slate-400">{c.reason}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </>
+        ) : (
+          /* ── Email list view ── */
+          <>
+            <div className="mb-5">
+              <Suspense>
+                <SearchInput defaultValue={q} />
+              </Suspense>
+            </div>
+
+            <div className="space-y-3">
+              {displayConversations.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-sm text-slate-500">
+                  {q || activeStatus || salesFilter
+                    ? "No conversations match your search."
+                    : "No conversations yet. Connect Gmail in Settings to import threads."}
+                </div>
+              ) : (
+                displayConversations.map((conversation) => {
+                  const lastMessage = conversation.messages[0];
+                  const displayName =
+                    conversation.contact?.name ?? conversation.externalThreadId;
+                  return (
+                    <Link
+                      key={conversation.id}
+                      href={`/conversations/${conversation.id}`}
+                      className="block rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:border-slate-300 sm:px-5 sm:py-4"
+                    >
+                      {/* Row 1: name + date; badges inline on sm+ */}
+                      <div className="flex items-start justify-between gap-2 sm:items-center">
+                        <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-1.5 sm:gap-y-0">
+                          <p
+                            className="min-w-0 truncate text-sm font-medium"
+                            title={displayName}
+                          >
+                            {displayName}
+                          </p>
+                          <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                            <StatusBadge status={isFyiConversation(conversation) ? "closed" : conversation.status} />
+                            {conversation.label && <LabelBadge label={conversation.label} />}
+                          </div>
+                        </div>
+                        <span className="shrink-0 whitespace-nowrap text-xs text-slate-400">
+                          {conversation.lastMessageAt.toLocaleString()}
+                        </span>
                       </div>
-                    </div>
-                    <span className="shrink-0 whitespace-nowrap text-xs text-slate-400">
-                      {conversation.lastMessageAt.toLocaleString()}
-                    </span>
-                  </div>
-                  {/* Row 2: preview */}
-                  <p className="mt-1 truncate text-sm text-slate-500">
-                    {lastMessage?.body ?? "No messages yet"}
-                  </p>
-                </Link>
-              );
-            })
-          )}
-        </div>
+                      {/* Row 2: preview */}
+                      <p className="mt-1 truncate text-sm text-slate-500">
+                        {lastMessage?.body ?? "No messages yet"}
+                      </p>
+                    </Link>
+                  );
+                })
+              )}
+            </div>
+          </>
+        )}
       </main>
     </div>
   );
