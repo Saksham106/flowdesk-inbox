@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-12 (AI classification quality improvements)
+Last updated: 2026-06-12 (conversation page layout and UX polish)
 
 This file is the codebase-facing companion to `MASTER_PRODUCT_PLAN.md`. It answers: what exists today, what is partial, and what should not be treated as active scope.
 
@@ -253,6 +253,15 @@ v2.2: Sales Agent Mode + Mini CRM Pipeline Reporting (2026-06-12):
 - `app/inbox/CommandCenterPanel.tsx` — Support and Sales Qualified count chips added to command center grid.
 - `app/inbox/page.tsx` — `?sales=1` filter tab; `stateRecord` mapped to `conversationState` before `buildDailyCommandCenter` so both `isClassifiedSupport` and `isSalesQualified` helpers read correctly.
 - `app/leads/page.tsx` — score/stage filter form with Clear link; week-over-week stats table (new leads + avg score); dynamic section titles when filters active; `allLeads`/`displayLeads` split so funnel always shows totals.
+
+Conversation page layout and UX polish (2026-06-12):
+
+- `app/conversations/[id]/page.tsx` — page-level max width widened from `max-w-5xl` (1024px) to `max-w-[1200px]`; applies to both the header bar and the main grid; sidebar column widened from 300px to 320px; grid gap increased from 5 to 6. On a typical 1440px desktop the main email column gains ~170px, eliminating the empty-canvas feeling.
+- `app/conversations/[id]/page.tsx` — `isPersonal` is now forwarded to `AIDraftPanel` and `HandleThisPanel` (previously only passed to `LabelSelect` and `WorkItemsPanel`).
+- Text overflow hardening: `min-w-0 overflow-hidden` added to sidebar Contact card, the "No reply needed" auto-email card, and `HandleThisPanel` outer div; `break-words [overflow-wrap:anywhere]` added to `HandleThisPanel` `ContextRow <dd>`, `ContextList <li>`, the Relationship memory content block, and `CollapsibleCard` inner content; header email address line uses `break-all` to handle bare email/thread addresses.
+- `app/conversations/[id]/AIDraftPanel.tsx` — `isPersonal?: boolean` prop added (default `false`); personal accounts see "Add reply preferences in Settings to enable suggestions." instead of "Add a business profile in Settings…"; setup warning style changed from amber to neutral slate (less visually dominant when the card is in a disabled state); instruction textarea reduced from `rows={2}` to `rows={1}`; draft textarea uses `rows={hasDraftText ? 6 : 3}` — collapses when empty, expands once a draft exists.
+- `app/conversations/[id]/HandleThisPanel.tsx` — `isPersonal?: boolean` prop added (default `false`); personal accounts see "Complete your profile in Settings before FlowDesk can draft a response." instead of "Add a business profile in Settings…"; `ContextRow` and `ContextList` get `min-w-0 break-words [overflow-wrap:anywhere]` for long summaries and bare URLs; outer card gets `min-w-0 overflow-hidden`.
+- `app/components/CollapsibleCard.tsx` — inner content div gets `min-w-0 break-words [overflow-wrap:anywhere]` so all collapsible card content is overflow-safe.
 
 AI Classification Quality improvements (2026-06-12):
 

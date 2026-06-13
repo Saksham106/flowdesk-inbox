@@ -31,7 +31,7 @@ export default function CollapsibleCard({
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {open && <div className="border-t border-slate-100 p-4">{children}</div>}
+      {open && <div className="min-w-0 break-words border-t border-slate-100 p-4 [overflow-wrap:anywhere]">{children}</div>}
     </div>
   )
 }

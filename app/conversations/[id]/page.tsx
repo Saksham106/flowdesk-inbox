@@ -233,7 +233,7 @@ export default async function ConversationPage({
 
       {/* Header */}
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 sm:px-6 py-4">
+        <div className="mx-auto flex max-w-[1200px] items-center justify-between px-4 sm:px-6 py-4">
           <div>
             <Link href="/inbox" className="text-sm text-slate-500 hover:text-slate-700">
               ← Back to inbox
@@ -243,7 +243,7 @@ export default async function ConversationPage({
               <StatusBadge status={conversation.status} />
               {conversation.label && <LabelBadge label={conversation.label} />}
             </div>
-            <p className="text-sm text-slate-500">
+            <p className="min-w-0 break-all text-sm text-slate-500">
               {conversation.channel.emailAddress ?? conversation.externalThreadId}
             </p>
           </div>
@@ -255,10 +255,10 @@ export default async function ConversationPage({
       </header>
 
       {/* Two-column layout: email thread + composer | context sidebar */}
-      <main className="mx-auto grid max-w-5xl gap-5 px-4 sm:px-6 py-6 lg:grid-cols-[1fr_300px]">
+      <main className="mx-auto grid max-w-[1200px] gap-6 px-4 sm:px-6 py-6 lg:grid-cols-[1fr_320px]">
 
         {/* Left: conversation thread then inline reply composer */}
-        <section className="min-w-0 space-y-4">
+        <section className="min-w-0 space-y-4 overflow-hidden">
           {/* Email thread */}
           <div className="overflow-x-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="space-y-4">
@@ -307,6 +307,7 @@ export default async function ConversationPage({
                 channelType={conversation.channel.type}
                 hasBusinessProfile={Boolean(businessProfile)}
                 knowledgeDocumentCount={knowledgeDocumentCount}
+                isPersonal={isPersonal}
                 initialDraft={
                   conversation.draft
                     ? {
@@ -332,10 +333,10 @@ export default async function ConversationPage({
         </section>
 
         {/* Right: compact context sidebar */}
-        <aside className="space-y-3">
+        <aside className="min-w-0 space-y-3">
 
           {/* Contact + Label — combined compact card */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="min-w-0">
               <p className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Contact
@@ -371,9 +372,9 @@ export default async function ConversationPage({
 
           {/* Assistant context */}
           {isAutoEmailConversation ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+            <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
               <p className="font-medium text-slate-700">No reply needed</p>
-              <p className="mt-1">
+              <p className="mt-1 break-words [overflow-wrap:anywhere]">
                 {emailType === "notification"
                   ? "This is an automated notification."
                   : emailType === "newsletter"
@@ -387,6 +388,7 @@ export default async function ConversationPage({
               assistantState={assistantState}
               relationshipContext={relationshipContext}
               canSuggest={conversation.channel.type === "email" && Boolean(businessProfile)}
+              isPersonal={isPersonal}
             />
           )}
 
@@ -447,7 +449,7 @@ export default async function ConversationPage({
           {/* Relationship memory — collapsible */}
           {personMemory && (
             <CollapsibleCard title="Relationship">
-              <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
+              <div className="min-w-0 space-y-3 break-words text-xs text-slate-600 leading-relaxed [overflow-wrap:anywhere]">
                 <p>{personMemory.summary}</p>
                 {personMemory.promisedActions && (
                   <div>

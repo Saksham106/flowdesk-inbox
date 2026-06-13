@@ -51,6 +51,7 @@ export default function AIDraftPanel({
   knowledgeDocumentCount,
   initialDraft,
   inline = false,
+  isPersonal = false,
 }: {
   conversationId: string;
   channelType: string;
@@ -58,6 +59,7 @@ export default function AIDraftPanel({
   knowledgeDocumentCount: number;
   initialDraft: DraftSnapshot | null;
   inline?: boolean;
+  isPersonal?: boolean;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState<DraftSnapshot | null>(initialDraft);
@@ -263,8 +265,10 @@ export default function AIDraftPanel({
       ) : null}
 
       {isEmail && !hasBusinessProfile ? (
-        <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Add a business profile in Settings before suggesting replies.
+        <p className="mb-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          {isPersonal
+            ? "Add reply preferences in Settings to enable suggestions."
+            : "Add a business profile in Settings to enable suggestions."}
         </p>
       ) : null}
 
@@ -282,9 +286,9 @@ export default function AIDraftPanel({
           <textarea
             value={userInstruction}
             onChange={(event) => setUserInstruction(event.target.value)}
-            rows={2}
+            rows={1}
             maxLength={500}
-            placeholder="Example: say yes, but only next week"
+            placeholder="e.g. say yes, but only next week"
             className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
             disabled={isBusy}
           />
@@ -311,7 +315,7 @@ export default function AIDraftPanel({
         <textarea
           value={text}
           onChange={(event) => setText(event.target.value)}
-          rows={6}
+          rows={hasDraftText ? 6 : 3}
           placeholder="AI draft will appear here"
           className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
           disabled={isBusy}

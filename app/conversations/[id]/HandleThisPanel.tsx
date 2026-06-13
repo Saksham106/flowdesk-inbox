@@ -13,11 +13,13 @@ export default function HandleThisPanel({
   assistantState,
   relationshipContext,
   canSuggest,
+  isPersonal = false,
 }: {
   conversationId: string
   assistantState: CommandCenterConversation
   relationshipContext: RelationshipContext
   canSuggest: boolean
+  isPersonal?: boolean
 }) {
   const router = useRouter()
   const [isHandling, setIsHandling] = useState(false)
@@ -49,11 +51,11 @@ export default function HandleThisPanel({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-slate-600">Assistant context</h2>
-          <p className="mt-1 text-xs text-slate-500">{assistantState.reason}</p>
+          <p className="mt-1 min-w-0 break-words text-xs text-slate-500 [overflow-wrap:anywhere]">{assistantState.reason}</p>
         </div>
         <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium capitalize text-slate-600">
           {assistantState.state.replaceAll("_", " ")}
@@ -71,7 +73,9 @@ export default function HandleThisPanel({
 
       {!canSuggest ? (
         <p className="mt-2 text-xs text-amber-700">
-          Add the required profile details before FlowDesk can draft a handled response.
+          {isPersonal
+            ? "Complete your profile in Settings before FlowDesk can draft a response."
+            : "Add a business profile in Settings before FlowDesk can draft a handled response."}
         </p>
       ) : null}
       {notice ? <p className="mt-2 text-sm text-green-700">{notice}</p> : null}
@@ -103,9 +107,9 @@ export default function HandleThisPanel({
 
 function ContextRow({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <div className="min-w-0">
       <dt className="font-medium text-slate-500">{label}</dt>
-      <dd className="mt-0.5 text-slate-800">{value}</dd>
+      <dd className="mt-0.5 min-w-0 break-words text-slate-800 [overflow-wrap:anywhere]">{value}</dd>
     </div>
   )
 }
@@ -116,7 +120,7 @@ function ContextList({ title, items }: { title: string; items: string[] }) {
       <h3 className="text-xs font-semibold text-slate-600">{title}</h3>
       <ul className="mt-2 space-y-1 text-xs text-slate-700">
         {items.map((item) => (
-          <li key={item}>{item}</li>
+          <li key={item} className="min-w-0 break-words [overflow-wrap:anywhere]">{item}</li>
         ))}
       </ul>
     </div>
