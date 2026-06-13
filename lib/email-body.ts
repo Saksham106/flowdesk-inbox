@@ -66,3 +66,28 @@ export function renderEmailBodyHtml(body: string): string {
   }
   return linkifyText(body);
 }
+
+export function stripHtmlToText(body: string, maxLength = 80): string {
+  let text: string;
+  if (isHtmlBody(body)) {
+    text = body
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\s+/g, " ")
+      .trim();
+  } else {
+    text = body
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/_([^_]+)_/g, "$1")
+      .replace(/\n/g, " ")
+      .trim();
+  }
+  return text.length > maxLength ? text.slice(0, maxLength) + "…" : text;
+}
