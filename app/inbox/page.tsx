@@ -7,12 +7,15 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import SignOutButton from "@/app/inbox/SignOutButton";
 import SearchInput from "@/app/inbox/SearchInput";
-import CommandCenterPanel from "@/app/inbox/CommandCenterPanel";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import { StatusBadge, LabelBadge } from "@/app/components/badges";
+import AppRail from "@/app/components/AppRail";
+import AppListColumn from "@/app/components/AppListColumn";
+import HomeCommandCenter from "@/app/components/HomeCommandCenter";
 import { buildDailyCommandCenter, CommandCenterInputConversation } from "@/lib/agent/command-center";
 import { analyzeRevenueAtRisk } from "@/lib/agent/revenue-at-risk";
 import { AppNavigationItem, getInboxNavigation } from "@/lib/app-navigation";
+import { stripHtmlToText } from "@/lib/email-body";
 
 export const dynamic = "force-dynamic";
 
@@ -69,21 +72,7 @@ export default async function InboxPage({ searchParams }: Props) {
   const salesFilter = searchParams.sales === "1";
 
   // Home view = no status param and no sales filter (default landing)
-  const isHomeView = !searchParams.status && !salesFilter;
-
-  // Build where clause for email list queries
-  const where = {
-    tenantId,
-    ...(activeStatus ? { status: activeStatus } : {}),
-    ...(q
-      ? {
-          OR: [
-            { externalThreadId: { contains: q, mode: "insensitive" as const } },
-            { contact: { name: { contains: q, mode: "insensitive" as const } } },
-          ],
-        }
-      : {}),
-  };
+  const isHomeView = !searchParams.status && !salesFilter && !q;
 
   const [tenant, statusCounts] = await Promise.all([
     prisma.tenant.findUnique({
@@ -92,17 +81,7 @@ export default async function InboxPage({ searchParams }: Props) {
     }),
     prisma.conversation.groupBy({
       by: ["status"],
-      where: {
-        tenantId,
-        ...(q
-          ? {
-              OR: [
-                { externalThreadId: { contains: q, mode: "insensitive" } },
-                { contact: { name: { contains: q, mode: "insensitive" } } },
-              ],
-            }
-          : {}),
-      },
+      where: { tenantId },
       _count: { status: true },
     }),
   ]);
@@ -110,11 +89,27 @@ export default async function InboxPage({ searchParams }: Props) {
   const isBusiness = tenant?.accountType === "business";
   const accountType = tenant?.accountType ?? "personal";
 
-  // Fetch email list only on non-home views
-  const conversations = isHomeView
-    ? []
-    : await prisma.conversation.findMany({
-        where,
+  const countByStatus = Object.fromEntries(
+    statusCounts.map((r) => [r.status, r._count.status])
+  ) as Record<string, number>;
+  const totalCount = statusCounts.reduce((sum, r) => sum + r._count.status, 0);
+  const needsReplyCount = countByStatus["needs_reply"] ?? 0;
+
+  // Fetch email list for mobile non-home views
+  const mobileConversations = !isHomeView
+    ? await prisma.conversation.findMany({
+        where: {
+          tenantId,
+          ...(activeStatus ? { status: activeStatus } : {}),
+          ...(q
+            ? {
+                OR: [
+                  { externalThreadId: { contains: q, mode: "insensitive" as const } },
+                  { contact: { name: { contains: q, mode: "insensitive" as const } } },
+                ],
+              }
+            : {}),
+        },
         orderBy: { lastMessageAt: "desc" },
         include: {
           messages: { orderBy: { createdAt: "desc" }, take: 1 },
@@ -122,9 +117,10 @@ export default async function InboxPage({ searchParams }: Props) {
           contact: true,
           stateRecord: { select: { metadataJson: true, state: true } },
         },
-      });
+      })
+    : [];
 
-  // Fetch brief data only on home view
+  // Home view data for command center
   const [commandCenterConversations, ignoredStates, pendingFollowUps, revenueAtRisk] =
     isHomeView
       ? await Promise.all([
@@ -192,25 +188,6 @@ export default async function InboxPage({ searchParams }: Props) {
       )
     : null;
 
-  const displayConversations = salesFilter
-    ? conversations.filter((c) => {
-        const meta = c.stateRecord?.metadataJson;
-        return (
-          meta !== null &&
-          typeof meta === "object" &&
-          !Array.isArray(meta) &&
-          (meta as Record<string, unknown>).isSalesLead === true
-        );
-      })
-    : conversations;
-
-  const countByStatus = Object.fromEntries(
-    statusCounts.map((r) => [r.status, r._count.status])
-  ) as Record<string, number>;
-
-  const totalCount = statusCounts.reduce((sum, r) => sum + r._count.status, 0);
-  const needsReplyCount = countByStatus["needs_reply"] ?? 0;
-
   type IgnoredStateRow = {
     metadataJson: unknown;
     conversationId: string;
@@ -243,7 +220,18 @@ export default async function InboxPage({ searchParams }: Props) {
     href: `/conversations/${job.conversationId}`,
   }));
 
-  // "all" maps to ?status=all so it's distinct from the home view (no params)
+  const displayConversations = salesFilter
+    ? mobileConversations.filter((c) => {
+        const meta = c.stateRecord?.metadataJson;
+        return (
+          meta !== null &&
+          typeof meta === "object" &&
+          !Array.isArray(meta) &&
+          (meta as Record<string, unknown>).isSalesLead === true
+        );
+      })
+    : mobileConversations;
+
   function tabHref(status: ConversationStatus | "all" | null, sales = false) {
     const params = new URLSearchParams();
     if (sales) {
@@ -277,7 +265,6 @@ export default async function InboxPage({ searchParams }: Props) {
 
   function secondaryNavMenu(className = "") {
     if (appNavigation.secondary.length === 0) return null;
-
     return (
       <details className={`relative ${className}`}>
         <summary className="cursor-pointer list-none rounded-md px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
@@ -299,228 +286,199 @@ export default async function InboxPage({ searchParams }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <>
       <AutoRefresh intervalMs={10000} />
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6">
-          {/* Title row */}
-          <div className="flex items-center justify-between py-4">
-            <div>
-              <h1 className="text-xl font-semibold">Inbox</h1>
-              <p className="text-sm text-slate-500">
-                {needsReplyCount > 0 ? (
-                  <span className="font-medium text-red-600">
-                    {needsReplyCount} need{needsReplyCount === 1 ? "s" : ""} reply
-                  </span>
-                ) : (
-                  "All caught up"
-                )}
-                {" · "}{totalCount} total
-              </p>
-            </div>
-            {/* Desktop nav */}
-            <div className="hidden items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 sm:flex">
-              {appNavigation.primary.map((item) => navLink(item))}
-              {secondaryNavMenu()}
-              <SignOutButton />
-            </div>
-            {/* Mobile: sign out only */}
-            <div className="sm:hidden">
-              <SignOutButton />
-            </div>
-          </div>
 
-          {/* Mobile nav strip */}
-          <div className="flex flex-wrap items-center gap-1 pb-3 sm:hidden">
-            {appNavigation.primary.map((item) => navLink(item, "shrink-0"))}
-            {secondaryNavMenu("shrink-0")}
-          </div>
-        </div>
+      {/* ── DESKTOP SHELL (lg+) ── */}
+      <div className="hidden lg:flex h-screen overflow-hidden bg-slate-50">
+        <AppRail needsReplyCount={needsReplyCount} accountType={accountType} />
+        <AppListColumn
+          tenantId={tenantId}
+          accountType={accountType}
+          status={activeStatus}
+          q={q || undefined}
+        />
+        {/* Main pane */}
+        <main className="flex-1 overflow-y-auto bg-slate-50">
+          {commandCenter ? (
+            <HomeCommandCenter
+              commandCenter={commandCenter}
+              revenueAtRisk={revenueAtRisk as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>}
+              followUps={followUpConversations}
+              ignoredItems={ignoredConversations}
+              accountType={accountType}
+              date={new Date()}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <div className="text-center">
+                <p className="text-sm font-semibold text-slate-700">Select a conversation</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  or{" "}
+                  <Link href="/inbox" className="text-blue-600 hover:underline">
+                    go to Home
+                  </Link>
+                </p>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
 
-        {/* View tabs */}
-        <div className="mx-auto max-w-5xl px-4 sm:px-6">
-          <nav className="-mb-px flex gap-6 overflow-x-auto">
-            {/* Home tab */}
-            <Link
-              href="/inbox"
-              className={`whitespace-nowrap border-b-2 pb-3 pt-2 text-sm font-medium transition ${
-                isHomeView
-                  ? "border-slate-900 text-slate-900"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              Home
-            </Link>
-
-            {/* Email list tabs */}
-            {listTabs.map(({ label, status, count }) => {
-              const isActive =
-                !isHomeView &&
-                !salesFilter &&
-                (status === "all" ? activeStatus === null : activeStatus === status);
-              return (
-                <Link
-                  key={label}
-                  href={tabHref(status)}
-                  className={`whitespace-nowrap border-b-2 pb-3 pt-2 text-sm font-medium transition ${
-                    isActive
-                      ? "border-slate-900 text-slate-900"
-                      : "border-transparent text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  {label}
-                  {count > 0 && (
-                    <span
-                      className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs ${
-                        isActive ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      {count}
+      {/* ── MOBILE LAYOUT (< lg) ── */}
+      <div className="lg:hidden min-h-screen bg-slate-50">
+        <header className="border-b border-slate-200 bg-white">
+          <div className="mx-auto max-w-5xl px-4 sm:px-6">
+            <div className="flex items-center justify-between py-4">
+              <div>
+                <h1 className="text-xl font-semibold">Inbox</h1>
+                <p className="text-sm text-slate-500">
+                  {needsReplyCount > 0 ? (
+                    <span className="font-medium text-red-600">
+                      {needsReplyCount} need{needsReplyCount === 1 ? "s" : ""} reply
                     </span>
+                  ) : (
+                    "All caught up"
                   )}
-                </Link>
-              );
-            })}
+                  {" · "}{totalCount} total
+                </p>
+              </div>
+              <div className="hidden items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 sm:flex">
+                {appNavigation.primary.map((item) => navLink(item))}
+                {secondaryNavMenu()}
+                <SignOutButton />
+              </div>
+              <div className="sm:hidden">
+                <SignOutButton />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1 pb-3 sm:hidden">
+              {appNavigation.primary.map((item) => navLink(item, "shrink-0"))}
+              {secondaryNavMenu("shrink-0")}
+            </div>
+          </div>
 
-            {/* Sales tab — business accounts only */}
-            {isBusiness && (
+          <div className="mx-auto max-w-5xl px-4 sm:px-6">
+            <nav className="-mb-px flex gap-6 overflow-x-auto">
               <Link
-                href={tabHref(null, true)}
+                href="/inbox"
                 className={`whitespace-nowrap border-b-2 pb-3 pt-2 text-sm font-medium transition ${
-                  salesFilter
-                    ? "border-emerald-600 text-emerald-700"
+                  isHomeView
+                    ? "border-slate-900 text-slate-900"
                     : "border-transparent text-slate-500 hover:text-slate-700"
                 }`}
               >
-                Sales
-                {(commandCenter?.counts.salesQualified ?? 0) > 0 && (
-                  <span
-                    className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs ${
-                      salesFilter ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600"
+                Home
+              </Link>
+              {listTabs.map(({ label, status, count }) => {
+                const isActive =
+                  !isHomeView &&
+                  !salesFilter &&
+                  (status === "all" ? activeStatus === null && q === "" : activeStatus === status);
+                return (
+                  <Link
+                    key={label}
+                    href={tabHref(status)}
+                    className={`whitespace-nowrap border-b-2 pb-3 pt-2 text-sm font-medium transition ${
+                      isActive
+                        ? "border-slate-900 text-slate-900"
+                        : "border-transparent text-slate-500 hover:text-slate-700"
                     }`}
                   >
-                    {commandCenter?.counts.salesQualified}
-                  </span>
-                )}
-              </Link>
-            )}
-          </nav>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-5xl px-4 sm:px-6 py-6">
-        {isHomeView ? (
-          /* ── Home / Dashboard view ── */
-          <>
-            {commandCenter && (
-              <CommandCenterPanel
-                commandCenter={commandCenter}
-                revenueAtRisk={revenueAtRisk as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>}
-                accountType={accountType}
-              />
-            )}
-
-            {followUpConversations.length > 0 && (
-              <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700">
-                  Follow-ups queued ({followUpConversations.length})
-                </p>
-                <ul className="space-y-1">
-                  {followUpConversations.map((c) => (
-                    <li key={c.id}>
-                      <Link
-                        href={c.href}
-                        className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-amber-100"
+                    {label}
+                    {count > 0 && (
+                      <span
+                        className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs ${
+                          isActive ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                        }`}
                       >
-                        <span className="font-medium text-amber-900">{c.displayName}</span>
-                        <span className="text-xs text-amber-600">
-                          Queued {c.scheduledAt.toLocaleDateString()}
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {ignoredConversations.length > 0 && (
-              <details className="mb-5 rounded-xl border border-slate-200 bg-white shadow-sm">
-                <summary className="cursor-pointer select-none px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700">
-                  Safely ignored ({ignoredConversations.length})
-                </summary>
-                <ul className="divide-y divide-slate-100 border-t border-slate-100">
-                  {ignoredConversations.map((c) => (
-                    <li key={c.id}>
-                      <Link
-                        href={c.href}
-                        className="flex items-start justify-between gap-4 px-4 py-3 text-sm hover:bg-slate-50"
-                      >
-                        <span className="font-medium text-slate-700">{c.displayName}</span>
-                        <span className="text-xs text-slate-400">{c.reason}</span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
-          </>
-        ) : (
-          /* ── Email list view ── */
-          <>
-            <div className="mb-5">
-              <Suspense>
-                <SearchInput defaultValue={q} />
-              </Suspense>
-            </div>
-
-            <div className="space-y-3">
-              {displayConversations.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-sm text-slate-500">
-                  {q || activeStatus || salesFilter
-                    ? "No conversations match your search."
-                    : "No conversations yet. Connect Gmail in Settings to import threads."}
-                </div>
-              ) : (
-                displayConversations.map((conversation) => {
-                  const lastMessage = conversation.messages[0];
-                  const displayName =
-                    conversation.contact?.name ?? conversation.externalThreadId;
-                  return (
-                    <Link
-                      key={conversation.id}
-                      href={`/conversations/${conversation.id}`}
-                      className="block rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:border-slate-300 sm:px-5 sm:py-4"
-                    >
-                      {/* Row 1: name + date; badges inline on sm+ */}
-                      <div className="flex items-start justify-between gap-2 sm:items-center">
-                        <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-1.5 sm:gap-y-0">
-                          <p
-                            className="min-w-0 truncate text-sm font-medium"
-                            title={displayName}
-                          >
-                            {displayName}
-                          </p>
-                          <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                            <StatusBadge status={isFyiConversation(conversation) ? "closed" : conversation.status} />
-                            {isBusiness && conversation.label && <LabelBadge label={conversation.label} />}
-                          </div>
-                        </div>
-                        <span className="shrink-0 whitespace-nowrap text-xs text-slate-400">
-                          {conversation.lastMessageAt.toLocaleString()}
-                        </span>
-                      </div>
-                      {/* Row 2: preview */}
-                      <p className="mt-1 truncate text-sm text-slate-500">
-                        {lastMessage?.body ?? "No messages yet"}
-                      </p>
-                    </Link>
-                  );
-                })
+                        {count}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+              {isBusiness && (
+                <Link
+                  href={tabHref(null, true)}
+                  className={`whitespace-nowrap border-b-2 pb-3 pt-2 text-sm font-medium transition ${
+                    salesFilter
+                      ? "border-emerald-600 text-emerald-700"
+                      : "border-transparent text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  Sales
+                </Link>
               )}
-            </div>
-          </>
-        )}
-      </main>
-    </div>
+            </nav>
+          </div>
+        </header>
+
+        <main className="mx-auto max-w-5xl px-4 sm:px-6 py-6">
+          {isHomeView ? (
+            <>
+              {commandCenter && (
+                <HomeCommandCenter
+                  commandCenter={commandCenter}
+                  revenueAtRisk={revenueAtRisk as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>}
+                  followUps={followUpConversations}
+                  ignoredItems={ignoredConversations}
+                  accountType={accountType}
+                  date={new Date()}
+                />
+              )}
+            </>
+          ) : (
+            <>
+              <div className="mb-5">
+                <Suspense>
+                  <SearchInput defaultValue={q} />
+                </Suspense>
+              </div>
+              <div className="space-y-3">
+                {displayConversations.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-sm text-slate-500">
+                    {q || activeStatus || salesFilter
+                      ? "No conversations match your search."
+                      : "No conversations yet. Connect Gmail in Settings to import threads."}
+                  </div>
+                ) : (
+                  displayConversations.map((conversation) => {
+                    const lastMessage = conversation.messages[0];
+                    const displayName = conversation.contact?.name ?? conversation.externalThreadId;
+                    const snippet = lastMessage?.body
+                      ? stripHtmlToText(lastMessage.body, 100)
+                      : "No messages yet";
+                    return (
+                      <Link
+                        key={conversation.id}
+                        href={`/conversations/${conversation.id}`}
+                        className="block rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:border-slate-300 sm:px-5 sm:py-4"
+                      >
+                        <div className="flex items-start justify-between gap-2 sm:items-center">
+                          <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-1.5 sm:gap-y-0">
+                            <p className="min-w-0 truncate text-sm font-medium" title={displayName}>
+                              {displayName}
+                            </p>
+                            <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                              <StatusBadge status={isFyiConversation(conversation) ? "closed" : conversation.status} />
+                              {isBusiness && conversation.label && <LabelBadge label={conversation.label} />}
+                            </div>
+                          </div>
+                          <span className="shrink-0 whitespace-nowrap text-xs text-slate-400">
+                            {conversation.lastMessageAt.toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="mt-1 truncate text-sm text-slate-500">{snippet}</p>
+                      </Link>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          )}
+        </main>
+      </div>
+    </>
   );
 }
