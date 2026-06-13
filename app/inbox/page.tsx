@@ -300,7 +300,7 @@ export default async function InboxPage({ searchParams }: Props) {
           sales={salesFilter}
         />
         {/* Main pane */}
-        <main className="flex-1 overflow-y-auto bg-slate-50">
+        <main className="flex-1 overflow-hidden bg-slate-50">
           {commandCenter ? (
             <HomeCommandCenter
               commandCenter={commandCenter}
