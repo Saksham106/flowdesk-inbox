@@ -100,6 +100,19 @@ export async function syncConversationWorkItems(
     },
   })
 
+  // Auto-close automated/FYI conversations that were never engaged with
+  const hasOutboundMessages = conversation.messages.some((m) => m.direction === "outbound")
+  if (
+    summary.state.state === "fyi_only" &&
+    conversation.status === "needs_reply" &&
+    !hasOutboundMessages
+  ) {
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { status: "closed" },
+    })
+  }
+
   let tasksSynced = 0
   for (const task of summary.tasks) {
     await prisma.inboxTask.upsert({

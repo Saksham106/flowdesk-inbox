@@ -127,6 +127,9 @@ const SENSITIVE_PATTERN =
 const LEAD_PATTERN =
   /\b(pricing|price|charge|cost|quote|demo|available|availability|book|setup|interested|can you help|do you work with)\b/i
 const FYI_PATTERN = /\b(fyi|newsletter|for your records|no action|all set|thanks, all set)\b/i
+const AUTOMATED_SENDER_PATTERN = /\b(no-?reply|noreply|notifications?|alerts?|do-not-reply|automated)\b/i
+const AUTOMATED_BODY_PATTERN =
+  /\b(unsubscribe|you'?re receiving this|this is an automated (email|message|notification)|do not reply to this email)\b/i
 const MONEY_PATTERN = /\b(pricing|price|charge|cost|quote|budget|invoice|payment|paid|refund|setup fee|contract)\b/i
 const PROMISE_PATTERN = /\b(i promised|you promised|we promised|send|follow up|circle back|confirm|provide|share)\b/i
 
@@ -192,13 +195,17 @@ function isOpportunity(conversation: CommandCenterInputConversation): boolean {
 function isSafelyIgnorable(conversation: CommandCenterInputConversation): boolean {
   if (isAutoEmail(conversation)) return true
   const latest = latestMessage(conversation)
+  if (conversation.status === "closed") return true
+  if (hasPendingApproval(conversation) || isSensitive(conversation)) return false
+  if (latest?.direction !== "inbound") return false
+
+  const senderEmail = conversation.contact?.phoneE164 ?? ""
+  const body = latest.body
+
   return (
-    conversation.status === "closed" ||
-    (conversation.status !== "needs_reply" &&
-      !hasPendingApproval(conversation) &&
-      !isSensitive(conversation) &&
-      latest?.direction === "inbound" &&
-      FYI_PATTERN.test(latest.body))
+    AUTOMATED_SENDER_PATTERN.test(senderEmail) ||
+    AUTOMATED_BODY_PATTERN.test(body) ||
+    FYI_PATTERN.test(body)
   )
 }
 
@@ -316,6 +323,11 @@ export function analyzeConversationForCommandCenter(
     priority = "high"
     reason = "Qualified sales lead detected."
     nextAction = "Follow up to advance the deal."
+  } else if (safelyIgnored) {
+    state = "fyi_only"
+    priority = "none"
+    reason = "FYI only."
+    nextAction = "No action needed."
   } else if (opportunity) {
     state = "opportunity"
     priority = "high"
@@ -331,11 +343,6 @@ export function analyzeConversationForCommandCenter(
     priority = "medium"
     reason = "You are waiting on them."
     nextAction = "Send a follow-up."
-  } else if (safelyIgnored) {
-    state = "fyi_only"
-    priority = "none"
-    reason = "FYI only."
-    nextAction = "No action needed."
   } else if (latest?.direction === "outbound") {
     state = "waiting_on_them"
     priority = "low"
