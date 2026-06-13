@@ -136,4 +136,70 @@ describe("classifyEmailType", () => {
     })
     expect(result.emailType).toBe("needs_reply")
   })
+
+  // Body-based notification patterns (subject unavailable in production)
+  it("classifies login alert body as notification", () => {
+    const result = classifyEmailType({
+      fromEmail: "security@accounts.example.com",
+      subject: "",
+      body: "We noticed a new sign-in to your account from Chrome on macOS.",
+    })
+    expect(result.emailType).toBe("notification")
+  })
+
+  it("classifies password reset body as notification", () => {
+    const result = classifyEmailType({
+      fromEmail: "support@someservice.com",
+      subject: "",
+      body: "Click the link below to reset your password. This link expires in 1 hour.",
+    })
+    expect(result.emailType).toBe("notification")
+  })
+
+  it("classifies OTP/verification code body as notification", () => {
+    const result = classifyEmailType({
+      fromEmail: "auth@app.com",
+      subject: "",
+      body: "Your verification code is 482910. Do not share this code with anyone.",
+    })
+    expect(result.emailType).toBe("notification")
+  })
+
+  it("classifies security alert body as notification", () => {
+    const result = classifyEmailType({
+      fromEmail: "alert@service.com",
+      subject: "",
+      body: "Security alert: unusual sign-in detected from a new device.",
+    })
+    expect(result.emailType).toBe("notification")
+  })
+
+  // Body-based marketing patterns (subject unavailable)
+  it("classifies flash sale body as marketing", () => {
+    const result = classifyEmailType({
+      fromEmail: "deals@shop.com",
+      subject: "",
+      body: "Flash sale — save up to 40% this weekend only. Shop now before it ends!",
+    })
+    expect(result.emailType).toBe("marketing")
+  })
+
+  it("classifies 'do not reply' body as newsletter", () => {
+    const result = classifyEmailType({
+      fromEmail: "updates@platform.com",
+      subject: "",
+      body: "Your account balance is $120. Do not reply to this email — it is automated.",
+    })
+    expect(result.emailType).toBe("newsletter")
+  })
+
+  // Subject hint extracted from [Subject] fallback body
+  it("classifies [Subject] fallback body using subject hint", () => {
+    const result = classifyEmailType({
+      fromEmail: "deals@store.com",
+      subject: "50% off today — limited time offer",
+      body: "[50% off today — limited time offer]",
+    })
+    expect(result.emailType).toBe("marketing")
+  })
 })

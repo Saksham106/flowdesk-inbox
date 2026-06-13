@@ -302,10 +302,13 @@ export async function syncConversationWorkItems(
   const firstInbound = conversation.messages.find((m) => m.direction === "inbound")
   if (firstInbound) {
     const fromEmail = extractEmail(firstInbound.fromE164 ?? "")
+    const bodyText = firstInbound.body
+    // When a message has no body, Gmail sync stores it as "[Subject text]"
+    const subjectHint = /^\[(.+)\]$/.test(bodyText.trim()) ? bodyText.trim().slice(1, -1) : ""
     const { emailType } = classifyEmailType({
       fromEmail,
-      subject: "",
-      body: firstInbound.body,
+      subject: subjectHint,
+      body: bodyText,
     })
 
     if (emailType !== "needs_reply") {
