@@ -312,6 +312,7 @@ export async function syncConversationWorkItems(
   }
 
   // Classify email type (notification / newsletter / marketing) for all accounts
+  let detectedEmailType: string | null = null
   const firstInbound = conversation.messages.find((m) => m.direction === "inbound")
   if (firstInbound) {
     const fromEmail = extractEmail(firstInbound.fromE164 ?? "")
@@ -323,6 +324,7 @@ export async function syncConversationWorkItems(
       subject: subjectHint,
       body: bodyText,
     })
+    detectedEmailType = emailType
 
     if (emailType !== "needs_reply") {
       const currentState = await prisma.conversationState.findUnique({
@@ -341,6 +343,26 @@ export async function syncConversationWorkItems(
         data: { metadataJson: { ...currentMeta, emailType } as Prisma.InputJsonValue },
       })
     }
+  }
+
+  // Second-pass auto-close: classifyEmailType runs after summarizeWorkItems, so emails classified
+  // as FYI by the email classifier (but not caught by pattern matching) need a second chance here.
+  const AUTO_EMAIL_TYPES = new Set(["notification", "newsletter", "marketing"])
+  if (
+    detectedEmailType !== null &&
+    AUTO_EMAIL_TYPES.has(detectedEmailType) &&
+    summary.state.state !== "fyi_only" &&
+    conversation.status === "needs_reply" &&
+    !hasOutboundMessages
+  ) {
+    await prisma.conversationState.update({
+      where: { conversationId: conversation.id },
+      data: { state: "fyi_only", priority: "none", reason: "FYI only.", nextAction: "No action needed." },
+    })
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { status: "closed" },
+    })
   }
 
   return {

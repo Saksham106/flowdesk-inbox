@@ -240,7 +240,7 @@ export default async function ConversationPage({
             </Link>
             <div className="mt-1 flex items-center gap-2">
               <h1 className="text-xl font-semibold">{displayName}</h1>
-              <StatusBadge status={conversation.status} />
+              <StatusBadge status={isAutoEmailConversation || stateRecord?.state === "fyi_only" ? "closed" : conversation.status} />
               {conversation.label && <LabelBadge label={conversation.label} />}
             </div>
             <p className="min-w-0 break-all text-sm text-slate-500">

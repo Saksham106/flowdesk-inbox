@@ -24,7 +24,7 @@ export async function POST() {
         take: 20,
         select: { body: true, direction: true },
       },
-      stateRecord: { select: { state: true } },
+      stateRecord: { select: { state: true, metadataJson: true } },
     },
   })
 
@@ -37,6 +37,14 @@ export async function POST() {
     if (c.stateRecord?.state === "fyi_only") {
       toClose.push(c.id)
       continue
+    }
+    const meta = c.stateRecord?.metadataJson
+    if (meta && typeof meta === "object" && !Array.isArray(meta)) {
+      const emailType = (meta as Record<string, unknown>).emailType
+      if (emailType === "notification" || emailType === "newsletter" || emailType === "marketing") {
+        toClose.push(c.id)
+        continue
+      }
     }
     const latestInbound = c.messages.find((m) => m.direction === "inbound")
     if (!latestInbound) continue

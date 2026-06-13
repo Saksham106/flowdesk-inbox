@@ -33,11 +33,16 @@ const FYI_RE = /\b(fyi|newsletter|for your records|no action|all set|thanks, all
 
 function isFyiConversation(conversation: {
   status: string
-  stateRecord: { state: string } | null
+  stateRecord: { state: string; metadataJson: unknown } | null
   contact: { phoneE164: string } | null
   messages: { direction: string; body: string }[]
 }): boolean {
   if (conversation.stateRecord?.state === "fyi_only") return true
+  const meta = conversation.stateRecord?.metadataJson
+  if (meta && typeof meta === "object" && !Array.isArray(meta)) {
+    const emailType = (meta as Record<string, unknown>).emailType
+    if (emailType === "notification" || emailType === "newsletter" || emailType === "marketing") return true
+  }
   if (conversation.status !== "needs_reply") return false
   const msg = conversation.messages[0]
   if (!msg || msg.direction !== "inbound") return false
@@ -418,24 +423,25 @@ export default async function InboxPage({ searchParams }: Props) {
                   href={`/conversations/${conversation.id}`}
                   className="block rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:border-slate-300 sm:px-5 sm:py-4"
                 >
-                  {/* Row 1: sender name + date */}
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p
-                      className="min-w-0 truncate text-sm font-medium"
-                      title={displayName}
-                    >
-                      {displayName}
-                    </p>
+                  {/* Row 1: name + date; badges inline on sm+ */}
+                  <div className="flex items-start justify-between gap-2 sm:items-center">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-1.5 sm:gap-y-0">
+                      <p
+                        className="min-w-0 truncate text-sm font-medium"
+                        title={displayName}
+                      >
+                        {displayName}
+                      </p>
+                      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                        <StatusBadge status={isFyiConversation(conversation) ? "closed" : conversation.status} />
+                        {conversation.label && <LabelBadge label={conversation.label} />}
+                      </div>
+                    </div>
                     <span className="shrink-0 whitespace-nowrap text-xs text-slate-400">
                       {conversation.lastMessageAt.toLocaleString()}
                     </span>
                   </div>
-                  {/* Row 2: badges */}
-                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    <StatusBadge status={isFyiConversation(conversation) ? "closed" : conversation.status} />
-                    {conversation.label && <LabelBadge label={conversation.label} />}
-                  </div>
-                  {/* Row 3: preview */}
+                  {/* Row 2: preview */}
                   <p className="mt-1 truncate text-sm text-slate-500">
                     {lastMessage?.body ?? "No messages yet"}
                   </p>
