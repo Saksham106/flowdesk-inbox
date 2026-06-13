@@ -120,6 +120,8 @@ export type RelationshipContext = {
   relationshipStatus: string
 }
 
+const AUTO_EMAIL_TYPES = new Set(["notification", "newsletter", "marketing"])
+
 const SENSITIVE_PATTERN =
   /\b(legal|lawsuit|attorney|immigration|tax|medical|doctor|diagnosis|angry|furious|refund|dispute|contract|hr|employment|breakup|divorce|owed|collections|overdue)\b/i
 const LEAD_PATTERN =
@@ -188,6 +190,7 @@ function isOpportunity(conversation: CommandCenterInputConversation): boolean {
 }
 
 function isSafelyIgnorable(conversation: CommandCenterInputConversation): boolean {
+  if (isAutoEmail(conversation)) return true
   const latest = latestMessage(conversation)
   return (
     conversation.status === "closed" ||
@@ -197,6 +200,18 @@ function isSafelyIgnorable(conversation: CommandCenterInputConversation): boolea
       latest?.direction === "inbound" &&
       FYI_PATTERN.test(latest.body))
   )
+}
+
+function getEmailType(conversation: CommandCenterInputConversation): string | null {
+  const state = conversation.conversationState
+  if (!state?.metadataJson || typeof state.metadataJson !== "object" || Array.isArray(state.metadataJson)) return null
+  const emailType = (state.metadataJson as Record<string, unknown>).emailType
+  return typeof emailType === "string" ? emailType : null
+}
+
+function isAutoEmail(conversation: CommandCenterInputConversation): boolean {
+  const emailType = getEmailType(conversation)
+  return emailType !== null && AUTO_EMAIL_TYPES.has(emailType)
 }
 
 function isClassifiedSupport(conversation: CommandCenterInputConversation): boolean {
@@ -238,6 +253,7 @@ export function analyzeConversationForCommandCenter(
   const hold = activeHold(conversation)
   const sensitive = isSensitive(conversation)
   const opportunity = isOpportunity(conversation)
+  const autoEmail = isAutoEmail(conversation)
   const safelyIgnored = isSafelyIgnorable(conversation)
   const support = isClassifiedSupport(conversation)
   const churnRisk = isChurnRisk(conversation)
@@ -256,6 +272,20 @@ export function analyzeConversationForCommandCenter(
     priority = "urgent"
     reason = approvalReason(conversation) ?? "Sensitive conversation needs review."
     nextAction = "Review carefully before sending anything."
+  } else if (autoEmail) {
+    const emailType = getEmailType(conversation)
+    state = "fyi_only"
+    priority = "none"
+    if (emailType === "notification") {
+      reason = "Automated notification — no reply needed."
+      nextAction = "Review only if relevant."
+    } else if (emailType === "newsletter") {
+      reason = "Newsletter or marketing email."
+      nextAction = "Unsubscribe if not relevant."
+    } else {
+      reason = "Marketing / promotional email."
+      nextAction = "No action needed."
+    }
   } else if (churnRisk) {
     state = "support"
     priority = "urgent"

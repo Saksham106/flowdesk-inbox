@@ -297,3 +297,51 @@ describe('revenue-weighted score()', () => {
     expect(center.topActions.every(a => a.estimatedValue !== undefined)).toBe(true)
   })
 })
+
+describe("emailType override in analyzeConversationForCommandCenter", () => {
+  it("classifies notification emailType as fyi_only", () => {
+    const result = analyzeConversationForCommandCenter(
+      conversation({ status: "needs_reply", conversationState: { metadataJson: { emailType: "notification" } } }),
+      now
+    )
+    expect(result.state).toBe("fyi_only")
+    expect(result.priority).toBe("none")
+    expect(result.reason).toContain("Automated notification")
+    expect(result.safelyIgnored).toBe(true)
+  })
+
+  it("classifies newsletter emailType as fyi_only with unsubscribe hint", () => {
+    const result = analyzeConversationForCommandCenter(
+      conversation({ status: "needs_reply", conversationState: { metadataJson: { emailType: "newsletter" } } }),
+      now
+    )
+    expect(result.state).toBe("fyi_only")
+    expect(result.priority).toBe("none")
+    expect(result.reason).toContain("Newsletter")
+    expect(result.nextAction).toContain("Unsubscribe")
+    expect(result.safelyIgnored).toBe(true)
+  })
+
+  it("classifies marketing emailType as fyi_only", () => {
+    const result = analyzeConversationForCommandCenter(
+      conversation({ status: "needs_reply", conversationState: { metadataJson: { emailType: "marketing" } } }),
+      now
+    )
+    expect(result.state).toBe("fyi_only")
+    expect(result.priority).toBe("none")
+    expect(result.reason).toContain("Marketing")
+    expect(result.safelyIgnored).toBe(true)
+  })
+
+  it("sensitive flag still overrides auto-email classification", () => {
+    const result = analyzeConversationForCommandCenter(
+      conversation({
+        label: "Complaint",
+        conversationState: { metadataJson: { emailType: "notification" } },
+        messages: [{ direction: "inbound", body: "legal dispute refund", createdAt: now }],
+      }),
+      now
+    )
+    expect(result.state).toBe("risky_urgent")
+  })
+})

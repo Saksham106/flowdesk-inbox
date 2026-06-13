@@ -192,6 +192,11 @@ export default async function ConversationPage({
     Boolean(businessProfile);
 
   const displayName = conversation.contact?.name ?? conversation.externalThreadId;
+  const emailType =
+    typeof convMeta.emailType === "string" ? convMeta.emailType : null
+  const isAutoEmailConversation =
+    emailType === "notification" || emailType === "newsletter" || emailType === "marketing"
+
   const assistantInput = {
     id: conversation.id,
     externalThreadId: conversation.externalThreadId,
@@ -205,6 +210,7 @@ export default async function ConversationPage({
     agentJobs: latestAgentJob ? [latestAgentJob] : [],
     approvalRequests: pendingApprovals,
     calendarHolds: activeHold ? [activeHold] : [],
+    conversationState: stateRecord ?? null,
   };
   const assistantState = analyzeConversationForCommandCenter(assistantInput);
   const relationshipContext = buildRelationshipContext(assistantInput);
@@ -364,12 +370,25 @@ export default async function ConversationPage({
           </div>
 
           {/* Assistant context */}
-          <HandleThisPanel
-            conversationId={conversation.id}
-            assistantState={assistantState}
-            relationshipContext={relationshipContext}
-            canSuggest={conversation.channel.type === "email" && Boolean(businessProfile)}
-          />
+          {isAutoEmailConversation ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+              <p className="font-medium text-slate-700">No reply needed</p>
+              <p className="mt-1">
+                {emailType === "notification"
+                  ? "This is an automated notification."
+                  : emailType === "newsletter"
+                    ? "This is a newsletter or marketing email."
+                    : "This is a promotional email."}
+              </p>
+            </div>
+          ) : (
+            <HandleThisPanel
+              conversationId={conversation.id}
+              assistantState={assistantState}
+              relationshipContext={relationshipContext}
+              canSuggest={conversation.channel.type === "email" && Boolean(businessProfile)}
+            />
+          )}
 
           {/* Business-only: support signals */}
           {isSupport && (
