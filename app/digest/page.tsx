@@ -91,6 +91,7 @@ export default async function DigestPage() {
         channel: true,
         contact: true,
         draft: true,
+        stateRecord: { select: { metadataJson: true, state: true } },
         agentJobs: { orderBy: { createdAt: "desc" }, take: 3 },
         approvalRequests: {
           where: { status: "pending" },
@@ -115,7 +116,13 @@ export default async function DigestPage() {
     pendingApprovals.length +
     expiringHolds.length
 
-  const commandCenter = buildDailyCommandCenter(commandCenterConversations, now)
+  const commandCenter = buildDailyCommandCenter(
+    commandCenterConversations.map((c) => ({
+      ...c,
+      conversationState: c.stateRecord,
+    })),
+    now
+  )
 
   let todayMeetings: CalendarEvent[] = []
   if (calendarCredential) {
