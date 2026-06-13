@@ -267,7 +267,7 @@ export default function AIDraftPanel({
       {isEmail && !canSuggest ? (
         <p className="mb-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
           {isPersonal
-            ? "AI suggestions are temporarily unavailable for this account."
+            ? "AI suggestions are temporarily unavailable."
             : "Add a business profile in Settings to enable suggestions."}
         </p>
       ) : null}

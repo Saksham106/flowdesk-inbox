@@ -54,7 +54,7 @@ export default function HandleThisPanel({
     <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-slate-600">Assistant context</h2>
+          <h2 className="text-sm font-semibold text-slate-600">Why this matters</h2>
           <p className="mt-1 min-w-0 break-words text-xs text-slate-500 [overflow-wrap:anywhere]">{assistantState.reason}</p>
         </div>
         <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium capitalize text-slate-600">
@@ -68,14 +68,14 @@ export default function HandleThisPanel({
         disabled={!canSuggest || isHandling}
         className="w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isHandling ? "Handling..." : "Handle this"}
+        {isHandling ? "Working…" : isPersonal ? "Suggest reply" : "Handle this"}
       </button>
 
       {!canSuggest ? (
         <p className="mt-2 text-xs text-amber-700">
           {isPersonal
-            ? "Complete your profile in Settings before FlowDesk can draft a response."
-            : "Add a business profile in Settings before FlowDesk can draft a handled response."}
+            ? "Complete your writing style in Settings to enable AI suggestions."
+            : "Add a business profile in Settings to enable AI suggestions."}
         </p>
       ) : null}
       {notice ? <p className="mt-2 text-sm text-green-700">{notice}</p> : null}
