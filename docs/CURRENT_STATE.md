@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-12 (conversation page layout redesign)
+Last updated: 2026-06-12 (AI classification quality improvements)
 
 This file is the codebase-facing companion to `MASTER_PRODUCT_PLAN.md`. It answers: what exists today, what is partial, and what should not be treated as active scope.
 
@@ -253,6 +253,18 @@ v2.2: Sales Agent Mode + Mini CRM Pipeline Reporting (2026-06-12):
 - `app/inbox/CommandCenterPanel.tsx` — Support and Sales Qualified count chips added to command center grid.
 - `app/inbox/page.tsx` — `?sales=1` filter tab; `stateRecord` mapped to `conversationState` before `buildDailyCommandCenter` so both `isClassifiedSupport` and `isSalesQualified` helpers read correctly.
 - `app/leads/page.tsx` — score/stage filter form with Clear link; week-over-week stats table (new leads + avg score); dynamic section titles when filters active; `allLeads`/`displayLeads` split so funnel always shows totals.
+
+AI Classification Quality improvements (2026-06-12):
+
+- `lib/agent/email-classifier.ts` — deterministic email-type classifier; pure function with no DB or AI calls; classifies emails as `needs_reply`, `notification`, `newsletter`, `marketing`, or `fyi` using no-reply local-part patterns, known notification/Google/Microsoft domains, subject patterns, newsletter body patterns, and marketing subject patterns.
+- `lib/agent/reply-learning.ts` — `trainLearnedReplyProfile` now falls back to Gmail SENT history (up to 60 messages) when fewer than 5 DB outbound samples exist; fetches from `lib/google.ts:fetchGmailSentSamples`; requires ≥5 total samples; result includes `fromDb`/`fromGmail` counts in `sourceStatsJson`.
+- `lib/google.ts` — `fetchGmailSentSamples(channelId, limit)` added; calls Gmail API with `labelIds: ["SENT"]`; returns `Array<{ text, createdAt }>`; does not write to DB.
+- `lib/ai/prompts/classify.ts` — `buildClassifyPrompt` now accepts `accountType`; personal accounts get a separate prompt focused on personal communication, no CRM labels, no lead/sales framing; business accounts get the existing prompt unchanged.
+- `lib/agent/jobs.ts` — `_executeJob` fetches `tenant.accountType` and passes it to `classifyConversation`, so personal accounts never receive the sales/lead classify prompt.
+- `lib/agent/work-item-sync.ts` — gates `scoreLeadForConversation` and `classifySalesSignals` behind `!isPersonal`; runs `classifyEmailType` on the first inbound message and stores `emailType` in `ConversationState.metadataJson` when type is not `needs_reply`.
+- `lib/agent/command-center.ts` — `getEmailType`/`isAutoEmail` helpers read `conversationState.metadataJson.emailType`; `isSafelyIgnorable` returns true for auto-emails; `analyzeConversationForCommandCenter` overrides state to `fyi_only`/priority `none` for notification/newsletter/marketing emailType (after sensitive check, before churn-risk check).
+- `app/conversations/[id]/page.tsx` — passes `conversationState` to `assistantInput`; derives `isAutoEmailConversation`; renders a simple "No reply needed" card instead of `HandleThisPanel` when emailType is notification/newsletter/marketing.
+- Tests: `tests/email-classifier.test.ts` (15 tests), `tests/reply-learning.test.ts` (3 new tests), `tests/agent-job-pipeline.test.ts` (3 new tests for personal/business/null prompt), `tests/work-item-sync.test.ts` (tenant mock added), `tests/command-center.test.ts` (4 new tests for emailType override). Total: 374 tests passing.
 
 Limitations:
 
