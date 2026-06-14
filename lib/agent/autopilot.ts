@@ -5,6 +5,7 @@ import { generateDraftReply } from "@/lib/ai/provider"
 import { sendConversationMessage, ConversationSendError } from "@/lib/conversations/send-message"
 import type { ClassifyResult } from "@/lib/ai/prompts/classify"
 import type { PolicyDecision } from "@/lib/agent/policy"
+import { summarizeConversation } from "@/lib/ai/summarize"
 
 export type AutopilotEligibility =
   | { eligible: true }
@@ -119,7 +120,12 @@ export async function attemptAutopilotSend(
   const context = await getReplyGenerationContext({
     tenantId: job.tenantId,
     channelId: job.conversation.channelId,
+    conversationId: job.conversationId,
+    contactId: job.conversation.contactId,
   })
+
+  // Summarize conversation for RAG-enhanced prompts
+  const conversationSummary = summarizeConversation(job.conversation.messages)
 
   if (context.accountType === "business" && !context.businessProfile) {
     return { sent: false, reason: "Business profile not configured" }
@@ -180,6 +186,7 @@ export async function attemptAutopilotSend(
       knowledgeDocuments: context.knowledgeDocuments,
       learnedReplyProfile: context.learnedProfile,
       messages: job.conversation.messages,
+      conversationSummary,
       availableSlots: slots,
     })
     draftText = result.draftText

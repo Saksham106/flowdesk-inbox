@@ -5,7 +5,8 @@ import OpenAI from "openai"
 import { authOptions } from "@/lib/auth"
 import { getReplyGenerationContext } from "@/lib/agent/reply-context"
 import { generateDraftReply } from "@/lib/ai/provider"
-import { buildPersonalDraftReplyPrompt, draftReplyJsonSchema, normalizeDraftReplyOutput } from "@/lib/ai/prompts/draft-reply"
+import { buildPersonalDraftReplyPrompt, buildDraftReplyPrompt, draftReplyJsonSchema, normalizeDraftReplyOutput } from "@/lib/ai/prompts/draft-reply"
+import { summarizeConversation } from "@/lib/ai/summarize"
 import { prisma } from "@/lib/prisma"
 
 export const runtime = "nodejs"
@@ -53,8 +54,13 @@ export async function POST(
   const context = await getReplyGenerationContext({
     tenantId: session.user.tenantId,
     channelId: conversation.channelId,
+    conversationId: conversation.id,
+    contactId: conversation.contactId,
   })
   const accountType = context.accountType
+
+  // Summarize conversation for RAG-enhanced prompts
+  const conversationSummary = summarizeConversation(conversation.messages)
 
   let result: Awaited<ReturnType<typeof generateDraftReply>>
   let promptVersion: string
@@ -75,6 +81,7 @@ export async function POST(
     const prompt = buildPersonalDraftReplyPrompt({
       personalProfile: learnedProfileToPersonalStyle(context.learnedProfile),
       messages: conversation.messages,
+      conversationSummary,
       userInstruction,
     })
 
@@ -120,6 +127,7 @@ export async function POST(
         knowledgeDocuments: context.knowledgeDocuments,
         learnedReplyProfile: context.learnedProfile,
         messages: conversation.messages,
+        conversationSummary,
         availableSlots,
         userInstruction,
       })
