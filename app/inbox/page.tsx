@@ -12,7 +12,7 @@ import { StatusBadge, LabelBadge } from "@/app/components/badges";
 import AppRail from "@/app/components/AppRail";
 import AppListColumn from "@/app/components/AppListColumn";
 import HomeCommandCenter from "@/app/components/HomeCommandCenter";
-import { buildDailyCommandCenter, CommandCenterInputConversation } from "@/lib/agent/command-center";
+import { buildDailyCommandCenter, CommandCenterInputConversation, PersistedCommandCenterState, CommandCenterState, CommandCenterPriority } from "@/lib/agent/command-center";
 import { analyzeRevenueAtRisk } from "@/lib/agent/revenue-at-risk";
 import { AppNavigationItem, getInboxNavigation } from "@/lib/app-navigation";
 import { stripHtmlToText } from "@/lib/email-body";
@@ -121,7 +121,7 @@ export default async function InboxPage({ searchParams }: Props) {
     : [];
 
   // Home view data for command center
-  const [commandCenterConversations, ignoredStates, pendingFollowUps, revenueAtRisk] =
+  const [commandCenterConversations, ignoredStates, pendingFollowUps, revenueAtRisk, persistedStates] =
     isHomeView
       ? await Promise.all([
           prisma.conversation.findMany({
@@ -168,13 +168,58 @@ export default async function InboxPage({ searchParams }: Props) {
             take: 50,
           }),
           isBusiness ? analyzeRevenueAtRisk(tenantId) : Promise.resolve([]),
+          // Fetch persisted command center states for the 75 conversations
+          prisma.conversationState.findMany({
+            where: {
+              tenantId,
+              conversationId: {
+                in: (
+                  await prisma.conversation.findMany({
+                    where: { tenantId },
+                    orderBy: { lastMessageAt: "desc" },
+                    take: 75,
+                    select: { id: true },
+                  })
+                ).map((c) => c.id),
+              },
+            },
+            select: {
+              conversationId: true,
+              state: true,
+              priority: true,
+              reason: true,
+              nextAction: true,
+              confidence: true,
+              source: true,
+              metadataJson: true,
+              updatedAt: true,
+            },
+          }),
         ])
-      : [[], [], [], [] as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>];
+      : [[], [], [], [] as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>, [] as PersistedCommandCenterState[]];
 
   type ConversationForBrief = CommandCenterInputConversation & {
     stateRecord: { metadataJson: unknown } | null;
     leads: { score: number; scoreExplanation: string | null; estimatedValue: number | null }[];
   };
+
+  // Build a Map of persisted states for quick lookup
+  const persistedStatesMap = new Map<string, PersistedCommandCenterState>(
+    persistedStates.map((s) => [
+      s.conversationId,
+      {
+        conversationId: s.conversationId,
+        state: s.state as CommandCenterState,
+        priority: s.priority as CommandCenterPriority,
+        reason: s.reason,
+        nextAction: s.nextAction,
+        confidence: s.confidence,
+        source: s.source,
+        metadataJson: s.metadataJson,
+        updatedAt: s.updatedAt,
+      } as PersistedCommandCenterState,
+    ])
+  );
 
   const commandCenter = isHomeView
     ? buildDailyCommandCenter(
@@ -184,7 +229,8 @@ export default async function InboxPage({ searchParams }: Props) {
           lead: c.leads[0] ?? null,
         })),
         new Date(),
-        accountType
+        accountType,
+        persistedStatesMap
       )
     : null;
 
