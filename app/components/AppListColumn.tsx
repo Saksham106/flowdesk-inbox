@@ -34,13 +34,23 @@ type ConvRow = {
 }
 
 function isFyi(conv: ConvRow): boolean {
-  if (conv.stateRecord?.state === "fyi_only") return true
   const meta = conv.stateRecord?.metadataJson
   if (meta && typeof meta === "object" && !Array.isArray(meta)) {
+    const attentionCategory = (meta as Record<string, unknown>).attentionCategory
+    if (attentionCategory === "quiet" || attentionCategory === "fyi_done") return true
+    if (typeof attentionCategory === "string") return false
     const t = (meta as Record<string, unknown>).emailType
     if (t === "notification" || t === "newsletter" || t === "marketing") return true
   }
+  if (conv.stateRecord?.state === "fyi_only") return true
   return false
+}
+
+function attentionCategory(conv: ConvRow): string | null {
+  const meta = conv.stateRecord?.metadataJson
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return null
+  const value = (meta as Record<string, unknown>).attentionCategory
+  return typeof value === "string" ? value : null
 }
 
 function relativeTime(date: Date): string {
@@ -70,6 +80,14 @@ const STATUS_LABEL: Record<string, string> = {
   needs_reply: "Needs Reply",
   in_progress: "In Progress",
   closed: "Closed",
+}
+
+const ATTENTION_STYLE: Record<string, { dot: string; text: string; label: string }> = {
+  needs_action: { dot: "bg-blue-500", text: "text-blue-700", label: "Needs Action" },
+  review_soon: { dot: "bg-amber-500", text: "text-amber-700", label: "Review Soon" },
+  read_later: { dot: "bg-violet-400", text: "text-violet-700", label: "Read Later" },
+  fyi_done: { dot: "bg-emerald-500", text: "text-emerald-700", label: "FYI" },
+  quiet: { dot: "bg-slate-300", text: "text-slate-500", label: "Quiet" },
 }
 
 export default async function AppListColumn({
@@ -200,6 +218,8 @@ export default async function AppListColumn({
         ) : (
           conversations.map((conv) => {
             const fyi = isFyi(conv)
+            const attention = attentionCategory(conv)
+            const attentionStyle = attention ? ATTENTION_STYLE[attention] : null
             const displayStatus = fyi ? "closed" : conv.status
             const style = STATUS_STYLE[displayStatus]
             const name = conv.contact?.name ?? conv.externalThreadId
@@ -238,10 +258,10 @@ export default async function AppListColumn({
                   <p className="mt-0.5 truncate text-[11px] text-slate-500">{snippet}</p>
                 )}
                 <div className="mt-1 flex items-center gap-1.5">
-                  {style && (
-                    <span className={`flex items-center gap-1 text-[10px] font-semibold ${style.text}`}>
-                      <span className={`inline-block h-1.5 w-1.5 rounded-full ${style.dot}`} />
-                      {fyi ? "No reply needed" : STATUS_LABEL[displayStatus]}
+                  {(attentionStyle || style) && (
+                    <span className={`flex items-center gap-1 text-[10px] font-semibold ${attentionStyle?.text ?? style.text}`}>
+                      <span className={`inline-block h-1.5 w-1.5 rounded-full ${attentionStyle?.dot ?? style.dot}`} />
+                      {attentionStyle?.label ?? (fyi ? "No reply needed" : STATUS_LABEL[displayStatus])}
                     </span>
                   )}
                   {hasDraft && !fyi && (

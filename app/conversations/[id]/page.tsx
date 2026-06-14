@@ -238,10 +238,17 @@ export default async function ConversationPage({
     conversation.channel.type === "email" && (isPersonal || Boolean(businessProfile));
 
   const displayName = conversation.contact?.name ?? conversation.externalThreadId;
+  const attentionCategory =
+    typeof convMeta.attentionCategory === "string" ? convMeta.attentionCategory : null
+  const attentionReason =
+    typeof convMeta.attentionReason === "string" ? convMeta.attentionReason : null
   const emailType =
     typeof convMeta.emailType === "string" ? convMeta.emailType : null
   const isAutoEmailConversation =
-    emailType === "notification" || emailType === "newsletter" || emailType === "marketing"
+    attentionCategory === "quiet" ||
+    attentionCategory === "fyi_done" ||
+    (!attentionCategory &&
+      (emailType === "notification" || emailType === "newsletter" || emailType === "marketing"))
 
   const assistantInput = {
     id: conversation.id,
@@ -309,13 +316,16 @@ export default async function ConversationPage({
 
   const assistantCard = isAutoEmailConversation ? (
     <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-      <p className="font-medium text-slate-700">No reply needed</p>
+      <p className="font-medium text-slate-700">
+        {attentionCategory === "quiet" ? "Quiet" : "No reply needed"}
+      </p>
       <p className="mt-1 break-words [overflow-wrap:anywhere]">
-        {emailType === "notification"
+        {attentionReason ??
+          (emailType === "notification"
           ? "This is an automated notification."
           : emailType === "newsletter"
             ? "This is a newsletter or marketing email."
-            : "This is a promotional email."}
+            : "This is a promotional email.")}
       </p>
     </div>
   ) : (
@@ -457,7 +467,7 @@ export default async function ConversationPage({
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <h1 className="min-w-0 truncate text-base font-bold text-slate-900">{displayName}</h1>
-                      <StatusBadge status={isAutoEmailConversation || stateRecord?.state === "fyi_only" ? "closed" : conversation.status} />
+                      <StatusBadge status={isAutoEmailConversation ? "closed" : conversation.status} />
                       {conversation.label && !isPersonal && <LabelBadge label={conversation.label} />}
                     </div>
                     <p className="min-w-0 break-all text-xs text-slate-500">
@@ -541,7 +551,7 @@ export default async function ConversationPage({
               </Link>
               <div className="mt-1 flex items-center gap-2">
                 <h1 className="text-xl font-semibold">{displayName}</h1>
-                <StatusBadge status={isAutoEmailConversation || stateRecord?.state === "fyi_only" ? "closed" : conversation.status} />
+                <StatusBadge status={isAutoEmailConversation ? "closed" : conversation.status} />
                 {conversation.label && !isPersonal && <LabelBadge label={conversation.label} />}
               </div>
               <p className="min-w-0 break-all text-sm text-slate-500">

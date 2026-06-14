@@ -207,11 +207,13 @@ describe("syncConversationWorkItems", () => {
       now,
     })
 
-    // The sales update (the last mockStateUpdate call) must contain both the
-    // pre-existing customTag key and the new sales-specific keys.
+    // The sales update must contain both the pre-existing customTag key and
+    // the new sales-specific keys, even if later metadata updates run.
     const allUpdateCalls = mockStateUpdate.mock.calls
-    const salesUpdateCall = allUpdateCalls[allUpdateCalls.length - 1]
-    const metadataJson = salesUpdateCall[0].data.metadataJson
+    const salesUpdateCall = allUpdateCalls.find(
+      (call) => call[0]?.data?.metadataJson?.isSalesLead === true
+    )
+    const metadataJson = salesUpdateCall?.[0].data.metadataJson
 
     expect(metadataJson).toMatchObject({
       customTag: "vip",

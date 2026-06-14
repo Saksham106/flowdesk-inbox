@@ -2,6 +2,80 @@ import { describe, expect, it } from "vitest"
 import { classifyEmailType } from "@/lib/agent/email-classifier"
 
 describe("classifyEmailType", () => {
+  it("classifies OTP email as needs_action and extracts the code", () => {
+    const result = classifyEmailType({
+      fromEmail: "noreply@app.com",
+      subject: "Your verification code",
+      body: "Your FlowDesk verification code is 482910. This code expires in 10 minutes.",
+    })
+    expect(result.emailType).toBe("notification")
+    expect(result.attentionCategory).toBe("needs_action")
+    expect(result.extractedCode).toBe("482910")
+    expect(result.expiresIn).toBe("10 minutes")
+    expect(result.reason).toMatch(/verification code/i)
+    expect(result.confidence).toBeGreaterThanOrEqual(0.9)
+  })
+
+  it("classifies password reset email as needs_action", () => {
+    const result = classifyEmailType({
+      fromEmail: "support@someservice.com",
+      subject: "Reset your password",
+      body: "Click the link below to reset your password. This link expires in 1 hour.",
+    })
+    expect(result.attentionCategory).toBe("needs_action")
+    expect(result.reason).toMatch(/password/i)
+  })
+
+  it("classifies GitHub token security alert as review_soon", () => {
+    const result = classifyEmailType({
+      fromEmail: "noreply@github.com",
+      subject: "[GitHub] New personal access token added",
+      body: "A fine-grained personal access token was added to your account. If this was not you, revoke it immediately.",
+    })
+    expect(result.emailType).toBe("notification")
+    expect(result.attentionCategory).toBe("review_soon")
+    expect(result.reason).toMatch(/security|token/i)
+  })
+
+  it("classifies newsletters as read_later instead of quiet", () => {
+    const result = classifyEmailType({
+      fromEmail: "newsletter@product.com",
+      subject: "Weekly product digest",
+      body: "Here are this week's updates. Manage preferences or unsubscribe.",
+    })
+    expect(result.emailType).toBe("newsletter")
+    expect(result.attentionCategory).toBe("read_later")
+  })
+
+  it("classifies real human reply requests as needs_reply", () => {
+    const result = classifyEmailType({
+      fromEmail: "alice@example.com",
+      subject: "Question about tomorrow",
+      body: "Could you reply with the final address for tomorrow's meeting?",
+    })
+    expect(result.emailType).toBe("needs_reply")
+    expect(result.attentionCategory).toBe("needs_reply")
+  })
+
+  it("classifies random marketing blasts as quiet", () => {
+    const result = classifyEmailType({
+      fromEmail: "offers@store.com",
+      subject: "50% off today only",
+      body: "Shop now and save big with this limited time promo code.",
+    })
+    expect(result.emailType).toBe("marketing")
+    expect(result.attentionCategory).toBe("quiet")
+  })
+
+  it("classifies automated LinkedIn job alerts as quiet", () => {
+    const result = classifyEmailType({
+      fromEmail: "jobs-noreply@linkedin.com",
+      subject: "New jobs for software engineer",
+      body: "Your LinkedIn job alert has 12 new jobs. View jobs on LinkedIn.",
+    })
+    expect(result.attentionCategory).toBe("quiet")
+  })
+
   it("classifies no-reply sender as notification", () => {
     const result = classifyEmailType({
       fromEmail: "noreply@github.com",

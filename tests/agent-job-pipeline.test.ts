@@ -100,6 +100,19 @@ describe('normalizeClassifyOutput', () => {
     expect(result.riskLevel).toBe('low')
     expect(result.suggestedLabel).toBe('Lead')
     expect(result.requiresApproval).toBe(false)
+    expect(result.attentionCategory).toBe('needs_reply')
+    expect(result.classificationReason).toMatch(/booking/i)
+  })
+
+  it('parses richer attention category and reason from LLM output', () => {
+    const result = normalizeClassifyOutput(JSON.stringify({
+      ...goodClassification,
+      attentionCategory: 'needs_action',
+      classificationReason: 'Contains a password setup link the user must complete.',
+    }))
+
+    expect(result.attentionCategory).toBe('needs_action')
+    expect(result.classificationReason).toBe('Contains a password setup link the user must complete.')
   })
 
   it('throws on non-JSON', () => {
@@ -355,6 +368,8 @@ describe("personal vs business classify prompt", () => {
     expect(prompt).not.toMatch(/CRM/i)
     expect(prompt).toMatch(/personal inbox/i)
     expect(prompt).toMatch(/suggestedLabel to null/i)
+    expect(prompt).toMatch(/attentionCategory/i)
+    expect(prompt).toMatch(/needs_action/i)
   })
 
   it("business account prompt includes business framing and CRM labels", () => {

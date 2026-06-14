@@ -43,12 +43,15 @@ function isFyiConversation(conversation: {
   contact: { phoneE164: string } | null
   messages: { direction: string; body: string }[]
 }): boolean {
-  if (conversation.stateRecord?.state === "fyi_only") return true
   const meta = conversation.stateRecord?.metadataJson
   if (meta && typeof meta === "object" && !Array.isArray(meta)) {
+    const attentionCategory = (meta as Record<string, unknown>).attentionCategory
+    if (attentionCategory === "quiet" || attentionCategory === "fyi_done") return true
+    if (typeof attentionCategory === "string") return false
     const emailType = (meta as Record<string, unknown>).emailType
     if (emailType === "notification" || emailType === "newsletter" || emailType === "marketing") return true
   }
+  if (conversation.stateRecord?.state === "fyi_only") return true
   if (conversation.status !== "needs_reply") return false
   const msg = conversation.messages[0]
   if (!msg || msg.direction !== "inbound") return false

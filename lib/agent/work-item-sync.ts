@@ -324,46 +324,106 @@ export async function syncConversationWorkItems(
     }
   }
 
-  // Classify email type (notification / newsletter / marketing) for all accounts
+  // Classify email attention for all accounts. This keeps the legacy emailType
+  // while adding richer attention metadata for no-reply transactional messages.
   let detectedEmailType: string | null = null
+  let detectedAttentionCategory: string | null = null
   const firstInbound = conversation.messages.find((m) => m.direction === "inbound")
   if (firstInbound) {
     const fromEmail = extractEmail(firstInbound.fromE164 ?? "")
     const bodyText = firstInbound.body
     // When a message has no body, Gmail sync stores it as "[Subject text]"
     const subjectHint = /^\[(.+)\]$/.test(bodyText.trim()) ? bodyText.trim().slice(1, -1) : ""
-    const { emailType } = classifyEmailType({
+    const classification = classifyEmailType({
       fromEmail,
       subject: subjectHint,
       body: bodyText,
     })
+    const {
+      emailType,
+      attentionCategory,
+      reason,
+      confidence,
+      extractedCode,
+      expiresIn,
+    } = classification
     detectedEmailType = emailType
+    detectedAttentionCategory = attentionCategory
 
-    if (emailType !== "needs_reply") {
-      const currentState = await prisma.conversationState.findUnique({
-        where: { conversationId: conversation.id },
-        select: { metadataJson: true },
-      })
-      const currentMeta =
-        currentState?.metadataJson &&
-        typeof currentState.metadataJson === "object" &&
-        !Array.isArray(currentState.metadataJson)
-          ? (currentState.metadataJson as Record<string, unknown>)
-          : {}
+    const currentState = await prisma.conversationState.findUnique({
+      where: { conversationId: conversation.id },
+      select: { metadataJson: true },
+    })
+    const currentMeta =
+      currentState?.metadataJson &&
+      typeof currentState.metadataJson === "object" &&
+      !Array.isArray(currentState.metadataJson)
+        ? (currentState.metadataJson as Record<string, unknown>)
+        : {}
 
+    await prisma.conversationState.update({
+      where: { conversationId: conversation.id },
+      data: {
+        metadataJson: {
+          ...currentMeta,
+          emailType,
+          attentionCategory,
+          attentionReason: reason,
+          attentionConfidence: confidence,
+          ...(extractedCode ? { verificationCode: extractedCode } : {}),
+          ...(expiresIn ? { expiresIn } : {}),
+        } as Prisma.InputJsonValue,
+      },
+    })
+
+    if (attentionCategory === "needs_action") {
       await prisma.conversationState.update({
         where: { conversationId: conversation.id },
-        data: { metadataJson: { ...currentMeta, emailType } as Prisma.InputJsonValue },
+        data: {
+          state: "waiting_on_you",
+          priority: "high",
+          reason,
+          nextAction: extractedCode
+            ? "Use the verification code only in the service that requested it."
+            : "Complete the requested account action.",
+          confidence,
+          source: "deterministic",
+        },
+      })
+    } else if (attentionCategory === "review_soon") {
+      await prisma.conversationState.update({
+        where: { conversationId: conversation.id },
+        data: {
+          state: "risky_urgent",
+          priority: "high",
+          reason,
+          nextAction: "Review the alert and decide whether action is needed.",
+          confidence,
+          source: "deterministic",
+        },
+      })
+    } else if (attentionCategory === "read_later") {
+      await prisma.conversationState.update({
+        where: { conversationId: conversation.id },
+        data: {
+          state: "fyi_only",
+          priority: "low",
+          reason,
+          nextAction: "Read later if relevant.",
+          confidence,
+          source: "deterministic",
+        },
       })
     }
   }
 
   // Second-pass auto-close: classifyEmailType runs after summarizeWorkItems, so emails classified
   // as FYI by the email classifier (but not caught by pattern matching) need a second chance here.
-  const AUTO_EMAIL_TYPES = new Set(["notification", "newsletter", "marketing"])
+  const AUTO_CLOSE_ATTENTION_CATEGORIES = new Set(["quiet", "fyi_done"])
   if (
     detectedEmailType !== null &&
-    AUTO_EMAIL_TYPES.has(detectedEmailType) &&
+    detectedAttentionCategory !== null &&
+    AUTO_CLOSE_ATTENTION_CATEGORIES.has(detectedAttentionCategory) &&
     summary.state.state !== "fyi_only" &&
     conversation.status === "needs_reply" &&
     !hasOutboundMessages

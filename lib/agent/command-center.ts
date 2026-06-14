@@ -135,7 +135,8 @@ export type RelationshipContext = {
   relationshipStatus: string
 }
 
-const AUTO_EMAIL_TYPES = new Set(["notification", "newsletter", "marketing"])
+const LEGACY_AUTO_EMAIL_TYPES = new Set(["notification", "newsletter", "marketing"])
+const IGNORABLE_ATTENTION_CATEGORIES = new Set(["quiet", "fyi_done"])
 
 const SENSITIVE_PATTERN =
   /\b(legal|lawsuit|attorney|immigration|tax|medical|doctor|diagnosis|angry|furious|refund|dispute|contract|hr|employment|breakup|divorce|owed|collections|overdue)\b/i
@@ -191,6 +192,7 @@ function activeHold(conversation: CommandCenterInputConversation) {
 function isSensitive(conversation: CommandCenterInputConversation): boolean {
   const meta = metadata(conversation)
   return (
+    meta.attentionCategory === "review_soon" ||
     meta.riskLevel === "high" ||
     typeof meta.escalationReason === "string" ||
     conversation.label === "Complaint" ||
@@ -211,6 +213,9 @@ function isOpportunity(conversation: CommandCenterInputConversation, accountMode
 }
 
 function isSafelyIgnorable(conversation: CommandCenterInputConversation): boolean {
+  const attentionCategory = getAttentionCategory(conversation)
+  if (attentionCategory && IGNORABLE_ATTENTION_CATEGORIES.has(attentionCategory)) return true
+  if (attentionCategory && !IGNORABLE_ATTENTION_CATEGORIES.has(attentionCategory)) return false
   if (isAutoEmail(conversation)) return true
   if (conversation.status === "closed") return true
 
@@ -240,9 +245,25 @@ function getEmailType(conversation: CommandCenterInputConversation): string | nu
   return typeof emailType === "string" ? emailType : null
 }
 
+function getAttentionCategory(conversation: CommandCenterInputConversation): string | null {
+  const state = conversation.conversationState
+  if (!state?.metadataJson || typeof state.metadataJson !== "object" || Array.isArray(state.metadataJson)) return null
+  const attentionCategory = (state.metadataJson as Record<string, unknown>).attentionCategory
+  return typeof attentionCategory === "string" ? attentionCategory : null
+}
+
+function getAttentionReason(conversation: CommandCenterInputConversation): string | null {
+  const state = conversation.conversationState
+  if (!state?.metadataJson || typeof state.metadataJson !== "object" || Array.isArray(state.metadataJson)) return null
+  const reason = (state.metadataJson as Record<string, unknown>).attentionReason
+  return typeof reason === "string" && reason.trim() ? reason.trim() : null
+}
+
 function isAutoEmail(conversation: CommandCenterInputConversation): boolean {
+  const attentionCategory = getAttentionCategory(conversation)
+  if (attentionCategory) return IGNORABLE_ATTENTION_CATEGORIES.has(attentionCategory)
   const emailType = getEmailType(conversation)
-  return emailType !== null && AUTO_EMAIL_TYPES.has(emailType)
+  return emailType !== null && LEGACY_AUTO_EMAIL_TYPES.has(emailType)
 }
 
 function isClassifiedSupport(conversation: CommandCenterInputConversation, accountMode: AccountMode): boolean {
@@ -289,6 +310,8 @@ export function analyzeConversationForCommandCenter(
   const sensitive = isSensitive(conversation)
   const opportunity = isOpportunity(conversation, accountMode)
   const autoEmail = isAutoEmail(conversation)
+  const attentionCategory = getAttentionCategory(conversation)
+  const attentionReason = getAttentionReason(conversation)
   const safelyIgnored = isSafelyIgnorable(conversation)
   const support = isClassifiedSupport(conversation, accountMode)
   const churnRisk = isChurnRisk(conversation)
@@ -304,9 +327,19 @@ export function analyzeConversationForCommandCenter(
 
   if (sensitive) {
     state = "risky_urgent"
-    priority = "urgent"
-    reason = approvalReason(conversation) ?? "Sensitive conversation needs review."
+    priority = attentionCategory === "review_soon" ? "high" : "urgent"
+    reason = attentionReason ?? approvalReason(conversation) ?? "Sensitive conversation needs review."
     nextAction = "Review carefully before sending anything."
+  } else if (attentionCategory === "needs_action") {
+    state = "waiting_on_you"
+    priority = "high"
+    reason = attentionReason ?? "This email requires an action, but not necessarily a reply."
+    nextAction = "Complete the requested action."
+  } else if (attentionCategory === "read_later") {
+    state = "fyi_only"
+    priority = "low"
+    reason = attentionReason ?? "Useful update to read later."
+    nextAction = "Read later if relevant."
   } else if (autoEmail) {
     const emailType = getEmailType(conversation)
     state = "fyi_only"
@@ -391,7 +424,7 @@ export function analyzeConversationForCommandCenter(
     sensitive,
     approvalReason: approvalReason(conversation),
     safelyIgnored: state === "done" || safelyIgnored,
-    needsReply: conversation.status === "needs_reply" && !safelyIgnored,
+    needsReply: conversation.status === "needs_reply" && !safelyIgnored && (!attentionCategory || attentionCategory === "needs_reply"),
     opportunity,
     leadScore: opportunity && conversation.lead ? conversation.lead.score : null,
     estimatedValue: conversation.lead?.estimatedValue ?? null,
@@ -405,7 +438,11 @@ export function persistedStateToCommandCenterConversation(
   lead?: { score: number; scoreExplanation: string | null; estimatedValue?: number | null } | null
 ): CommandCenterConversation {
   const meta = persisted.metadataJson as Record<string, unknown> | null
-  const sensitive = meta?.riskLevel === "high" || typeof meta?.escalationReason === "string" || conversation.label === "Complaint"
+  const sensitive =
+    meta?.attentionCategory === "review_soon" ||
+    meta?.riskLevel === "high" ||
+    typeof meta?.escalationReason === "string" ||
+    conversation.label === "Complaint"
   const opportunity = meta?.suggestedLabel === "Lead" || conversation.label === "Lead"
   const approvalReasonStr = typeof meta?.escalationReason === "string" && meta.escalationReason.trim()
     ? meta.escalationReason.trim()
@@ -429,8 +466,13 @@ export function persistedStateToCommandCenterConversation(
     label: conversation.label,
     sensitive,
     approvalReason: approvalReasonStr,
-    safelyIgnored: persisted.state === "done" || persisted.state === "fyi_only",
-    needsReply: conversation.status === "needs_reply" && persisted.state !== "fyi_only",
+    safelyIgnored:
+      persisted.state === "done" ||
+      (persisted.state === "fyi_only" && meta?.attentionCategory !== "read_later"),
+    needsReply:
+      conversation.status === "needs_reply" &&
+      persisted.state !== "fyi_only" &&
+      (!meta?.attentionCategory || meta.attentionCategory === "needs_reply"),
     opportunity,
     leadScore: opportunity && lead ? lead.score : null,
     estimatedValue: lead?.estimatedValue ?? null,

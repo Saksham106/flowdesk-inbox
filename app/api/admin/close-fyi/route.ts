@@ -34,17 +34,25 @@ export async function POST() {
     const hasOutbound = c.messages.some((m) => m.direction === "outbound")
     if (hasOutbound) continue
 
-    if (c.stateRecord?.state === "fyi_only") {
-      toClose.push(c.id)
-      continue
-    }
     const meta = c.stateRecord?.metadataJson
     if (meta && typeof meta === "object" && !Array.isArray(meta)) {
+      const attentionCategory = (meta as Record<string, unknown>).attentionCategory
+      if (attentionCategory === "quiet" || attentionCategory === "fyi_done") {
+        toClose.push(c.id)
+        continue
+      }
+      if (typeof attentionCategory === "string") {
+        continue
+      }
       const emailType = (meta as Record<string, unknown>).emailType
       if (emailType === "notification" || emailType === "newsletter" || emailType === "marketing") {
         toClose.push(c.id)
         continue
       }
+    }
+    if (c.stateRecord?.state === "fyi_only") {
+      toClose.push(c.id)
+      continue
     }
     const latestInbound = c.messages.find((m) => m.direction === "inbound")
     if (!latestInbound) continue
