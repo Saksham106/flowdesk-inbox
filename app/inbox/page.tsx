@@ -11,6 +11,7 @@ import AutoRefresh from "@/app/components/AutoRefresh";
 import { StatusBadge, LabelBadge } from "@/app/components/badges";
 import AppRail from "@/app/components/AppRail";
 import AppListColumn from "@/app/components/AppListColumn";
+import DesktopResizablePanels from "@/app/components/DesktopResizablePanels";
 import HomeCommandCenter from "@/app/components/HomeCommandCenter";
 import { buildDailyCommandCenter, CommandCenterInputConversation, PersistedCommandCenterState, CommandCenterState, CommandCenterPriority } from "@/lib/agent/command-center";
 import { analyzeRevenueAtRisk } from "@/lib/agent/revenue-at-risk";
@@ -338,38 +339,43 @@ export default async function InboxPage({ searchParams }: Props) {
       {/* ── DESKTOP SHELL (lg+) ── */}
       <div className="hidden lg:flex h-screen overflow-hidden bg-slate-50">
         <AppRail needsReplyCount={needsReplyCount} accountType={accountType} />
-        <AppListColumn
-          tenantId={tenantId}
-          accountType={accountType}
-          status={activeStatus}
-          q={q || undefined}
-          sales={salesFilter}
-        />
-        {/* Main pane */}
-        <main className="flex-1 overflow-hidden bg-slate-50">
-          {commandCenter ? (
-            <HomeCommandCenter
-              commandCenter={commandCenter}
-              revenueAtRisk={revenueAtRisk as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>}
-              followUps={followUpConversations}
-              ignoredItems={ignoredConversations}
+        <DesktopResizablePanels
+          storageKey="flowdesk.inbox.desktopPanels"
+          left={
+            <AppListColumn
+              tenantId={tenantId}
               accountType={accountType}
-              date={new Date()}
+              status={activeStatus}
+              q={q || undefined}
+              sales={salesFilter}
+              className="w-full shrink-0"
             />
-          ) : (
-            <div className="flex h-full items-center justify-center">
-              <div className="text-center">
-                <p className="text-sm font-semibold text-slate-700">Select a conversation</p>
-                <p className="mt-1 text-xs text-slate-400">
-                  or{" "}
-                  <Link href="/inbox" className="text-blue-600 hover:underline">
-                    go to Home
-                  </Link>
-                </p>
+          }
+          main={
+            commandCenter ? (
+              <HomeCommandCenter
+                commandCenter={commandCenter}
+                revenueAtRisk={revenueAtRisk as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>}
+                followUps={followUpConversations}
+                ignoredItems={ignoredConversations}
+                accountType={accountType}
+                date={new Date()}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-slate-700">Select a conversation</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    or{" "}
+                    <Link href="/inbox" className="text-blue-600 hover:underline">
+                      go to Home
+                    </Link>
+                  </p>
+                </div>
               </div>
-            </div>
-          )}
-        </main>
+            )
+          }
+        />
       </div>
 
       {/* ── MOBILE LAYOUT (< lg) ── */}

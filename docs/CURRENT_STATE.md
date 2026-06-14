@@ -65,12 +65,12 @@ Email body rendering and readable-text safety (updated 2026-06-14):
   - Plain-text emails with `**bold**` or `_italic_` markers now render as `<strong>`/`<em>` instead of showing raw markers. Lookbehind guard prevents underscore-in-word false matches.
 - `stripHtmlToText` uses `sanitize-html` to remove non-readable HTML (`head`, `style`, `script`, embeds, frames, templates, etc.) before entity decoding and truncation. It also strips plain-text CSS-rule lines and newsletter separator banners so Gmail `text/plain` alternatives do not leak template junk into inbox previews. Inbox snippets, mobile list snippets, explain-thread prompts, and both business/personal draft prompts use cleaned readable text instead of raw HTML/CSS.
 - `app/components/EmailBody.tsx` — server component rendering sanitized received HTML in `EmailBodyIframe`; plain text remains linkified and escaped via `dangerouslySetInnerHTML`.
-- `app/components/EmailBodyIframe.tsx` — sandboxed `srcDoc` iframe renderer for HTML emails. The wrapper injects containment CSS for full-document and fragment emails so wide tables/images/pre/code/links do not create page-level horizontal scrolling or break the parent layout.
+- `lib/email-iframe.ts` / `app/components/EmailBodyIframe.tsx` — sandboxed `srcDoc` iframe renderer for HTML emails. The wrapper injects containment CSS for full-document and fragment emails so wide tables/images/pre/code/links do not create page-level horizontal scrolling or break the parent layout. The iframe now defaults to Gmail-like light rendering: it injects `color-scheme: light only`, removes email `color-scheme` / `supported-color-schemes` meta hints, and strips only dark-mode `@media (prefers-color-scheme: dark)` blocks while preserving normal colored sections and layout CSS.
 - `app/globals.css` — `.email-body` scoped CSS remains available for plain-text/linkified content: `overflow-wrap: anywhere`, `word-break: break-word`, `max-width: 100%`, image/table/pre/link constraints.
 - `app/conversations/[id]/page.tsx` — email thread blocks use `EmailBody`; main section has `min-w-0 overflow-x-hidden` so the sidebar stays visible on desktop even with long/HTML content.
 - `lib/google.ts` — Gmail thread sync fetches `threads.get(..., format: "full")` and extracts a canonical body model from the MIME tree: `htmlBody`, `textBody`, `cleanSnippet`, and `renderMode`. The extractor recursively walks nested `multipart/alternative`, `multipart/related`, and `multipart/mixed` payloads, prefers `text/html` for received-email rendering when available, and falls back to `text/plain` for simple messages. `Message.body` remains the storage field for now: HTML messages store renderable HTML so the existing iframe renderer can preserve images/tables/layout; plain-text messages store readable text.
 - `fetchGmailSentSamples` still uses the same MIME extraction path but returns readable text/clean snippets only, so reply-style training does not ingest HTML markup.
-- Tests in `tests/email-body.test.ts`, `tests/gmail-sync.test.ts`, `tests/explain-thread.test.ts`, and `tests/ai-draft-provider.test.ts` cover sanitization, unsafe attributes, scheme restriction, plain-text linkification, MIME preference for HTML over CSS-junk plain text, nested multipart HTML extraction, cleaned snippets, and cleaned AI prompt inputs.
+- Tests in `tests/email-body.test.ts`, `tests/email-iframe.test.ts`, `tests/gmail-sync.test.ts`, `tests/explain-thread.test.ts`, and `tests/ai-draft-provider.test.ts` cover sanitization, unsafe attributes, scheme restriction, plain-text linkification, light-mode iframe wrapping, MIME preference for HTML over CSS-junk plain text, nested multipart HTML extraction, cleaned snippets, and cleaned AI prompt inputs.
 - Known gap: external HTTPS images in HTML emails can now survive sync/render safely, but inline `cid:` images are not yet resolved from Gmail attachment parts.
 
 Conversation page layout redesign (2026-06-12):
@@ -90,6 +90,13 @@ Email-only thread UI hardening (2026-06-13):
 - Reply composition remains connected to the thread below the messages through a unified `ReplyComposer` that supports manual sending and AI draft generation/review in one textarea.
 - Manual sends still call `POST /api/conversations/[id]/send`. AI draft sends still edit/approve the draft, then call `POST /api/conversations/[id]/draft/send-approved`; failed edit/approve/send responses stop the flow and show the server error instead of sending stale content.
 - The email-body sanitizer, linkification, iframe wrapping, and layout constraints remain in use through `EmailBody`.
+
+Desktop panel resizing (2026-06-14):
+
+- `app/components/DesktopResizablePanels.tsx` — client-only desktop shell with draggable and keyboard-accessible vertical resize handles. It persists panel widths in `localStorage`, clamps the left inbox list and right context panel to usable sizes, and keeps the center thread at a readable minimum width.
+- `app/inbox/page.tsx` — desktop inbox home/list view uses the resizable shell for the left inbox list and main pane; mobile layout is unchanged.
+- `app/conversations/[id]/page.tsx` — desktop conversation view uses the resizable shell for left inbox list, center thread/reply area, and right context cards. AppRail remains fixed. Mobile layout is unchanged.
+- `app/components/AppListColumn.tsx` — accepts an optional `className` so the same server-rendered list can fill a resizable pane while preserving its fixed default elsewhere.
 - Personal accounts hide existing business labels in the thread header/contact card even if old data has a label value.
 
 Personal vs business account separation (updated 2026-06-13):

@@ -18,6 +18,7 @@ import CollapsibleCard from "@/app/components/CollapsibleCard";
 import { StatusBadge, LabelBadge } from "@/app/components/badges";
 import AppRail from "@/app/components/AppRail";
 import AppListColumn from "@/app/components/AppListColumn";
+import DesktopResizablePanels from "@/app/components/DesktopResizablePanels";
 import {
   analyzeConversationForCommandCenter,
   buildRelationshipContext,
@@ -401,93 +402,96 @@ export default async function ConversationPage({
       {/* ── DESKTOP SHELL (lg+) ── */}
       <div className="hidden lg:flex h-screen overflow-hidden bg-slate-50">
         <AppRail needsReplyCount={needsReplyCount} accountType={accountType} />
-        <AppListColumn
-          tenantId={session.user.tenantId}
-          accountType={accountType}
-          activeConversationId={conversation.id}
-        />
-
-        {/* Thread + sidebar */}
-        <div className="flex flex-1 min-w-0 overflow-hidden">
-          {/* Thread column */}
-          <div className="flex flex-1 min-w-0 flex-col overflow-hidden border-r border-slate-200 bg-white">
-            {/* Sticky thread header */}
-            <div className="shrink-0 border-b border-slate-200 px-5 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h1 className="min-w-0 truncate text-base font-bold text-slate-900">{displayName}</h1>
-                    <StatusBadge status={isAutoEmailConversation || stateRecord?.state === "fyi_only" ? "closed" : conversation.status} />
-                    {conversation.label && !isPersonal && <LabelBadge label={conversation.label} />}
+        <DesktopResizablePanels
+          storageKey="flowdesk.conversation.desktopPanels"
+          left={
+            <AppListColumn
+              tenantId={session.user.tenantId}
+              accountType={accountType}
+              activeConversationId={conversation.id}
+              className="w-full shrink-0"
+            />
+          }
+          main={
+            <div className="flex h-full min-w-0 flex-col overflow-hidden border-r border-slate-200 bg-white">
+              {/* Sticky thread header */}
+              <div className="shrink-0 border-b border-slate-200 px-5 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h1 className="min-w-0 truncate text-base font-bold text-slate-900">{displayName}</h1>
+                      <StatusBadge status={isAutoEmailConversation || stateRecord?.state === "fyi_only" ? "closed" : conversation.status} />
+                      {conversation.label && !isPersonal && <LabelBadge label={conversation.label} />}
+                    </div>
+                    <p className="min-w-0 break-all text-xs text-slate-500">
+                      {conversation.channel.emailAddress ?? conversation.externalThreadId}
+                    </p>
                   </div>
-                  <p className="min-w-0 break-all text-xs text-slate-500">
-                    {conversation.channel.emailAddress ?? conversation.externalThreadId}
-                  </p>
+                  <StatusButton conversationId={conversation.id} currentStatus={conversation.status} />
                 </div>
-                <StatusButton conversationId={conversation.id} currentStatus={conversation.status} />
               </div>
-            </div>
 
-            {/* Scrollable messages */}
-            <div className="flex-1 overflow-y-auto px-5 py-4">
-              <div className="mx-auto max-w-3xl space-y-4">
-                {conversation.messages.length === 0 ? (
-                  <p className="text-sm text-slate-500">No messages yet.</p>
-                ) : (
-                  conversation.messages.map((message) => {
-                    const isOutbound = message.direction === "outbound";
-                    return (
-                      <article
-                        key={message.id}
-                        className={`overflow-hidden rounded-xl border px-5 py-4 ${
-                          isOutbound ? "border-blue-100 bg-blue-50" : "border-slate-200 bg-white"
-                        }`}
-                      >
-                        <div className="mb-3 flex items-start justify-between gap-3">
-                          <div className="flex items-center gap-2">
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
-                              {isOutbound ? "Me" : initialsFor(message.fromE164)}
+              {/* Scrollable messages */}
+              <div className="flex-1 overflow-y-auto px-5 py-4">
+                <div className="mx-auto max-w-3xl space-y-4">
+                  {conversation.messages.length === 0 ? (
+                    <p className="text-sm text-slate-500">No messages yet.</p>
+                  ) : (
+                    conversation.messages.map((message) => {
+                      const isOutbound = message.direction === "outbound";
+                      return (
+                        <article
+                          key={message.id}
+                          className={`overflow-hidden rounded-xl border px-5 py-4 ${
+                            isOutbound ? "border-blue-100 bg-blue-50" : "border-slate-200 bg-white"
+                          }`}
+                        >
+                          <div className="mb-3 flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
+                                {isOutbound ? "Me" : initialsFor(message.fromE164)}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="min-w-0 break-all text-xs font-semibold text-slate-900">
+                                  {isOutbound ? "You" : message.fromE164}
+                                </p>
+                                <p className="min-w-0 break-all text-[11px] text-slate-500">
+                                  To: {message.toE164}
+                                </p>
+                              </div>
                             </div>
-                            <div className="min-w-0">
-                              <p className="min-w-0 break-all text-xs font-semibold text-slate-900">
-                                {isOutbound ? "You" : message.fromE164}
-                              </p>
-                              <p className="min-w-0 break-all text-[11px] text-slate-500">
-                                To: {message.toE164}
-                              </p>
-                            </div>
+                            <time className="shrink-0 text-[11px] text-slate-400" dateTime={message.createdAt.toISOString()}>
+                              {message.createdAt.toLocaleString()}
+                            </time>
                           </div>
-                          <time className="shrink-0 text-[11px] text-slate-400" dateTime={message.createdAt.toISOString()}>
-                            {message.createdAt.toLocaleString()}
-                          </time>
-                        </div>
-                        <div className="min-w-0 text-sm leading-relaxed text-slate-900">
-                          <EmailBody body={message.body} />
-                        </div>
-                      </article>
-                    );
-                  })
-                )}
+                          <div className="min-w-0 text-sm leading-relaxed text-slate-900">
+                            <EmailBody body={message.body} />
+                          </div>
+                        </article>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Reply composer — anchored at bottom, full thread-column width */}
+              <div className="shrink-0 border-t-2 border-slate-200 bg-white">
+                <div className="flex items-center px-5 pt-3">
+                  <h2 className="text-sm font-bold text-slate-900">Reply to {displayName}</h2>
+                </div>
+                {replyComposer}
               </div>
             </div>
-
-            {/* Reply composer — anchored at bottom, full thread-column width */}
-            <div className="shrink-0 border-t-2 border-slate-200 bg-white">
-              <div className="flex items-center px-5 pt-3">
-                <h2 className="text-sm font-bold text-slate-900">Reply to {displayName}</h2>
-              </div>
-              {replyComposer}
+          }
+          right={
+            <div className="space-y-2.5">
+              {contactCard}
+              {assistantCard}
+              {businessPanels}
+              {extraCards}
             </div>
-          </div>
-
-          {/* Context sidebar */}
-          <aside className="w-[260px] shrink-0 overflow-y-auto bg-slate-50 p-3 space-y-2.5">
-            {contactCard}
-            {assistantCard}
-            {businessPanels}
-            {extraCards}
-          </aside>
-        </div>
+          }
+        />
       </div>
 
       {/* ── MOBILE LAYOUT (< lg) ── */}
