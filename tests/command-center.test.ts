@@ -5,6 +5,7 @@ import {
   buildDailyCommandCenter,
   buildRelationshipContext,
   type CommandCenterInputConversation,
+  type PersistedCommandCenterState,
 } from "@/lib/agent/command-center"
 
 const now = new Date("2026-06-11T14:00:00.000Z")
@@ -343,5 +344,113 @@ describe("emailType override in analyzeConversationForCommandCenter", () => {
       now
     )
     expect(result.state).toBe("risky_urgent")
+  })
+})
+
+describe("buildDailyCommandCenter with persisted states", () => {
+  function makePersistedState(overrides: Partial<PersistedCommandCenterState> = {}): PersistedCommandCenterState {
+    return {
+      conversationId: "conv-1",
+      state: "needs_reply",
+      priority: "high",
+      reason: "Needs your reply.",
+      nextAction: "Draft a reply.",
+      confidence: 0.75,
+      source: "deterministic",
+      metadataJson: {},
+      updatedAt: now,
+      ...overrides,
+    }
+  }
+
+  it("uses persisted state when fresh", () => {
+    const persisted = makePersistedState({
+      conversationId: "conv-persisted",
+      state: "opportunity",
+      priority: "high",
+      reason: "Potential revenue opportunity.",
+      nextAction: "Draft a reply and move the opportunity forward.",
+    })
+
+    const persistedStates = new Map<string, PersistedCommandCenterState>([
+      ["conv-persisted", persisted],
+    ])
+
+    const result = buildDailyCommandCenter(
+      [
+        conversation({ id: "conv-persisted", status: "needs_reply" }),
+        conversation({ id: "conv-fresh", status: "needs_reply" }),
+      ],
+      now,
+      "business",
+      persistedStates
+    )
+
+    // Persisted conversation should use persisted state
+    const persistedResult = result.conversations.find((c) => c.id === "conv-persisted")
+    expect(persistedResult?.state).toBe("opportunity")
+    expect(persistedResult?.reason).toBe("Potential revenue opportunity.")
+
+    // Fresh conversation should be analyzed normally
+    const freshResult = result.conversations.find((c) => c.id === "conv-fresh")
+    expect(freshResult?.state).toBe("needs_reply")
+  })
+
+  it("ignores stale persisted state and re-analyzes", () => {
+    const staleNow = new Date(now.getTime() + 2 * 60 * 60 * 1000) // 2 hours later
+    const persisted = makePersistedState({
+      conversationId: "conv-stale",
+      updatedAt: new Date(now.getTime() - 3 * 60 * 60 * 1000), // 3 hours ago (stale)
+      state: "fyi_only",
+      priority: "none",
+      reason: "Safely ignored for now.",
+      nextAction: "No action needed.",
+    })
+
+    const persistedStates = new Map<string, PersistedCommandCenterState>([
+      ["conv-stale", persisted],
+    ])
+
+    const result = buildDailyCommandCenter(
+      [
+        conversation({ id: "conv-stale", status: "needs_reply" }),
+      ],
+      staleNow,
+      "business",
+      persistedStates
+    )
+
+    // Should re-analyze because state is stale, not use persisted fyi_only
+    const analyzed = result.conversations[0]
+    expect(analyzed.state).toBe("needs_reply")
+    expect(analyzed.priority).toBe("high")
+  })
+
+  it("uses persisted state for done/fyi_only conversations correctly", () => {
+    const persisted = makePersistedState({
+      conversationId: "conv-done",
+      state: "done",
+      priority: "none",
+      reason: "Conversation is done.",
+      nextAction: "No action needed.",
+    })
+
+    const persistedStates = new Map<string, PersistedCommandCenterState>([
+      ["conv-done", persisted],
+    ])
+
+    const result = buildDailyCommandCenter(
+      [
+        conversation({ id: "conv-done", status: "closed" }),
+      ],
+      now,
+      "business",
+      persistedStates
+    )
+
+    const analyzed = result.conversations[0]
+    expect(analyzed.state).toBe("done")
+    expect(analyzed.safelyIgnored).toBe(true)
+    expect(analyzed.needsReply).toBe(false)
   })
 })

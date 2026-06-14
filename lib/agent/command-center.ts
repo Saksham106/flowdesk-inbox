@@ -62,6 +62,19 @@ export type CommandCenterInputConversation = {
   } | null
 }
 
+/** Persisted conversation state from the database (ConversationState model) */
+export type PersistedCommandCenterState = {
+  conversationId: string
+  state: CommandCenterState
+  priority: CommandCenterPriority
+  reason: string
+  nextAction: string
+  confidence: number
+  source: string
+  metadataJson: unknown
+  updatedAt: Date
+}
+
 export type CommandCenterConversation = {
   id: string
   displayName: string
@@ -385,15 +398,67 @@ export function analyzeConversationForCommandCenter(
   }
 }
 
+/** Convert a persisted ConversationState to a CommandCenterConversation for display */
+export function persistedStateToCommandCenterConversation(
+  persisted: PersistedCommandCenterState,
+  conversation: Pick<CommandCenterInputConversation, "id" | "externalThreadId" | "label" | "status" | "lastMessageAt" | "contact" | "channel">,
+  lead?: { score: number; scoreExplanation: string | null; estimatedValue?: number | null } | null
+): CommandCenterConversation {
+  const meta = persisted.metadataJson as Record<string, unknown> | null
+  const sensitive = meta?.riskLevel === "high" || typeof meta?.escalationReason === "string" || conversation.label === "Complaint"
+  const opportunity = meta?.suggestedLabel === "Lead" || conversation.label === "Lead"
+  const approvalReasonStr = typeof meta?.escalationReason === "string" && meta.escalationReason.trim()
+    ? meta.escalationReason.trim()
+    : meta?.riskLevel === "high"
+      ? "High-risk conversation"
+      : conversation.label === "Complaint"
+        ? "Complaint needs careful review"
+        : meta?.sensitive === true
+          ? "Sensitive topic detected"
+          : null
+
+  return {
+    id: conversation.id,
+    displayName: conversation.contact?.name ?? conversation.externalThreadId,
+    state: persisted.state as CommandCenterState,
+    priority: persisted.priority as CommandCenterPriority,
+    reason: persisted.reason,
+    nextAction: persisted.nextAction,
+    href: `/conversations/${conversation.id}`,
+    lastMessageAt: conversation.lastMessageAt,
+    label: conversation.label,
+    sensitive,
+    approvalReason: approvalReasonStr,
+    safelyIgnored: persisted.state === "done" || persisted.state === "fyi_only",
+    needsReply: conversation.status === "needs_reply" && persisted.state !== "fyi_only",
+    opportunity,
+    leadScore: opportunity && lead ? lead.score : null,
+    estimatedValue: lead?.estimatedValue ?? null,
+  }
+}
+
+/** Check if a persisted state is fresh (within TTL) */
+const STATE_TTL_MS = 60 * 60 * 1000 // 1 hour
+
+function isPersistedStateFresh(persisted: PersistedCommandCenterState, now: Date): boolean {
+  return now.getTime() - new Date(persisted.updatedAt).getTime() < STATE_TTL_MS
+}
+
 export function buildDailyCommandCenter(
   conversations: CommandCenterInputConversation[],
   now = new Date(),
-  accountType?: unknown
+  accountType?: unknown,
+  persistedStates?: Map<string, PersistedCommandCenterState>
 ): DailyCommandCenter {
   const accountMode = resolveAccountMode(accountType ?? "business")
-  const analyzed = conversations.map((conversation) =>
-    analyzeConversationForCommandCenter(conversation, now, accountMode)
-  )
+  const analyzed = conversations.map((conversation) => {
+    // Use persisted state if available and fresh
+    const persisted = persistedStates?.get(conversation.id)
+    if (persisted && isPersistedStateFresh(persisted, now)) {
+      return persistedStateToCommandCenterConversation(persisted, conversation, conversation.lead ?? null)
+    }
+    return analyzeConversationForCommandCenter(conversation, now, accountMode)
+  })
   const approvals = analyzed.filter(
     (conversation) => conversation.state === "waiting_on_you" || conversation.approvalReason
   )

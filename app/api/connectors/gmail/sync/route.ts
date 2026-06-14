@@ -29,10 +29,15 @@ export async function POST(request: Request) {
   try {
     let result
     if (incremental) {
-      result = await syncGmailChannelIncremental(channelId, session.user.tenantId)
-      // Auto-setup watch for real-time updates if not already watching
       const cred = await prisma.gmailCredential.findUnique({ where: { channelId } })
-      if (cred?.historyId && process.env.GMAIL_PUSH_TOPIC) {
+      if (cred?.historyId) {
+        result = await syncGmailChannelIncremental(channelId, session.user.tenantId)
+      } else {
+        const count = await syncGmailChannel(channelId, session.user.tenantId)
+        result = { synced: count }
+      }
+
+      if (process.env.GMAIL_PUSH_TOPIC) {
         try {
           await watchGmailChannel(channelId, process.env.GMAIL_PUSH_TOPIC)
         } catch {

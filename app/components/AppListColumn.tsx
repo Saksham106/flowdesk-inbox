@@ -11,6 +11,7 @@ interface Props {
   status?: string | null
   q?: string
   sales?: boolean
+  className?: string
 }
 
 type ConvRow = {
@@ -70,6 +71,7 @@ export default async function AppListColumn({
   status,
   q,
   sales = false,
+  className = "w-[280px] shrink-0",
 }: Props) {
   const isBusiness = accountType === "business"
 
@@ -122,7 +124,7 @@ export default async function AppListColumn({
   }
 
   return (
-    <div className="flex h-full w-[280px] shrink-0 flex-col border-r border-slate-200 bg-white">
+    <div className={`flex h-full flex-col border-r border-slate-200 bg-white ${className}`}>
       {/* Header */}
       <div className="border-b border-slate-100 px-3 pb-2 pt-3">
         <p className="mb-2 text-sm font-semibold text-slate-900">Inbox</p>

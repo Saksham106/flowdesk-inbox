@@ -349,6 +349,7 @@ Shipped MVP direction hardening slice (2026-06-13):
 
 - Email-only conversation detail: opened conversations now render as top-to-bottom email threads instead of chat-style bubbles, with sender/recipient/timestamp metadata and a reply composer below the thread.
 - Account-mode boundary: `Tenant.accountType` is the current source of truth. Personal accounts default to personal/work-email behavior and do not show CRM labels, lead/opportunity cards, sales/support widgets, Revenue at Risk, business-profile requirements, or business labels in personal draft prompts. Business accounts retain business profile, knowledge base, sales/support, lead scoring, and revenue features.
+- Draft prompt RAG/summarization: business draft prompts now summarize thread context, include only recent messages, and select the most relevant knowledge documents instead of sending a large fixed block of raw thread and KB text. Autopilot uses the same summarized prompt context.
 
 ### Next Slice: v2.4 — TBD
 
@@ -488,6 +489,8 @@ After an AI agent finishes work:
 | 2026-06-12 | Ship intent-guided draft suggestions in the existing AI draft panel. | Keeps rough instructions inside the manual draft suggestion path, records the instruction in metadata, and preserves all existing review/send safeguards instead of creating a separate compose workflow. |
 | 2026-06-12 | Fix email body rendering: sanitize HTML, auto-link plain-text URLs, fix sidebar overflow layout. | Gmail `extractBody` was storing raw HTML for single-part HTML-only emails (mimeType not checked). Conversation detail page was rendering `message.body` as escaped text unconditionally. Added `lib/email-body.ts` with `sanitize-html` allow-list + linkification; `EmailBody` server component; `min-w-0` layout fix. Both the sync source (extractBody) and the render layer (EmailBody) were fixed: source fix prevents new raw HTML from entering the DB; render fix handles existing rows. |
 | 2026-06-13 | Make the MVP email-only and personal-safe by default while preserving business mode. | Conversation detail moved away from chat bubbles to email-thread blocks. `Tenant.accountType` remains the source of truth; business CRM/sales/support/revenue behavior is gated behind business mode. Renaming `Tenant` is deferred because it is the storage isolation model and a broad migration would be risky. |
+| 2026-06-14 | Preserve received Gmail HTML for robust email rendering. | Gmail sync now walks the full MIME tree, keeps `text/html` for renderable received messages, uses text/plain only as fallback/readable text, and cleans snippets from visible text so newsletter CSS/template junk does not appear in previews or AI prompts. This reuses the existing sandboxed iframe renderer and avoids React Email. Inline CID image resolution remains future work. |
+| 2026-06-14 | Fix HTML email light-mode rendering and add desktop panel resizing. | The iframe renderer now strips dark-mode-only email hints and forces a light color scheme by default so Amazon-style transactional emails do not render black when Gmail shows them light. Desktop inbox/conversation layouts now have localStorage-backed resize handles for the inbox list and context panel, with mobile unchanged. |
 
 ## Open Product Questions
 
