@@ -347,6 +347,115 @@ describe("emailType override in analyzeConversationForCommandCenter", () => {
   })
 })
 
+describe("needsAction flag", () => {
+  it("is true when attentionCategory is needs_action", () => {
+    const conv = conversation({
+      conversationState: {
+        metadataJson: { attentionCategory: "needs_action", emailType: "notification" },
+      },
+    })
+    const result = analyzeConversationForCommandCenter(conv, now)
+    expect(result.needsAction).toBe(true)
+  })
+
+  it("is false when attentionCategory is needs_reply", () => {
+    const conv = conversation({
+      conversationState: {
+        metadataJson: { attentionCategory: "needs_reply" },
+      },
+    })
+    const result = analyzeConversationForCommandCenter(conv, now)
+    expect(result.needsAction).toBe(false)
+  })
+
+  it("is false when no attentionCategory is set", () => {
+    const result = analyzeConversationForCommandCenter(conversation(), now)
+    expect(result.needsAction).toBe(false)
+  })
+})
+
+describe("readLater flag", () => {
+  it("is true when attentionCategory is read_later", () => {
+    const conv = conversation({
+      conversationState: {
+        metadataJson: { attentionCategory: "read_later" },
+      },
+    })
+    const result = analyzeConversationForCommandCenter(conv, now)
+    expect(result.readLater).toBe(true)
+  })
+
+  it("is false when attentionCategory is not read_later", () => {
+    const result = analyzeConversationForCommandCenter(conversation(), now)
+    expect(result.readLater).toBe(false)
+  })
+})
+
+describe("emailType field", () => {
+  it("returns the emailType from metadataJson", () => {
+    const conv = conversation({
+      conversationState: {
+        metadataJson: { emailType: "newsletter", attentionCategory: "quiet" },
+      },
+    })
+    const result = analyzeConversationForCommandCenter(conv, now)
+    expect(result.emailType).toBe("newsletter")
+  })
+
+  it("returns null when no emailType in metadataJson", () => {
+    const result = analyzeConversationForCommandCenter(conversation(), now)
+    expect(result.emailType).toBeNull()
+  })
+})
+
+describe("buildDailyCommandCenter new sections", () => {
+  it("populates sections.needsAction and counts.needsAction", () => {
+    const actionConv = conversation({
+      id: "action-1",
+      conversationState: {
+        metadataJson: { attentionCategory: "needs_action" },
+      },
+    })
+    const result = buildDailyCommandCenter([actionConv, conversation({ id: "normal-1" })], now)
+    expect(result.sections.needsAction).toHaveLength(1)
+    expect(result.sections.needsAction[0].id).toBe("action-1")
+    expect(result.counts.needsAction).toBe(1)
+  })
+
+  it("populates sections.readLater and counts.readLater", () => {
+    const readLaterConv = conversation({
+      id: "rl-1",
+      conversationState: {
+        metadataJson: { attentionCategory: "read_later" },
+      },
+    })
+    const result = buildDailyCommandCenter([readLaterConv, conversation({ id: "normal-1" })], now)
+    expect(result.sections.readLater).toHaveLength(1)
+    expect(result.sections.readLater[0].id).toBe("rl-1")
+    expect(result.counts.readLater).toBe(1)
+  })
+
+  it("computes quietlyHandledBreakdown from safelyIgnored emails", () => {
+    const newsletter = conversation({
+      id: "nl-1",
+      conversationState: {
+        metadataJson: { emailType: "newsletter", attentionCategory: "quiet" },
+      },
+    })
+    const notification = conversation({
+      id: "notif-1",
+      conversationState: {
+        metadataJson: { emailType: "notification", attentionCategory: "quiet" },
+      },
+    })
+    const result = buildDailyCommandCenter([newsletter, notification], now)
+    expect(result.quietlyHandledBreakdown.newsletter).toBe(1)
+    expect(result.quietlyHandledBreakdown.notification).toBe(1)
+    expect(result.quietlyHandledBreakdown.marketing).toBe(0)
+    expect(result.quietlyHandledBreakdown.other).toBe(0)
+  })
+})
+
 describe("buildDailyCommandCenter with persisted states", () => {
   function makePersistedState(overrides: Partial<PersistedCommandCenterState> = {}): PersistedCommandCenterState {
     return {
