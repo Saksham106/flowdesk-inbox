@@ -89,9 +89,24 @@ export type CommandCenterConversation = {
   approvalReason: string | null
   safelyIgnored: boolean
   needsReply: boolean
+  needsAction: boolean
   opportunity: boolean
   leadScore: number | null
   estimatedValue: number | null
+  emailType: string | null
+}
+
+export type AgentSummary = {
+  classifiedLast24h: number
+  draftedLast24h: number
+  learnedRecentlyUpdated: boolean
+}
+
+export type QuietlyHandledBreakdown = {
+  newsletter: number
+  notification: number
+  marketing: number
+  other: number
 }
 
 export type DailyCommandCenter = {
@@ -108,6 +123,8 @@ export type DailyCommandCenter = {
     support: number
     salesQualified: number
     safelyIgnored: number
+    needsAction: number
+    readLater: number
   }
   topActions: CommandCenterConversation[]
   sections: {
@@ -120,7 +137,10 @@ export type DailyCommandCenter = {
     support: CommandCenterConversation[]
     salesQualified: CommandCenterConversation[]
     safelyIgnored: CommandCenterConversation[]
+    needsAction: CommandCenterConversation[]
+    readLater: CommandCenterConversation[]
   }
+  quietlyHandledBreakdown: QuietlyHandledBreakdown
   conversations: CommandCenterConversation[]
 }
 
@@ -425,9 +445,11 @@ export function analyzeConversationForCommandCenter(
     approvalReason: approvalReason(conversation),
     safelyIgnored: state === "done" || safelyIgnored,
     needsReply: conversation.status === "needs_reply" && !safelyIgnored && (!attentionCategory || attentionCategory === "needs_reply"),
+    needsAction: attentionCategory === "needs_action",
     opportunity,
     leadScore: opportunity && conversation.lead ? conversation.lead.score : null,
     estimatedValue: conversation.lead?.estimatedValue ?? null,
+    emailType: getEmailType(conversation),
   }
 }
 
@@ -473,9 +495,11 @@ export function persistedStateToCommandCenterConversation(
       conversation.status === "needs_reply" &&
       persisted.state !== "fyi_only" &&
       (!meta?.attentionCategory || meta.attentionCategory === "needs_reply"),
+    needsAction: meta?.attentionCategory === "needs_action",
     opportunity,
     leadScore: opportunity && lead ? lead.score : null,
     estimatedValue: lead?.estimatedValue ?? null,
+    emailType: typeof meta?.emailType === "string" ? meta.emailType : null,
   }
 }
 
@@ -504,6 +528,18 @@ export function buildDailyCommandCenter(
   const approvals = analyzed.filter(
     (conversation) => conversation.state === "waiting_on_you" || conversation.approvalReason
   )
+  const needsActionItems = analyzed.filter(c => c.needsAction)
+  const readLaterItems = analyzed.filter(c =>
+    !c.safelyIgnored && c.state === "fyi_only" && c.priority === "low"
+  )
+  const safelyIgnoredItems = analyzed.filter(c => c.safelyIgnored)
+  const breakdown: QuietlyHandledBreakdown = { newsletter: 0, notification: 0, marketing: 0, other: 0 }
+  for (const item of safelyIgnoredItems) {
+    if (item.emailType === "newsletter") breakdown.newsletter++
+    else if (item.emailType === "notification") breakdown.notification++
+    else if (item.emailType === "marketing") breakdown.marketing++
+    else breakdown.other++
+  }
   const topActions = analyzed
     .filter((conversation) => conversation.priority !== "none" && !conversation.safelyIgnored)
     .sort((a, b) => score(b) - score(a) || b.lastMessageAt.getTime() - a.lastMessageAt.getTime())
@@ -528,7 +564,9 @@ export function buildDailyCommandCenter(
       potentialProblems: analyzed.filter((conversation) => conversation.sensitive).length,
       support: analyzed.filter((conversation) => conversation.state === "support").length,
       salesQualified: analyzed.filter((conversation) => conversation.state === "sales_qualified").length,
-      safelyIgnored: analyzed.filter((conversation) => conversation.safelyIgnored).length,
+      safelyIgnored: safelyIgnoredItems.length,
+      needsAction: needsActionItems.length,
+      readLater: readLaterItems.length,
     },
     topActions,
     sections: {
@@ -540,8 +578,11 @@ export function buildDailyCommandCenter(
       potentialProblems: analyzed.filter((conversation) => conversation.sensitive),
       support: analyzed.filter((conversation) => conversation.state === "support"),
       salesQualified: analyzed.filter((conversation) => conversation.state === "sales_qualified"),
-      safelyIgnored: analyzed.filter((conversation) => conversation.safelyIgnored),
+      safelyIgnored: safelyIgnoredItems,
+      needsAction: needsActionItems,
+      readLater: readLaterItems,
     },
+    quietlyHandledBreakdown: breakdown,
     conversations: analyzed,
   }
 }
