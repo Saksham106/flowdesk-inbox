@@ -334,7 +334,244 @@ export async function sendGmailReply(
   return res.data.id ?? "";
 }
 
-// ── Google Calendar ────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────────
+// Gmail Incremental Sync & Push Notifications
+// ──────────────────────────────────────────────────────────────────────────────
+
+export type GmailHistoryRecord = {
+  id: string;
+  threadId: string;
+  messagesAdded?: Array<{ message: { id: string; threadId: string } }>;
+  messagesDeleted?: Array<{ message: { id: string } }>;
+  labelsAdded?: Array<{ message: { id: string }; labelIds: string[] }>;
+  labelsRemoved?: Array<{ message: { id: string }; labelIds: string[] }>;
+};
+
+/**
+ * Fetches the latest historyId from Gmail for the user.
+ * Returns the current historyId to start watching from.
+ */
+export async function fetchLatestHistoryId(channelId: string): Promise<string | null> {
+  const gmail = await getGmailClient(channelId);
+  const profile = await gmail.users.getProfile({ userId: "me" });
+  return profile.data.historyId ?? null;
+}
+
+/**
+ * Incrementally syncs Gmail changes since the last historyId.
+ * Uses the Gmail History API to fetch only changes since last sync.
+ */
+export async function syncGmailChannelIncremental(
+  channelId: string,
+  tenantId: string
+): Promise<{ synced: number; newHistoryId: string | null }> {
+  const cred = await prisma.gmailCredential.findUnique({ where: { channelId } });
+  if (!cred) throw new Error("No Gmail credential found for channel");
+
+  const gmail = await getGmailClient(channelId);
+  const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+  if (!channel?.emailAddress) throw new Error("Not an email channel");
+
+  const startHistoryId = cred.historyId ?? (await fetchLatestHistoryId(channelId));
+  if (!startHistoryId) throw new Error("Could not determine starting historyId");
+
+  let currentHistoryId = startHistoryId;
+  let synced = 0;
+  let pageToken: string | undefined;
+
+  do {
+    const historyRes = await gmail.users.history.list({
+      userId: "me",
+      startHistoryId,
+      pageToken,
+      maxResults: 100,
+      labelId: "INBOX",
+    });
+
+    const history = historyRes.data.history ?? [];
+    currentHistoryId = historyRes.data.historyId ?? currentHistoryId;
+    pageToken = historyRes.data.nextPageToken ?? undefined;
+
+    for (const record of history) {
+      // Process messages added (new messages in INBOX)
+      if (record.messagesAdded) {
+        for (const added of record.messagesAdded) {
+          const message = added.message;
+          if (!message || !message.threadId) continue;
+
+          const threadId = message.threadId;
+
+          // Also handle thread-level sync
+          await syncThreadFromHistory(gmail, threadId, channelId, tenantId, channel.emailAddress);
+        }
+      }
+
+      // Process messages deleted (mark as deleted or remove)
+      if (record.messagesDeleted) {
+        for (const deleted of record.messagesDeleted) {
+          if (!deleted.message?.id) continue;
+          await prisma.message.updateMany({
+            where: { providerMessageId: `gmail_${deleted.message.id}` },
+            data: { body: "[Message deleted]" },
+          });
+        }
+      }
+
+      // Process label changes (e.g., messages moved out of INBOX)
+      if (record.labelsRemoved) {
+        for (const labelChange of record.labelsRemoved) {
+          if (!labelChange.labelIds?.includes("INBOX")) continue;
+          if (!labelChange.message?.id) continue;
+          await prisma.message.updateMany({
+            where: { providerMessageId: `gmail_${labelChange.message.id}` },
+            data: { body: "[Message removed from inbox]" },
+          });
+        }
+      }
+    }
+
+    synced += history.length;
+  } while (pageToken);
+
+  // Update the historyId for next sync
+  await prisma.gmailCredential.update({
+    where: { channelId },
+    data: { historyId: currentHistoryId, lastSyncedAt: new Date(), lastSyncError: null },
+  });
+
+  return { synced, newHistoryId: currentHistoryId };
+}
+
+/**
+ * Helper to sync a thread from history (reusing existing thread sync logic)
+ */
+async function syncThreadFromHistory(
+  gmail: ReturnType<typeof google.gmail>,
+  threadId: string,
+  channelId: string,
+  tenantId: string,
+  channelEmail: string
+) {
+  const messages = await fetchThread(gmail, threadId);
+  if (messages.length === 0) return;
+
+  const firstMsg = messages[0];
+  const lastMsg = messages[messages.length - 1];
+
+  const isFirstOutbound = extractEmail(firstMsg.from).toLowerCase() === channelEmail.toLowerCase();
+  const externalRaw = isFirstOutbound ? firstMsg.to : firstMsg.from;
+  const externalEmail = extractEmail(externalRaw);
+  const externalDisplayName = externalRaw.replace(/<[^>]+>/, "").trim() || externalEmail;
+
+  let contact = await prisma.contact.findUnique({
+    where: { tenantId_phoneE164: { tenantId, phoneE164: externalEmail } },
+  });
+  if (!contact) {
+    contact = await prisma.contact.create({
+      data: { tenantId, name: externalDisplayName || externalEmail, phoneE164: externalEmail },
+    });
+  }
+
+  const conversation = await prisma.conversation.upsert({
+    where: { tenantId_channelId_externalThreadId: { tenantId, channelId, externalThreadId: threadId } },
+    create: {
+      tenantId,
+      channelId,
+      externalThreadId: threadId,
+      contactId: contact.id,
+      status: "needs_reply",
+      lastMessageAt: lastMsg.date,
+    },
+    update: {
+      lastMessageAt: lastMsg.date,
+      contactId: contact.id,
+    },
+  });
+
+  for (const msg of messages) {
+    const isOutbound = extractEmail(msg.from).toLowerCase() === channelEmail.toLowerCase();
+    await prisma.message.upsert({
+      where: { providerMessageId: `gmail_${msg.id}` },
+      create: {
+        conversationId: conversation.id,
+        direction: isOutbound ? "outbound" : "inbound",
+        fromE164: msg.from,
+        toE164: msg.to,
+        body: msg.body || `[${msg.subject}]`,
+        providerMessageId: `gmail_${msg.id}`,
+        createdAt: msg.date,
+      },
+      update: {},
+    });
+  }
+
+  syncConversationWorkItems({ tenantId, conversationId: conversation.id }).catch(() => null);
+}
+
+/**
+ * Sets up Gmail push notifications (watch) for real-time updates.
+ * Returns the watch expiration timestamp.
+ */
+export async function watchGmailChannel(
+  channelId: string,
+  topicName: string
+): Promise<{ expiration: Date; historyId: string }> {
+  const gmail = await getGmailClient(channelId);
+  const cred = await prisma.gmailCredential.findUnique({ where: { channelId } });
+  if (!cred) throw new Error("No Gmail credential found for channel");
+
+  const currentHistoryId = cred.historyId ?? (await fetchLatestHistoryId(channelId));
+  if (!currentHistoryId) throw new Error("Could not determine current historyId");
+
+  const res = await gmail.users.watch({
+    userId: "me",
+    requestBody: {
+      topicName,
+      labelIds: ["INBOX"],
+      labelFilterBehavior: "INCLUDE",
+    },
+  });
+
+  const expirationMs = parseInt(res.data.expiration ?? "0");
+  const expiration = expirationMs > 0 ? new Date(expirationMs) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  await prisma.gmailCredential.update({
+    where: { channelId },
+    data: { historyId: currentHistoryId },
+  });
+
+  return { expiration, historyId: currentHistoryId };
+}
+
+/**
+ * Stops the Gmail push notification watch.
+ */
+export async function stopGmailWatch(channelId: string): Promise<void> {
+  const gmail = await getGmailClient(channelId);
+  await gmail.users.stop({ userId: "me" });
+}
+
+/**
+ * Renews the Gmail watch if it's about to expire.
+ * Should be called from a cron job (e.g., daily).
+ */
+export async function renewGmailWatchIfNeeded(
+  channelId: string,
+  topicName: string,
+  thresholdHours = 24
+): Promise<boolean> {
+  const cred = await prisma.gmailCredential.findUnique({ where: { channelId } });
+  if (!cred) return false;
+
+  // We don't store expiration in DB currently, so we assume it needs renewal
+  // In production, you'd store the expiration and check against it
+  await watchGmailChannel(channelId, topicName);
+  return true;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Google Calendar
+// ──────────────────────────────────────────────────────────────────────────────
 
 export function createCalendarOAuth2Client() {
   return new google.auth.OAuth2(
@@ -546,34 +783,34 @@ export async function fetchGmailSentSamples(
   channelId: string,
   limit = 60
 ): Promise<Array<{ text: string; createdAt: Date }>> {
-  const gmail = await getGmailClient(channelId)
+  const gmail = await getGmailClient(channelId);
 
   const listRes = await gmail.users.messages.list({
     userId: "me",
     labelIds: ["SENT"],
     maxResults: limit,
-  })
+  });
 
-  const messages = listRes.data.messages ?? []
-  const samples: Array<{ text: string; createdAt: Date }> = []
+  const messages = listRes.data.messages ?? [];
+  const samples: Array<{ text: string; createdAt: Date }> = [];
 
   for (const msg of messages) {
-    if (!msg.id) continue
+    if (!msg.id) continue;
     try {
       const res = await gmail.users.messages.get({
         userId: "me",
         id: msg.id,
         format: "full",
-      })
-      const text = extractBody(res.data.payload)
-      const createdAt = new Date(parseInt(res.data.internalDate ?? "0"))
+      });
+      const text = extractBody(res.data.payload);
+      const createdAt = new Date(parseInt(res.data.internalDate ?? "0"));
       if (text.trim()) {
-        samples.push({ text, createdAt })
+        samples.push({ text, createdAt });
       }
     } catch {
       // Skip messages that cannot be fetched
     }
   }
 
-  return samples
+  return samples;
 }

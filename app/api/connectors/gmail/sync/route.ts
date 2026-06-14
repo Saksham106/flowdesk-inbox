@@ -1,48 +1,64 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
 
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { syncGmailChannel } from "@/lib/google";
+import { authOptions } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
+import { syncGmailChannel, syncGmailChannelIncremental, watchGmailChannel } from "@/lib/google"
 
-export const runtime = "nodejs";
+export const runtime = "nodejs"
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(authOptions)
   if (!session?.user?.tenantId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { channelId } = await request.json();
+  const { channelId, incremental } = await request.json()
   if (!channelId) {
-    return NextResponse.json({ error: "channelId is required" }, { status: 400 });
+    return NextResponse.json({ error: "channelId is required" }, { status: 400 })
   }
 
   const channel = await prisma.channel.findFirst({
     where: { id: channelId, tenantId: session.user.tenantId, type: "email" },
-  });
+  })
 
   if (!channel) {
-    return NextResponse.json({ error: "Channel not found" }, { status: 404 });
+    return NextResponse.json({ error: "Channel not found" }, { status: 404 })
   }
 
   try {
-    const count = await syncGmailChannel(channelId, session.user.tenantId);
+    let result
+    if (incremental) {
+      result = await syncGmailChannelIncremental(channelId, session.user.tenantId)
+      // Auto-setup watch for real-time updates if not already watching
+      const cred = await prisma.gmailCredential.findUnique({ where: { channelId } })
+      if (cred?.historyId && process.env.GMAIL_PUSH_TOPIC) {
+        try {
+          await watchGmailChannel(channelId, process.env.GMAIL_PUSH_TOPIC)
+        } catch {
+          // Non-blocking, log but don't fail sync
+          console.warn("Failed to setup Gmail watch for channel", channelId)
+        }
+      }
+    } else {
+      const count = await syncGmailChannel(channelId, session.user.tenantId)
+      result = { synced: count }
+    }
 
     await prisma.gmailCredential.update({
       where: { channelId },
       data: { lastSyncedAt: new Date(), lastSyncError: null },
-    });
+    })
 
-    return NextResponse.json({ ok: true, synced: count });
+    return NextResponse.json({ ok: true, ...result })
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown sync error";
+    const message = err instanceof Error ? err.message : "Unknown sync error"
 
     await prisma.gmailCredential.update({
       where: { channelId },
       data: { lastSyncError: message },
-    }).catch(() => {});
+    }).catch(() => {})
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
