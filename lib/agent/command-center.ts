@@ -90,6 +90,7 @@ export type CommandCenterConversation = {
   safelyIgnored: boolean
   needsReply: boolean
   needsAction: boolean
+  readLater: boolean
   opportunity: boolean
   leadScore: number | null
   estimatedValue: number | null
@@ -446,6 +447,7 @@ export function analyzeConversationForCommandCenter(
     safelyIgnored: state === "done" || safelyIgnored,
     needsReply: conversation.status === "needs_reply" && !safelyIgnored && (!attentionCategory || attentionCategory === "needs_reply"),
     needsAction: attentionCategory === "needs_action",
+    readLater: attentionCategory === "read_later",
     opportunity,
     leadScore: opportunity && conversation.lead ? conversation.lead.score : null,
     estimatedValue: conversation.lead?.estimatedValue ?? null,
@@ -496,6 +498,7 @@ export function persistedStateToCommandCenterConversation(
       persisted.state !== "fyi_only" &&
       (!meta?.attentionCategory || meta.attentionCategory === "needs_reply"),
     needsAction: meta?.attentionCategory === "needs_action",
+    readLater: meta?.attentionCategory === "read_later",
     opportunity,
     leadScore: opportunity && lead ? lead.score : null,
     estimatedValue: lead?.estimatedValue ?? null,
@@ -529,9 +532,7 @@ export function buildDailyCommandCenter(
     (conversation) => conversation.state === "waiting_on_you" || conversation.approvalReason
   )
   const needsActionItems = analyzed.filter(c => c.needsAction)
-  const readLaterItems = analyzed.filter(c =>
-    !c.safelyIgnored && c.state === "fyi_only" && c.priority === "low"
-  )
+  const readLaterItems = analyzed.filter(c => c.readLater)
   const safelyIgnoredItems = analyzed.filter(c => c.safelyIgnored)
   const breakdown: QuietlyHandledBreakdown = { newsletter: 0, notification: 0, marketing: 0, other: 0 }
   for (const item of safelyIgnoredItems) {
@@ -665,6 +666,7 @@ function score(conversation: CommandCenterConversation): number {
     (conversation.opportunity ? 25 : 0) +
     (conversation.sensitive ? 20 : 0) +
     (conversation.needsReply ? 10 : 0) +
+    (conversation.needsAction ? 8 : 0) +
     (conversation.state === "support" ? 30 : 0) +
     (conversation.state === "sales_qualified" ? 35 : 0) +
     revenueBonus
