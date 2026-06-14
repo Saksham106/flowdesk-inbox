@@ -349,6 +349,7 @@ Shipped MVP direction hardening slice (2026-06-13):
 
 - Email-only conversation detail: opened conversations now render as top-to-bottom email threads instead of chat-style bubbles, with sender/recipient/timestamp metadata and a reply composer below the thread.
 - Account-mode boundary: `Tenant.accountType` is the current source of truth. Personal accounts default to personal/work-email behavior and do not show CRM labels, lead/opportunity cards, sales/support widgets, Revenue at Risk, business-profile requirements, or business labels in personal draft prompts. Business accounts retain business profile, knowledge base, sales/support, lead scoring, and revenue features.
+- Draft prompt RAG/summarization: business draft prompts now summarize thread context, include only recent messages, and select the most relevant knowledge documents instead of sending a large fixed block of raw thread and KB text. Autopilot uses the same summarized prompt context.
 
 ### Next Slice: v2.4 — TBD
 

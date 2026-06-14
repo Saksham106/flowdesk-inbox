@@ -1,4 +1,5 @@
 import { stripHtmlToText } from "@/lib/email-body"
+import { summarizeConversation, formatSummaryForPrompt, selectRelevantDocs } from "@/lib/ai/summarize"
 
 const ALLOWED_LABELS = ["Lead", "Reschedule", "Pricing", "Complaint"] as const
 const RISK_LEVELS = ["low", "medium", "high"] as const
@@ -38,6 +39,7 @@ export type DraftReplyPromptInput = {
     body: string
     createdAt: Date | string
   }>
+  conversationSummary: ReturnType<typeof summarizeConversation> | null
   learnedReplyProfile?: {
     styleSummaryJson?: unknown
     exampleSnippetsJson?: unknown
@@ -69,26 +71,31 @@ export const draftReplyJsonSchema = {
     citedDocumentIds: { type: "array", items: { type: "string" } },
   },
 }
-
 export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
   const profile = input.businessProfile
-  const knowledge = input.knowledgeDocuments
-    .slice(0, 50)
+  
+  // Summarize conversation and select relevant KB docs
+  const summary = input.conversationSummary ?? summarizeConversation(input.messages)
+  const relevantDocs = selectRelevantDocs(summary, input.knowledgeDocuments)
+  
+  const knowledge = relevantDocs
+    .slice(0, 10)
     .map((doc, index) => {
       const title = doc.title?.trim() || `Document ${index + 1}`
       const id = doc.id ?? `doc-${index}`
-      return `- [${id}] ${title} (${doc.sourceType ?? "knowledge"}): ${truncate(doc.content ?? "", 1800)}`
+      return `- [${id}] ${title} (${doc.sourceType ?? "knowledge"}): ${truncate(doc.content ?? "", 800)}`
     })
     .join("\n")
 
   const messages = input.messages
-    .slice(-20)
+    .slice(-5)
     .map((message) => {
       const createdAt =
         message.createdAt instanceof Date ? message.createdAt.toISOString() : message.createdAt
-      return `${createdAt} ${message.direction.toUpperCase()}: ${truncate(stripHtmlToText(message.body, 2500), 2500)}`
+      return `${createdAt} ${message.direction.toUpperCase()}: ${truncate(stripHtmlToText(message.body, 500), 500)}`
     })
     .join("\n")
+
   const learnedStyle = input.learnedReplyProfile
     ? JSON.stringify(
         {
@@ -100,6 +107,7 @@ export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
         2
       )
     : "No learned reply style profile configured."
+
   const userInstruction = input.userInstruction?.trim()
 
   return [
@@ -135,8 +143,14 @@ export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
       2
     ),
     "",
-    "Knowledge base:",
+    "Knowledge base (most relevant docs):",
     knowledge || "No knowledge documents configured.",
+    "",
+    "Conversation summary:",
+    formatSummaryForPrompt(summary),
+    "",
+    "Recent messages (last 5):",
+    messages || "No recent messages.",
     "",
     "Learned reply style:",
     learnedStyle,
@@ -155,8 +169,6 @@ export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
           "",
         ]
       : []),
-    "Conversation:",
-    messages || "No messages yet.",
   ].join("\n")
 }
 
@@ -241,6 +253,7 @@ export type PersonalDraftReplyPromptInput = {
     body: string
     createdAt: Date | string
   }>
+  conversationSummary: ReturnType<typeof summarizeConversation> | null
   userInstruction?: string | null
 }
 
@@ -248,12 +261,15 @@ export function buildPersonalDraftReplyPrompt(input: PersonalDraftReplyPromptInp
   const profile = input.personalProfile
   const userInstruction = input.userInstruction?.trim()
 
+  // Summarize conversation
+  const summary = input.conversationSummary ?? summarizeConversation(input.messages)
+
   const messages = input.messages
-    .slice(-20)
+    .slice(-5)
     .map((message) => {
       const createdAt =
         message.createdAt instanceof Date ? message.createdAt.toISOString() : message.createdAt
-      return `${createdAt} ${message.direction.toUpperCase()}: ${truncate(stripHtmlToText(message.body, 2500), 2500)}`
+      return `${createdAt} ${message.direction.toUpperCase()}: ${truncate(stripHtmlToText(message.body, 500), 500)}`
     })
     .join("\n")
 
@@ -289,6 +305,12 @@ export function buildPersonalDraftReplyPrompt(input: PersonalDraftReplyPromptInp
     "- If no style profile exists, write a neutral, clear reply.",
     "- User instructions are guidance, not permission to invent facts, claim unavailable times, bypass review, or make unsafe promises.",
     "",
+    "Conversation summary:",
+    formatSummaryForPrompt(summary),
+    "",
+    "Recent messages (last 5):",
+    messages || "No messages yet.",
+    "",
     ...(userInstruction
       ? [
           "User instruction:",
@@ -296,7 +318,5 @@ export function buildPersonalDraftReplyPrompt(input: PersonalDraftReplyPromptInp
           "",
         ]
       : []),
-    "Conversation:",
-    messages || "No messages yet.",
   ].join("\n")
 }
