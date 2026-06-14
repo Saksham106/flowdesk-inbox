@@ -117,7 +117,12 @@ Connectors are configured per account from the **Settings** page (`/settings`). 
 3. Create OAuth 2.0 credentials (Web application)
 4. Add redirect URI: `http://localhost:3000/api/connectors/gmail/callback`
 5. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`
-6. Go to `/settings` → click **+ Connect** under Gmail
+6. Go to `/settings` -> click **+ Connect** under Gmail
+
+Optional real-time sync:
+- Create a Pub/Sub topic and subscription that pushes to `/api/connectors/gmail/push?secret=<GMAIL_PUSH_SECRET>`.
+- Set `GMAIL_PUSH_TOPIC` to the topic name and `GMAIL_PUSH_SECRET` to the same secret used in the push URL.
+- Schedule `GET /api/cron/gmail-watch` daily with `Authorization: Bearer <CRON_SECRET>` so Gmail watches renew before their 7-day expiration.
 
 ### Google Calendar
 
@@ -156,6 +161,9 @@ Credentials are verified live against MindBody's API before being saved. Use Sit
 | `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth client secret |
 | `OPENAI_API_KEY` | Yes | OpenAI API key for AI draft suggestions |
 | `OPENAI_MODEL` | Yes | OpenAI model used for draft suggestions |
+| `GMAIL_PUSH_TOPIC` | Optional | Google Pub/Sub topic name for Gmail watch notifications, e.g. `projects/<project>/topics/<topic>` |
+| `GMAIL_PUSH_SECRET` | Optional | Shared secret for the Pub/Sub push endpoint at `/api/connectors/gmail/push?secret=...` |
+| `CRON_SECRET` | Optional | Bearer token for scheduled endpoints, including Gmail watch renewal |
 | `MINDBODY_API_KEY` | Optional | MindBody source password from developer portal |
 | `SEED_EMAIL` | No | Override default login email |
 | `SEED_PASSWORD` | No | Override default login password |

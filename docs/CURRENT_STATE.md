@@ -37,7 +37,7 @@ Email is the active channel. SMS/Twilio is not part of the active product path.
 
 ### Email And Calendar Connectors
 
-- Gmail connector routes exist for connect, callback, sync, and disconnect.
+- Gmail connector routes exist for connect, callback, sync, push notification processing, watch renewal, and disconnect.
 - Outlook connector routes exist for connect, callback, sync, and disconnect.
 - Google Calendar connector routes exist for connect, callback, and disconnect.
 - Calendar availability and calendar hold support exist.
@@ -72,6 +72,14 @@ Email body rendering and readable-text safety (updated 2026-06-14):
 - `fetchGmailSentSamples` still uses the same MIME extraction path but returns readable text/clean snippets only, so reply-style training does not ingest HTML markup.
 - Tests in `tests/email-body.test.ts`, `tests/email-iframe.test.ts`, `tests/gmail-sync.test.ts`, `tests/explain-thread.test.ts`, and `tests/ai-draft-provider.test.ts` cover sanitization, unsafe attributes, scheme restriction, plain-text linkification, light-mode iframe wrapping, MIME preference for HTML over CSS-junk plain text, nested multipart HTML extraction, cleaned snippets, and cleaned AI prompt inputs.
 - Known gap: external HTTPS images in HTML emails can now survive sync/render safely, but inline `cid:` images are not yet resolved from Gmail attachment parts.
+
+Gmail incremental sync and push notifications (2026-06-14):
+
+- `lib/google.ts` supports Gmail History API incremental sync from stored `GmailCredential.historyId`, Gmail watch setup/stop/renewal, and Pub/Sub push notification processing by Gmail account email address.
+- `POST /api/connectors/gmail/sync` accepts `incremental: true`; it uses incremental sync when a history cursor exists and falls back to a full sync before establishing the watch when one does not.
+- `POST /api/connectors/gmail/push?secret=<GMAIL_PUSH_SECRET>` decodes Pub/Sub push payloads and triggers incremental sync for the matching Gmail channel.
+- `GET /api/cron/gmail-watch` renews Gmail watches for channels with a history cursor; `DELETE /api/cron/gmail-watch` stops a channel watch and clears the cursor.
+- `SyncGmailButton` requests incremental sync after the channel has a previous sync timestamp.
 
 Conversation page layout redesign (2026-06-12):
 

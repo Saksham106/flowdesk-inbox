@@ -3,20 +3,33 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // ---------------------------------------------------------------------------
 // Hoisted mocks
 // ---------------------------------------------------------------------------
-const { mockChannelFindFirst, mockCredUpdate } = vi.hoisted(() => ({
+const {
+  mockChannelFindFirst,
+  mockCredFindUnique,
+  mockCredUpdate,
+  mockSyncGmailChannel,
+  mockSyncGmailChannelIncremental,
+  mockWatchGmailChannel,
+} = vi.hoisted(() => ({
   mockChannelFindFirst: vi.fn(),
-  mockCredUpdate:       vi.fn(),
+  mockCredFindUnique: vi.fn(),
+  mockCredUpdate: vi.fn(),
+  mockSyncGmailChannel: vi.fn(),
+  mockSyncGmailChannelIncremental: vi.fn(),
+  mockWatchGmailChannel: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     channel: { findFirst: mockChannelFindFirst },
-    gmailCredential: { update: mockCredUpdate },
+    gmailCredential: { findUnique: mockCredFindUnique, update: mockCredUpdate },
   },
 }))
 
 vi.mock('@/lib/google', () => ({
-  syncGmailChannel: vi.fn().mockResolvedValue(3),
+  syncGmailChannel: mockSyncGmailChannel,
+  syncGmailChannelIncremental: mockSyncGmailChannelIncremental,
+  watchGmailChannel: mockWatchGmailChannel,
 }))
 
 let mockSession: unknown = null
@@ -53,7 +66,13 @@ function makeReq(body: Record<string, unknown>) {
 // ---------------------------------------------------------------------------
 
 describe('POST /api/connectors/gmail/sync — tenant isolation', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env.GMAIL_PUSH_TOPIC
+    mockSyncGmailChannel.mockResolvedValue(3)
+    mockSyncGmailChannelIncremental.mockResolvedValue({ synced: 2, newHistoryId: 'history-2' })
+    mockWatchGmailChannel.mockResolvedValue({ expiration: new Date(), historyId: 'history-2' })
+  })
 
   it('returns 401 with no session', async () => {
     mockSession = null
@@ -93,6 +112,36 @@ describe('POST /api/connectors/gmail/sync — tenant isolation', () => {
     expect(res.status).toBe(200)
     expect(body.ok).toBe(true)
     expect(body.synced).toBe(3)
+  })
+
+  it('uses incremental sync when a history cursor already exists', async () => {
+    mockSession = { user: { tenantId: 'tenant-A' } }
+    mockChannelFindFirst.mockResolvedValue({ id: 'ch-1', tenantId: 'tenant-A', type: 'email' })
+    mockCredFindUnique.mockResolvedValue({ channelId: 'ch-1', historyId: 'history-1' })
+    mockCredUpdate.mockResolvedValue({})
+
+    const res = await POST(makeReq({ channelId: 'ch-1', incremental: true }) as never)
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.synced).toBe(2)
+    expect(mockSyncGmailChannelIncremental).toHaveBeenCalledWith('ch-1', 'tenant-A')
+    expect(mockSyncGmailChannel).not.toHaveBeenCalled()
+  })
+
+  it('falls back to full sync when incremental is requested without a history cursor', async () => {
+    mockSession = { user: { tenantId: 'tenant-A' } }
+    mockChannelFindFirst.mockResolvedValue({ id: 'ch-1', tenantId: 'tenant-A', type: 'email' })
+    mockCredFindUnique.mockResolvedValue({ channelId: 'ch-1', historyId: null })
+    mockCredUpdate.mockResolvedValue({})
+
+    const res = await POST(makeReq({ channelId: 'ch-1', incremental: true }) as never)
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.synced).toBe(3)
+    expect(mockSyncGmailChannel).toHaveBeenCalledWith('ch-1', 'tenant-A')
+    expect(mockSyncGmailChannelIncremental).not.toHaveBeenCalled()
   })
 
   it('updates lastSyncedAt and clears lastSyncError on success', async () => {

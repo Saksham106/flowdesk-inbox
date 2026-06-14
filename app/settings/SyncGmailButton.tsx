@@ -38,7 +38,7 @@ export default function SyncGmailButton({
     const res = await fetch("/api/connectors/gmail/sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channelId }),
+      body: JSON.stringify({ channelId, incremental: Boolean(displaySyncedAt) }),
     });
 
     const data = await res.json();
