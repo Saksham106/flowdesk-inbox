@@ -98,6 +98,8 @@ export function sanitizeEmailHtmlForIframe(html: string): string {
 const URL_RE = /https?:\/\/[^\s<>"]+/g;
 const BOLD_RE = /\*\*([^*\n]+)\*\*/g;
 const ITALIC_RE = /(?<![a-zA-Z0-9])_([^_\n]+)_(?![a-zA-Z0-9])/g;
+const PLAIN_TEXT_CSS_RULE_RE = /(^|\n)\s*[^{}\n]{1,100}\{[^{}\n]{0,800}\}\s*(?=\n|$)/g;
+const SEPARATOR_BANNER_RE = /^\s*[*=_-]{3,}\s*$/gm;
 
 function applyBasicMarkdown(text: string): string {
   return text
@@ -156,13 +158,17 @@ export function stripHtmlToText(body: string, maxLength = 80): string {
       .replace(/&#39;/g, "'")
       .replace(/&#x27;/g, "'")
       .replace(/&apos;/g, "'")
+      .replace(SEPARATOR_BANNER_RE, " ")
       .replace(/\s+/g, " ")
       .trim();
   } else {
     text = body
+      .replace(PLAIN_TEXT_CSS_RULE_RE, "\n")
+      .replace(SEPARATOR_BANNER_RE, " ")
       .replace(/\*\*([^*]+)\*\*/g, "$1")
       .replace(/_([^_]+)_/g, "$1")
       .replace(/\n/g, " ")
+      .replace(/\s+/g, " ")
       .trim();
   }
   return text.length > maxLength ? text.slice(0, maxLength) + "…" : text;

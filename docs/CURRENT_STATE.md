@@ -59,17 +59,19 @@ Inbox navigation refactor (2026-06-13):
 - Brief data queries (`commandCenterConversations`, `ignoredStates`, `pendingFollowUps`, `revenueAtRisk`) are skipped when rendering list tabs, making those pages faster.
 - Tab active-state logic: Home active when no params; All active on `?status=all`; status tabs active on matching `?status=`; Sales active on `?sales=1`.
 
-Email body rendering and readable-text safety (updated 2026-06-13):
+Email body rendering and readable-text safety (updated 2026-06-14):
 
 - `lib/email-body.ts` — `isHtmlBody`, `sanitizeEmailHtml` (sanitize-html allow-list, scheme-restricted links/images, enforced `target="_blank" rel="noopener noreferrer"`), `sanitizeEmailHtmlForIframe` (iframe renderer allow-list with scripts/iframes/objects/event handlers removed, links forced to `noopener noreferrer`, image sources limited to `http`, `https`, and `cid`), `linkifyText` (HTML escape, basic markdown rendering, newline→`<br>`, URL auto-link), `renderEmailBodyHtml` dispatcher.
   - Plain-text emails with `**bold**` or `_italic_` markers now render as `<strong>`/`<em>` instead of showing raw markers. Lookbehind guard prevents underscore-in-word false matches.
-- `stripHtmlToText` uses `sanitize-html` to remove non-readable HTML (`head`, `style`, `script`, embeds, frames, templates, etc.) before entity decoding and truncation. Inbox snippets, mobile list snippets, explain-thread prompts, and both business/personal draft prompts use cleaned readable text instead of raw HTML/CSS.
+- `stripHtmlToText` uses `sanitize-html` to remove non-readable HTML (`head`, `style`, `script`, embeds, frames, templates, etc.) before entity decoding and truncation. It also strips plain-text CSS-rule lines and newsletter separator banners so Gmail `text/plain` alternatives do not leak template junk into inbox previews. Inbox snippets, mobile list snippets, explain-thread prompts, and both business/personal draft prompts use cleaned readable text instead of raw HTML/CSS.
 - `app/components/EmailBody.tsx` — server component rendering sanitized received HTML in `EmailBodyIframe`; plain text remains linkified and escaped via `dangerouslySetInnerHTML`.
 - `app/components/EmailBodyIframe.tsx` — sandboxed `srcDoc` iframe renderer for HTML emails. The wrapper injects containment CSS for full-document and fragment emails so wide tables/images/pre/code/links do not create page-level horizontal scrolling or break the parent layout.
 - `app/globals.css` — `.email-body` scoped CSS remains available for plain-text/linkified content: `overflow-wrap: anywhere`, `word-break: break-word`, `max-width: 100%`, image/table/pre/link constraints.
 - `app/conversations/[id]/page.tsx` — email thread blocks use `EmailBody`; main section has `min-w-0 overflow-x-hidden` so the sidebar stays visible on desktop even with long/HTML content.
-- `lib/google.ts` — `extractBody` now checks `mimeType` on root body (strips HTML when `text/html` or content starts with `<`), recurses into nested `multipart/*` via `findPart`, and has a depth guard (max 8) against malformed payloads.
-- Tests in `tests/email-body.test.ts`, `tests/explain-thread.test.ts`, and `tests/ai-draft-provider.test.ts` cover sanitization, unsafe attributes, scheme restriction, plain-text linkification, cleaned snippets, and cleaned AI prompt inputs.
+- `lib/google.ts` — Gmail thread sync fetches `threads.get(..., format: "full")` and extracts a canonical body model from the MIME tree: `htmlBody`, `textBody`, `cleanSnippet`, and `renderMode`. The extractor recursively walks nested `multipart/alternative`, `multipart/related`, and `multipart/mixed` payloads, prefers `text/html` for received-email rendering when available, and falls back to `text/plain` for simple messages. `Message.body` remains the storage field for now: HTML messages store renderable HTML so the existing iframe renderer can preserve images/tables/layout; plain-text messages store readable text.
+- `fetchGmailSentSamples` still uses the same MIME extraction path but returns readable text/clean snippets only, so reply-style training does not ingest HTML markup.
+- Tests in `tests/email-body.test.ts`, `tests/gmail-sync.test.ts`, `tests/explain-thread.test.ts`, and `tests/ai-draft-provider.test.ts` cover sanitization, unsafe attributes, scheme restriction, plain-text linkification, MIME preference for HTML over CSS-junk plain text, nested multipart HTML extraction, cleaned snippets, and cleaned AI prompt inputs.
+- Known gap: external HTTPS images in HTML emails can now survive sync/render safely, but inline `cid:` images are not yet resolved from Gmail attachment parts.
 
 Conversation page layout redesign (2026-06-12):
 
