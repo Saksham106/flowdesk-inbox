@@ -1,6 +1,6 @@
 # FlowDesk Remaining-Work To-Do List
 
-Last updated: 2026-06-12
+Last updated: 2026-06-14
 
 This is the canonical checklist of what has **not** been completed from the master product plan. It complements `MASTER_PRODUCT_PLAN.md` (the roadmap and feature index) and `CURRENT_STATE.md` (what exists). When work ships, check items off here and update both companion docs in the same branch.
 
@@ -15,13 +15,14 @@ Most Phase 1 foundations are shipped (command center, task/lead extraction, appr
 - [x] **Explain This Thread Like I'm Busy** (#15) — shipped 2026-06-11: on-demand LLM panel on conversation pages (what happened, what they want, what to do, risks with risk badge, suggested next step) via `POST /api/conversations/[id]/explain`; audited and usage-tracked.
 - [x] **Email Risk Radar** (#22) — shipped 2026-06-12: `/risk-radar` read-only view with deadline-soon, final-notice, unanswered-N-days, and sensitive-content signal groups built on `lib/agent/risk-radar.ts`.
 - [x] **Auto-draft based on user intent** (#30) — shipped 2026-06-12: AI draft panel accepts an optional rough instruction ("say yes but only next week"), passes it into draft generation, and records it in draft metadata while preserving approval-gated sending.
-- [ ] **Smart labels taxonomy** (#42) — replace limited labels with action-oriented set (needs decision, waiting on me, revenue opportunity, payment issue, urgent deadline, safe to ignore...).
+- [x] **Smart labels taxonomy — first attention slice** (#42) — shipped 2026-06-14: deterministic and LLM classification now support `needs_reply`, `needs_action`, `review_soon`, `read_later`, `waiting_on`, `fyi_done`, and `quiet`; stored in `ConversationState.metadataJson.attentionCategory`.
+- [ ] **Smart labels taxonomy — product-complete UI** (#42) — expose the full taxonomy as first-class filters/actions, add correction controls, and decide whether categories graduate from metadata to schema fields.
 - [ ] **Richer sensitive detection** (#10) — more categories (legal, immigration, tax, medical, HR, emotional) and highlighted risky parts inside drafts.
 - [ ] **Command-center source signals** (#1) — meetings-needing-prep and bills/deadlines sections need calendar events and attachment/deadline signals.
 - [ ] **Trust UX** (#44) — per-action "why" explanations and undo on top of the existing audit log.
 - [ ] **Confidence policy thresholds** (#29) — confidence is displayed; policy gating by threshold per category is not implemented.
 - [ ] **Task assignment and manual task creation** (#13).
-- [ ] **Safely-ignored reasons and bulk archive** (#25).
+- [ ] **Safely-ignored reasons and bulk archive** (#25) — reasons now exist in attention metadata; still needs a visible bulk archive/cleanup workflow.
 - [ ] **Person-memory editing and corrections** (#5) — user-editable memory; LLM-based extraction upgrade.
 
 ## Phase 2: Business Revenue Inbox Agent
@@ -39,7 +40,7 @@ Most Phase 1 foundations are shipped (command center, task/lead extraction, appr
 
 ## Phase 3: Personal Chief Of Staff — Not Started
 
-- [ ] **Personal life admin mode** (#21) — bill/travel/school/medical/subscription detection.
+- [ ] **Personal life admin mode** (#21) — first attention rules now catch codes, account setup, security, billing, delivery, and calendar RSVP; still needs broader bill/travel/school/medical/subscription flows and privacy UX.
 - [ ] **VIP protection** (#33).
 - [ ] **Reply later / smart snooze intelligence** (#34).
 - [ ] **Smart attachment intelligence** (#16) — PDF/invoice/contract extraction.

@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-13 (email-only thread UI and personal/business account-mode hardening)
+Last updated: 2026-06-14 (Gmail sync controls and richer email attention classification)
 
 This file is the codebase-facing companion to `MASTER_PRODUCT_PLAN.md`. It answers: what exists today, what is partial, and what should not be treated as active scope.
 
@@ -80,6 +80,35 @@ Gmail incremental sync and push notifications (2026-06-14):
 - `POST /api/connectors/gmail/push?secret=<GMAIL_PUSH_SECRET>` decodes Pub/Sub push payloads and triggers incremental sync for the matching Gmail channel.
 - `GET /api/cron/gmail-watch` renews Gmail watches for channels with a history cursor; `DELETE /api/cron/gmail-watch` stops a channel watch and clears the cursor.
 - `SyncGmailButton` requests incremental sync after the channel has a previous sync timestamp.
+
+Gmail sync controls and inbox refresh polish (2026-06-14):
+
+- `app/components/GmailSyncControl.tsx` exposes a real Gmail sync control in the inbox shell, backed by `POST /api/connectors/gmail/sync`; it never fakes sync state.
+- The control shows loading, last-synced time, and inline success/error status. It is shown in the desktop inbox list header and mobile inbox header when a Gmail channel exists.
+- Client-side sync triggers now cover app load, returning to the tab/window, a 5-minute interval while open, and manual **Sync**. The control blocks concurrent syncs and rate-limits automatic triggers with a 60-second cooldown.
+- `AutoRefresh` still only refreshes rendered server data; Gmail synchronization itself is handled by the sync API, Gmail push notifications, and the new `GmailSyncControl`.
+- Conversation links now preserve inbox filter context through a validated `returnTo=/inbox?...` query. Opening a conversation from **Reply**, **Closed**, search, or Sales preserves the left-list filter and mobile back link.
+- The top-left `F` app mark in `AppRail` is now a keyboard/focus-accessible link to `/inbox`.
+- The home-page "Safely ignored" list remains collapsible and now previews only a small sample plus a remaining count to avoid duplicating the inbox list.
+
+Email attention classification (2026-06-14):
+
+- `lib/agent/email-classifier.ts` now returns both the legacy `emailType` (`needs_reply`, `notification`, `newsletter`, `marketing`, `fyi`) and a richer `attentionCategory`.
+- Supported attention categories are:
+  - `needs_reply` — a human likely expects a response.
+  - `needs_action` — user should do something but not necessarily reply, such as OTPs, verification codes, password setup/reset links, account confirmation, and calendar RSVP.
+  - `review_soon` — security, GitHub token, suspicious login, billing/payment, delivery, or account problem alerts.
+  - `read_later` — newsletter/product/update content the user may want to read.
+  - `waiting_on` — reserved category for threads where the user is waiting for someone else.
+  - `fyi_done` — safe informational or completed transaction email.
+  - `quiet` — low-value automated/marketing/noise.
+- Deterministic rules run before broad no-reply/domain rules so no-reply transactional emails containing codes, links, account setup, billing, security, or RSVP language are not incorrectly closed as useless.
+- The classifier stores `attentionCategory`, `attentionReason`, `attentionConfidence`, and optional `verificationCode` / `expiresIn` in `ConversationState.metadataJson`. No Prisma migration was needed.
+- `lib/agent/work-item-sync.ts` maps `needs_action` to `waiting_on_you` with high priority, `review_soon` to `risky_urgent` with high priority, and `read_later` to low-priority `fyi_only`; only `quiet` and `fyi_done` are eligible for auto-close.
+- `lib/agent/command-center.ts`, the inbox list, conversation detail, and `/api/admin/close-fyi` now prefer `attentionCategory` over the legacy `emailType` when deciding whether something is safely ignorable.
+- `lib/ai/prompts/classify.ts` schema and prompt now include `attentionCategory` and `classificationReason`, keeping LLM classification aligned with deterministic attention categories.
+- Tests cover OTP/code extraction, password reset, GitHub token/security alert, newsletter/read-later, human reply request, marketing quiet, LinkedIn job alert quiet, LLM schema normalization, and metadata merge behavior.
+- Safety note: FlowDesk extracts verification codes for display/copy surfaces later, but does not auto-use them and does not include them in audit logs.
 
 Conversation page layout redesign (2026-06-12):
 
@@ -403,9 +432,9 @@ The AI Draft MVP PR handoff was removed. The feature is now part of the baseline
 
 ## Recommended Next Engineering Slice
 
-The follow-up tracker, persisted `PersonMemory`, conversation relationship panel, lead follow-up sequences, weekly value report, Explain This Thread panel, Email Risk Radar, and intent-guided auto-draft compose flow are now shipped. The remaining Phase 1 gaps, in priority order:
+The follow-up tracker, persisted `PersonMemory`, conversation relationship panel, lead follow-up sequences, weekly value report, Explain This Thread panel, Email Risk Radar, intent-guided auto-draft compose flow, Gmail sync controls, and first attention taxonomy slice are now shipped. The remaining Phase 1 gaps, in priority order:
 
-1. Smart labels taxonomy — action-oriented label set replacing the current limited labels.
+1. Smart labels taxonomy UI — first-class filters/counts, visible explanation, and correction controls for the attention categories now stored in metadata.
 2. Richer sensitive detection — more categories and highlighted risky parts inside drafts.
 3. Command-center source signals — meetings-needing-prep and bills/deadlines sections need calendar events and attachment/deadline signals.
 
@@ -413,7 +442,7 @@ See `docs/TODO.md` for the full remaining-work roadmap mapped against the master
 
 ## Verification Baseline
 
-Recent verification (2026-06-13, after email thread UI and account-mode hardening):
+Recent verification (2026-06-14, after Gmail sync controls and attention classification):
 
 ```bash
 npm test
@@ -423,7 +452,9 @@ npm run build
 
 Observed result:
 
-- `npm test`: 383 tests passed across 34 files.
+- `npm test`: 422 tests passed across 37 files.
+- `npm run lint`: passed.
+- `npm run build`: passed.
 - `npm run lint`: passed.
 - `npm run build`: passed.
 
