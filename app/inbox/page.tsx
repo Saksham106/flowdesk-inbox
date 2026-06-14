@@ -14,7 +14,7 @@ import AppListColumn from "@/app/components/AppListColumn";
 import DesktopResizablePanels from "@/app/components/DesktopResizablePanels";
 import HomeCommandCenter from "@/app/components/HomeCommandCenter";
 import GmailSyncControl from "@/app/components/GmailSyncControl";
-import { buildDailyCommandCenter, CommandCenterInputConversation, PersistedCommandCenterState, CommandCenterState, CommandCenterPriority } from "@/lib/agent/command-center";
+import { buildDailyCommandCenter, CommandCenterInputConversation, PersistedCommandCenterState, CommandCenterState, CommandCenterPriority, type AgentSummary } from "@/lib/agent/command-center";
 import { analyzeRevenueAtRisk } from "@/lib/agent/revenue-at-risk";
 import { AppNavigationItem, getInboxNavigation } from "@/lib/app-navigation";
 import { buildConversationHref } from "@/lib/client-navigation";
@@ -251,6 +251,38 @@ export default async function InboxPage({ searchParams }: Props) {
       )
     : null;
 
+  const agentSummaryRaw = isHomeView
+    ? await Promise.all([
+        prisma.conversationState.count({
+          where: {
+            tenantId,
+            updatedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          },
+        }),
+        prisma.draft.count({
+          where: {
+            conversation: { tenantId },
+            status: "proposed",
+            updatedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          },
+        }),
+        prisma.learnedReplyProfile.findFirst({
+          where: {
+            tenantId,
+            updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+          },
+          select: { id: true },
+        }),
+      ])
+    : ([0, 0, null] as const)
+
+  const [classifiedLast24h, draftedLast24h, learnedProfile] = agentSummaryRaw
+  const agentSummary: AgentSummary = {
+    classifiedLast24h: classifiedLast24h as number,
+    draftedLast24h: draftedLast24h as number,
+    learnedRecentlyUpdated: learnedProfile !== null,
+  }
+
   type IgnoredStateRow = {
     metadataJson: unknown;
     conversationId: string;
@@ -386,10 +418,10 @@ export default async function InboxPage({ searchParams }: Props) {
               <HomeCommandCenter
                 commandCenter={commandCenter}
                 revenueAtRisk={revenueAtRisk as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>}
-                followUps={followUpConversations}
-                ignoredItems={ignoredConversations}
                 accountType={accountType}
                 date={new Date()}
+                agentSummary={agentSummary}
+                gmailChannels={gmailSyncChannels}
               />
             ) : (
               <div className="flex h-full items-center justify-center">
@@ -507,10 +539,10 @@ export default async function InboxPage({ searchParams }: Props) {
                 <HomeCommandCenter
                   commandCenter={commandCenter}
                   revenueAtRisk={revenueAtRisk as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>}
-                  followUps={followUpConversations}
-                  ignoredItems={ignoredConversations}
                   accountType={accountType}
                   date={new Date()}
+                  agentSummary={agentSummary}
+                  gmailChannels={gmailSyncChannels}
                 />
               )}
             </>
