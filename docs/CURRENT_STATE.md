@@ -313,6 +313,7 @@ Bug fixes and hardening (2026-06-13):
 - **Auto-email classifier hardening** — `isSensitive` and `isOpportunity` in `command-center.ts` short-circuit on auto-emails; `isSafelyIgnorable` checks automated body/sender patterns before the sensitive guard; `email-classifier.ts` adds LinkedIn, Target, common social/edu/marketing domains, and a subdomain pattern for `em./e./email.` senders.
 - **Digest page stateRecord** — `app/digest/page.tsx` now includes `stateRecord` in its Prisma query so `isAutoEmail()` reads correctly on the full brief page.
 - **FYI badge suppression** — inbox and detail pages correctly suppress FYI badges using `metadataJson.emailType` in addition to `stateRecord.state` and body/sender patterns.
+- **Draft prompt RAG/summarization** — draft generation now builds a structured conversation summary, sends only the five most recent messages, and selects the most relevant knowledge documents for business prompts instead of always sending up to 20 long raw messages. The draft route and autopilot both pass conversation/contact IDs into reply context so prompt generation can fetch related state and memory.
 
 Limitations:
 

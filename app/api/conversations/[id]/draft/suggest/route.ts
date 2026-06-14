@@ -5,7 +5,7 @@ import OpenAI from "openai"
 import { authOptions } from "@/lib/auth"
 import { getReplyGenerationContext } from "@/lib/agent/reply-context"
 import { generateDraftReply } from "@/lib/ai/provider"
-import { buildPersonalDraftReplyPrompt, buildDraftReplyPrompt, draftReplyJsonSchema, normalizeDraftReplyOutput } from "@/lib/ai/prompts/draft-reply"
+import { buildPersonalDraftReplyPrompt, draftReplyJsonSchema, normalizeDraftReplyOutput } from "@/lib/ai/prompts/draft-reply"
 import { summarizeConversation } from "@/lib/ai/summarize"
 import { prisma } from "@/lib/prisma"
 
