@@ -64,8 +64,8 @@ Existing foundations in the codebase:
 
 Recently shipped first slice:
 
-- Design doc: `docs/superpowers/specs/2026-06-11-daily-command-center-design.md`
-- Implementation plan: `docs/superpowers/plans/2026-06-11-daily-command-center.md`
+- Design doc: `docs/archive/specs/2026-06-11-daily-command-center-design.md`
+- Implementation plan: `docs/archive/plans/2026-06-11-daily-command-center.md`
 - Core analyzer: `lib/agent/command-center.ts`
 - Inbox command center: `app/inbox/CommandCenterPanel.tsx`
 - Digest briefing: `app/digest/DailyBriefSections.tsx`
@@ -73,8 +73,8 @@ Recently shipped first slice:
 
 Task/lead/approval foundation slice:
 
-- Design doc: `docs/superpowers/specs/2026-06-11-task-lead-approval-foundation-design.md`
-- Implementation plan: `docs/superpowers/plans/2026-06-11-task-lead-approval-foundation.md`
+- Design doc: `docs/archive/specs/2026-06-11-task-lead-approval-foundation-design.md`
+- Implementation plan: `docs/archive/plans/2026-06-11-task-lead-approval-foundation.md`
 - Extraction helpers: `lib/agent/work-items.ts`
 - Persistence sync: `lib/agent/work-item-sync.ts`
 - Approval queue: `app/approvals/page.tsx`
@@ -270,7 +270,7 @@ Success criteria:
 | 8 | Knowledge Base Replies | `Partial` | Phase 1/2 | URL import + webpage sourceType + citations in drafts shipped. Website re-crawl and semantic search remain. |
 | 9 | Personal Voice Clone, Controlled | `Partial` | Phase 1 | Learned profile exists; needs clearer controls and style feedback. |
 | 10 | Sensitive Email Detection | `Partial` | Phase 1 | Basic detection exists; needs richer categories and highlighted risky draft parts. |
-| 11 | Meeting Prep From Email History | `Partial` | Phase 2 | On-demand brief from PersonMemory + email threads; `/meetings` page + digest card. Briefs not persisted. Spec: `docs/superpowers/specs/2026-06-11-meeting-prep-design.md`. Plan: `docs/superpowers/plans/2026-06-11-meeting-prep.md`. |
+| 11 | Meeting Prep From Email History | `Partial` | Phase 2 | On-demand brief from PersonMemory + email threads; `/meetings` page + digest card. Briefs not persisted. Spec: `docs/archive/specs/2026-06-11-meeting-prep-design.md`. Plan: `docs/archive/plans/2026-06-11-meeting-prep.md`. |
 | 12 | Post-Meeting Follow-Up Generator | `Partial` | Phase 2 | Notes + prior threads → follow-up draft → ApprovalRequest. Falls back to inline copy if no prior conversation exists. |
 | 13 | Email-to-Task Extraction | `Partial` | Phase 1 | Task model, extraction, list page, close action, background sync, and inline due-date editing exist; needs assignment and manual creation. |
 | 14 | Smart Scheduling Agent | `Partial` | Phase 4 | Availability/holds exist; needs full back-and-forth booking. |
@@ -281,7 +281,7 @@ Success criteria:
 | 19 | Customer Support Agent Mode | `Partial` | Phase 2 | Auto-detect via work-item-sync; churn-risk + escalation flags; KB-match draft suggestion; SupportPanel on conversations; support filter in inbox; command center count. |
 | 20 | Sales Agent Mode | `Partial` | Phase 2 | Business-mode sales signals, SalesPanel, Sales tab, and sales-qualified state shipped; needs richer sales workflows and settings. |
 | 21 | Personal Life Admin Mode | `Planned` | Phase 3 | Needs personal category detection and safer privacy UX. |
-| 22 | Email Risk Radar | `Shipped` | Phase 1 | `/risk-radar` ships a read-only deterministic scan for deadline-soon, final-notice, unanswered, and sensitive-content signals. Spec: `docs/superpowers/specs/2026-06-12-email-risk-radar-design.md`. Plan: `docs/superpowers/plans/2026-06-12-email-risk-radar.md`. |
+| 22 | Email Risk Radar | `Shipped` | Phase 1 | `/risk-radar` ships a read-only deterministic scan for deadline-soon, final-notice, unanswered, and sensitive-content signals. Spec: `docs/archive/specs/2026-06-12-email-risk-radar-design.md`. Plan: `docs/archive/plans/2026-06-12-email-risk-radar.md`. |
 | 23 | Phishing, Scam, and Fraud Protection | `Discovery` | Phase 3 | Needs careful security heuristics and false-positive UX. |
 | 24 | Auto-Unsubscribe and Noise Killer | `Planned` | Phase 3/4 | Needs safe archive/unsubscribe permissions. |
 | 25 | What Can I Ignore Mode | `Partial` | Phase 1 | Collapsible safely-ignored inbox section shipped; needs per-item reasons and bulk archive action. |
@@ -289,7 +289,7 @@ Success criteria:
 | 27 | Train My Agent With Plain English | `Discovery` | Phase 4 | Needs rule compiler and conflict resolution. |
 | 28 | Approval Queue | `Partial` | Phase 1 | Inline approve/reject, collapsible draft preview, and batch approve/reject shipped; needs edit-before-send and teach-the-agent actions. |
 | 29 | Confidence Score Before Sending | `Partial` | Phase 1 | Metadata exists; needs visible UX and policy thresholds. |
-| 30 | Auto-Draft Based on User Intent | `Shipped` | Phase 1 | AI draft panel accepts optional rough instructions and turns them into proposed drafts through the existing approval-gated flow. Spec: `docs/superpowers/specs/2026-06-12-intent-auto-draft-design.md`. Plan: `docs/superpowers/plans/2026-06-12-intent-auto-draft.md`. |
+| 30 | Auto-Draft Based on User Intent | `Shipped` | Phase 1 | AI draft panel accepts optional rough instructions and turns them into proposed drafts through the existing approval-gated flow. Spec: `docs/archive/specs/2026-06-12-intent-auto-draft-design.md`. Plan: `docs/archive/plans/2026-06-12-intent-auto-draft.md`. |
 | 31 | Multi-Step Email Workflows | `Discovery` | Phase 4 | Depends on tasks, leads, scheduling, audit, approvals. |
 | 32 | Email Analytics That Show ROI | `Shipped` | Phase 2 | 4-week trend bars, pipeline value summary, revenue opportunities on `/reports`; `ValueSnapshot` model with weekly cron; `buildValueSnapshot`/`getWeeklyTrend` in `value-report.ts`. |
 | 33 | VIP Protection | `Planned` | Phase 3 | Needs VIP/contact model and notification policy. |
