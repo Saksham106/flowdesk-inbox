@@ -1,3 +1,5 @@
+import { stripHtmlToText } from "@/lib/email-body"
+
 const RISK_LEVELS = ["low", "medium", "high"] as const
 
 export type ExplainRiskLevel = (typeof RISK_LEVELS)[number]
@@ -49,7 +51,7 @@ export function buildExplainThreadPrompt(input: ExplainThreadPromptInput): strin
     .map((message) => {
       const createdAt =
         message.createdAt instanceof Date ? message.createdAt.toISOString() : message.createdAt
-      return `${createdAt} ${message.direction.toUpperCase()}: ${truncate(message.body, 2500)}`
+      return `${createdAt} ${message.direction.toUpperCase()}: ${truncate(stripHtmlToText(message.body, 2500), 2500)}`
     })
     .join("\n")
 

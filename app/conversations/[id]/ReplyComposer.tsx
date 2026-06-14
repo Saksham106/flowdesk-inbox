@@ -52,6 +52,12 @@ export default function ReplyComposer({
   const escalationReason = draft?.metadataJson?.escalationReason;
   const isRisky = hasDraftText && (riskLevel === "high" || Boolean(escalationReason));
 
+  async function assertOk(response: Response, fallback: string) {
+    if (response.ok) return;
+    const body = await response.json().catch(() => null);
+    throw new Error(typeof body?.error === "string" ? body.error : fallback);
+  }
+
   async function suggestReply() {
     if (!canAI || isBusy) return;
     setAction("suggesting");
@@ -88,19 +94,21 @@ export default function ReplyComposer({
         // AI draft path: update text if edited, approve, then send
         const isDirty = trimmedText !== draft.text;
         if (isDirty) {
-          await fetch(`/api/conversations/${conversationId}/draft`, {
+          const updateRes = await fetch(`/api/conversations/${conversationId}/draft`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ text: trimmedText }),
           });
+          await assertOk(updateRes, "Failed to update draft.");
         }
-        await fetch(`/api/conversations/${conversationId}/draft`, {
+        const approveRes = await fetch(`/api/conversations/${conversationId}/draft`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status: "approved" }),
         });
+        await assertOk(approveRes, "Failed to approve draft.");
         const sendRes = await fetch(`/api/conversations/${conversationId}/draft/send-approved`, { method: "POST" });
-        if (!sendRes.ok) throw new Error("Failed to send.");
+        await assertOk(sendRes, "Failed to send.");
         setDraft((d) => d ? { ...d, status: "sent", text: trimmedText } : d);
       } else {
         // Manual path: send directly
@@ -109,7 +117,7 @@ export default function ReplyComposer({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: trimmedText }),
         });
-        if (!sendRes.ok) throw new Error("Failed to send.");
+        await assertOk(sendRes, "Failed to send.");
         setDraft(null);
         setText("");
       }

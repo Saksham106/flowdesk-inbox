@@ -1,3 +1,5 @@
+import { stripHtmlToText } from "@/lib/email-body"
+
 const ALLOWED_LABELS = ["Lead", "Reschedule", "Pricing", "Complaint"] as const
 const RISK_LEVELS = ["low", "medium", "high"] as const
 
@@ -84,7 +86,7 @@ export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
     .map((message) => {
       const createdAt =
         message.createdAt instanceof Date ? message.createdAt.toISOString() : message.createdAt
-      return `${createdAt} ${message.direction.toUpperCase()}: ${truncate(message.body, 2500)}`
+      return `${createdAt} ${message.direction.toUpperCase()}: ${truncate(stripHtmlToText(message.body, 2500), 2500)}`
     })
     .join("\n")
   const learnedStyle = input.learnedReplyProfile
@@ -251,7 +253,7 @@ export function buildPersonalDraftReplyPrompt(input: PersonalDraftReplyPromptInp
     .map((message) => {
       const createdAt =
         message.createdAt instanceof Date ? message.createdAt.toISOString() : message.createdAt
-      return `${createdAt} ${message.direction.toUpperCase()}: ${truncate(message.body, 2500)}`
+      return `${createdAt} ${message.direction.toUpperCase()}: ${truncate(stripHtmlToText(message.body, 2500), 2500)}`
     })
     .join("\n")
 

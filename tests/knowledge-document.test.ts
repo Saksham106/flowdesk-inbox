@@ -93,7 +93,7 @@ describe('GET /api/knowledge-documents', () => {
 
   it('returns 401 when there is no session', async () => {
     mockSession = null
-    const res = await GET(makeReq() as never)
+    const res = await GET()
     expect(res.status).toBe(401)
   })
 
@@ -101,7 +101,7 @@ describe('GET /api/knowledge-documents', () => {
     mockSession = { user: { id: 'user1', tenantId: 'tenant-A' } }
     mockFindMany.mockResolvedValue([])
 
-    await GET(makeReq() as never)
+    await GET()
 
     expect(mockFindMany).toHaveBeenCalledOnce()
     expect(mockFindMany.mock.calls[0][0].where).toMatchObject({ tenantId: 'tenant-A' })
@@ -111,7 +111,7 @@ describe('GET /api/knowledge-documents', () => {
     mockSession = { user: { id: 'user1', tenantId: 'tenant-A' } }
     mockFindMany.mockResolvedValue([])
 
-    await GET(makeReq() as never)
+    await GET()
 
     const where = mockFindMany.mock.calls[0][0].where
     expect(where.tenantId).not.toBe('tenant-B')

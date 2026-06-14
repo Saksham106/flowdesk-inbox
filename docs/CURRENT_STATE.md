@@ -59,15 +59,17 @@ Inbox navigation refactor (2026-06-13):
 - Brief data queries (`commandCenterConversations`, `ignoredStates`, `pendingFollowUps`, `revenueAtRisk`) are skipped when rendering list tabs, making those pages faster.
 - Tab active-state logic: Home active when no params; All active on `?status=all`; status tabs active on matching `?status=`; Sales active on `?sales=1`.
 
-Email body rendering (2026-06-12):
+Email body rendering and readable-text safety (updated 2026-06-13):
 
-- `lib/email-body.ts` — `isHtmlBody`, `sanitizeEmailHtml` (sanitize-html allow-list, scheme-restricted links/images, enforced `target="_blank" rel="noopener noreferrer"`), `linkifyText` (HTML escape, basic markdown rendering, newline→`<br>`, URL auto-link), `renderEmailBodyHtml` dispatcher.
+- `lib/email-body.ts` — `isHtmlBody`, `sanitizeEmailHtml` (sanitize-html allow-list, scheme-restricted links/images, enforced `target="_blank" rel="noopener noreferrer"`), `sanitizeEmailHtmlForIframe` (iframe renderer allow-list with scripts/iframes/objects/event handlers removed, links forced to `noopener noreferrer`, image sources limited to `http`, `https`, and `cid`), `linkifyText` (HTML escape, basic markdown rendering, newline→`<br>`, URL auto-link), `renderEmailBodyHtml` dispatcher.
   - Plain-text emails with `**bold**` or `_italic_` markers now render as `<strong>`/`<em>` instead of showing raw markers. Lookbehind guard prevents underscore-in-word false matches.
-- `app/components/EmailBody.tsx` — server component rendering sanitized HTML or linkified plain text via `dangerouslySetInnerHTML`.
-- `app/globals.css` — `.email-body` scoped CSS: `overflow-wrap: anywhere`, `word-break: break-word`, `max-width: 100%`, image/table/pre/link constraints.
+- `stripHtmlToText` uses `sanitize-html` to remove non-readable HTML (`head`, `style`, `script`, embeds, frames, templates, etc.) before entity decoding and truncation. Inbox snippets, mobile list snippets, explain-thread prompts, and both business/personal draft prompts use cleaned readable text instead of raw HTML/CSS.
+- `app/components/EmailBody.tsx` — server component rendering sanitized received HTML in `EmailBodyIframe`; plain text remains linkified and escaped via `dangerouslySetInnerHTML`.
+- `app/components/EmailBodyIframe.tsx` — sandboxed `srcDoc` iframe renderer for HTML emails. The wrapper injects containment CSS for full-document and fragment emails so wide tables/images/pre/code/links do not create page-level horizontal scrolling or break the parent layout.
+- `app/globals.css` — `.email-body` scoped CSS remains available for plain-text/linkified content: `overflow-wrap: anywhere`, `word-break: break-word`, `max-width: 100%`, image/table/pre/link constraints.
 - `app/conversations/[id]/page.tsx` — email thread blocks use `EmailBody`; main section has `min-w-0 overflow-x-hidden` so the sidebar stays visible on desktop even with long/HTML content.
 - `lib/google.ts` — `extractBody` now checks `mimeType` on root body (strips HTML when `text/html` or content starts with `<`), recurses into nested `multipart/*` via `findPart`, and has a depth guard (max 8) against malformed payloads.
-- Tests in `tests/email-body.test.ts` — 26 tests covering detection, sanitization (XSS, iframe, event handlers, scheme restriction), linkification, and BOM handling.
+- Tests in `tests/email-body.test.ts`, `tests/explain-thread.test.ts`, and `tests/ai-draft-provider.test.ts` cover sanitization, unsafe attributes, scheme restriction, plain-text linkification, cleaned snippets, and cleaned AI prompt inputs.
 
 Conversation page layout redesign (2026-06-12):
 
@@ -83,8 +85,9 @@ Conversation page layout redesign (2026-06-12):
 Email-only thread UI hardening (2026-06-13):
 
 - `app/conversations/[id]/page.tsx` — the message renderer no longer uses left/right chat bubbles. Messages render as full-width email blocks in chronological order with sender, recipient, timestamp, direction badge, and `EmailBody` content.
-- Reply composition remains connected to the thread below the messages through the inline Reply card containing `AIDraftPanel` and `SendBox`.
-- The existing email-body sanitization, linkification, wrapping, and layout constraints remain in use through `EmailBody`.
+- Reply composition remains connected to the thread below the messages through a unified `ReplyComposer` that supports manual sending and AI draft generation/review in one textarea.
+- Manual sends still call `POST /api/conversations/[id]/send`. AI draft sends still edit/approve the draft, then call `POST /api/conversations/[id]/draft/send-approved`; failed edit/approve/send responses stop the flow and show the server error instead of sending stale content.
+- The email-body sanitizer, linkification, iframe wrapping, and layout constraints remain in use through `EmailBody`.
 - Personal accounts hide existing business labels in the thread header/contact card even if old data has a label value.
 
 Personal vs business account separation (updated 2026-06-13):

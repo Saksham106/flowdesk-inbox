@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import type { NextRequest } from "next/server"
 
 // ── Prisma mock ──────────────────────────────────────────────────────────────
 
@@ -142,7 +143,7 @@ describe("PATCH /api/tasks/[id]/status", () => {
 // ── Task due route ───────────────────────────────────────────────────────────
 
 describe("PATCH /api/tasks/[id]/due", () => {
-  let PATCH: (req: Request, ctx: { params: { id: string } }) => Promise<unknown>
+  let PATCH: (req: NextRequest, ctx: { params: { id: string } }) => Promise<unknown>
 
   beforeEach(async () => {
     vi.clearAllMocks()
@@ -152,26 +153,26 @@ describe("PATCH /api/tasks/[id]/due", () => {
 
   it("returns 401 when unauthenticated", async () => {
     mockGetServerSession.mockResolvedValue(null)
-    const res = (await PATCH(makeRequest({ dueAt: "2026-06-12" }), params("t1"))) as { status: number }
+    const res = (await PATCH(makeRequest({ dueAt: "2026-06-12" }) as NextRequest, params("t1"))) as { status: number }
     expect(res.status).toBe(401)
   })
 
   it("returns 400 for malformed json", async () => {
     mockGetServerSession.mockResolvedValue({ user: { tenantId: "ten-1", id: "u1" } })
-    const res = (await PATCH(makeInvalidJsonRequest(), params("t1"))) as { status: number }
+    const res = (await PATCH(makeInvalidJsonRequest() as NextRequest, params("t1"))) as { status: number }
     expect(res.status).toBe(400)
   })
 
   it("returns 400 for invalid due date", async () => {
     mockGetServerSession.mockResolvedValue({ user: { tenantId: "ten-1", id: "u1" } })
-    const res = (await PATCH(makeRequest({ dueAt: "not-a-date" }), params("t1"))) as { status: number }
+    const res = (await PATCH(makeRequest({ dueAt: "not-a-date" }) as NextRequest, params("t1"))) as { status: number }
     expect(res.status).toBe(400)
   })
 
   it("returns 404 when task not found", async () => {
     mockGetServerSession.mockResolvedValue({ user: { tenantId: "ten-1", id: "u1" } })
     mockTaskFindFirst.mockResolvedValue(null)
-    const res = (await PATCH(makeRequest({ dueAt: "2026-06-12" }), params("t1"))) as { status: number }
+    const res = (await PATCH(makeRequest({ dueAt: "2026-06-12" }) as NextRequest, params("t1"))) as { status: number }
     expect(res.status).toBe(404)
   })
 
@@ -182,7 +183,7 @@ describe("PATCH /api/tasks/[id]/due", () => {
     mockTaskUpdate.mockResolvedValue({ ...task, dueAt: new Date("2026-06-12T00:00:00.000Z") })
     mockAuditCreate.mockResolvedValue({})
 
-    const res = (await PATCH(makeRequest({ dueAt: "2026-06-12" }), params("t1"))) as { status: number }
+    const res = (await PATCH(makeRequest({ dueAt: "2026-06-12" }) as NextRequest, params("t1"))) as { status: number }
     expect(res.status).toBe(200)
     expect(mockTaskUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -333,7 +334,7 @@ describe("POST /api/approvals/[id]/decide", () => {
 // ── Approval bulk route ──────────────────────────────────────────────────────
 
 describe("POST /api/approvals/bulk", () => {
-  let POST: (req: Request) => Promise<unknown>
+  let POST: (req: NextRequest) => Promise<unknown>
 
   beforeEach(async () => {
     vi.clearAllMocks()
@@ -343,25 +344,25 @@ describe("POST /api/approvals/bulk", () => {
 
   it("returns 401 when unauthenticated", async () => {
     mockGetServerSession.mockResolvedValue(null)
-    const res = (await POST(makeRequest({ ids: ["a1"], decision: "approved" }))) as { status: number }
+    const res = (await POST(makeRequest({ ids: ["a1"], decision: "approved" }) as NextRequest)) as { status: number }
     expect(res.status).toBe(401)
   })
 
   it("returns 400 for malformed json", async () => {
     mockGetServerSession.mockResolvedValue({ user: { tenantId: "ten-1", id: "u1" } })
-    const res = (await POST(makeInvalidJsonRequest())) as { status: number }
+    const res = (await POST(makeInvalidJsonRequest() as NextRequest)) as { status: number }
     expect(res.status).toBe(400)
   })
 
   it("returns 400 for invalid decision", async () => {
     mockGetServerSession.mockResolvedValue({ user: { tenantId: "ten-1", id: "u1" } })
-    const res = (await POST(makeRequest({ ids: ["a1"], decision: "maybe" }))) as { status: number }
+    const res = (await POST(makeRequest({ ids: ["a1"], decision: "maybe" }) as NextRequest)) as { status: number }
     expect(res.status).toBe(400)
   })
 
   it("returns 400 when no ids are provided", async () => {
     mockGetServerSession.mockResolvedValue({ user: { tenantId: "ten-1", id: "u1" } })
-    const res = (await POST(makeRequest({ ids: [], decision: "approved" }))) as { status: number }
+    const res = (await POST(makeRequest({ ids: [], decision: "approved" }) as NextRequest)) as { status: number }
     expect(res.status).toBe(400)
   })
 
@@ -371,7 +372,7 @@ describe("POST /api/approvals/bulk", () => {
     mockApprovalUpdateMany.mockResolvedValue({ count: 1 })
     mockAuditCreate.mockResolvedValue({})
 
-    const res = (await POST(makeRequest({ ids: ["a1", "other-tenant"], decision: "approved" }))) as {
+    const res = (await POST(makeRequest({ ids: ["a1", "other-tenant"], decision: "approved" }) as NextRequest)) as {
       status: number
       _body: { updated: number }
     }
