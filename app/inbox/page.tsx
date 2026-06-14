@@ -138,7 +138,7 @@ export default async function InboxPage({ searchParams }: Props) {
     : [];
 
   // Home view data for command center
-  const [commandCenterConversations, ignoredStates, pendingFollowUps, revenueAtRisk, persistedStates] =
+  const [commandCenterConversations, revenueAtRisk, persistedStates] =
     isHomeView
       ? await Promise.all([
           prisma.conversation.findMany({
@@ -167,22 +167,6 @@ export default async function InboxPage({ searchParams }: Props) {
               },
               stateRecord: { select: { metadataJson: true } },
             },
-          }),
-          prisma.conversationState.findMany({
-            where: { tenantId },
-            include: { conversation: { include: { contact: true } } },
-            orderBy: { updatedAt: "desc" },
-            take: 200,
-          }),
-          prisma.agentJob.findMany({
-            where: {
-              tenantId,
-              trigger: { in: ["follow_up", "lead_follow_up"] },
-              status: { in: ["pending", "running"] },
-            },
-            include: { conversation: { include: { contact: true } } },
-            orderBy: { createdAt: "desc" },
-            take: 50,
           }),
           isBusiness ? analyzeRevenueAtRisk(tenantId) : Promise.resolve([]),
           // Fetch persisted command center states for the 75 conversations
@@ -213,7 +197,7 @@ export default async function InboxPage({ searchParams }: Props) {
             },
           }),
         ])
-      : [[], [], [], [] as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>, [] as PersistedCommandCenterState[]];
+      : [[], [] as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>, [] as PersistedCommandCenterState[]];
 
   type ConversationForBrief = CommandCenterInputConversation & {
     stateRecord: { metadataJson: unknown } | null;
@@ -283,37 +267,7 @@ export default async function InboxPage({ searchParams }: Props) {
     learnedRecentlyUpdated: learnedProfile !== null,
   }
 
-  type IgnoredStateRow = {
-    metadataJson: unknown;
-    conversationId: string;
-    conversation: { contact: { name: string } | null; externalThreadId: string };
-    reason: string | null;
-  };
 
-  type FollowUpJobRow = {
-    conversationId: string;
-    conversation: { contact: { name: string } | null; externalThreadId: string };
-    createdAt: Date;
-  };
-
-  const ignoredConversations = (ignoredStates as IgnoredStateRow[])
-    .filter((s) => {
-      const meta = s.metadataJson as Record<string, unknown> | null;
-      return meta?.safelyIgnored === true;
-    })
-    .map((s) => ({
-      id: s.conversationId,
-      displayName: s.conversation.contact?.name ?? s.conversation.externalThreadId,
-      reason: s.reason,
-      href: `/conversations/${s.conversationId}`,
-    }));
-
-  const followUpConversations = (pendingFollowUps as FollowUpJobRow[]).map((job) => ({
-    id: job.conversationId,
-    displayName: job.conversation.contact?.name ?? job.conversation.externalThreadId,
-    scheduledAt: job.createdAt,
-    href: `/conversations/${job.conversationId}`,
-  }));
 
   const displayConversations = salesFilter
     ? mobileConversations.filter((c) => {
