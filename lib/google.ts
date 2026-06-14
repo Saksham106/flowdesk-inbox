@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import { createHmac } from "crypto";
 import { encryptString, decryptString } from "@/lib/crypto";
+import { stripHtmlToText } from "@/lib/email-body";
 import { prisma } from "@/lib/prisma";
 import { syncConversationWorkItems } from "@/lib/agent/work-item-sync";
 
@@ -106,6 +107,9 @@ type GmailMessage = {
   to: string;
   subject: string;
   body: string;
+  textBody: string;
+  cleanSnippet: string;
+  renderMode: "html" | "plainText" | "fallback";
   date: Date;
   rfc822MessageId: string;
 };
@@ -119,62 +123,71 @@ function getHeader(
 
 type GmailPart = {
   mimeType?: string | null;
-  body?: { data?: string | null } | null;
+  body?: { data?: string | null; attachmentId?: string | null } | null;
   parts?: GmailPart[] | null;
 };
 
-// Extracts the best plain-text body from a Gmail message payload.
-// Prefers text/plain; strips tags from text/html; recurses into multipart.
-// Always returns plain text so raw HTML is never stored in the DB.
-function extractBody(payload: GmailPart | null | undefined, depth = 0): string {
-  if (!payload || depth > 8) return "";
+type ExtractedEmailBody = {
+  htmlBody: string;
+  textBody: string;
+  cleanSnippet: string;
+  renderMode: "html" | "plainText" | "fallback";
+};
 
-  const mime = payload.mimeType ?? "";
-
-  // Single-part payload: body data is at root level
-  if (payload.body?.data) {
-    const text = Buffer.from(payload.body.data, "base64url").toString("utf8");
-    if (mime === "text/html" || (mime !== "text/plain" && /^\s*</.test(text))) {
-      return text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-    }
-    return text;
-  }
-
-  // Multipart payload: search parts, preferring text/plain
-  if (payload.parts) {
-    const textPart = findPart(payload.parts, "text/plain", depth + 1);
-    if (textPart?.body?.data) {
-      return Buffer.from(textPart.body.data, "base64url").toString("utf8");
-    }
-    const htmlPart = findPart(payload.parts, "text/html", depth + 1);
-    if (htmlPart?.body?.data) {
-      return Buffer.from(htmlPart.body.data, "base64url").toString("utf8")
-        .replace(/<[^>]+>/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-    }
-    // Recurse into nested multipart containers (multipart/alternative, etc.)
-    for (const part of payload.parts) {
-      if (part.mimeType?.startsWith("multipart/")) {
-        const nested = extractBody(part, depth + 1);
-        if (nested) return nested;
-      }
-    }
-  }
-
-  return "";
+function decodePartData(data?: string | null): string {
+  return data ? Buffer.from(data, "base64url").toString("utf8") : "";
 }
 
-function findPart(parts: GmailPart[], mimeType: string, depth = 0): GmailPart | null {
-  if (depth > 8) return null;
-  for (const part of parts) {
-    if (part.mimeType === mimeType && part.body?.data) return part;
-    if (part.parts) {
-      const found = findPart(part.parts, mimeType, depth + 1);
-      if (found) return found;
+function collectMimeBodies(
+  payload: GmailPart | null | undefined,
+  bodies: { html: string[]; text: string[] },
+  depth = 0
+): void {
+  if (!payload || depth > 12) return;
+
+  const mime = (payload.mimeType ?? "").toLowerCase();
+  const decoded = decodePartData(payload.body?.data);
+
+  if (decoded) {
+    if (mime === "text/html" || (mime !== "text/plain" && /^\s*</.test(decoded))) {
+      bodies.html.push(decoded);
+    } else if (mime === "text/plain" || !mime || mime === "text") {
+      bodies.text.push(decoded);
     }
   }
-  return null;
+
+  for (const part of payload.parts ?? []) {
+    collectMimeBodies(part, bodies, depth + 1);
+  }
+}
+
+// Extracts the canonical received-email body model from Gmail's full MIME payload.
+// Keeps HTML when available for visual rendering, while retaining readable text for AI/snippets.
+function extractEmailBody(payload: GmailPart | null | undefined): ExtractedEmailBody {
+  const bodies = { html: [] as string[], text: [] as string[] };
+  collectMimeBodies(payload, bodies);
+
+  const htmlBody = bodies.html.find((body) => body.trim())?.trim() ?? "";
+  const textBody =
+    bodies.text.find((body) => body.trim())?.trim() ??
+    (htmlBody ? stripHtmlToText(htmlBody, 12000) : "");
+  const renderMode = htmlBody ? "html" : textBody ? "plainText" : "fallback";
+  const cleanSnippet = stripHtmlToText(htmlBody || textBody, 240);
+
+  return {
+    htmlBody,
+    textBody,
+    cleanSnippet,
+    renderMode,
+  };
+}
+
+function extractedBodyForPayload(payload: GmailPart | null | undefined): ExtractedEmailBody {
+  const extracted = extractEmailBody(payload);
+  return {
+    ...extracted,
+    cleanSnippet: extracted.cleanSnippet || stripHtmlToText(extracted.textBody || extracted.htmlBody, 240),
+  }
 }
 
 export async function fetchThread(
@@ -189,13 +202,17 @@ export async function fetchThread(
 
   return (res.data.messages ?? []).map((msg) => {
     const headers = msg.payload?.headers ?? [];
+    const extracted = extractedBodyForPayload(msg.payload);
     return {
       id: msg.id ?? "",
       threadId: msg.threadId ?? "",
       from: getHeader(headers, "From"),
       to: getHeader(headers, "To"),
       subject: getHeader(headers, "Subject"),
-      body: extractBody(msg.payload),
+      body: extracted.htmlBody || extracted.textBody,
+      textBody: extracted.textBody,
+      cleanSnippet: extracted.cleanSnippet,
+      renderMode: extracted.renderMode,
       date: new Date(parseInt(msg.internalDate ?? "0")),
       rfc822MessageId: getHeader(headers, "Message-ID"),
     };
@@ -565,7 +582,8 @@ export async function fetchGmailSentSamples(
         id: msg.id,
         format: "full",
       })
-      const text = extractBody(res.data.payload)
+      const extracted = extractEmailBody(res.data.payload)
+      const text = extracted.textBody || extracted.cleanSnippet
       const createdAt = new Date(parseInt(res.data.internalDate ?? "0"))
       if (text.trim()) {
         samples.push({ text, createdAt })

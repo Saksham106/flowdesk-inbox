@@ -230,6 +230,14 @@ describe("stripHtmlToText", () => {
     expect(result).toBe("Line 1 Line 2 Line 3");
   });
 
+  it("removes plain-text CSS rules and newsletter separator banners from snippets", () => {
+    const result = stripHtmlToText(
+      "a {text-decoration: none;}\nbody { margin:0; }\n***************\n5-Bullet Friday\n***************\nReadable intro",
+      120
+    );
+    expect(result).toBe("5-Bullet Friday Readable intro");
+  });
+
   it("returns empty string for blank input", () => {
     expect(stripHtmlToText("")).toBe("");
     expect(stripHtmlToText("   ")).toBe("");
