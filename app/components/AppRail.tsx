@@ -32,9 +32,14 @@ export default function AppRail({ needsReplyCount, accountType }: Props) {
   return (
     <nav className="flex h-full w-14 shrink-0 flex-col items-center bg-slate-900 py-3 gap-1">
       {/* Logo */}
-      <div className="mb-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500 text-sm font-black text-white select-none">
+      <Link
+        href="/inbox"
+        aria-label="Go to FlowDesk home"
+        title="FlowDesk home"
+        className="mb-3 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-blue-500 text-sm font-black text-white transition hover:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-900"
+      >
         F
-      </div>
+      </Link>
 
       {/* Home / email section */}
       <RailLink

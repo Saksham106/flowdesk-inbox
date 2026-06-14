@@ -3,6 +3,8 @@ import { Suspense } from "react"
 import { prisma } from "@/lib/prisma"
 import { stripHtmlToText } from "@/lib/email-body"
 import SearchInput from "@/app/inbox/SearchInput"
+import GmailSyncControl from "@/app/components/GmailSyncControl"
+import { buildConversationHref } from "@/lib/client-navigation"
 
 interface Props {
   tenantId: string
@@ -11,6 +13,12 @@ interface Props {
   status?: string | null
   q?: string
   sales?: boolean
+  gmailChannels?: {
+    id: string
+    emailAddress: string | null
+    lastSyncedAt: Date | null
+    lastSyncError: string | null
+  }[]
   className?: string
 }
 
@@ -71,6 +79,7 @@ export default async function AppListColumn({
   status,
   q,
   sales = false,
+  gmailChannels = [],
   className = "w-[280px] shrink-0",
 }: Props) {
   const isBusiness = accountType === "business"
@@ -123,11 +132,25 @@ export default async function AppListColumn({
     return qs ? `/inbox?${qs}` : "/inbox"
   }
 
+  function currentInboxHref(): string {
+    const p = new URLSearchParams()
+    if (sales && isBusiness) p.set("sales", "1")
+    else if (status) p.set("status", status)
+    if (q) p.set("q", q)
+    const qs = p.toString()
+    return qs ? `/inbox?${qs}` : "/inbox"
+  }
+
+  const returnTo = currentInboxHref()
+
   return (
     <div className={`flex h-full flex-col border-r border-slate-200 bg-white ${className}`}>
       {/* Header */}
       <div className="border-b border-slate-100 px-3 pb-2 pt-3">
-        <p className="mb-2 text-sm font-semibold text-slate-900">Inbox</p>
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <p className="pt-1 text-sm font-semibold text-slate-900">Inbox</p>
+          <GmailSyncControl channels={gmailChannels} compact />
+        </div>
         <Suspense>
           <SearchInput defaultValue={q} />
         </Suspense>
@@ -190,7 +213,7 @@ export default async function AppListColumn({
             return (
               <Link
                 key={conv.id}
-                href={`/conversations/${conv.id}`}
+                href={buildConversationHref(conv.id, returnTo)}
                 className={`block border-b border-slate-50 px-3 py-2.5 transition ${
                   isSelected
                     ? "border-l-2 border-l-blue-500 bg-blue-50"

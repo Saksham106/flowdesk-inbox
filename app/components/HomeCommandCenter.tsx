@@ -54,6 +54,8 @@ export default function HomeCommandCenter({
 }: Props) {
   const isBusiness = accountType === "business"
   const { counts, topActions, headline } = commandCenter
+  const ignoredPreview = ignoredItems.slice(0, 5)
+  const hiddenIgnoredCount = Math.max(0, ignoredItems.length - ignoredPreview.length)
 
   const dateLabel = date.toLocaleDateString("en-US", {
     weekday: "long",
@@ -192,7 +194,7 @@ export default function HomeCommandCenter({
                   Safely ignored ({ignoredItems.length})
                 </summary>
                 <ul className="divide-y divide-slate-100 border-t border-slate-100">
-                  {ignoredItems.map((c) => (
+                  {ignoredPreview.map((c) => (
                     <li key={c.id}>
                       <Link
                         href={c.href}
@@ -205,6 +207,11 @@ export default function HomeCommandCenter({
                       </Link>
                     </li>
                   ))}
+                  {hiddenIgnoredCount > 0 && (
+                    <li className="px-4 py-2.5 text-xs text-slate-400">
+                      {hiddenIgnoredCount} more safely ignored conversations
+                    </li>
+                  )}
                 </ul>
               </details>
             )}

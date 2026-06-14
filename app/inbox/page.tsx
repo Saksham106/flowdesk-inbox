@@ -13,9 +13,11 @@ import AppRail from "@/app/components/AppRail";
 import AppListColumn from "@/app/components/AppListColumn";
 import DesktopResizablePanels from "@/app/components/DesktopResizablePanels";
 import HomeCommandCenter from "@/app/components/HomeCommandCenter";
+import GmailSyncControl from "@/app/components/GmailSyncControl";
 import { buildDailyCommandCenter, CommandCenterInputConversation, PersistedCommandCenterState, CommandCenterState, CommandCenterPriority } from "@/lib/agent/command-center";
 import { analyzeRevenueAtRisk } from "@/lib/agent/revenue-at-risk";
 import { AppNavigationItem, getInboxNavigation } from "@/lib/app-navigation";
+import { buildConversationHref } from "@/lib/client-navigation";
 import { stripHtmlToText } from "@/lib/email-body";
 
 export const dynamic = "force-dynamic";
@@ -75,7 +77,7 @@ export default async function InboxPage({ searchParams }: Props) {
   // Home view = no status param and no sales filter (default landing)
   const isHomeView = !searchParams.status && !salesFilter && !q;
 
-  const [tenant, statusCounts] = await Promise.all([
+  const [tenant, statusCounts, gmailChannels] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: tenantId },
       select: { accountType: true },
@@ -84,6 +86,17 @@ export default async function InboxPage({ searchParams }: Props) {
       by: ["status"],
       where: { tenantId },
       _count: { status: true },
+    }),
+    prisma.channel.findMany({
+      where: { tenantId, type: "email", provider: "google" },
+      select: {
+        id: true,
+        emailAddress: true,
+        gmailCredential: {
+          select: { lastSyncedAt: true, lastSyncError: true },
+        },
+      },
+      orderBy: { createdAt: "asc" },
     }),
   ]);
 
@@ -291,6 +304,19 @@ export default async function InboxPage({ searchParams }: Props) {
     return qs ? `/inbox?${qs}` : "/inbox";
   }
 
+  function currentInboxHref() {
+    return tabHref(activeStatus, salesFilter);
+  }
+
+  const gmailSyncChannels = gmailChannels
+    .filter((channel) => channel.gmailCredential)
+    .map((channel) => ({
+      id: channel.id,
+      emailAddress: channel.emailAddress,
+      lastSyncedAt: channel.gmailCredential?.lastSyncedAt ?? null,
+      lastSyncError: channel.gmailCredential?.lastSyncError ?? null,
+    }));
+
   const listTabs = [
     { label: "All", status: "all" as const, count: totalCount },
     ...ALL_STATUSES.map((s) => ({ label: STATUS_LABELS[s], status: s, count: countByStatus[s] ?? 0 })),
@@ -348,6 +374,7 @@ export default async function InboxPage({ searchParams }: Props) {
               status={activeStatus}
               q={q || undefined}
               sales={salesFilter}
+              gmailChannels={gmailSyncChannels}
               className="w-full shrink-0"
             />
           }
@@ -383,7 +410,7 @@ export default async function InboxPage({ searchParams }: Props) {
         <header className="border-b border-slate-200 bg-white">
           <div className="mx-auto max-w-5xl px-4 sm:px-6">
             <div className="flex items-center justify-between py-4">
-              <div>
+              <div className="min-w-0">
                 <h1 className="text-xl font-semibold">Inbox</h1>
                 <p className="text-sm text-slate-500">
                   {needsReplyCount > 0 ? (
@@ -396,13 +423,16 @@ export default async function InboxPage({ searchParams }: Props) {
                   {" · "}{totalCount} total
                 </p>
               </div>
-              <div className="hidden items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 sm:flex">
-                {appNavigation.primary.map((item) => navLink(item))}
-                {secondaryNavMenu()}
-                <SignOutButton />
-              </div>
-              <div className="sm:hidden">
-                <SignOutButton />
+              <div className="flex items-center gap-2">
+                <GmailSyncControl channels={gmailSyncChannels} compact />
+                <div className="hidden items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 sm:flex">
+                  {appNavigation.primary.map((item) => navLink(item))}
+                  {secondaryNavMenu()}
+                  <SignOutButton />
+                </div>
+                <div className="sm:hidden">
+                  <SignOutButton />
+                </div>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-1 pb-3 sm:hidden">
@@ -505,7 +535,7 @@ export default async function InboxPage({ searchParams }: Props) {
                     return (
                       <Link
                         key={conversation.id}
-                        href={`/conversations/${conversation.id}`}
+                        href={buildConversationHref(conversation.id, currentInboxHref())}
                         className="block rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:border-slate-300 sm:px-5 sm:py-4"
                       >
                         <div className="flex items-start justify-between gap-2 sm:items-center">

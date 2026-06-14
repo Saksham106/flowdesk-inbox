@@ -33,3 +33,31 @@ export function scrollToLandingSection(
   historyApi.replaceState(null, "", "/");
   return true;
 }
+
+export function buildConversationHref(conversationId: string, returnTo?: string | null): string {
+  if (!returnTo) {
+    return `/conversations/${conversationId}`;
+  }
+
+  return `/conversations/${conversationId}?returnTo=${encodeURIComponent(returnTo)}`;
+}
+
+export function getSafeInboxReturnPath(returnTo?: string | null): string {
+  if (!returnTo) {
+    return "/inbox";
+  }
+
+  try {
+    const url = returnTo.startsWith("/")
+      ? new URL(returnTo, "https://flowdesk.local")
+      : new URL(returnTo);
+
+    if (url.pathname !== "/inbox") {
+      return "/inbox";
+    }
+
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return "/inbox";
+  }
+}

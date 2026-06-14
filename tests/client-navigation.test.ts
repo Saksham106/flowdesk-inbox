@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  buildConversationHref,
   getAuthSuccessPath,
+  getSafeInboxReturnPath,
   scrollToLandingSection,
 } from "@/lib/client-navigation";
 import { getInboxNavigation } from "@/lib/app-navigation";
@@ -33,6 +35,22 @@ describe("scrollToLandingSection", () => {
     expect(doc.getElementById).toHaveBeenCalledWith("pricing");
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
     expect(replaceState).toHaveBeenCalledWith(null, "", "/");
+  });
+});
+
+describe("conversation inbox return links", () => {
+  it("preserves the current inbox filter in conversation hrefs", () => {
+    expect(buildConversationHref("conv-1", "/inbox?status=needs_reply&q=vip")).toBe(
+      "/conversations/conv-1?returnTo=%2Finbox%3Fstatus%3Dneeds_reply%26q%3Dvip"
+    );
+  });
+
+  it("only allows inbox return paths", () => {
+    expect(getSafeInboxReturnPath("/inbox?status=closed")).toBe("/inbox?status=closed");
+    expect(getSafeInboxReturnPath("/settings")).toBe("/inbox");
+    expect(getSafeInboxReturnPath("https://example.com/inbox?status=needs_reply")).toBe(
+      "/inbox?status=needs_reply"
+    );
   });
 });
 

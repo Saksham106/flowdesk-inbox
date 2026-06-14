@@ -29,13 +29,18 @@ import SalesPanel from "@/app/conversations/[id]/SalesPanel";
 import { SALES_SUGGESTED_ACTIONS } from "@/lib/agent/sales-classifier";
 import EmailBody from "@/app/components/EmailBody";
 import { resolveAccountMode } from "@/lib/account-mode";
+import { getSafeInboxReturnPath } from "@/lib/client-navigation";
 
 export const dynamic = "force-dynamic";
 
+const INBOX_STATUSES = ["needs_reply", "in_progress", "closed"] as const;
+
 export default async function ConversationPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: { returnTo?: string };
 }) {
   const session = await getServerSession(authOptions);
 
@@ -54,6 +59,7 @@ export default async function ConversationPage({
     pendingApprovals,
     pendingFollowUpJob,
     needsReplyCount,
+    gmailChannels,
   ] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: session.user.tenantId },
@@ -98,6 +104,17 @@ export default async function ConversationPage({
     prisma.conversation.count({
       where: { tenantId: session.user.tenantId, status: "needs_reply" },
     }),
+    prisma.channel.findMany({
+      where: { tenantId: session.user.tenantId, type: "email", provider: "google" },
+      select: {
+        id: true,
+        emailAddress: true,
+        gmailCredential: {
+          select: { lastSyncedAt: true, lastSyncError: true },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
   ]);
 
   if (!conversation) {
@@ -107,6 +124,22 @@ export default async function ConversationPage({
   const accountType = tenant?.accountType ?? sessionAccountType ?? "personal";
   const accountMode = resolveAccountMode(accountType);
   const isPersonal = accountMode === "personal";
+  const inboxReturnPath = getSafeInboxReturnPath(searchParams.returnTo);
+  const inboxReturnParams = new URLSearchParams(inboxReturnPath.split("?")[1] ?? "");
+  const returnStatusParam = inboxReturnParams.get("status");
+  const returnStatus = INBOX_STATUSES.includes(returnStatusParam as (typeof INBOX_STATUSES)[number])
+    ? returnStatusParam
+    : null;
+  const returnSales = inboxReturnParams.get("sales") === "1";
+  const returnQuery = inboxReturnParams.get("q") ?? undefined;
+  const gmailSyncChannels = gmailChannels
+    .filter((channel) => channel.gmailCredential)
+    .map((channel) => ({
+      id: channel.id,
+      emailAddress: channel.emailAddress,
+      lastSyncedAt: channel.gmailCredential?.lastSyncedAt ?? null,
+      lastSyncError: channel.gmailCredential?.lastSyncError ?? null,
+    }));
 
   await syncConversationWorkItems({
     tenantId: session.user.tenantId,
@@ -409,6 +442,10 @@ export default async function ConversationPage({
               tenantId={session.user.tenantId}
               accountType={accountType}
               activeConversationId={conversation.id}
+              status={returnStatus}
+              q={returnQuery}
+              sales={returnSales}
+              gmailChannels={gmailSyncChannels}
               className="w-full shrink-0"
             />
           }
@@ -499,7 +536,7 @@ export default async function ConversationPage({
         <header className="border-b border-slate-200 bg-white">
           <div className="mx-auto flex max-w-[1200px] items-center justify-between px-4 sm:px-6 py-4">
             <div>
-              <Link href="/inbox" className="text-sm text-slate-500 hover:text-slate-700">
+              <Link href={inboxReturnPath} className="text-sm text-slate-500 hover:text-slate-700">
                 ← Back to inbox
               </Link>
               <div className="mt-1 flex items-center gap-2">
