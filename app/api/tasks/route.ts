@@ -14,6 +14,11 @@ export async function POST(req: NextRequest) {
   if (!title?.trim()) return NextResponse.json({ error: "Title is required" }, { status: 400 })
   if (!conversationId) return NextResponse.json({ error: "conversationId is required" }, { status: 400 })
 
+  const parsedDueAt = dueAt ? new Date(dueAt) : null
+  if (parsedDueAt !== null && isNaN(parsedDueAt.getTime())) {
+    return NextResponse.json({ error: "Invalid due date" }, { status: 400 })
+  }
+
   const conversation = await prisma.conversation.findFirst({
     where: { id: conversationId, tenantId },
     select: { id: true },
@@ -27,8 +32,8 @@ export async function POST(req: NextRequest) {
       title: title.trim(),
       status: "open",
       source: "manual",
-      deterministicKey: `manual_${conversationId}_${Date.now()}`,
-      dueAt: dueAt ? new Date(dueAt) : null,
+      deterministicKey: `manual_${conversationId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      dueAt: parsedDueAt,
     },
   })
 
