@@ -414,7 +414,7 @@ export default async function ConversationPage({
           suggestedAction={salesSuggestedAction}
         />
       )}
-      {conversation.channel.type === "email" && !isPersonal && (
+      {conversation.channel.type === "email" && !isPersonal && !isAutoEmailConversation && (
         <CalendarHoldPanel
           conversationId={conversation.id}
           availableSlots={
