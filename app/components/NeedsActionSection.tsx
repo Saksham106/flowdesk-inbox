@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import type { CommandCenterConversation } from "@/lib/agent/command-center"
 
@@ -27,6 +28,7 @@ interface Props {
 function NeedsActionCard({ item }: { item: CommandCenterConversation }) {
   const router = useRouter()
   const action = item.action
+  const [copied, setCopied] = useState(false)
 
   function openCard() {
     router.push(item.href)
@@ -37,6 +39,14 @@ function NeedsActionCard({ item }: { item: CommandCenterConversation }) {
       event.preventDefault()
       openCard()
     }
+  }
+
+  function copyCode(event: React.MouseEvent, code: string) {
+    event.stopPropagation()
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 500)
+    })
   }
 
   return (
@@ -60,7 +70,20 @@ function NeedsActionCard({ item }: { item: CommandCenterConversation }) {
         {/* Action metadata */}
         {action && (
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            {action.hasDetectedCode ? (
+            {action.detectedCode ? (
+              <>
+                <span className="font-mono text-sm bg-violet-50 border border-violet-200 text-violet-900 px-2 py-0.5 rounded">
+                  {action.detectedCode}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => copyCode(e, action.detectedCode!)}
+                  className="text-[10px] font-semibold text-violet-700 hover:text-violet-900 transition"
+                >
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+              </>
+            ) : action.hasDetectedCode ? (
               <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
                 Code detected
               </span>
