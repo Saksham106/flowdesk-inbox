@@ -22,18 +22,26 @@ export default function AttentionCorrectionSelect({
 }) {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const value = e.target.value
     if (!value) return
     setSaving(true)
+    setError(null)
     try {
-      await fetch(`/api/conversations/${conversationId}/attention`, {
+      const res = await fetch(`/api/conversations/${conversationId}/attention`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ attentionCategory: value }),
       })
-      router.refresh()
+      if (res.ok) {
+        router.refresh()
+      } else {
+        setError("Failed to update")
+      }
+    } catch {
+      setError("Failed to update")
     } finally {
       setSaving(false)
     }
@@ -53,6 +61,7 @@ export default function AttentionCorrectionSelect({
           <option key={value} value={value}>{label}</option>
         ))}
       </select>
+      {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
     </div>
   )
 }

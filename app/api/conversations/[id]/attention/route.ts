@@ -69,7 +69,7 @@ export async function PATCH(
       payloadJson: {
         conversationId,
         attentionCategory,
-        previous: (prevMeta.attentionCategory as string | undefined) ?? null,
+        previous: typeof prevMeta.attentionCategory === "string" ? prevMeta.attentionCategory : null,
         reason: "User manually corrected attention category",
       },
     },
