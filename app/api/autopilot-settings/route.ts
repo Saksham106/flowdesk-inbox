@@ -79,6 +79,17 @@ export async function PATCH(request: Request) {
     updateData.disabledAt = null
   }
   if (categoryThresholds !== undefined) {
+    if (typeof categoryThresholds !== "object" || categoryThresholds === null || Array.isArray(categoryThresholds)) {
+      return NextResponse.json({ error: "categoryThresholds must be an object" }, { status: 400 })
+    }
+    for (const [intent, threshold] of Object.entries(categoryThresholds)) {
+      if (typeof threshold !== "number" || !Number.isFinite(threshold) || threshold < 0.5 || threshold > 1) {
+        return NextResponse.json(
+          { error: `categoryThresholds["${intent}"] must be a number between 0.5 and 1.0` },
+          { status: 400 }
+        )
+      }
+    }
     updateData.categoryThresholdsJson = categoryThresholds
   }
 

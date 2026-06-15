@@ -190,6 +190,38 @@ describe('checkAutopilotEligibility', () => {
     const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
     expect(result.eligible).toBe(true)
   })
+
+  it('returns ineligible when confidence is below the per-category threshold for the intent', async () => {
+    // classification.intent = 'appointment booking request', confidence = 0.92
+    mockAutopilotSettingFindUnique.mockResolvedValue({
+      ...enabledSetting,
+      categoryThresholdsJson: { 'appointment booking request': 0.95 },
+    })
+    const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
+    expect(result.eligible).toBe(false)
+    if (!result.eligible) {
+      expect(result.reason).toContain('per-category threshold')
+      expect(result.reason).toContain('appointment booking request')
+    }
+  })
+
+  it('per-category threshold lookup is case-insensitive', async () => {
+    mockAutopilotSettingFindUnique.mockResolvedValue({
+      ...enabledSetting,
+      categoryThresholdsJson: { 'Appointment Booking Request': 0.95 },
+    })
+    const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
+    expect(result.eligible).toBe(false)
+  })
+
+  it('ignores per-category threshold when the intent key is absent', async () => {
+    mockAutopilotSettingFindUnique.mockResolvedValue({
+      ...enabledSetting,
+      categoryThresholdsJson: { 'complaint': 0.99 },
+    })
+    const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
+    expect(result.eligible).toBe(true)
+  })
 })
 
 // ---------------------------------------------------------------------------
