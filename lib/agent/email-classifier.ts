@@ -115,7 +115,7 @@ const SECURITY_REVIEW_PATTERN =
   /\b(security alert|security notice|suspicious|unusual (activity|login|sign.{0,6}in)|new (personal access )?token|token (created|added|generated)|new ssh key|recovery email changed|password was changed|new sign.{0,6}in|login from a new device)\b/i
 const LOGIN_APPROVAL_PATTERN =
   /\b(approve (this )?(sign[-\s]?in|login)|sign[-\s]?in approval|login approval|confirm (this )?(sign[-\s]?in|login)|authorize (this )?(sign[-\s]?in|login))\b/i
-const URL_PATTERN = /\bhttps?:\/\/[^\s<>"')]+/i
+
 const BILLING_PROBLEM_PATTERN =
   /\b(payment failed|failed payment|could not process your payment|billing problem|invoice overdue|past due|card declined|subscription suspended|service interruption|action required.{0,40}(billing|payment|invoice))\b/i
 const CALENDAR_INVITE_PATTERN =
