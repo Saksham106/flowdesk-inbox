@@ -500,11 +500,10 @@ export default async function ConversationPage({
         channelType={conversation.channel.type}
         canSuggest={canSuggestReply}
         isPersonal={isPersonal}
-        senderAddress={
-          conversation.messages.length > 0
-            ? conversation.messages[conversation.messages.length - 1].fromE164
-            : (conversation.channel.emailAddress ?? undefined)
-        }
+        senderAddress={(() => {
+          const lastInbound = [...conversation.messages].reverse().find(m => m.direction === "inbound")
+          return lastInbound?.fromE164 ?? conversation.channel.emailAddress ?? undefined
+        })()}
         threadSubject={conversation.externalThreadId}
         initialDraft={
           conversation.draft

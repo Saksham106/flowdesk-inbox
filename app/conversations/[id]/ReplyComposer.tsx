@@ -276,12 +276,10 @@ export default function ReplyComposer({
         )}
 
         {/* Subject (read-only) */}
-        {threadSubject && (
-          <div className="flex items-center gap-2 px-3 py-2">
-            <span className="text-[11px] font-semibold text-slate-400 w-6 shrink-0">Re</span>
-            <span className="flex-1 text-[12px] text-slate-400 truncate">{threadSubject}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2 px-3 py-2">
+          <span className="text-[11px] font-semibold text-slate-400 w-6 shrink-0">Subj</span>
+          <span className="flex-1 text-[12px] text-slate-400 truncate">{threadSubject ?? "(no subject)"}</span>
+        </div>
       </div>
 
       {/* Draft status indicator */}
@@ -406,7 +404,12 @@ export default function ReplyComposer({
         <span className="flex-1" />
         <button
           type="button"
-          onClick={() => setIsExpanded(false)}
+          onClick={() => {
+            if (hasDraftText && !draft) {
+              if (!window.confirm("Discard your reply?")) return
+            }
+            setIsExpanded(false)
+          }}
           disabled={isBusy}
           className="text-xs text-slate-400 hover:text-slate-600 disabled:opacity-50"
         >
