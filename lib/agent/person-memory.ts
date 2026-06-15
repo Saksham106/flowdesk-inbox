@@ -1,8 +1,10 @@
 import type { Prisma } from "@prisma/client"
+import { createHash } from "crypto"
 import OpenAI from "openai"
 import { prisma } from "@/lib/prisma"
+import { stripHtmlToText } from "@/lib/email-body"
+import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 
-const openaiClient = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
 import {
   buildPersonMemoryExtractPrompt,
   normalizePersonMemoryExtractResult,
@@ -28,6 +30,37 @@ type ConversationRow = {
   id: string
   lastMessageAt: Date
   messages: Array<{ direction: string; body: string; createdAt: Date }>
+}
+
+export type PersonMemorySyncResult =
+  | { status: "deterministic"; reason: string }
+  | { status: "cache_hit"; contentHash: string }
+  | { status: "llm_completed"; contentHash: string; model: string }
+  | { status: "llm_failed"; reason: string }
+  | { status: "skipped"; reason: string }
+
+export type SyncPersonMemoryWithLLMOptions = {
+  featureContext?: string
+  force?: boolean
+}
+
+function getOpenAIClient(): OpenAI | null {
+  return process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
+}
+
+export function buildPersonMemoryContentHash(
+  messages: Array<{ direction: string; body: string; createdAt: Date }>
+): string {
+  const normalized = messages
+    .map((message) => ({
+      direction: message.direction,
+      createdAt: message.createdAt.toISOString(),
+      body: stripHtmlToText(message.body, 1200),
+    }))
+    .map((message) => `${message.createdAt}|${message.direction}|${message.body}`)
+    .join("\n")
+
+  return createHash("sha256").update(normalized).digest("hex")
 }
 
 export function buildPersonMemoryDraft(
@@ -107,6 +140,9 @@ export async function syncPersonMemory(
     contact.name,
     contact.conversations
   )
+  const allMessages = contact.conversations
+    .flatMap((c) => c.messages)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
 
   await prisma.personMemory.upsert({
     where: { contactId },
@@ -119,6 +155,8 @@ export async function syncPersonMemory(
       preferences: draft.preferences,
       openQuestions: draft.openQuestions,
       promisedActions: draft.promisedActions,
+      source: "deterministic",
+      contentHash: buildPersonMemoryContentHash(allMessages),
     },
     update: {
       lastContactAt: draft.lastContactAt,
@@ -127,6 +165,8 @@ export async function syncPersonMemory(
       preferences: draft.preferences,
       openQuestions: draft.openQuestions,
       promisedActions: draft.promisedActions,
+      source: "deterministic",
+      contentHash: buildPersonMemoryContentHash(allMessages),
     },
   })
 
@@ -144,9 +184,20 @@ export async function syncPersonMemory(
 
 export async function syncPersonMemoryWithLLM(
   tenantId: string,
-  contactId: string
-): Promise<void> {
-  if (!openaiClient) return syncPersonMemory(tenantId, contactId)
+  contactId: string,
+  options: SyncPersonMemoryWithLLMOptions = {}
+): Promise<PersonMemorySyncResult> {
+  const client = getOpenAIClient()
+  if (!client) {
+    await syncPersonMemory(tenantId, contactId)
+    await recordAiUsageEvent({
+      tenantId,
+      feature: "person_memory.deterministic_fallback",
+      model: "none",
+      status: "skipped",
+    })
+    return { status: "deterministic", reason: "OPENAI_API_KEY is not configured" }
+  }
 
   const contact = await prisma.contact.findFirst({
     where: { id: contactId, tenantId },
@@ -160,7 +211,7 @@ export async function syncPersonMemoryWithLLM(
       },
     },
   })
-  if (!contact) return
+  if (!contact) return { status: "skipped", reason: "Contact not found" }
 
   const allMessages = contact.conversations
     .flatMap((c) => c.messages)
@@ -172,7 +223,30 @@ export async function syncPersonMemoryWithLLM(
     }))
 
   if (allMessages.length < 3) {
-    return syncPersonMemory(tenantId, contactId)
+    await syncPersonMemory(tenantId, contactId)
+    await recordAiUsageEvent({
+      tenantId,
+      feature: "person_memory.too_few_messages",
+      model: "none",
+      status: "skipped",
+    })
+    return { status: "deterministic", reason: "Too few messages for LLM relationship memory" }
+  }
+
+  const contentHash = buildPersonMemoryContentHash(allMessages)
+  const existing = await prisma.personMemory.findUnique({
+    where: { contactId },
+    select: { contentHash: true, source: true },
+  })
+
+  if (!options.force && existing?.source === "llm" && existing.contentHash === contentHash) {
+    await recordAiUsageEvent({
+      tenantId,
+      feature: "person_memory.cache_hit",
+      model: process.env.OPENAI_MODEL || "gpt-5.4-mini",
+      status: "skipped",
+    })
+    return { status: "cache_hit", contentHash }
   }
 
   const prompt = buildPersonMemoryExtractPrompt({
@@ -181,9 +255,9 @@ export async function syncPersonMemoryWithLLM(
   })
 
   let extracted: ReturnType<typeof normalizePersonMemoryExtractResult> = null
+  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
   try {
-    const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
-    const response = await openaiClient!.responses.create({
+    const response = await client.responses.create({
       model,
       input: prompt,
       text: {
@@ -199,11 +273,32 @@ export async function syncPersonMemoryWithLLM(
     if (content) {
       extracted = normalizePersonMemoryExtractResult(JSON.parse(content))
     }
-  } catch {
-    return syncPersonMemory(tenantId, contactId)
+  } catch (err) {
+    await syncPersonMemory(tenantId, contactId)
+    await recordAiUsageEvent({
+      tenantId,
+      feature: "person_memory.llm",
+      model,
+      estimatedInputTokens: estimateTokenCount(prompt),
+      status: "failed",
+    })
+    return {
+      status: "llm_failed",
+      reason: err instanceof Error ? err.message : "Failed to generate person memory",
+    }
   }
 
-  if (!extracted) return syncPersonMemory(tenantId, contactId)
+  if (!extracted) {
+    await syncPersonMemory(tenantId, contactId)
+    await recordAiUsageEvent({
+      tenantId,
+      feature: "person_memory.llm",
+      model,
+      estimatedInputTokens: estimateTokenCount(prompt),
+      status: "failed",
+    })
+    return { status: "llm_failed", reason: "AI response did not include usable memory" }
+  }
 
   await prisma.personMemory.upsert({
     where: { contactId },
@@ -216,6 +311,10 @@ export async function syncPersonMemoryWithLLM(
       preferences: extracted.preferences,
       openQuestions: extracted.openQuestions,
       promisedActions: extracted.promisedActions,
+      source: "llm",
+      contentHash,
+      model,
+      llmSyncedAt: new Date(),
     },
     update: {
       lastContactAt: allMessages[allMessages.length - 1]?.createdAt ?? null,
@@ -224,7 +323,20 @@ export async function syncPersonMemoryWithLLM(
       preferences: extracted.preferences,
       openQuestions: extracted.openQuestions,
       promisedActions: extracted.promisedActions,
+      source: "llm",
+      contentHash,
+      model,
+      llmSyncedAt: new Date(),
     },
+  })
+
+  await recordAiUsageEvent({
+    tenantId,
+    feature: options.featureContext ? `person_memory.${options.featureContext}` : "person_memory.llm",
+    model,
+    estimatedInputTokens: estimateTokenCount(prompt),
+    estimatedOutputTokens: estimateTokenCount(JSON.stringify(extracted)),
+    status: "succeeded",
   })
 
   await prisma.auditLog.create({
@@ -237,4 +349,6 @@ export async function syncPersonMemoryWithLLM(
       } as Prisma.InputJsonValue,
     },
   })
+
+  return { status: "llm_completed", contentHash, model }
 }

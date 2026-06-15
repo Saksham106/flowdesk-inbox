@@ -176,6 +176,7 @@ export default async function ConversationPage({
   await syncConversationWorkItems({
     tenantId: session.user.tenantId,
     conversationId: conversation.id,
+    enableRichAi: false,
   }).catch(() => null);
 
   const [stateRecord, inboxTasks, lead, personMemory, rawConciergeTemplates] = await Promise.all([
