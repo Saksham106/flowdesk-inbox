@@ -177,8 +177,70 @@ function extractExpiry(text: string): string | undefined {
   return match?.[1]?.replace(/\s+/g, " ")
 }
 
-function extractActionLink(text: string): string | undefined {
-  return text.match(URL_PATTERN)?.[0]?.replace(/[.,;:!?]+$/, "")
+const DISCARD_URL_PATTERNS = [
+  /unsubscribe/i,
+  /\bunsub\b/i,
+  /opt[_-]?out/i,
+  /\/pixel[/?]/i,
+  /\/track[/?]/i,
+  /[?&]utm_/i,
+  /\/open[/?]/i,
+  /\/click[/?]/i,
+  /linkedin\.com/i,
+  /twitter\.com/i,
+  /facebook\.com/i,
+  /instagram\.com/i,
+]
+
+const CTA_ACTION_KEYWORDS = [
+  "reset", "verify", "confirm", "activate", "create-password",
+  "set-password", "choose-password", "signup", "sign-up", "magic",
+  "token", "validate", "complete", "account/setup", "account/confirm",
+  "approve", "authorize",
+]
+
+const CTA_TYPE_KEYWORDS: Record<string, string[]> = {
+  reset_password: ["reset", "password"],
+  create_password: ["create-password", "set-password", "choose-password"],
+  verify_email: ["verify", "confirm", "validate", "activate"],
+  confirm_account: ["confirm", "activate", "complete"],
+  account_setup: ["setup", "activate", "complete"],
+  login_approval: ["approve", "authorize", "login", "signin"],
+  magic_link: ["magic", "login", "signin"],
+  security_alert: ["review", "revoke", "secure", "account"],
+}
+
+function extractBestActionLink(text: string, actionType?: string): string | undefined {
+  const allUrls = Array.from(text.matchAll(/\bhttps?:\/\/[^\s<>"')]+/gi))
+    .map((m) => m[0].replace(/[.,;:!?]+$/, ""))
+    .filter((url) => url.length >= 20)
+
+  const candidates = allUrls.filter(
+    (url) => !DISCARD_URL_PATTERNS.some((p) => p.test(url))
+  )
+
+  if (candidates.length === 0) return undefined
+  if (candidates.length === 1) return candidates[0]
+
+  const typeKeywords = actionType ? (CTA_TYPE_KEYWORDS[actionType] ?? []) : []
+
+  const scored = candidates.map((url) => {
+    const lower = url.toLowerCase()
+    let score = 0
+    if (typeKeywords.some((k) => lower.includes(k))) score += 3
+    if (CTA_ACTION_KEYWORDS.some((k) => lower.includes(k))) score += 2
+    const pathOnly = lower.split("?")[0]
+    if (pathOnly.length > 40) score += 1
+    return { url, score }
+  })
+
+  scored.sort((a, b) => b.score - a.score)
+  const best = scored[0]
+
+  // If no candidate has any CTA signal, don't surface an unknown link
+  if (best.score === 0) return undefined
+
+  return best.url
 }
 
 function passwordActionType(text: string): ActionType {
@@ -216,7 +278,7 @@ export function classifyEmailType(input: EmailClassifierInput): EmailClassifierR
 
   if (LOGIN_APPROVAL_PATTERN.test(text)) {
     const expiresIn = extractExpiry(text)
-    const actionLink = extractActionLink(text)
+    const actionLink = extractBestActionLink(text, "login_approval")
     return result("notification", "needs_action", "Sign-in approval requires user action.", 0.94, {
       expiresIn,
       action: {
@@ -230,8 +292,8 @@ export function classifyEmailType(input: EmailClassifierInput): EmailClassifierR
 
   if (PASSWORD_ACTION_PATTERN.test(text)) {
     const expiresIn = extractExpiry(text)
-    const actionLink = extractActionLink(text)
     const type = passwordActionType(text)
+    const actionLink = extractBestActionLink(text, type)
     return result("notification", "needs_action", "Password setup or reset link requires user action.", 0.94, {
       expiresIn,
       action: {
@@ -245,8 +307,8 @@ export function classifyEmailType(input: EmailClassifierInput): EmailClassifierR
 
   if (VERIFY_ACCOUNT_PATTERN.test(text)) {
     const expiresIn = extractExpiry(text)
-    const actionLink = extractActionLink(text)
     const type = verificationActionType(text)
+    const actionLink = extractBestActionLink(text, type)
     return result("notification", "needs_action", "Account verification or setup requires user action.", 0.93, {
       expiresIn,
       action: {
@@ -267,7 +329,7 @@ export function classifyEmailType(input: EmailClassifierInput): EmailClassifierR
       action: {
         type: "security_alert",
         explanation: "Review the security alert and take action only if the activity was not yours.",
-        ...(extractActionLink(text) ? { actionLink: extractActionLink(text) } : {}),
+        ...(extractBestActionLink(text, "security_alert") ? { actionLink: extractBestActionLink(text, "security_alert") } : {}),
       },
     })
   }

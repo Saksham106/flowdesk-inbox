@@ -308,4 +308,37 @@ describe("classifyEmailType", () => {
     })
     expect(result.emailType).toBe("marketing")
   })
+
+  it("picks the reset link over an unsubscribe link that appears first in the body", () => {
+    const result = classifyEmailType({
+      fromEmail: "noreply@service.com",
+      subject: "Reset your password",
+      body: [
+        "Click here to unsubscribe: https://service.com/unsubscribe?uid=abc",
+        "Reset your password: https://service.com/reset-password?token=xyz123abc",
+      ].join("\n"),
+    })
+    expect(result.action?.actionLink).toBe("https://service.com/reset-password?token=xyz123abc")
+  })
+
+  it("picks the verify link over a tracking pixel URL that appears first", () => {
+    const result = classifyEmailType({
+      fromEmail: "accounts@app.com",
+      subject: "Verify your email",
+      body: [
+        "https://track.app.com/pixel?uid=1234",
+        "Verify your email: https://app.com/verify?token=abcdef",
+      ].join("\n"),
+    })
+    expect(result.action?.actionLink).toBe("https://app.com/verify?token=abcdef")
+  })
+
+  it("returns undefined actionLink when only tracking/unsubscribe URLs are present", () => {
+    const result = classifyEmailType({
+      fromEmail: "noreply@service.com",
+      subject: "Reset your password",
+      body: "Reset your password.\nhttps://service.com/unsubscribe?uid=abc\nhttps://track.service.com/pixel?open=1",
+    })
+    expect(result.action?.actionLink).toBeUndefined()
+  })
 })
