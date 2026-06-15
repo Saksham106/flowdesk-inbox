@@ -12,7 +12,8 @@ import { StatusBadge, LabelBadge } from "@/app/components/badges";
 import AppRail from "@/app/components/AppRail";
 import AppListColumn from "@/app/components/AppListColumn";
 import DesktopResizablePanels from "@/app/components/DesktopResizablePanels";
-import HomeCommandCenter from "@/app/components/HomeCommandCenter";
+import HomeCommandCenter from "@/app/components/HomeCommandCenter"
+import BulkCloseButton from "@/app/inbox/BulkCloseButton";
 import GmailSyncControl from "@/app/components/GmailSyncControl";
 import { buildDailyCommandCenter, CommandCenterInputConversation, PersistedCommandCenterState, CommandCenterState, CommandCenterPriority, type AgentSummary } from "@/lib/agent/command-center";
 import { analyzeRevenueAtRisk } from "@/lib/agent/revenue-at-risk";
@@ -60,7 +61,7 @@ function isFyiConversation(conversation: {
 }
 
 interface Props {
-  searchParams: { status?: string; q?: string; sales?: string };
+  searchParams: { status?: string; q?: string; sales?: string; attention?: string };
 }
 
 export default async function InboxPage({ searchParams }: Props) {
@@ -76,9 +77,10 @@ export default async function InboxPage({ searchParams }: Props) {
     : null;
   const q = searchParams.q?.trim() ?? "";
   const salesFilter = searchParams.sales === "1";
+  const attentionFilter = searchParams.attention ?? "";
 
-  // Home view = no status param and no sales filter (default landing)
-  const isHomeView = !searchParams.status && !salesFilter && !q;
+  // Home view = no status param and no sales filter and no attention filter (default landing)
+  const isHomeView = !searchParams.status && !salesFilter && !q && !attentionFilter;
 
   const [tenant, statusCounts, gmailChannels] = await Promise.all([
     prisma.tenant.findUnique({
@@ -279,6 +281,12 @@ export default async function InboxPage({ searchParams }: Props) {
           (meta as Record<string, unknown>).isSalesLead === true
         );
       })
+    : attentionFilter
+    ? mobileConversations.filter((c) => {
+        const meta = c.stateRecord?.metadataJson;
+        if (!meta || typeof meta !== "object" || Array.isArray(meta)) return false;
+        return (meta as Record<string, unknown>).attentionCategory === attentionFilter;
+      })
     : mobileConversations;
 
   function tabHref(status: ConversationStatus | "all" | null, sales = false) {
@@ -295,6 +303,13 @@ export default async function InboxPage({ searchParams }: Props) {
 
   function currentInboxHref() {
     return tabHref(activeStatus, salesFilter);
+  }
+
+  function attentionTabHref(category: string) {
+    const params = new URLSearchParams();
+    params.set("attention", category);
+    if (q) params.set("q", q);
+    return `/inbox?${params.toString()}`;
   }
 
   const gmailSyncChannels = gmailChannels
@@ -446,6 +461,7 @@ export default async function InboxPage({ searchParams }: Props) {
                 const isActive =
                   !isHomeView &&
                   !salesFilter &&
+                  !attentionFilter &&
                   (status === "all" ? activeStatus === null && q === "" : activeStatus === status);
                 return (
                   <Link
@@ -482,6 +498,23 @@ export default async function InboxPage({ searchParams }: Props) {
                   Sales
                 </Link>
               )}
+              {(["needs_reply", "review_soon", "read_later"] as const).map((cat) => {
+                const labels: Record<string, string> = { needs_reply: "Reply", review_soon: "Review", read_later: "Later" }
+                const isActive = attentionFilter === cat && !salesFilter && !activeStatus
+                return (
+                  <Link
+                    key={cat}
+                    href={attentionTabHref(cat)}
+                    className={`whitespace-nowrap border-b-2 pb-3 pt-2 text-sm font-medium transition ${
+                      isActive
+                        ? "border-blue-600 text-blue-700"
+                        : "border-transparent text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    {labels[cat]}
+                  </Link>
+                )
+              })}
             </nav>
           </div>
         </header>
@@ -499,6 +532,7 @@ export default async function InboxPage({ searchParams }: Props) {
                   gmailChannels={gmailSyncChannels}
                 />
               )}
+              <BulkCloseButton />
             </>
           ) : (
             <>
