@@ -14,7 +14,8 @@ import LabelSelect from "@/app/conversations/[id]/LabelSelect"
 import AttentionCorrectionSelect from "@/app/conversations/[id]/AttentionCorrectionSelect";
 import SaveContactForm from "@/app/conversations/[id]/SaveContactForm";
 import AutoDraftTrigger from "@/app/conversations/[id]/AutoDraftTrigger";
-import AutoRefresh from "@/app/components/AutoRefresh";
+import AutoRefresh from "@/app/components/AutoRefresh"
+import PersonMemoryEditShell from "./PersonMemoryEditShell";
 import CollapsibleCard from "@/app/components/CollapsibleCard";
 import { StatusBadge, LabelBadge } from "@/app/components/badges";
 import AppRail from "@/app/components/AppRail";
@@ -455,6 +456,17 @@ export default async function ConversationPage({
                 <p className="mb-1 font-semibold text-slate-500">Preferences noted</p>
                 <p className="whitespace-pre-line">{personMemory.preferences}</p>
               </div>
+            )}
+            {conversation.contactId && (
+              <PersonMemoryEditShell
+                contactId={conversation.contactId}
+                memory={{
+                  summary: personMemory.summary ?? null,
+                  preferences: personMemory.preferences ?? null,
+                  openQuestions: personMemory.openQuestions ?? null,
+                  promisedActions: personMemory.promisedActions ?? null,
+                }}
+              />
             )}
           </div>
         </CollapsibleCard>

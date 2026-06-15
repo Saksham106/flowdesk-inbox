@@ -1,5 +1,11 @@
 import type { Prisma } from "@prisma/client"
+import OpenAI from "openai"
 import { prisma } from "@/lib/prisma"
+import {
+  buildPersonMemoryExtractPrompt,
+  normalizePersonMemoryExtractResult,
+  personMemoryExtractJsonSchema,
+} from "@/lib/ai/prompts/person-memory-extract"
 
 const PROMISE_PATTERN = /\b(i['']ll|i will|we['']ll|we will|i['']m going to|i can)\b/i
 const QUESTION_PATTERN = /\?$/m
@@ -129,6 +135,104 @@ export async function syncPersonMemory(
       payloadJson: {
         contactId,
         messageCount: draft.messageCount,
+      } as Prisma.InputJsonValue,
+    },
+  })
+}
+
+export async function syncPersonMemoryWithLLM(
+  tenantId: string,
+  contactId: string
+): Promise<void> {
+  if (!process.env.OPENAI_API_KEY) return syncPersonMemory(tenantId, contactId)
+
+  const contact = await prisma.contact.findFirst({
+    where: { id: contactId, tenantId },
+    include: {
+      conversations: {
+        orderBy: { lastMessageAt: "desc" },
+        take: 10,
+        include: {
+          messages: { orderBy: { createdAt: "asc" }, take: 30 },
+        },
+      },
+    },
+  })
+  if (!contact) return
+
+  const allMessages = contact.conversations
+    .flatMap((c) => c.messages)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    .map((m) => ({
+      direction: m.direction as "inbound" | "outbound",
+      body: m.body,
+      createdAt: m.createdAt,
+    }))
+
+  if (allMessages.length < 3) {
+    return syncPersonMemory(tenantId, contactId)
+  }
+
+  const prompt = buildPersonMemoryExtractPrompt({
+    contactName: contact.name,
+    messages: allMessages,
+  })
+
+  let extracted: ReturnType<typeof normalizePersonMemoryExtractResult> = null
+  try {
+    const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    const response = await client.responses.create({
+      model,
+      input: prompt,
+      text: {
+        format: {
+          type: "json_schema",
+          name: "flowdesk_person_memory_extract",
+          strict: true,
+          schema: personMemoryExtractJsonSchema,
+        },
+      },
+    })
+    const content = response.output_text
+    if (content) {
+      extracted = normalizePersonMemoryExtractResult(JSON.parse(content))
+    }
+  } catch {
+    return syncPersonMemory(tenantId, contactId)
+  }
+
+  if (!extracted) return syncPersonMemory(tenantId, contactId)
+
+  await prisma.personMemory.upsert({
+    where: { contactId },
+    create: {
+      tenantId,
+      contactId,
+      lastContactAt: allMessages[allMessages.length - 1]?.createdAt ?? null,
+      messageCount: allMessages.length,
+      summary: extracted.summary,
+      preferences: extracted.preferences,
+      openQuestions: extracted.openQuestions,
+      promisedActions: extracted.promisedActions,
+    },
+    update: {
+      lastContactAt: allMessages[allMessages.length - 1]?.createdAt ?? null,
+      messageCount: allMessages.length,
+      summary: extracted.summary,
+      preferences: extracted.preferences,
+      openQuestions: extracted.openQuestions,
+      promisedActions: extracted.promisedActions,
+    },
+  })
+
+  await prisma.auditLog.create({
+    data: {
+      tenantId,
+      action: "person_memory.synced_llm",
+      payloadJson: {
+        contactId,
+        messageCount: allMessages.length,
       } as Prisma.InputJsonValue,
     },
   })
