@@ -18,17 +18,15 @@ type InboxRowProps = {
   statusText: string
   statusLabel: string
   hasDraft: boolean
-  initialReadAt: boolean   // true if conversation.readAt is non-null
-  initialStatus: string    // "needs_reply" | "in_progress" | "closed"
+  initialReadAt: boolean
+  initialStatus: string
 }
 
 export default function InboxRow({
   id,
   href,
   isSelected,
-  isUnread: initialUnread,
   isFyi,
-  isClosed: initialClosed,
   name,
   snippet,
   timeLabel,
@@ -40,7 +38,6 @@ export default function InboxRow({
   initialStatus,
 }: InboxRowProps) {
   const router = useRouter()
-  const [isHovered, setIsHovered] = useState(false)
   const [isRead, setIsRead] = useState(initialReadAt)
   const [status, setStatus] = useState(initialStatus)
 
@@ -52,11 +49,12 @@ export default function InboxRow({
     e.stopPropagation()
     const nextRead = !isRead
     setIsRead(nextRead)
-    await fetch(`/api/conversations/${id}/read`, {
+    const res = await fetch(`/api/conversations/${id}/read`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ read: nextRead }),
     })
+    if (!res.ok) setIsRead(!nextRead)
     router.refresh()
   }
 
@@ -65,20 +63,17 @@ export default function InboxRow({
     e.stopPropagation()
     const nextStatus = isClosed ? "needs_reply" : "closed"
     setStatus(nextStatus)
-    await fetch(`/api/conversations/${id}/status`, {
+    const res = await fetch(`/api/conversations/${id}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: nextStatus }),
     })
+    if (!res.ok) setStatus(status)
     router.refresh()
   }
 
   return (
-    <div
-      className="relative"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
+    <div className="group relative">
       <Link
         href={href}
         className={`block border-b border-slate-50 px-3 py-2.5 transition ${
@@ -124,31 +119,29 @@ export default function InboxRow({
         </div>
       </Link>
 
-      {/* Hover action strip */}
-      {isHovered && (
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-1 py-1 shadow-sm">
-          <button
-            type="button"
-            onClick={toggleRead}
-            title={isRead ? "Mark unread" : "Mark read"}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-[11px] text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-          >
-            {isRead ? (
-              <span className="h-2 w-2 rounded-full border-2 border-slate-400 inline-block" />
-            ) : (
-              <span className="h-2 w-2 rounded-full bg-blue-500 inline-block" />
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={toggleStatus}
-            title={isClosed ? "Reopen" : "Close"}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-[11px] text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-          >
-            {isClosed ? "↺" : "✓"}
-          </button>
-        </div>
-      )}
+      {/* Hover action strip — CSS-driven to avoid dismount race on fast mouse exits */}
+      <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-1 py-1 shadow-sm opacity-0 transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto">
+        <button
+          type="button"
+          onClick={toggleRead}
+          title={isRead ? "Mark unread" : "Mark read"}
+          className="flex h-6 w-6 items-center justify-center rounded-md text-[11px] text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+        >
+          {isRead ? (
+            <span className="h-2 w-2 rounded-full border-2 border-slate-400 inline-block" />
+          ) : (
+            <span className="h-2 w-2 rounded-full bg-blue-500 inline-block" />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={toggleStatus}
+          title={isClosed ? "Reopen" : "Close"}
+          className="flex h-6 w-6 items-center justify-center rounded-md text-[11px] text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+        >
+          {isClosed ? "↺" : "✓"}
+        </button>
+      </div>
     </div>
   )
 }
