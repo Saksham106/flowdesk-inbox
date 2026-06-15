@@ -554,8 +554,8 @@ export default async function ConversationPage({
               </div>
 
               {/* Scrollable messages */}
-              <div className="flex-1 overflow-y-auto px-5 py-4">
-                <div className="mx-auto max-w-3xl space-y-4">
+              <div className="flex-1 overflow-y-auto px-3 py-4">
+                <div className="space-y-4">
                   {conversation.messages.length === 0 ? (
                     <p className="text-sm text-slate-500">No messages yet.</p>
                   ) : (
@@ -564,7 +564,7 @@ export default async function ConversationPage({
                       return (
                         <article
                           key={message.id}
-                          className={`overflow-hidden rounded-xl border px-5 py-4 ${
+                          className={`overflow-hidden rounded-xl border px-4 py-3 ${
                             isOutbound ? "border-blue-100 bg-blue-50" : "border-slate-200 bg-white"
                           }`}
                         >
@@ -658,7 +658,7 @@ export default async function ConversationPage({
                   conversation.messages.map((message) => {
                     const isOutbound = message.direction === "outbound";
                     return (
-                      <article key={message.id} className="px-6 py-5">
+                      <article key={message.id} className="px-4 py-4">
                         <div className="mb-4 grid gap-2 text-sm sm:grid-cols-[auto_1fr_auto] sm:items-start">
                           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
                             {isOutbound ? "Me" : initialsFor(message.fromE164)}
