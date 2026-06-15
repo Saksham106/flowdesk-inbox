@@ -517,6 +517,7 @@ export default async function SettingsPage({ searchParams }: Props) {
                       disableAfterFailures: autopilotSetting.disableAfterFailures,
                       currentFailures: autopilotSetting.currentFailures,
                       disabledAt: autopilotSetting.disabledAt?.toISOString() ?? null,
+                      categoryThresholds: (autopilotSetting.categoryThresholdsJson as Record<string, number> | null) ?? {},
                     }
                   : null
               }

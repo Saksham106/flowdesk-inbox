@@ -33,7 +33,20 @@ export async function checkAutopilotEligibility(
   if (classification.confidence < setting.confidenceThreshold) {
     return {
       eligible: false,
-      reason: `Confidence ${classification.confidence.toFixed(2)} is below threshold ${setting.confidenceThreshold}`,
+      reason: `Confidence ${classification.confidence.toFixed(2)} is below global threshold ${setting.confidenceThreshold}`,
+    }
+  }
+
+  // Per-intent threshold override
+  if (setting.categoryThresholdsJson) {
+    const categoryThresholds = setting.categoryThresholdsJson as Record<string, number>
+    const intentKey = classification.intent
+    const categoryThreshold = categoryThresholds[intentKey]
+    if (typeof categoryThreshold === "number" && classification.confidence < categoryThreshold) {
+      return {
+        eligible: false,
+        reason: `Confidence ${classification.confidence.toFixed(2)} is below per-category threshold ${categoryThreshold} for intent "${intentKey}"`,
+      }
     }
   }
 

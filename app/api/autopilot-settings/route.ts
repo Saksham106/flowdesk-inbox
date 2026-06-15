@@ -32,6 +32,7 @@ export async function PATCH(request: Request) {
     maxAutoSendsPerDay,
     disableAfterFailures,
     resetFailures,
+    categoryThresholds,
   } = body as {
     enabled?: boolean
     confidenceThreshold?: number
@@ -39,6 +40,7 @@ export async function PATCH(request: Request) {
     maxAutoSendsPerDay?: number
     disableAfterFailures?: number
     resetFailures?: boolean
+    categoryThresholds?: Record<string, number>
   }
 
   const updateData: Record<string, unknown> = {}
@@ -75,6 +77,9 @@ export async function PATCH(request: Request) {
   if (resetFailures === true) {
     updateData.currentFailures = 0
     updateData.disabledAt = null
+  }
+  if (categoryThresholds !== undefined) {
+    updateData.categoryThresholdsJson = categoryThresholds
   }
 
   const setting = await prisma.autopilotSetting.upsert({

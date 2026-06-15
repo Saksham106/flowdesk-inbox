@@ -12,6 +12,7 @@ type AutopilotSnapshot = {
   disableAfterFailures: number
   currentFailures: number
   disabledAt: string | null
+  categoryThresholds: Record<string, number>
 } | null
 
 export default function AutopilotSettingsForm({
@@ -28,6 +29,9 @@ export default function AutopilotSettingsForm({
   const [allowedIntents, setAllowedIntents] = useState<string[]>(initial?.allowedIntents ?? [])
   const [maxSends, setMaxSends] = useState(String(initial?.maxAutoSendsPerDay ?? 10))
   const [disableAfter, setDisableAfter] = useState(String(initial?.disableAfterFailures ?? 3))
+  const [categoryThresholds, setCategoryThresholds] = useState<Record<string, number>>(
+    initial?.categoryThresholds ?? {}
+  )
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -56,6 +60,7 @@ export default function AutopilotSettingsForm({
           allowedIntents,
           maxAutoSendsPerDay: parseInt(maxSends, 10),
           disableAfterFailures: parseInt(disableAfter, 10),
+          categoryThresholds,
         }),
       })
       const data = await res.json()
@@ -164,6 +169,39 @@ export default function AutopilotSettingsForm({
           <p className="mt-0.5 text-xs text-slate-400">
             Replies are only sent automatically when the AI&apos;s confidence is at least this high.
           </p>
+        </div>
+
+        {/* Per-intent confidence overrides */}
+        <div>
+          <p className="text-xs font-medium text-slate-600">Per-intent confidence overrides (optional)</p>
+          <p className="mt-0.5 text-xs text-slate-400">
+            Set a stricter threshold for specific intents, e.g. Complaint &rarr; 0.95.
+          </p>
+          <div className="mt-2 space-y-2">
+            {INTENT_OPTIONS.map((intent) => (
+              <div key={intent} className="flex items-center gap-2">
+                <span className="w-24 shrink-0 text-xs text-slate-600">{intent}</span>
+                <input
+                  type="number"
+                  step={0.05}
+                  min={0.5}
+                  max={1.0}
+                  placeholder="—"
+                  value={categoryThresholds[intent] ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value === "" ? undefined : parseFloat(e.target.value)
+                    setCategoryThresholds((prev) => {
+                      const next = { ...prev }
+                      if (val === undefined) delete next[intent]
+                      else next[intent] = val
+                      return next
+                    })
+                  }}
+                  className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Allowed intents */}
