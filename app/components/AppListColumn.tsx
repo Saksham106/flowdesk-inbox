@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { stripHtmlToText } from "@/lib/email-body"
 import SearchInput from "@/app/inbox/SearchInput"
 import GmailSyncControl from "@/app/components/GmailSyncControl"
+import InboxScrollContainer from "@/app/components/InboxScrollContainer"
 import { buildConversationHref } from "@/lib/client-navigation"
 
 interface Props {
@@ -163,6 +164,7 @@ export default async function AppListColumn({
   }
 
   const returnTo = currentInboxHref()
+  const scrollKey = [status ?? "all", q ?? "", sales ? "s" : ""].join("_")
 
   return (
     <div className={`flex h-full flex-col border-r border-slate-200 bg-white ${className}`}>
@@ -213,7 +215,7 @@ export default async function AppListColumn({
       </div>
 
       {/* Conversation rows */}
-      <div className="flex-1 overflow-y-auto">
+      <InboxScrollContainer scrollKey={scrollKey} className="flex-1 overflow-y-auto">
         {conversations.length === 0 ? (
           <p className="px-4 py-8 text-xs text-slate-400">
             {q || status || sales ? "No results." : "No conversations yet."}
@@ -283,7 +285,7 @@ export default async function AppListColumn({
             )
           })
         )}
-      </div>
+      </InboxScrollContainer>
     </div>
   )
 }
