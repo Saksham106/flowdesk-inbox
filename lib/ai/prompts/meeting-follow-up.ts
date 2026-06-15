@@ -39,8 +39,8 @@ export function buildMeetingFollowUpPrompt(input: MeetingFollowUpPromptInput): s
     .map((a) => {
       const name = a.name || a.email
       const parts = [`${name} <${a.email}>`]
-      if (a.personMemory?.summary) parts.push(`Relationship: ${a.personMemory.summary}`)
-      if (a.personMemory?.preferences) parts.push(`Preferences: ${a.personMemory.preferences}`)
+      if (a.personMemory?.summary) parts.push(`[RELATIONSHIP_DATA: Relationship: ${a.personMemory.summary}]`)
+      if (a.personMemory?.preferences) parts.push(`[RELATIONSHIP_DATA: Preferences: ${a.personMemory.preferences}]`)
       return parts.join(" — ")
     })
     .join("\n")

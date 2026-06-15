@@ -1,6 +1,8 @@
 import type { Prisma } from "@prisma/client"
 import OpenAI from "openai"
 import { prisma } from "@/lib/prisma"
+
+const openaiClient = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
 import {
   buildPersonMemoryExtractPrompt,
   normalizePersonMemoryExtractResult,
@@ -144,7 +146,7 @@ export async function syncPersonMemoryWithLLM(
   tenantId: string,
   contactId: string
 ): Promise<void> {
-  if (!process.env.OPENAI_API_KEY) return syncPersonMemory(tenantId, contactId)
+  if (!openaiClient) return syncPersonMemory(tenantId, contactId)
 
   const contact = await prisma.contact.findFirst({
     where: { id: contactId, tenantId },
@@ -181,8 +183,7 @@ export async function syncPersonMemoryWithLLM(
   let extracted: ReturnType<typeof normalizePersonMemoryExtractResult> = null
   try {
     const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-    const response = await client.responses.create({
+    const response = await openaiClient!.responses.create({
       model,
       input: prompt,
       text: {

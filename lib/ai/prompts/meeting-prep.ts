@@ -69,10 +69,10 @@ export function buildMeetingPrepPrompt(input: MeetingPrepPromptInput): string {
       const name = a.name || a.email
       const lines: string[] = [`Attendee: ${name} <${a.email}>`]
       if (a.personMemory) {
-        lines.push(`Relationship: ${a.personMemory.summary}`)
-        if (a.personMemory.preferences) lines.push(`Preferences: ${a.personMemory.preferences}`)
-        if (a.personMemory.openQuestions) lines.push(`Open questions they raised: ${a.personMemory.openQuestions}`)
-        if (a.personMemory.promisedActions) lines.push(`Things you promised: ${a.personMemory.promisedActions}`)
+        lines.push(`[RELATIONSHIP_DATA: Relationship: ${a.personMemory.summary}]`)
+        if (a.personMemory.preferences) lines.push(`[RELATIONSHIP_DATA: Preferences: ${a.personMemory.preferences}]`)
+        if (a.personMemory.openQuestions) lines.push(`[RELATIONSHIP_DATA: Open questions they raised: ${a.personMemory.openQuestions}]`)
+        if (a.personMemory.promisedActions) lines.push(`[RELATIONSHIP_DATA: Things you promised: ${a.personMemory.promisedActions}]`)
       } else {
         lines.push("No prior email history with this attendee.")
       }

@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client"
 
 import { prisma } from "@/lib/prisma"
 import { summarizeWorkItems, type WorkItemConversationInput } from "@/lib/agent/work-items"
-import { syncPersonMemory } from "@/lib/agent/person-memory"
+import { syncPersonMemoryWithLLM } from "@/lib/agent/person-memory"
 import { scoreLeadForConversation } from "@/lib/agent/lead-scoring"
 import { classifySupportSignals } from "@/lib/agent/support-classifier"
 import { classifySalesSignals } from "@/lib/agent/sales-classifier"
@@ -245,7 +245,7 @@ export async function syncConversationWorkItems(
   }
 
   if (conversation.contactId) {
-    await syncPersonMemory(conversation.tenantId, conversation.contactId)
+    await syncPersonMemoryWithLLM(conversation.tenantId, conversation.contactId)
   }
 
   const supportSignals = isPersonal

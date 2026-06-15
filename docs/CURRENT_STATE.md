@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-15 (sync idempotency, user override preservation, read state, action-email metadata; Home card UX, right rail cleanup, summary HTML fix)
+Last updated: 2026-06-15 (sync idempotency, user override preservation, read state, action-email metadata; Home card UX, right rail cleanup, summary HTML fix; Phase 1 gaps + Phase 2 concierge templates)
 
 This file is the codebase-facing companion to `MASTER_PRODUCT_PLAN.md`. It answers: what exists today, what is partial, and what should not be treated as active scope.
 
@@ -389,10 +389,19 @@ Bug fixes and hardening (2026-06-13):
 - **FYI badge suppression** — inbox and detail pages correctly suppress FYI badges using `metadataJson.emailType` in addition to `stateRecord.state` and body/sender patterns.
 - **Draft prompt RAG/summarization** — draft generation now builds a structured conversation summary, sends only the five most recent messages, and selects the most relevant knowledge documents for business prompts instead of always sending up to 20 long raw messages. The draft route and autopilot both pass conversation/contact IDs into reply context so prompt generation can fetch related state and memory.
 
+Phase 1 gaps + Phase 2 concierge templates slice (2026-06-15):
+
+- **Richer sensitive detection** (#10) — `lib/agent/sensitive-classifier.ts` expanded to legal, immigration, tax, medical, HR, and emotional categories. Risky snippet highlighted in the AI draft panel.
+- **Confidence policy thresholds** (#29) — `AutopilotSetting.categoryThresholdsJson Json?` field (migration applied). Per-category threshold gate in `lib/agent/autopilot.ts` with case-insensitive intent lookup. Settings UI in `/settings` for map of intent→threshold; server-side validation [0.5, 1.0].
+- **Smart labels taxonomy — product-complete UI** (#42) — attention filter tabs (Reply/Review/Later) on `/inbox` via `?attention=` param. `AttentionCorrectionSelect` client dropdown on conversation pages. `PATCH /api/conversations/[id]/attention` route with tenant isolation and audit log. `BulkCloseButton` and `POST /api/conversations/bulk-close` for quiet/fyi_done batch close.
+- **Command-center bills & deadline signals** (#1) — `BillSignal`/`BillsSection` types and `buildBillsSection` in `lib/agent/command-center.ts`. Bills & Deadlines card (amber-accented) in `HomeCommandCenter` driven by `InboxTask.dueAt`, sorted ascending, capped at 8.
+- **Trust UX: Why + Undo** (#44) — Why/Undo columns on `/audit` page. `POST /api/audit/[id]/undo` reverts `autopilot.draft_approved` actions: tenant-isolates draft update, writes undo audit log with original `conversationId`.
+- **Manual task creation** (#13) — `POST /api/tasks` route with `source: "manual"`, idempotent `deterministicKey` with random suffix, `isNaN` guard on `dueAt`. `ManualTaskForm` and `WorkItemsPanel` "+ Add task" toggle on conversation pages.
+- **Person-memory editing + LLM upgrade** (#5) — `PersonMemoryEditShell`/`PersonMemoryEditPanel` client forms. `PATCH /api/person-memory/[contactId]` partial-update route. `syncPersonMemoryWithLLM` LLM extraction with `gpt-5.4-mini`; falls back to regex heuristic on <3 messages, no API key, or LLM error. `[RELATIONSHIP_DATA: ...]` bracketing on personMemory fields in meeting-prep and meeting-follow-up prompts for prompt-injection mitigation.
+- **Local-business concierge templates** (#36) — 8 templates across 6 categories in `lib/agent/concierge-templates.ts`. `POST /api/settings/seed-templates` idempotent seed (business-only). `ConciergeTemplateSeedButton` in `/settings`. Template picker in `ReplyComposer`. Concierge templates excluded from AI reply context via `sourceType: "concierge_template"` filter in `lib/agent/reply-context.ts` and `lib/agent/context.ts`.
+
 Limitations:
 
-- Task assignment is not yet implemented.
-- Person-memory extraction is deterministic (regex heuristics), not LLM-based, and is not user-editable.
 - Lead sequence step timings are fixed (2/4/7 days); there is no settings UI yet.
 - Batch re-scoring of all existing leads is not implemented; scoring runs per lead after each sync.
 - Risk Radar thresholds are deterministic and not user-configurable yet.
@@ -407,39 +416,40 @@ These exist in some form, but are not product-complete:
 - Daily Command Center.
 - Handle This button.
 - Follow-up brain.
-- Relationship memory.
+- Relationship memory (editing shipped; LLM extraction shipped with heuristic fallback).
 - Knowledge-base replies.
 - Personal style matching.
-- Sensitive/risky email detection.
+- Sensitive/risky email detection (expanded categories shipped; no settings UI for thresholds).
 - Smart scheduling.
 - Approval infrastructure.
-- Confidence metadata.
-- Action-oriented labels.
-- Trust/audit infrastructure.
-- Autopilot settings.
+- Confidence metadata and policy (per-category thresholds shipped; broader policy builder Phase 4).
+- Action-oriented labels (attention categories + correction UI shipped; personal label taxonomy not yet added).
+- Trust/audit infrastructure (Why + Undo shipped for autopilot; broader action types pending).
+- Autopilot settings (global + per-category thresholds shipped).
 - Persisted conversation state.
-- First-pass task extraction.
+- Task extraction (manual creation shipped; assignment not yet).
 - First-pass lead capture.
 - Approval queue.
+- Command center source signals (Bills & Deadlines card shipped; meetings-needing-prep calendar events pending).
+- Local-business concierge templates (seed + picker shipped; template editing not yet).
 
 See `MASTER_PRODUCT_PLAN.md` for phase recommendations and feature statuses.
 
 ## Not Yet Implemented As Product Features
 
-- Full task management (assignment, manual creation).
 - Full CRM pipeline.
 - Full pipeline trend analytics and value forecasting (score/stage filters and WoW stats table shipped in v2.2; deeper forecasting not yet built).
+- Task assignment.
 - Attachment intelligence.
 - Natural-language inbox search.
 - Ask My Inbox chat.
 - Team inbox collaboration.
-- Personal life admin mode.
+- Personal life admin mode (broader bill/travel/school/medical/subscription flows and privacy UX).
 - Phishing/scam/fraud protection.
-- Auto-unsubscribe and bulk safe archive.
+- Auto-unsubscribe.
 - Outcome-based automation.
 - Plain-English rule training.
 - Multi-step workflows.
-- ROI analytics dashboard.
 - VIP protection.
 - Smart snooze.
 - Broad connected-app context.
@@ -460,17 +470,17 @@ The AI Draft MVP PR handoff was removed. The feature is now part of the baseline
 
 ## Recommended Next Engineering Slice
 
-The follow-up tracker, persisted `PersonMemory`, conversation relationship panel, lead follow-up sequences, weekly value report, Explain This Thread panel, Email Risk Radar, intent-guided auto-draft compose flow, Gmail sync controls, and first attention taxonomy slice are now shipped. The remaining Phase 1 gaps, in priority order:
+All Phase 1 gaps and the remaining Phase 2 concierge-templates item are now shipped. The natural next slice is Phase 3 (Personal Chief of Staff) — see `docs/TODO.md` for the full roadmap. Within Phase 3, highest-ROI items:
 
-1. Smart labels taxonomy UI — first-class filters/counts, visible explanation, and correction controls for the attention categories now stored in metadata.
-2. Richer sensitive detection — more categories and highlighted risky parts inside drafts.
-3. Command-center source signals — meetings-needing-prep and bills/deadlines sections need calendar events and attachment/deadline signals.
+1. VIP protection (#33) — priority override for known important senders.
+2. Smart snooze / reply-later (#34) — schedule a conversation for later with auto-reminder.
+3. Personal life admin mode (#21) — broader bill/travel/school/medical/subscription flows.
 
 See `docs/TODO.md` for the full remaining-work roadmap mapped against the master plan.
 
 ## Verification Baseline
 
-Recent verification (2026-06-14, after Gmail sync controls and attention classification):
+Recent verification (2026-06-15, after Phase 1 gaps + concierge templates):
 
 ```bash
 npm test
@@ -480,11 +490,9 @@ npm run build
 
 Observed result:
 
-- `npm test`: 422 tests passed across 37 files.
-- `npm run lint`: passed.
-- `npm run build`: passed.
-- `npm run lint`: passed.
-- `npm run build`: passed.
+- `npm test`: 458 tests passed across 43 files.
+- `npm run lint`: passed (no warnings).
+- `npm run build`: see PR for build verification.
 
 Browser smoke-test note:
 

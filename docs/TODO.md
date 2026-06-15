@@ -18,14 +18,14 @@ Most Phase 1 foundations are shipped (command center, task/lead extraction, appr
 - [x] **Smart labels taxonomy — first attention slice** (#42) — shipped 2026-06-14: deterministic and LLM classification now support `needs_reply`, `needs_action`, `review_soon`, `read_later`, `waiting_on`, `fyi_done`, and `quiet`; stored in `ConversationState.metadataJson.attentionCategory`.
 - [x] **Account-action detection slice** (#21/#42) — shipped 2026-06-15: deterministic OTP, verify-email, password setup/reset, login approval, account setup, and security alert detection; redacted action metadata is surfaced to Home cards without persisting OTP codes.
 - [x] **Read/done sync persistence hardening** (#6/#42) — shipped 2026-06-15: local user overrides and read state are separate from raw Gmail state; Gmail sync no longer resurrects done items in Handle First.
-- [ ] **Smart labels taxonomy — product-complete UI** (#42) — expose the full taxonomy as first-class filters/actions, add correction controls, and decide whether categories graduate from metadata to schema fields. Action metadata badges (OTP, password reset, security alert, expiry warnings, action links) are now surfaced on Home cards; read/unread dot indicator added to inbox list. Remaining: full filter/correction controls.
-- [ ] **Richer sensitive detection** (#10) — more categories (legal, immigration, tax, medical, HR, emotional) and highlighted risky parts inside drafts.
-- [ ] **Command-center source signals** (#1) — meetings-needing-prep and bills/deadlines sections need calendar events and attachment/deadline signals.
-- [ ] **Trust UX** (#44) — per-action "why" explanations and undo on top of the existing audit log. Some action metadata/reasons now exist, but visible correction/undo UX remains.
-- [ ] **Confidence policy thresholds** (#29) — confidence is displayed; policy gating by threshold per category is not implemented.
-- [ ] **Task assignment and manual task creation** (#13).
-- [ ] **Safely-ignored reasons and bulk archive** (#25) — reasons now exist in attention metadata; still needs a visible bulk archive/cleanup workflow.
-- [ ] **Person-memory editing and corrections** (#5) — user-editable memory; LLM-based extraction upgrade.
+- [x] **Smart labels taxonomy — product-complete UI** (#42) — shipped 2026-06-15: attention filter tabs (Reply/Review/Later) in inbox, `AttentionCorrectionSelect` dropdown on conversation pages, `PATCH /api/conversations/[id]/attention` route, bulk-close workflow for quiet/fyi_done categories. Action metadata badges (OTP, password reset, security alert, expiry warnings, action links) surfaced on Home cards.
+- [x] **Richer sensitive detection** (#10) — shipped 2026-06-15: expanded classifier to legal, immigration, tax, medical, HR, emotional categories; highlighted risky snippet in AI draft panel.
+- [x] **Command-center source signals** (#1) — shipped 2026-06-15: Bills & Deadlines section in home command center powered by `buildBillsSection` from `lib/agent/command-center.ts`, driven by `InboxTask.dueAt` signals sorted ascending.
+- [x] **Trust UX** (#44) — shipped 2026-06-15: "Why" column with audit log explanations and "Undo" button on `/audit`; `POST /api/audit/[id]/undo` reverts autopilot draft approvals with tenant isolation + re-audit.
+- [x] **Confidence policy thresholds** (#29) — shipped 2026-06-15: `AutopilotSetting.categoryThresholdsJson` schema field; per-category threshold gate in `lib/agent/autopilot.ts` with case-insensitive intent lookup; settings UI in `/settings`; server-side validation [0.5, 1.0].
+- [x] **Task assignment and manual task creation** (#13) — shipped 2026-06-15: `POST /api/tasks` with `source: "manual"`, `ManualTaskForm` and `WorkItemsPanel` with "+ Add task" toggle on conversation pages.
+- [x] **Safely-ignored reasons and bulk archive** (#25) — shipped 2026-06-15: `BulkCloseButton` on `/inbox`, `POST /api/conversations/bulk-close` closes all quiet/fyi_done/fyi_only conversations; attention tabs surface safely-ignored threads.
+- [x] **Person-memory editing and corrections** (#5) — shipped 2026-06-15: `PersonMemoryEditShell`/`PersonMemoryEditPanel` client forms; `PATCH /api/person-memory/[contactId]` partial-update route; `syncPersonMemoryWithLLM` LLM extraction upgrade with `gpt-5.4-mini` fallback to heuristic.
 
 ## Phase 2: Business Revenue Inbox Agent
 
@@ -38,7 +38,7 @@ Most Phase 1 foundations are shipped (command center, task/lead extraction, appr
 - [x] **Email triage by money impact** (#40) — shipped 2026-06-13: revenue-weighted `score()` bonus (+up to 50) in command center, Revenue at Risk subsection (amber cards for stale high-value leads) in `CommandCenterPanel`, `analyzeRevenueAtRisk` in `lib/agent/revenue-at-risk.ts`.
 - [x] **Full ROI analytics dashboard** (#32) — shipped 2026-06-13: `ValueSnapshot` model, weekly cron at `/api/cron/value-snapshot`, `buildValueSnapshot`/`getWeeklyTrend` in `value-report.ts`, 4-week trend bars + pipeline value summary + revenue opportunities on `/reports`.
 - [x] **Knowledge base source management** (#8) — shipped 2026-06-12: URL crawl endpoint, `sourceUrl`/`crawledAt` fields, `/knowledge-base` page, `"webpage"` source type, citations in draft replies.
-- [ ] **Local-business concierge templates** (#36).
+- [x] **Local-business concierge templates** (#36) — shipped 2026-06-15: 8 templates across 6 categories in `lib/agent/concierge-templates.ts`; `POST /api/settings/seed-templates` idempotent seed route (business-only); template picker in `ReplyComposer`; templates excluded from AI reply context via `sourceType: "concierge_template"` filter.
 
 ## Phase 3: Personal Chief Of Staff — Not Started
 
