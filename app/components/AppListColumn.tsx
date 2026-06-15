@@ -235,7 +235,6 @@ export default async function AppListColumn({
               conv.draft?.status === "proposed" || conv.draft?.status === "approved"
             const isSelected = conv.id === activeConversationId
             const isUnread = !conv.readAt && conv.gmailUnread !== false && !fyi
-            const isRead = !!conv.readAt
 
             const isClosed = conv.status === "closed"
 

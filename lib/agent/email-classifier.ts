@@ -104,7 +104,6 @@ const NOTIFICATION_BODY_PATTERN =
 
 const OTP_PATTERN =
   /\b(one[-\s]?time (passcode|password|code|pin)|verification code|security code|authentication code|login code|access code|2fa code|mfa code|otp)\b/i
-const CODE_PATTERN = /\b(\d{4,8}|[A-Z0-9]{3,4}(?:[- ]?[A-Z0-9]{3,4}){1,2})\b/i
 const EXPIRES_PATTERN =
   /\bexpires?\s+(?:in|after)\s+(\d+\s*(?:minutes?|mins?|hours?|hrs?|days?))\b/i
 const PASSWORD_ACTION_PATTERN =
