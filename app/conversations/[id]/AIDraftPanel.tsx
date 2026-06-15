@@ -53,6 +53,7 @@ export default function AIDraftPanel({
   initialDraft,
   inline = false,
   isPersonal = false,
+  conciergeTemplates,
 }: {
   conversationId: string;
   channelType: string;
@@ -61,6 +62,7 @@ export default function AIDraftPanel({
   initialDraft: DraftSnapshot | null;
   inline?: boolean;
   isPersonal?: boolean;
+  conciergeTemplates?: Array<{ id: string; title: string; content: string }>;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState<DraftSnapshot | null>(initialDraft);
@@ -280,6 +282,27 @@ export default function AIDraftPanel({
       ) : null}
 
       <div className="space-y-3">
+        {conciergeTemplates && conciergeTemplates.length > 0 && (
+          <div>
+            <label className="text-xs text-slate-500">Start from template</label>
+            <select
+              className="mt-0.5 block w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900"
+              defaultValue=""
+              onChange={(e) => {
+                const tpl = conciergeTemplates.find((t) => t.id === e.target.value)
+                if (tpl) {
+                  setUserInstruction(`Use this template as a starting point:\n${tpl.content}`)
+                }
+              }}
+            >
+              <option value="">— pick a template —</option>
+              {conciergeTemplates.map((t) => (
+                <option key={t.id} value={t.id}>{t.title}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-slate-600">
             Rough instruction

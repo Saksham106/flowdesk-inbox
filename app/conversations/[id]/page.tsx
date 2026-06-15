@@ -177,7 +177,7 @@ export default async function ConversationPage({
     conversationId: conversation.id,
   }).catch(() => null);
 
-  const [stateRecord, inboxTasks, lead, personMemory] = await Promise.all([
+  const [stateRecord, inboxTasks, lead, personMemory, rawConciergeTemplates] = await Promise.all([
     prisma.conversationState.findUnique({
       where: { conversationId: conversation.id },
       select: {
@@ -227,7 +227,22 @@ export default async function ConversationPage({
           },
         })
       : null,
+    !isPersonal
+      ? prisma.knowledgeDocument.findMany({
+          where: { tenantId: session.user.tenantId, sourceType: "concierge_template" },
+          select: { id: true, title: true, content: true },
+          orderBy: { createdAt: "asc" },
+        })
+      : null,
   ]);
+
+  const conciergeTemplates = (rawConciergeTemplates ?? []).map(
+    (d: { id: string; title: string; content: string }) => ({
+      id: d.id,
+      title: d.title.replace("[Template] ", ""),
+      content: d.content,
+    })
+  )
 
   const convMeta =
     stateRecord?.metadataJson &&
@@ -491,6 +506,7 @@ export default async function ConversationPage({
               }
             : null
         }
+        conciergeTemplates={conciergeTemplates.length > 0 ? conciergeTemplates : undefined}
       />
     </div>
   )

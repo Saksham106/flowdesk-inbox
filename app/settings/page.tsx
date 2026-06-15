@@ -15,7 +15,8 @@ import KnowledgeDocumentList from "@/app/settings/KnowledgeDocumentList";
 import BusinessProfileForm from "@/app/settings/BusinessProfileForm";
 import FollowUpSettingsForm from "@/app/settings/FollowUpSettingsForm";
 import AutopilotSettingsForm from "@/app/settings/AutopilotSettingsForm";
-import PersonalStylePanel from "@/app/settings/PersonalStylePanel";
+import PersonalStylePanel from "@/app/settings/PersonalStylePanel"
+import ConciergeTemplateSeedButton from "./ConciergeTemplateSeedButton";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +101,10 @@ export default async function SettingsPage({ searchParams }: Props) {
   ]);
 
   const isPersonal = tenant?.accountType === "personal";
+
+  const templateCount = !isPersonal
+    ? await prisma.knowledgeDocument.count({ where: { tenantId: session.user.tenantId, sourceType: "concierge_template" } })
+    : 0
 
   const googleConfigured =
     !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
@@ -441,6 +446,16 @@ export default async function SettingsPage({ searchParams }: Props) {
             </div>
             <div className="px-6 py-5">
               <KnowledgeDocumentList initialDocuments={knowledgeDocuments} />
+            </div>
+          </section>
+        )}
+
+        {/* Concierge Templates — business only */}
+        {!isPersonal && (
+          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-base font-semibold">Concierge Templates</h2>
+            <div className="mt-4">
+              <ConciergeTemplateSeedButton alreadySeeded={templateCount > 0} />
             </div>
           </section>
         )}

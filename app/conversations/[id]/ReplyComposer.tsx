@@ -26,12 +26,14 @@ export default function ReplyComposer({
   canSuggest,
   isPersonal = false,
   initialDraft,
+  conciergeTemplates,
 }: {
   conversationId: string;
   channelType: string;
   canSuggest: boolean;
   isPersonal?: boolean;
   initialDraft: DraftSnapshot | null;
+  conciergeTemplates?: Array<{ id: string; title: string; content: string }>;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState<DraftSnapshot | null>(initialDraft);
@@ -202,6 +204,29 @@ export default function ReplyComposer({
         className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm leading-relaxed text-slate-900 focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
         disabled={isBusy}
       />
+
+      {/* Template picker — shown when concierge templates are available */}
+      {canAI && conciergeTemplates && conciergeTemplates.length > 0 && (
+        <div>
+          <label className="text-xs text-slate-500">Start from template</label>
+          <select
+            className="mt-0.5 block w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900"
+            defaultValue=""
+            onChange={(e) => {
+              const tpl = conciergeTemplates.find((t) => t.id === e.target.value)
+              if (tpl) {
+                setInstruction(`Use this template as a starting point:\n${tpl.content}`)
+                setShowInstruction(true)
+              }
+            }}
+          >
+            <option value="">— pick a template —</option>
+            {conciergeTemplates.map((t) => (
+              <option key={t.id} value={t.id}>{t.title}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Instruction row — collapsible hint for AI */}
       {canAI && (
