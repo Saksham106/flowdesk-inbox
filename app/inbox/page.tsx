@@ -544,7 +544,7 @@ export default async function InboxPage({ searchParams }: Props) {
               <div className="space-y-3">
                 {displayConversations.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-sm text-slate-500">
-                    {q || activeStatus || salesFilter
+                    {q || activeStatus || salesFilter || attentionFilter
                       ? "No conversations match your search."
                       : "No conversations yet. Connect Gmail in Settings to import threads."}
                   </div>
