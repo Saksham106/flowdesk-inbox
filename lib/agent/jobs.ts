@@ -4,6 +4,8 @@ import { classifyConversation } from "@/lib/agent/classify"
 import { checkPolicy } from "@/lib/agent/policy"
 import { checkAvailability, formatSlots, type AvailableSlot } from "@/lib/agent/availability"
 import { attemptAutopilotSend } from "@/lib/agent/autopilot"
+import { buildClassifyPrompt } from "@/lib/ai/prompts/classify"
+import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import type { AgentJob, Prisma } from "@prisma/client"
 import type { ClassifyResult } from "@/lib/ai/prompts/classify"
 
@@ -146,12 +148,15 @@ async function _executeJob(
   })
 
   let classification
+  const classifyInput = {
+    messages: conversation.messages,
+    businessProfile: businessContext.profile,
+    accountType: tenant?.accountType === "personal" ? "personal" as const : "business" as const,
+  }
+  const classifyPrompt = buildClassifyPrompt(classifyInput)
+  const classifyModel = process.env.OPENAI_MODEL || "gpt-4o-mini"
   try {
-    classification = await classifyConversation({
-      messages: conversation.messages,
-      businessProfile: businessContext.profile,
-      accountType: tenant?.accountType === "personal" ? "personal" : "business",
-    })
+    classification = await classifyConversation(classifyInput)
 
     await prisma.agentToolCall.update({
       where: { id: classifyToolCall.id },
@@ -161,6 +166,14 @@ async function _executeJob(
         outputJson: classification as unknown as Prisma.InputJsonValue,
       },
     })
+    await recordAiUsageEvent({
+      tenantId: job.tenantId,
+      feature: "agent.classify",
+      model: classifyModel,
+      estimatedInputTokens: estimateTokenCount(classifyPrompt),
+      estimatedOutputTokens: estimateTokenCount(JSON.stringify(classification)),
+      status: "succeeded",
+    })
   } catch (err) {
     await prisma.agentToolCall.update({
       where: { id: classifyToolCall.id },
@@ -169,6 +182,13 @@ async function _executeJob(
         completedAt: new Date(),
         outputJson: { error: err instanceof Error ? err.message : "Unknown error" },
       },
+    })
+    await recordAiUsageEvent({
+      tenantId: job.tenantId,
+      feature: "agent.classify",
+      model: classifyModel,
+      estimatedInputTokens: estimateTokenCount(classifyPrompt),
+      status: "failed",
     })
     throw err
   }

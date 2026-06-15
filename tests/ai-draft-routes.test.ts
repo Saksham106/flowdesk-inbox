@@ -7,6 +7,7 @@ const {
   mockDraftUpdate,
   mockDraftFindUnique,
   mockAuditCreate,
+  mockAiUsageCreate,
   mockAgentJobFindFirst,
   mockGenerateDraftReply,
   mockGetFullBusinessContext,
@@ -19,6 +20,7 @@ const {
   mockDraftUpdate: vi.fn(),
   mockDraftFindUnique: vi.fn(),
   mockAuditCreate: vi.fn(),
+  mockAiUsageCreate: vi.fn(),
   mockAgentJobFindFirst: vi.fn(),
   mockGenerateDraftReply: vi.fn(),
   mockGetFullBusinessContext: vi.fn(),
@@ -42,6 +44,9 @@ vi.mock('@/lib/prisma', () => ({
     },
     auditLog: {
       create: mockAuditCreate,
+    },
+    aiUsageEvent: {
+      create: mockAiUsageCreate,
     },
   },
 }))
@@ -166,6 +171,7 @@ describe('POST /api/conversations/[id]/draft/suggest', () => {
     })
     mockConversationUpdate.mockResolvedValue({})
     mockAuditCreate.mockResolvedValue({})
+    mockAiUsageCreate.mockResolvedValue({})
 
     const res = await suggestDraft(makeReq() as never, { params: { id: 'conv1' } })
 
@@ -184,6 +190,7 @@ describe('POST /api/conversations/[id]/draft/suggest', () => {
       riskLevel: 'low',
       suggestedLabel: 'Pricing',
       model: 'gpt-test',
+      draftCacheKey: expect.stringMatching(/^[a-f0-9]{64}$/),
     })
     expect(mockConversationUpdate).toHaveBeenCalledWith({
       where: { id: 'conv1' },
@@ -194,6 +201,81 @@ describe('POST /api/conversations/[id]/draft/suggest', () => {
       userId: 'user1',
       action: 'draft.suggest',
     })
+  })
+
+  it('returns a cached proposed draft when the prompt inputs have not changed', async () => {
+    mockConversationFindFirst.mockResolvedValue({
+      ...emailConversation,
+      draft: {
+        id: 'draft-cached',
+        conversationId: 'conv1',
+        text: 'Cached reply',
+        status: 'proposed',
+        metadataJson: {
+          draftCacheKey: 'will-be-filled-by-route',
+          promptVersion: 'ai-draft-mvp-v1',
+          accountType: 'business',
+        },
+      },
+    })
+    mockGenerateDraftReply.mockResolvedValue({
+      draftText: 'Fresh reply',
+      intent: 'pricing',
+      confidence: 0.91,
+      riskLevel: 'low',
+      suggestedLabel: 'Pricing',
+      escalationReason: null,
+      model: 'gpt-test',
+    })
+    mockDraftUpsert.mockImplementation(async (arg) => {
+      const cacheKey = arg.create.metadataJson.draftCacheKey
+      mockConversationFindFirst.mockResolvedValueOnce({
+        ...emailConversation,
+        draft: {
+          id: 'draft-cached',
+          conversationId: 'conv1',
+          text: 'Cached reply',
+          status: 'proposed',
+          metadataJson: {
+            ...arg.create.metadataJson,
+            draftCacheKey: cacheKey,
+          },
+        },
+      })
+      return { id: 'draft1', text: arg.create.text, status: 'proposed', metadataJson: arg.create.metadataJson }
+    })
+    mockConversationUpdate.mockResolvedValue({})
+    mockAuditCreate.mockResolvedValue({})
+    mockAiUsageCreate.mockResolvedValue({})
+
+    await suggestDraft(makeReq() as never, { params: { id: 'conv1' } })
+    vi.clearAllMocks()
+    mockSession = { user: { id: 'user1', tenantId: 'tenant-A' } }
+    mockAgentJobFindFirst.mockResolvedValue(null)
+    mockGetReplyGenerationContext.mockResolvedValue({
+      accountType: 'business',
+      businessProfile: { businessName: 'Glow Studio' },
+      knowledgeDocuments: [{ id: 'doc1', title: 'Pricing', content: 'Botox starts at $12/unit.' }],
+      learnedProfile: null,
+    })
+
+    const res = await suggestDraft(makeReq() as never, { params: { id: 'conv1' } })
+
+    expect(res.status).toBe(200)
+    expect(mockGenerateDraftReply).not.toHaveBeenCalled()
+    expect(mockDraftUpsert).not.toHaveBeenCalled()
+    expect(await res.json()).toMatchObject({
+      draft: expect.objectContaining({ id: 'draft-cached', text: 'Cached reply' }),
+      meta: expect.objectContaining({ cacheHit: true }),
+    })
+    expect(mockAiUsageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          feature: 'draft.suggest.cache_hit',
+          status: 'skipped',
+        }),
+      })
+    )
   })
 
   it('passes rough user instructions into generation and draft metadata', async () => {
