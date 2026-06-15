@@ -59,8 +59,9 @@ Existing foundations in the codebase:
 - Approval requests and audit logs.
 - Agent jobs, classification, follow-up batch jobs, autopilot settings.
 - Rich email attention categories stored in `ConversationState.metadataJson.attentionCategory`: `needs_reply`, `needs_action`, `review_soon`, `read_later`, `waiting_on`, `fyi_done`, and `quiet`.
-- Redacted account-action metadata for OTPs, verification links, password setup/reset, login approvals, account setup, and security alerts. OTP codes are not persisted.
+- Account-action metadata for OTPs, verification links, password setup/reset, login approvals, account setup, and security alerts. OTP/security codes are persisted only for direct user display/copy and are not auto-used.
 - Local user/read state is separate from raw Gmail state: user overrides, done/closed status, local reads, Gmail unread labels, and Gmail raw metadata are stored independently.
+- Cost-aware AI usage policy: deterministic rules handle low-value automated mail first; richer person-memory extraction is skipped for low-value mail, cached by content hash for eligible mail, and conversation opens avoid eager rich-AI regeneration.
 - `Tenant.accountType` personal/business mode, with personal-safe defaults and business-only gates for CRM, sales, support, lead, and revenue surfaces.
 - Business and personal reply/profile settings.
 - Daily command center first slice.
@@ -269,15 +270,15 @@ Success criteria:
 | 2 | Autopilot Modes, Not Just Auto-Reply | `Partial` | Phase 4 | Basic settings exist; needs category rules and UI policy builder. |
 | 3 | Handle This Button | `Partial` | Phase 0/1 | Button exists and triggers draft suggestion; needs task/lead/calendar side effects. |
 | 4 | AI Follow-Up Brain | `Partial` | Phase 1 | Tracker panel and three-step lead follow-up sequences shipped; needs sequence settings UI and sent-output visibility. |
-| 5 | Inbox Memory / Relationship Memory | `Partial` | Phase 1 | Persisted `PersonMemory` and conversation relationship panel shipped; extraction is deterministic and not user-editable yet. |
+| 5 | Inbox Memory / Relationship Memory | `Partial` | Phase 1 | Persisted `PersonMemory`, relationship panel, user editing, and gated/cached LLM extraction shipped; richer correction history and retrieval remain. |
 | 6 | Never Drop the Ball System | `Partial` | Phase 1 | Computed and persisted states exist; richer attention categories now separate reply/action/review/read-later/quiet; needs more first-class inbox filters and alerts. |
 | 7 | Business Lead Capture From Email | `Partial` | Phase 2 | LLM-based scoring, scoreExplanation, estimatedValue, funnel header, and score badge shipped. CRM filter/search and value forecasting remain. |
 | 8 | Knowledge Base Replies | `Partial` | Phase 1/2 | URL import + webpage sourceType + citations in drafts shipped. Website re-crawl and semantic search remain. |
 | 9 | Personal Voice Clone, Controlled | `Partial` | Phase 1 | Learned profile exists; needs clearer controls and style feedback. |
-| 10 | Sensitive Email Detection | `Partial` | Phase 1 | Security/token/login/billing/delivery alerts map to `review_soon`; still needs highlighted risky draft parts and broader sensitive-topic taxonomy. |
+| 10 | Sensitive Email Detection | `Partial` | Phase 1 | Security/token/login/billing/delivery plus legal, immigration, tax, medical, HR, emotional, and financial/dispute language detection shipped; draft warning highlights exist. |
 | 11 | Meeting Prep From Email History | `Partial` | Phase 2 | On-demand brief from PersonMemory + email threads; `/meetings` page + digest card. Briefs not persisted. Spec: `docs/archive/specs/2026-06-11-meeting-prep-design.md`. Plan: `docs/archive/plans/2026-06-11-meeting-prep.md`. |
 | 12 | Post-Meeting Follow-Up Generator | `Partial` | Phase 2 | Notes + prior threads → follow-up draft → ApprovalRequest. Falls back to inline copy if no prior conversation exists. |
-| 13 | Email-to-Task Extraction | `Partial` | Phase 1 | Task model, extraction, list page, close action, background sync, and inline due-date editing exist; needs assignment and manual creation. |
+| 13 | Email-to-Task Extraction | `Partial` | Phase 1 | Task model, extraction, list page, close action, background sync, inline due-date editing, and manual task creation exist; assignment remains later. |
 | 14 | Smart Scheduling Agent | `Partial` | Phase 4 | Availability/holds exist; needs full back-and-forth booking. |
 | 15 | Explain This Thread Like I’m Busy | `Partial` | Phase 1 | On-demand LLM explanation panel shipped on conversation pages; needs persistence, inbox-level surfacing, and draft hand-off. |
 | 16 | Smart Attachment Intelligence | `Planned` | Phase 3 | Needs attachment ingestion, extraction, storage, safety. |
@@ -289,26 +290,26 @@ Success criteria:
 | 22 | Email Risk Radar | `Shipped` | Phase 1 | `/risk-radar` ships a read-only deterministic scan for deadline-soon, final-notice, unanswered, and sensitive-content signals. Spec: `docs/archive/specs/2026-06-12-email-risk-radar-design.md`. Plan: `docs/archive/plans/2026-06-12-email-risk-radar.md`. |
 | 23 | Phishing, Scam, and Fraud Protection | `Discovery` | Phase 3 | Needs careful security heuristics and false-positive UX. |
 | 24 | Auto-Unsubscribe and Noise Killer | `Planned` | Phase 3/4 | Needs safe archive/unsubscribe permissions. |
-| 25 | What Can I Ignore Mode | `Partial` | Phase 1 | Collapsible safely-ignored section shipped; attention metadata now records reasons and protects actionable no-reply email from auto-close; needs bulk archive action. |
+| 25 | What Can I Ignore Mode | `Partial` | Phase 1 | Collapsible safely-ignored section, attention reasons, action-email protection, and bulk close for quiet/FYI mail shipped; provider archive/unsubscribe remain later. |
 | 26 | Outcome-Based Automation | `Discovery` | Phase 4 | Depends on trust, audit, and rule engine. |
 | 27 | Train My Agent With Plain English | `Discovery` | Phase 4 | Needs rule compiler and conflict resolution. |
 | 28 | Approval Queue | `Partial` | Phase 1 | Inline approve/reject, collapsible draft preview, and batch approve/reject shipped; needs edit-before-send and teach-the-agent actions. |
-| 29 | Confidence Score Before Sending | `Partial` | Phase 1 | Draft confidence and attention confidence metadata exist; needs visible UX and policy thresholds. |
+| 29 | Confidence Score Before Sending | `Partial` | Phase 1 | Draft confidence, attention confidence metadata, sensitive warnings, and per-category autopilot thresholds exist; needs clearer user-facing policy education. |
 | 30 | Auto-Draft Based on User Intent | `Shipped` | Phase 1 | AI draft panel accepts optional rough instructions and turns them into proposed drafts through the existing approval-gated flow. Spec: `docs/archive/specs/2026-06-12-intent-auto-draft-design.md`. Plan: `docs/archive/plans/2026-06-12-intent-auto-draft.md`. |
 | 31 | Multi-Step Email Workflows | `Discovery` | Phase 4 | Depends on tasks, leads, scheduling, audit, approvals. |
 | 32 | Email Analytics That Show ROI | `Shipped` | Phase 2 | 4-week trend bars, pipeline value summary, revenue opportunities on `/reports`; `ValueSnapshot` model with weekly cron; `buildValueSnapshot`/`getWeeklyTrend` in `value-report.ts`. |
 | 33 | VIP Protection | `Planned` | Phase 3 | Needs VIP/contact model and notification policy. |
 | 34 | Reply Later, But Don’t Forget Intelligence | `Planned` | Phase 3 | Needs smart reminder model. |
 | 35 | Context From Connected Apps | `Discovery` | Phase 4 | Integrations should follow use cases, not integration count. |
-| 36 | AI Email Concierge For Local Businesses | `Planned` | Phase 2 | Strong positioning niche; build via vertical templates. |
+| 36 | AI Email Concierge For Local Businesses | `Partial` | Phase 2 | Local-business concierge templates, business-only seed route, and reply-composer picker shipped; deeper vertical workflows remain. |
 | 37 | Auto-Generated Snippets and Playbooks | `Planned` | Phase 4 | Needs repeated-pattern mining and user approval. |
 | 38 | Second Brain Inbox | `Planned` | Phase 3 | Depends on memory extraction and natural-language retrieval. |
 | 39 | Auto-Personalized Outreach | `Later` | Phase 4 | Valuable, but avoid spam positioning. |
 | 40 | Email Triage By Money Impact | `Shipped` | Phase 2 | Revenue-weighted score bonus (+up to 50) in command center; Revenue at Risk subsection (amber cards for stale high-value leads); `analyzeRevenueAtRisk` in `lib/agent/revenue-at-risk.ts`. |
 | 41 | One-Click Clean My Inbox Experience | `Planned` | Phase 4 | Great onboarding; needs safe bulk operations. |
-| 42 | Smart Email Labels That Matter | `Partial` | Phase 1 | First action-oriented attention taxonomy shipped in metadata and UI labels; needs first-class filters, user correction, and possible schema promotion. |
+| 42 | Smart Email Labels That Matter | `Partial` | Phase 1 | Action-oriented attention taxonomy, inbox attention filters, correction dropdown, and bulk close shipped; possible schema promotion remains. |
 | 43 | Ask My Inbox Chat | `Planned` | Phase 3 | Should answer with actions, not just summaries. |
-| 44 | Trust, Privacy, and Audit Log | `Partial` | Phase 1/All | Audit log exists; needs visible explanations and undo. |
+| 44 | Trust, Privacy, and Audit Log | `Partial` | Phase 1/All | Audit log, Why column, and undo route for reversible autopilot draft approvals exist; broader reversible-action coverage remains. |
 | 45 | Magic Paid Version Packaging | `Discovery` | All | Use as product packaging, not engineering feature. |
 
 ## Immediate Next Slice Recommendation
@@ -517,6 +518,7 @@ After an AI agent finishes work:
 | 2026-06-14 | Add real Gmail sync controls and preserve inbox navigation context. | The inbox now exposes the existing Gmail sync API with manual/app-load/tab-return/periodic triggers, visible sync state, and duplicate request protection. Conversation routes preserve the active inbox filter through validated return URLs instead of resetting the list to All. |
 | 2026-06-14 | Upgrade classification from broad no-reply buckets to attention categories in metadata. | Avoided a broad schema/status migration by keeping `Conversation.status` stable and storing `attentionCategory`, reason, confidence, and optional code/expiry in `ConversationState.metadataJson`. Only `quiet` and `fyi_done` are auto-close candidates; action/security/read-later emails remain visible. |
 | 2026-06-15 | Separate raw Gmail state, AI classification, and user override/read state. | The Mark Done resurrection bug showed that sync/provider state and local intent were sharing too much surface area. Added local state/read fields, raw Gmail label fields, a user override source, server-side sync locking, and redacted action metadata so sync is idempotent and explicit user actions win. |
+| 2026-06-15 | Add AI usage policy, caching, and lazy rich-AI behavior. | Low-value automated email now stays on deterministic paths; relationship-memory LLM extraction is skipped or cached by content hash; manual draft suggestions reuse cached drafts for unchanged prompts; conversation opens sync deterministic state without eager rich-AI regeneration. |
 
 ## Open Product Questions
 
@@ -525,5 +527,5 @@ After an AI agent finishes work:
 - What actions should be allowed in free accounts versus paid accounts?
 - How much user-visible explanation is enough before automation feels noisy?
 - Which integrations are required for the first paid wedge: calendar, Stripe, Calendly, Drive, Notion, or CRM?
-- Should relationship memory be fully automatic, user-editable, or both?
+- How much relationship-memory automation should run proactively versus lazily for privacy and cost?
 - How should users correct the agent when classification or memory is wrong?

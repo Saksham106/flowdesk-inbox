@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-15 (sync idempotency, user override preservation, read state, action-email metadata; Home card UX, right rail cleanup, summary HTML fix; Phase 1 gaps + Phase 2 concierge templates)
+Last updated: 2026-06-15 (sync idempotency, user override preservation, read state, action-email metadata; Home card UX, right rail cleanup, summary HTML fix; Phase 1 gaps + Phase 2 concierge templates; inbox UX polish; AI cost controls)
 
 This file is the codebase-facing companion to `MASTER_PRODUCT_PLAN.md`. It answers: what exists today, what is partial, and what should not be treated as active scope.
 
@@ -115,13 +115,13 @@ Email attention classification (2026-06-14):
   - `fyi_done` — safe informational or completed transaction email.
   - `quiet` — low-value automated/marketing/noise.
 - Deterministic rules run before broad no-reply/domain rules so no-reply transactional emails containing codes, links, account setup, billing, security, or RSVP language are not incorrectly closed as useless.
-- The classifier stores `attentionCategory`, `attentionReason`, `attentionConfidence`, redacted `action` metadata, and optional `expiresIn` in `ConversationState.metadataJson`. OTP codes are not persisted; metadata records only whether a code was detected.
-- Structured action metadata can include action type, explanation, action link, expiration text, and `hasDetectedCode`. Action types include OTP code, verify email, confirm account, create password, reset password, login approval, account setup, and security alert.
+- The classifier stores `attentionCategory`, `attentionReason`, `attentionConfidence`, action metadata, and optional `expiresIn` in `ConversationState.metadataJson`. OTP/security codes are preserved only in action metadata for direct user display/copy, never auto-used.
+- Structured action metadata can include action type, explanation, action link, expiration text, `hasDetectedCode`, and optional `detectedCode`. Action types include OTP code, verify email, confirm account, create password, reset password, login approval, account setup, and security alert.
 - `lib/agent/work-item-sync.ts` maps `needs_action` to `waiting_on_you` with high priority, `review_soon` to `risky_urgent` with high priority, and `read_later` to low-priority `fyi_only`; only `quiet` and `fyi_done` are eligible for auto-close.
 - `lib/agent/command-center.ts`, the inbox list, conversation detail, and `/api/admin/close-fyi` now prefer `attentionCategory` over the legacy `emailType` when deciding whether something is safely ignorable.
 - `lib/ai/prompts/classify.ts` schema and prompt now include `attentionCategory` and `classificationReason`, keeping LLM classification aligned with deterministic attention categories.
 - Tests cover OTP/code extraction, password reset, GitHub token/security alert, newsletter/read-later, human reply request, marketing quiet, LinkedIn job alert quiet, LLM schema normalization, and metadata merge behavior.
-- Safety note: FlowDesk extracts verification codes only in local classifier output for immediate app use. It does not auto-use them, does not persist them in `ConversationState.metadataJson`, and does not include them in audit logs.
+- Safety note: FlowDesk extracts verification codes only for immediate user-facing action metadata. It does not auto-use them, and audit payloads do not include raw codes.
 
 Home command-center ranking/dedupe (2026-06-15):
 
@@ -133,9 +133,9 @@ Home command-center ranking/dedupe (2026-06-15):
 Home card and right rail UI cleanup (2026-06-15):
 
 - **Card click behavior** — both `HandleFirstSection` and `NeedsActionSection` use the same `role="link"` div pattern: whole card navigates, inner buttons/links stop propagation. Removed the redundant "Open" link inside Handle First cards (card click already navigates). Added consistent hover shadow and border on both card types. Unread cards use `ring-1` accent; read cards use normal weight without dimming.
-- **Action metadata on cards** — `CommandCenterConversation.action` fields are now surfaced on both card types: `type` renders as a colored badge (e.g. "Code detected", "Password reset", "Security alert"), `expirationText` renders as a ⏱ warning, and `actionLink` renders as an "Open link →" button that opens in a new tab (with stopPropagation so clicking the button does not also navigate to the conversation). OTP/code emails show a violet "Code detected" pill; other action types show amber. No raw code values are ever displayed.
+- **Action metadata on cards** — `CommandCenterConversation.action` fields are now surfaced on both card types: `type` renders as a colored badge (e.g. "Code detected", "Password reset", "Security alert"), `expirationText` renders as a time warning, and `actionLink` renders as an "Open link" button that opens in a new tab (with stopPropagation so clicking the button does not also navigate to the conversation). OTP/code emails show the detected code with a copy button when available; other action types show amber metadata.
 - **Duplicate resilience** — `HandleFirstSection` deduplicates by `item.id` before rendering. `NeedsActionSection` accepts an `excludeIds` set (passed by `HomeCommandCenter` containing all Handle First IDs) so the same thread never appears in both sections, even if upstream data has duplicates.
-- **Read/unread styling in inbox list** — `AppListColumn` now reads `readAt` and `gmailUnread` from the Prisma query result (both fields were already present in the query's include result; the TS type now includes them). Unread conversations (no `readAt` and not `gmailUnread === false`) show a blue dot and bold name. Read conversations use normal font weight. FYI/quiet threads use reduced opacity (0.4) instead of 0.5 to stay legible.
+- **Read/unread styling in inbox list** — `AppListColumn` now reads `readAt` and `gmailUnread` from the Prisma query result (both fields were already present in the query's include result; the TS type now includes them). Unread conversations (no `readAt` and not `gmailUnread === false`) show a blue dot and bold name. Read conversations use normal font weight. FYI/quiet threads stay muted but legible, without washing the whole row out.
 - **Summary HTML fix** — `buildRelationshipContext` now uses `stripHtmlToText` from `lib/email-body.ts` (instead of the inline `plainBody` helper that only regex-stripped HTML tags). Plain-text emails with embedded CSS rules (`@import`, `body { ... }`, etc.) no longer leak raw CSS into the right rail Summary card. The `stripHtmlToText` function handles both HTML and plain-text-with-embedded-CSS paths.
 - **Explain like I'm busy simplified** — `ExplainThreadPanel` no longer renders a full card with a description paragraph before the explanation is loaded. It renders as a compact `w-full` button ("✦ Explain like I'm busy") that sits inline in the right rail between the Summary card and Work items. Once the explanation loads, it expands into a full card with the structured breakdown. This removes visual weight without removing any functionality.
 - **Right rail order** — right rail sections are now ordered: Contact → Why this matters (HandleThisPanel, trimmed) → Summary card → Explain like I'm busy button → business panels → Work items (collapsible) → Relationship (collapsible). `HandleThisPanel` now shows only Why this matters, the state badge, the Handle this / Suggest reply button, and Next action. The previously-crowded ContextRows for Person, Summary, Relationship, and Tone have been removed from that panel; Summary is now its own dedicated card using the cleaned `lastConversationSummary` text.
@@ -298,6 +298,16 @@ Explain This Thread slice implemented:
 - Works for both personal and business accounts (no business-profile requirement).
 - Tests in `tests/explain-thread.test.ts`.
 
+AI usage policy and cost controls (2026-06-15):
+
+- `lib/agent/ai-usage-policy.ts` is the shared deterministic gate for expensive AI work. It classifies low-value automated mail such as OTPs, password resets, verification links, receipts, newsletters, marketing, LinkedIn job alerts, GitHub/security notifications, and quiet/FYI messages before any rich LLM work is considered.
+- Gmail/Outlook sync keeps work-item extraction and deterministic attention classification, but rich relationship-memory extraction is skipped for Tier 0/Tier 1 automated or low-value emails. High-value human, reply/action, VIP, and business-critical threads still qualify for richer AI.
+- Conversation detail uses deterministic state sync on open with `enableRichAi: false`, so opening the same thread does not eagerly regenerate relationship intelligence.
+- `syncPersonMemoryWithLLM` caches by content hash, prompt version, source, and model on `PersonMemory`; unchanged eligible conversations reuse the previous result and record a `person_memory.cache_hit` usage event instead of calling the model.
+- Manual draft suggestions cache by prompt version, account mode, conversation content, reply context, and user instructions in `Draft.metadataJson.draftCacheKey`. Repeating the same suggestion request returns the existing draft and records `draft.suggest.cache_hit`.
+- Agent classification, draft suggestion, and person-memory paths record `AiUsageEvent` entries for success, skipped/cache-hit, and failure cases so token/cost behavior can be measured without adding fake analytics.
+- Right-rail expensive work remains lazy: Explain This Thread is generated only after the user clicks the button and is not persisted; reply suggestions are generated only through explicit user action.
+
 Email Risk Radar slice implemented (2026-06-12, Phase 1):
 
 - `lib/agent/risk-radar.ts` — pure deterministic scanner for deadline-soon, final-notice, unanswered-thread, and sensitive-content signals.
@@ -315,7 +325,7 @@ Current behavior:
 - Approval queue supports inline approve/reject decisions, bulk decisions, and inline draft previews without navigating to the conversation.
 - Tasks are extracted from promise, deadline, payment, invoice, and renewal language.
 - Leads are extracted from pricing, demo, setup, and booking language for business accounts only.
-- Every contact gets a persisted `PersonMemory` record after sync, surfaced as a relationship panel on conversation pages.
+- Contacts get persisted `PersonMemory` after sync, surfaced as a relationship panel on conversation pages. Deterministic memory still runs broadly; richer LLM memory extraction is gated by the AI usage policy and cached by content hash.
 - The inbox shows queued follow-up jobs and a collapsible safely-ignored section.
 
 Meeting prep + post-meeting follow-up slice implemented (2026-06-11, Phase 2):
@@ -399,7 +409,7 @@ Phase 1 gaps + Phase 2 concierge templates slice (2026-06-15):
 - **Command-center bills & deadline signals** (#1) — `BillSignal`/`BillsSection` types and `buildBillsSection` in `lib/agent/command-center.ts`. Bills & Deadlines card (amber-accented) in `HomeCommandCenter` driven by `InboxTask.dueAt`, sorted ascending, capped at 8.
 - **Trust UX: Why + Undo** (#44) — Why/Undo columns on `/audit` page. `POST /api/audit/[id]/undo` reverts `autopilot.draft_approved` actions: tenant-isolates draft update, writes undo audit log with original `conversationId`.
 - **Manual task creation** (#13) — `POST /api/tasks` route with `source: "manual"`, idempotent `deterministicKey` with random suffix, `isNaN` guard on `dueAt`. `ManualTaskForm` and `WorkItemsPanel` "+ Add task" toggle on conversation pages.
-- **Person-memory editing + LLM upgrade** (#5) — `PersonMemoryEditShell`/`PersonMemoryEditPanel` client forms. `PATCH /api/person-memory/[contactId]` partial-update route. `syncPersonMemoryWithLLM` LLM extraction with `gpt-5.4-mini`; falls back to regex heuristic on <3 messages, no API key, or LLM error. `[RELATIONSHIP_DATA: ...]` bracketing on personMemory fields in meeting-prep and meeting-follow-up prompts for prompt-injection mitigation.
+- **Person-memory editing + LLM upgrade** (#5) — `PersonMemoryEditShell`/`PersonMemoryEditPanel` client forms. `PATCH /api/person-memory/[contactId]` partial-update route. `syncPersonMemoryWithLLM` LLM extraction with `gpt-5.4-mini`; skips low-value email via the AI usage policy, caches by content hash/source/model, and falls back to regex heuristic on <3 messages, no API key, cache-skip, or LLM error. `[RELATIONSHIP_DATA: ...]` bracketing on personMemory fields in meeting-prep and meeting-follow-up prompts for prompt-injection mitigation.
 - **Local-business concierge templates** (#36) — 8 templates across 6 categories in `lib/agent/concierge-templates.ts`. `POST /api/settings/seed-templates` idempotent seed (business-only). `ConciergeTemplateSeedButton` in `/settings`. Template picker in `ReplyComposer`. Concierge templates excluded from AI reply context via `sourceType: "concierge_template"` filter in `lib/agent/reply-context.ts` and `lib/agent/context.ts`.
 
 Limitations:
