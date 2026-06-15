@@ -37,15 +37,18 @@ export async function checkAutopilotEligibility(
     }
   }
 
-  // Per-intent threshold override
+  // Per-intent threshold override — case-insensitive key lookup, consistent with allowedIntentsJson
   if (setting.categoryThresholdsJson) {
     const categoryThresholds = setting.categoryThresholdsJson as Record<string, number>
-    const intentKey = classification.intent
-    const categoryThreshold = categoryThresholds[intentKey]
-    if (typeof categoryThreshold === "number" && classification.confidence < categoryThreshold) {
-      return {
-        eligible: false,
-        reason: `Confidence ${classification.confidence.toFixed(2)} is below per-category threshold ${categoryThreshold} for intent "${intentKey}"`,
+    const intentLower = classification.intent.toLowerCase()
+    const matchedKey = Object.keys(categoryThresholds).find((k) => k.toLowerCase() === intentLower)
+    if (matchedKey !== undefined) {
+      const categoryThreshold = categoryThresholds[matchedKey]
+      if (typeof categoryThreshold === "number" && classification.confidence < categoryThreshold) {
+        return {
+          eligible: false,
+          reason: `Confidence ${classification.confidence.toFixed(2)} is below per-category threshold ${categoryThreshold} for intent "${classification.intent}"`,
+        }
       }
     }
   }
