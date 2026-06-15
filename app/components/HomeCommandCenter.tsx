@@ -9,21 +9,13 @@ import WaitingOnSection from "@/app/components/WaitingOnSection"
 import AgentActivitySection from "@/app/components/AgentActivitySection"
 import QuietlyHandledBanner from "@/app/components/QuietlyHandledBanner"
 
-type GmailSyncChannel = {
-  id: string
-  emailAddress: string | null
-  lastSyncedAt: Date | string | null
-  lastSyncError: string | null
-  watchExpiresAt?: Date | string | null
-}
-
 interface Props {
   commandCenter: DailyCommandCenter
   revenueAtRisk: RevenueAtRiskItem[]
   agentSummary: AgentSummary
   accountType: string | null
   date: Date
-  gmailChannels: GmailSyncChannel[]
+  gmailChannels?: unknown[]
   billsSection: BillsSection
 }
 
@@ -31,7 +23,6 @@ export default function HomeCommandCenter({
   commandCenter,
   agentSummary,
   date,
-  gmailChannels,
   billsSection,
 }: Props) {
   const { counts, topActions, sections, quietlyHandledBreakdown } = commandCenter

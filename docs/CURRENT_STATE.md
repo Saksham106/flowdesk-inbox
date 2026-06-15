@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-15 (sync idempotency, user override preservation, read state, action-email metadata; Home card UX, right rail cleanup, summary HTML fix; Phase 1 gaps + Phase 2 concierge templates; inbox UX polish; AI cost controls)
+Last updated: 2026-06-15 (sync idempotency, user override preservation, read state, action-email metadata; Home card UX, right rail cleanup, summary HTML fix; Phase 1 gaps + Phase 2 concierge templates; inbox UX polish; AI cost controls; layout centering, hover row actions, composer redesign, right rail simplification)
 
 This file is the codebase-facing companion to `MASTER_PRODUCT_PLAN.md`. It answers: what exists today, what is partial, and what should not be treated as active scope.
 
@@ -157,6 +157,14 @@ Email-only thread UI hardening (2026-06-13):
 - Reply composition remains connected to the thread below the messages through a unified `ReplyComposer` that supports manual sending and AI draft generation/review in one textarea.
 - Manual sends still call `POST /api/conversations/[id]/send`. AI draft sends still edit/approve the draft, then call `POST /api/conversations/[id]/draft/send-approved`; failed edit/approve/send responses stop the flow and show the server error instead of sending stale content.
 - The email-body sanitizer, linkification, iframe wrapping, and layout constraints remain in use through `EmailBody`.
+
+Inbox UX polish, hover actions, and composer redesign (2026-06-15):
+
+- **Wide-screen Home layout** — `HomeCommandCenter` inner container now has `mx-auto` so content centers on wide monitors instead of pinning to the left edge. `HomeHeader` no longer renders `GmailSyncControl` (duplicate removed; inbox list header is the canonical sync-status location).
+- **Hover row actions** — `app/components/InboxRow.tsx` is a new client component that wraps each inbox row. On hover, a CSS-driven action strip appears (opacity transition, no dismount race) with two icon buttons: read/unread toggle (`PATCH /api/conversations/:id/read`) and close/reopen toggle (`PATCH /api/conversations/:id/status`). Both use optimistic state updates that roll back on API failure. `AppListColumn` remains a pure server component; `InboxRow` is the client boundary.
+- **Reply composer collapsed state** — `ReplyComposer` now starts collapsed (compact "Reply to sender…" bar + "Reply" button). Clicking expands an in-place email composer with To (pre-filled from last inbound sender), CC, BCC (toggle buttons → input rows), and Subject (read-only, shows thread ID). The Draft with AI and Send paths are unchanged. Discard collapses back; if the user has typed text without an AI draft, a confirmation prompt prevents accidental loss. CC/BCC capture input but are not yet forwarded to the send API (backend extension point, marked with a TODO comment).
+- **Right rail simplification** — when `isAutoEmailConversation` is true (quiet/fyi_done/notification/newsletter/marketing), the right rail shows only the Contact card and the "No reply needed" assistant card. Summary, ExplainThread, WorkItems, Relationship, and CalendarHoldPanel are hidden for those emails. Business panels (SupportPanel, SalesPanel) are unaffected unless `isAutoEmailConversation` overrides the CalendarHoldPanel gate.
+- **Email reading padding** — desktop thread scroll area reduced from `px-3 py-4` to `px-2 py-3`; article card inner padding reduced from `px-4 py-3` to `px-3 py-2.5`.
 
 Desktop panel resizing (2026-06-14):
 
