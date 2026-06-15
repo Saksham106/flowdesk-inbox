@@ -15,7 +15,7 @@ import DesktopResizablePanels from "@/app/components/DesktopResizablePanels";
 import HomeCommandCenter from "@/app/components/HomeCommandCenter"
 import BulkCloseButton from "@/app/inbox/BulkCloseButton";
 import GmailSyncControl from "@/app/components/GmailSyncControl";
-import { buildDailyCommandCenter, CommandCenterInputConversation, PersistedCommandCenterState, CommandCenterState, CommandCenterPriority, type AgentSummary } from "@/lib/agent/command-center";
+import { buildDailyCommandCenter, buildBillsSection, CommandCenterInputConversation, PersistedCommandCenterState, CommandCenterState, CommandCenterPriority, type AgentSummary, type BillsSection } from "@/lib/agent/command-center";
 import { analyzeRevenueAtRisk } from "@/lib/agent/revenue-at-risk";
 import { AppNavigationItem, getInboxNavigation } from "@/lib/app-navigation";
 import { buildConversationHref } from "@/lib/client-navigation";
@@ -201,10 +201,37 @@ export default async function InboxPage({ searchParams }: Props) {
         ])
       : [[], [] as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>, [] as PersistedCommandCenterState[]];
 
+  const upcomingTasks = isHomeView
+    ? await prisma.inboxTask.findMany({
+        where: {
+          tenantId,
+          status: "open",
+          dueAt: { lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
+        },
+        orderBy: { dueAt: "asc" },
+        take: 10,
+        include: {
+          conversation: {
+            include: { contact: { select: { name: true } } },
+          },
+        },
+      })
+    : []
+
   type ConversationForBrief = CommandCenterInputConversation & {
     stateRecord: { metadataJson: unknown } | null;
     leads: { score: number; scoreExplanation: string | null; estimatedValue: number | null }[];
   };
+
+  // Hoist the mapped conversations so both buildDailyCommandCenter and buildBillsSection
+  // receive conversationState (not the raw stateRecord field).
+  const mappedConvs: CommandCenterInputConversation[] = isHomeView
+    ? (commandCenterConversations as ConversationForBrief[]).map((c) => ({
+        ...c,
+        conversationState: c.stateRecord,
+        lead: c.leads[0] ?? null,
+      }))
+    : []
 
   // Build a Map of persisted states for quick lookup
   const persistedStatesMap = new Map<string, PersistedCommandCenterState>(
@@ -226,16 +253,16 @@ export default async function InboxPage({ searchParams }: Props) {
 
   const commandCenter = isHomeView
     ? buildDailyCommandCenter(
-        (commandCenterConversations as ConversationForBrief[]).map((c) => ({
-          ...c,
-          conversationState: c.stateRecord,
-          lead: c.leads[0] ?? null,
-        })),
+        mappedConvs,
         new Date(),
         accountType,
         persistedStatesMap
       )
     : null;
+
+  const billsSection: BillsSection = isHomeView
+    ? buildBillsSection(upcomingTasks, mappedConvs)
+    : { items: [], count: 0 }
 
   const agentSummaryRaw = isHomeView
     ? await Promise.all([
@@ -391,6 +418,7 @@ export default async function InboxPage({ searchParams }: Props) {
                 date={new Date()}
                 agentSummary={agentSummary}
                 gmailChannels={gmailSyncChannels}
+                billsSection={billsSection}
               />
             ) : (
               <div className="flex h-full items-center justify-center">
@@ -530,6 +558,7 @@ export default async function InboxPage({ searchParams }: Props) {
                   date={new Date()}
                   agentSummary={agentSummary}
                   gmailChannels={gmailSyncChannels}
+                  billsSection={billsSection}
                 />
               )}
               <BulkCloseButton />

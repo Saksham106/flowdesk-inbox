@@ -723,3 +723,77 @@ function score(conversation: CommandCenterConversation): number {
     revenueBonus
   )
 }
+
+export type BillSignal = {
+  conversationId: string
+  displayName: string
+  href: string
+  title: string
+  dueAt: Date | null
+  type: "task" | "billing_alert"
+}
+
+export type BillsSection = {
+  items: BillSignal[]
+  count: number
+}
+
+export function buildBillsSection(
+  tasks: Array<{
+    id: string
+    conversationId: string
+    title: string
+    dueAt: Date | null
+    conversation: { contact: { name: string } | null; externalThreadId: string }
+  }>,
+  conversations: CommandCenterInputConversation[],
+  now = new Date()
+): BillsSection {
+  const items: BillSignal[] = []
+  const sevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+  // Upcoming tasks with due dates
+  for (const task of tasks) {
+    if (task.dueAt && task.dueAt <= sevenDays) {
+      const name = task.conversation.contact?.name ?? task.conversation.externalThreadId
+      items.push({
+        conversationId: task.conversationId,
+        displayName: name,
+        href: `/conversations/${task.conversationId}`,
+        title: task.title,
+        dueAt: task.dueAt,
+        type: "task",
+      })
+    }
+  }
+
+  // Conversations with review_soon attention category
+  for (const conv of conversations) {
+    const meta = conv.conversationState?.metadataJson
+    const category =
+      meta && typeof meta === "object" && !Array.isArray(meta)
+        ? (meta as Record<string, unknown>).attentionCategory
+        : null
+    if (category === "review_soon") {
+      const name = conv.contact?.name ?? conv.externalThreadId
+      items.push({
+        conversationId: conv.id,
+        displayName: name,
+        href: `/conversations/${conv.id}`,
+        title: "Billing or security alert",
+        dueAt: null,
+        type: "billing_alert",
+      })
+    }
+  }
+
+  // Sort by dueAt ascending (nulls last)
+  items.sort((a, b) => {
+    if (!a.dueAt && !b.dueAt) return 0
+    if (!a.dueAt) return 1
+    if (!b.dueAt) return -1
+    return a.dueAt.getTime() - b.dueAt.getTime()
+  })
+
+  return { items: items.slice(0, 8), count: items.length }
+}

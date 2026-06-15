@@ -1,4 +1,4 @@
-import type { DailyCommandCenter, AgentSummary } from "@/lib/agent/command-center"
+import type { DailyCommandCenter, AgentSummary, BillsSection } from "@/lib/agent/command-center"
 import type { RevenueAtRiskItem } from "@/lib/agent/revenue-at-risk"
 import HomeHeader from "@/app/components/HomeHeader"
 import HomeStats from "@/app/components/HomeStats"
@@ -23,6 +23,7 @@ interface Props {
   accountType: string | null
   date: Date
   gmailChannels: GmailSyncChannel[]
+  billsSection: BillsSection
 }
 
 export default function HomeCommandCenter({
@@ -30,6 +31,7 @@ export default function HomeCommandCenter({
   agentSummary,
   date,
   gmailChannels,
+  billsSection,
 }: Props) {
   const { counts, topActions, sections, quietlyHandledBreakdown } = commandCenter
 
@@ -56,7 +58,7 @@ export default function HomeCommandCenter({
         {/* 60/40 body grid */}
         <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
 
-          {/* Left 60%: Handle First + Needs Action */}
+          {/* Left 60%: Handle First + Needs Action + Bills & Deadlines */}
           <div className="flex flex-col gap-5">
             <div>
               <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-red-500">
@@ -68,6 +70,34 @@ export default function HomeCommandCenter({
               items={sections.needsAction}
               excludeIds={new Set(topActions.map((item) => item.id))}
             />
+            {/* Bills & Deadlines */}
+            {billsSection.count > 0 && (
+              <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-semibold text-slate-700">
+                  Bills &amp; Deadlines
+                  <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                    {billsSection.count}
+                  </span>
+                </h3>
+                <ul className="mt-3 space-y-2">
+                  {billsSection.items.map((item) => (
+                    <li key={`${item.conversationId}-${item.title}`}>
+                      <a href={item.href} className="flex items-start justify-between gap-2 text-sm hover:underline">
+                        <span className="min-w-0">
+                          <span className="font-medium text-slate-800">{item.displayName}</span>
+                          <span className="ml-1.5 text-slate-500">{item.title}</span>
+                        </span>
+                        {item.dueAt && (
+                          <span className="shrink-0 whitespace-nowrap text-xs text-amber-600">
+                            Due {item.dueAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          </span>
+                        )}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
           </div>
 
           {/* Right 40%: Read Later + Waiting On + Agent Activity */}
