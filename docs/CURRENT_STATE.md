@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-15 (sync idempotency, user override preservation, read state, action-email metadata)
+Last updated: 2026-06-15 (sync idempotency, user override preservation, read state, action-email metadata; Home card UX, right rail cleanup, summary HTML fix)
 
 This file is the codebase-facing companion to `MASTER_PRODUCT_PLAN.md`. It answers: what exists today, what is partial, and what should not be treated as active scope.
 
@@ -128,6 +128,16 @@ Home command-center ranking/dedupe (2026-06-15):
 - Pure action emails (OTP, verification link, password setup/reset) appear in Needs Action and not also in Handle First. Reply/urgent/opportunity/review-style items can still appear in Handle First.
 - Handle First cards are now clickable like Needs Action cards, with keyboard activation and child buttons/links stopping propagation.
 
+Home card and right rail UI cleanup (2026-06-15):
+
+- **Card click behavior** — both `HandleFirstSection` and `NeedsActionSection` use the same `role="link"` div pattern: whole card navigates, inner buttons/links stop propagation. Removed the redundant "Open" link inside Handle First cards (card click already navigates). Added consistent hover shadow and border on both card types. Unread cards use `ring-1` accent; read cards use normal weight without dimming.
+- **Action metadata on cards** — `CommandCenterConversation.action` fields are now surfaced on both card types: `type` renders as a colored badge (e.g. "Code detected", "Password reset", "Security alert"), `expirationText` renders as a ⏱ warning, and `actionLink` renders as an "Open link →" button that opens in a new tab (with stopPropagation so clicking the button does not also navigate to the conversation). OTP/code emails show a violet "Code detected" pill; other action types show amber. No raw code values are ever displayed.
+- **Duplicate resilience** — `HandleFirstSection` deduplicates by `item.id` before rendering. `NeedsActionSection` accepts an `excludeIds` set (passed by `HomeCommandCenter` containing all Handle First IDs) so the same thread never appears in both sections, even if upstream data has duplicates.
+- **Read/unread styling in inbox list** — `AppListColumn` now reads `readAt` and `gmailUnread` from the Prisma query result (both fields were already present in the query's include result; the TS type now includes them). Unread conversations (no `readAt` and not `gmailUnread === false`) show a blue dot and bold name. Read conversations use normal font weight. FYI/quiet threads use reduced opacity (0.4) instead of 0.5 to stay legible.
+- **Summary HTML fix** — `buildRelationshipContext` now uses `stripHtmlToText` from `lib/email-body.ts` (instead of the inline `plainBody` helper that only regex-stripped HTML tags). Plain-text emails with embedded CSS rules (`@import`, `body { ... }`, etc.) no longer leak raw CSS into the right rail Summary card. The `stripHtmlToText` function handles both HTML and plain-text-with-embedded-CSS paths.
+- **Explain like I'm busy simplified** — `ExplainThreadPanel` no longer renders a full card with a description paragraph before the explanation is loaded. It renders as a compact `w-full` button ("✦ Explain like I'm busy") that sits inline in the right rail between the Summary card and Work items. Once the explanation loads, it expands into a full card with the structured breakdown. This removes visual weight without removing any functionality.
+- **Right rail order** — right rail sections are now ordered: Contact → Why this matters (HandleThisPanel, trimmed) → Summary card → Explain like I'm busy button → business panels → Work items (collapsible) → Relationship (collapsible). `HandleThisPanel` now shows only Why this matters, the state badge, the Handle this / Suggest reply button, and Next action. The previously-crowded ContextRows for Person, Summary, Relationship, and Tone have been removed from that panel; Summary is now its own dedicated card using the cleaned `lastConversationSummary` text.
+
 Conversation page layout redesign (2026-06-12):
 
 - `app/conversations/[id]/page.tsx` — two-column grid changed to `lg:grid-cols-[1fr_300px]`; main column is now `section.space-y-4` containing the email thread card and a new inline Reply card below it; sidebar reduced to context-only cards.
@@ -135,7 +145,7 @@ Conversation page layout redesign (2026-06-12):
 - `app/components/CollapsibleCard.tsx` — new reusable client component: animated chevron toggle, `defaultOpen` prop, renders children inside a `border-t` content area; used for Work items and Relationship memory in the sidebar.
 - `AIDraftPanel` — `inline?: boolean` prop added; when true, skips the outer `rounded-xl border` card wrapper and the "AI draft" title/subtitle (the parent Reply card provides that context); status badge is repositioned inline.
 - `WorkItemsPanel` — `bare?: boolean` prop added; when true, skips the outer card wrapper so it renders cleanly inside `CollapsibleCard` without double borders.
-- Sidebar order (top to bottom): Contact + Label (combined compact card) → Assistant context (`HandleThisPanel`) → Support signals (conditional) → Sales panel (conditional, business only) → Calendar holds → Explain thread → Work items (collapsible, default closed) → Relationship memory (collapsible, default closed).
+- Sidebar order (top to bottom): Contact + Label (combined compact card) → Why this matters (`HandleThisPanel`, trimmed to state badge + handle button + next action) → Summary card (cleaned plain text) → Explain like I'm busy button → Support signals (conditional) → Sales panel (conditional, business only) → Calendar holds → Work items (collapsible, default closed) → Relationship memory (collapsible, default closed).
 - Contact and Label merged into one card, eliminating one always-visible sidebar item.
 - Sidebar widened from 280px to 300px; main grid gap reduced from 6 to 5.
 
@@ -168,7 +178,7 @@ Personal vs business account separation (updated 2026-06-13):
 - `lib/agent/work-items.ts` and `lib/agent/work-item-sync.ts` — personal accounts still get state/task/person-memory sync, but deterministic lead extraction, support classification, sales classification, lead scoring, and lead audit records are business-only.
 - `app/api/conversations/[id]/draft/suggest/route.ts` — personal draft metadata forcibly stores `suggestedLabel: null` and never writes business labels to the conversation.
 - `lib/ai/prompts/draft-reply.ts` — personal draft prompt tells the model to keep `suggestedLabel` null instead of listing business labels.
-- `lib/agent/command-center.ts` — added `stripHtml` and `plainBody` helpers; `bodyText` now strips HTML from HTML email bodies before pattern matching; `lastConversationSummary` and `pastPromises` in `buildRelationshipContext` use `plainBody` so the Assistant Context "Summary" row never shows raw HTML/CSS/template markup.
+- `lib/agent/command-center.ts` — `bodyText` strips HTML from HTML email bodies before pattern matching using an internal `plainBody` helper. `lastConversationSummary` in `buildRelationshipContext` now uses `stripHtmlToText` from `lib/email-body.ts` so the right rail Summary card never shows raw HTML/CSS/template markup, including plain-text emails with embedded CSS rules.
 - Tests: `tests/work-item-sync.test.ts` covers personal accounts not creating lead records; `tests/ai-draft-provider.test.ts` covers personal draft prompt label separation; command-center tests cover account-mode-safe behavior and sensitive override.
 
 Limitations:
@@ -281,7 +291,7 @@ Explain This Thread slice implemented:
 - `lib/ai/prompts/explain-thread.ts` — prompt builder (last 25 messages, per-message truncation, direction labels, no-invented-facts and no-liability-admission safety rules), strict JSON schema, tolerant normalizer.
 - `explainThreadWithOpenAI` / `explainThread` in `lib/ai/openai.ts` and `lib/ai/provider.ts`, mirroring the draft-reply structured-output pattern.
 - `POST /api/conversations/[id]/explain` — tenant-scoped; records `AiUsageEvent` (feature `explain_thread`) on success and failure and writes a `conversation.explained` audit entry with risk level and counts.
-- `ExplainThreadPanel` on conversation pages — what happened, what they want, what you need to do, risks/deadlines with a low/medium/high risk badge, suggested next step, refresh.
+- `ExplainThreadPanel` on conversation pages — compact "✦ Explain like I'm busy" button in the right rail. On click: what happened, what they want, what you need to do, risks/deadlines with a low/medium/high risk badge, suggested next step, refresh. Renders as a button until triggered; expands to a structured card on load.
 - Read-only by design: never drafts, sends, or mutates state. Explanations are generated on demand and not persisted.
 - Works for both personal and business accounts (no business-profile requirement).
 - Tests in `tests/explain-thread.test.ts`.

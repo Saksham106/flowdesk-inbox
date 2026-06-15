@@ -1,4 +1,5 @@
 import { resolveAccountMode, type AccountMode } from "@/lib/account-mode"
+import { stripHtmlToText } from "@/lib/email-body"
 
 type MessageDirection = "inbound" | "outbound" | string
 
@@ -663,7 +664,7 @@ export function buildRelationshipContext(
     lastConversationSummary: intent
       ? `Last classified as ${intent}.`
       : latest
-        ? plainBody(latest).slice(0, 160)
+        ? stripHtmlToText(latest.body, 200)
         : "No recent conversation summary yet.",
     openTasks: buildOpenTasks(conversation, state, pastPromises),
     tonePreference: "Use a concise, warm, approval-first reply.",

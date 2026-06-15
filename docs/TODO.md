@@ -1,6 +1,6 @@
 # FlowDesk Remaining-Work To-Do List
 
-Last updated: 2026-06-15
+Last updated: 2026-06-15 (UI/UX cleanup: Home cards, right rail, summary HTML)
 
 This is the canonical checklist of what has **not** been completed from the master product plan. It complements `MASTER_PRODUCT_PLAN.md` (the roadmap and feature index) and `CURRENT_STATE.md` (what exists). When work ships, check items off here and update both companion docs in the same branch.
 
@@ -18,7 +18,7 @@ Most Phase 1 foundations are shipped (command center, task/lead extraction, appr
 - [x] **Smart labels taxonomy — first attention slice** (#42) — shipped 2026-06-14: deterministic and LLM classification now support `needs_reply`, `needs_action`, `review_soon`, `read_later`, `waiting_on`, `fyi_done`, and `quiet`; stored in `ConversationState.metadataJson.attentionCategory`.
 - [x] **Account-action detection slice** (#21/#42) — shipped 2026-06-15: deterministic OTP, verify-email, password setup/reset, login approval, account setup, and security alert detection; redacted action metadata is surfaced to Home cards without persisting OTP codes.
 - [x] **Read/done sync persistence hardening** (#6/#42) — shipped 2026-06-15: local user overrides and read state are separate from raw Gmail state; Gmail sync no longer resurrects done items in Handle First.
-- [ ] **Smart labels taxonomy — product-complete UI** (#42) — expose the full taxonomy as first-class filters/actions, add correction controls, and decide whether categories graduate from metadata to schema fields.
+- [ ] **Smart labels taxonomy — product-complete UI** (#42) — expose the full taxonomy as first-class filters/actions, add correction controls, and decide whether categories graduate from metadata to schema fields. Action metadata badges (OTP, password reset, security alert, expiry warnings, action links) are now surfaced on Home cards; read/unread dot indicator added to inbox list. Remaining: full filter/correction controls.
 - [ ] **Richer sensitive detection** (#10) — more categories (legal, immigration, tax, medical, HR, emotional) and highlighted risky parts inside drafts.
 - [ ] **Command-center source signals** (#1) — meetings-needing-prep and bills/deadlines sections need calendar events and attachment/deadline signals.
 - [ ] **Trust UX** (#44) — per-action "why" explanations and undo on top of the existing audit log. Some action metadata/reasons now exist, but visible correction/undo UX remains.

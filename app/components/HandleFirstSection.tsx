@@ -2,7 +2,6 @@
 
 import type React from "react"
 import { useState } from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import type { CommandCenterConversation, CommandCenterPriority } from "@/lib/agent/command-center"
 
@@ -20,6 +19,21 @@ function relativeTime(date: Date): string {
 const PRIORITY_STYLES: Partial<Record<CommandCenterPriority, string>> = {
   urgent: "border-l-2 border-l-red-300 bg-red-50/40",
   high: "border-l-2 border-l-amber-300 bg-amber-50/40",
+}
+
+const ACTION_TYPE_LABELS: Record<string, string> = {
+  otp: "Code detected",
+  verification_code: "Code detected",
+  password_reset: "Password reset",
+  create_password: "Create password",
+  email_verification: "Email verification",
+  security_alert: "Security alert",
+  magic_link: "Login link",
+  action_required: "Action required",
+}
+
+function actionLabel(type: string): string {
+  return ACTION_TYPE_LABELS[type] ?? type.replace(/_/g, " ")
 }
 
 interface CardProps {
@@ -70,9 +84,6 @@ function HandleFirstCard({ item }: CardProps) {
     }
   }
 
-  const priorityClass = PRIORITY_STYLES[item.priority] ?? ""
-  const readClass = item.isRead ? "opacity-80" : "ring-1 ring-blue-100"
-
   function openCard() {
     router.push(item.href)
   }
@@ -84,21 +95,51 @@ function HandleFirstCard({ item }: CardProps) {
     }
   }
 
+  const priorityClass = PRIORITY_STYLES[item.priority] ?? ""
+  const readClass = item.isRead
+    ? ""
+    : "ring-1 ring-blue-100"
+
+  const action = item.action
+
   return (
     <div
       role="link"
       tabIndex={0}
       onClick={openCard}
       onKeyDown={handleKeyDown}
-      className={`cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${priorityClass} ${readClass}`}
+      className={`cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:shadow-sm hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 ${priorityClass} ${readClass}`}
       aria-label={`Open ${item.displayName}`}
     >
       <div className="flex items-baseline justify-between gap-2 mb-1">
-        <p className="text-[12px] font-semibold text-slate-900 truncate">{item.displayName}</p>
+        <p className={`text-[12px] truncate ${item.isRead ? "font-medium text-slate-700" : "font-semibold text-slate-900"}`}>
+          {item.displayName}
+        </p>
         <span className="text-[10px] text-slate-400 flex-shrink-0">{relativeTime(item.lastMessageAt)}</span>
       </div>
+
       <p className="text-[11px] text-slate-600 truncate mb-1">{item.nextAction}</p>
-      <p className="text-[10px] text-slate-400 italic mb-2.5">{item.reason}</p>
+      <p className="text-[10px] text-slate-400 italic mb-2">{item.reason}</p>
+
+      {/* Action metadata */}
+      {action && (
+        <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
+          {action.hasDetectedCode && (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
+              Code detected
+            </span>
+          )}
+          {!action.hasDetectedCode && (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+              {actionLabel(action.type)}
+            </span>
+          )}
+          {action.expirationText && (
+            <span className="text-[10px] text-red-600 font-medium">⏱ {action.expirationText}</span>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center gap-2 flex-wrap">
         {item.needsReply && (
           <button
@@ -113,21 +154,27 @@ function HandleFirstCard({ item }: CardProps) {
           </button>
         )}
         {item.approvalReason && !item.needsReply && (
-          <Link
-            href={item.href}
-            onClick={(event) => event.stopPropagation()}
+          <button
+            onClick={(event) => {
+              event.stopPropagation()
+              router.push(item.href)
+            }}
             className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition"
           >
             Review Draft
-          </Link>
+          </button>
         )}
-        <Link
-          href={item.href}
-          onClick={(event) => event.stopPropagation()}
-          className="text-[10px] font-medium px-2.5 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
-        >
-          Open
-        </Link>
+        {action?.actionLink && (
+          <a
+            href={action.actionLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(event) => event.stopPropagation()}
+            className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-amber-500 text-white hover:bg-amber-600 transition"
+          >
+            Open link →
+          </a>
+        )}
         <button
           onClick={(event) => {
             event.stopPropagation()
@@ -153,7 +200,15 @@ interface Props {
 }
 
 export default function HandleFirstSection({ items }: Props) {
-  if (items.length === 0) {
+  // Deduplicate by id
+  const seen = new Set<string>()
+  const deduped = items.filter((item) => {
+    if (seen.has(item.id)) return false
+    seen.add(item.id)
+    return true
+  })
+
+  if (deduped.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-4 text-center">
         <p className="text-[11px] font-medium text-slate-600">All caught up</p>
@@ -164,7 +219,7 @@ export default function HandleFirstSection({ items }: Props) {
 
   return (
     <div className="flex flex-col gap-2">
-      {items.slice(0, 5).map((item) => (
+      {deduped.slice(0, 5).map((item) => (
         <HandleFirstCard key={item.id} item={item} />
       ))}
     </div>

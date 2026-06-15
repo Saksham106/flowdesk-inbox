@@ -5,19 +5,16 @@ import { useState } from "react"
 
 import type {
   CommandCenterConversation,
-  RelationshipContext,
 } from "@/lib/agent/command-center"
 
 export default function HandleThisPanel({
   conversationId,
   assistantState,
-  relationshipContext,
   canSuggest,
   isPersonal = false,
 }: {
   conversationId: string
   assistantState: CommandCenterConversation
-  relationshipContext: RelationshipContext
   canSuggest: boolean
   isPersonal?: boolean
 }) {
@@ -86,21 +83,7 @@ export default function HandleThisPanel({
         {assistantState.approvalReason ? (
           <ContextRow label="Review note" value={assistantState.approvalReason} />
         ) : null}
-        <ContextRow label="Person" value={relationshipContext.name} />
-        <ContextRow label="Summary" value={relationshipContext.lastConversationSummary} />
-        <ContextRow label="Relationship" value={relationshipContext.relationshipStatus} />
-        <ContextRow label="Tone" value={relationshipContext.tonePreference} />
       </dl>
-
-      {relationshipContext.openTasks.length > 0 ? (
-        <ContextList title="Open tasks" items={relationshipContext.openTasks} />
-      ) : null}
-      {relationshipContext.moneySignals.length > 0 ? (
-        <ContextList title="Money signals" items={relationshipContext.moneySignals} />
-      ) : null}
-      {relationshipContext.importantDetails.length > 0 ? (
-        <ContextList title="Details" items={relationshipContext.importantDetails} />
-      ) : null}
     </div>
   )
 }
@@ -114,15 +97,3 @@ function ContextRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-function ContextList({ title, items }: { title: string; items: string[] }) {
-  return (
-    <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 p-3">
-      <h3 className="text-xs font-semibold text-slate-600">{title}</h3>
-      <ul className="mt-2 space-y-1 text-xs text-slate-700">
-        {items.map((item) => (
-          <li key={item} className="min-w-0 break-words [overflow-wrap:anywhere]">{item}</li>
-        ))}
-      </ul>
-    </div>
-  )
-}

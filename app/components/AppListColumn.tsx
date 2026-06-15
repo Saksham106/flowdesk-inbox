@@ -27,6 +27,8 @@ type ConvRow = {
   status: string
   lastMessageAt: Date
   externalThreadId: string
+  readAt: Date | null
+  gmailUnread: boolean | null
   contact: { name: string } | null
   messages: { body: string }[]
   draft: { status: string } | null
@@ -229,6 +231,7 @@ export default async function AppListColumn({
             const hasDraft =
               conv.draft?.status === "proposed" || conv.draft?.status === "approved"
             const isSelected = conv.id === activeConversationId
+            const isUnread = !conv.readAt && conv.gmailUnread !== false && !fyi
 
             return (
               <Link
@@ -238,18 +241,25 @@ export default async function AppListColumn({
                   isSelected
                     ? "border-l-2 border-l-blue-500 bg-blue-50"
                     : "hover:bg-slate-50"
-                } ${fyi ? "opacity-50" : ""}`}
+                } ${fyi ? "opacity-40" : ""}`}
               >
                 <div className="flex items-baseline justify-between gap-1">
-                  <p
-                    className={`min-w-0 truncate text-xs ${
-                      conv.status === "needs_reply" && !fyi
-                        ? "font-bold text-slate-900"
-                        : "font-medium text-slate-700"
-                    }`}
-                  >
-                    {name}
-                  </p>
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    {isUnread && (
+                      <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+                    )}
+                    <p
+                      className={`min-w-0 truncate text-xs ${
+                        isUnread
+                          ? "font-bold text-slate-900"
+                          : fyi
+                            ? "font-normal text-slate-500"
+                            : "font-medium text-slate-700"
+                      }`}
+                    >
+                      {name}
+                    </p>
+                  </div>
                   <span className="shrink-0 text-[10px] text-slate-400">
                     {relativeTime(conv.lastMessageAt)}
                   </span>

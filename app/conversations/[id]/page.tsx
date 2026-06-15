@@ -361,7 +361,6 @@ export default async function ConversationPage({
     <HandleThisPanel
       conversationId={conversation.id}
       assistantState={assistantState}
-      relationshipContext={relationshipContext}
       canSuggest={canSuggestReply}
       isPersonal={isPersonal}
     />
@@ -405,8 +404,18 @@ export default async function ConversationPage({
     </>
   )
 
+  const cleanSummary = relationshipContext.lastConversationSummary
+
+  const summaryCard = cleanSummary && cleanSummary !== "No recent conversation summary yet." ? (
+    <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Summary</p>
+      <p className="text-xs text-slate-700 leading-relaxed break-words [overflow-wrap:anywhere]">{cleanSummary}</p>
+    </div>
+  ) : null
+
   const extraCards = (
     <>
+      {summaryCard}
       <ExplainThreadPanel conversationId={conversation.id} />
       <CollapsibleCard title="Work items">
         <WorkItemsPanel

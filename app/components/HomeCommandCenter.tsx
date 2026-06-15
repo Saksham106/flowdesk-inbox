@@ -64,7 +64,10 @@ export default function HomeCommandCenter({
               </p>
               <HandleFirstSection items={topActions} />
             </div>
-            <NeedsActionSection items={sections.needsAction} />
+            <NeedsActionSection
+              items={sections.needsAction}
+              excludeIds={new Set(topActions.map((item) => item.id))}
+            />
           </div>
 
           {/* Right 40%: Read Later + Waiting On + Agent Activity */}
