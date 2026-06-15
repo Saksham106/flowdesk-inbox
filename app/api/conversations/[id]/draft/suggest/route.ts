@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import OpenAI from "openai"
+import { createHash } from "crypto"
 
 import { authOptions } from "@/lib/auth"
 import { detectSensitiveMatches } from "@/lib/agent/risk-radar"
 import { getReplyGenerationContext } from "@/lib/agent/reply-context"
 import { generateDraftReply } from "@/lib/ai/provider"
-import { buildPersonalDraftReplyPrompt, draftReplyJsonSchema, normalizeDraftReplyOutput } from "@/lib/ai/prompts/draft-reply"
+import { buildDraftReplyPrompt, buildPersonalDraftReplyPrompt, draftReplyJsonSchema, normalizeDraftReplyOutput } from "@/lib/ai/prompts/draft-reply"
 import { summarizeConversation } from "@/lib/ai/summarize"
+import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import { prisma } from "@/lib/prisma"
 
 export const runtime = "nodejs"
@@ -36,6 +38,7 @@ export async function POST(
         orderBy: { createdAt: "asc" },
         take: 40,
       },
+      draft: true,
     },
   })
 
@@ -68,9 +71,28 @@ export async function POST(
   let knowledgeDocumentIds: string[] = []
   const learnedProfileId = context.learnedProfile?.id ?? null
   const learnedProfilePromptVersion = context.learnedProfile?.promptVersion ?? null
+  let draftCacheKey: string
+  let estimatedPromptTokens = 0
 
   if (accountType === "personal") {
     promptVersion = "personal-draft-v1"
+    const prompt = buildPersonalDraftReplyPrompt({
+      personalProfile: learnedProfileToPersonalStyle(context.learnedProfile),
+      messages: conversation.messages,
+      conversationSummary,
+      userInstruction,
+    })
+    draftCacheKey = buildDraftCacheKey(promptVersion, accountType, prompt)
+    estimatedPromptTokens = estimateTokenCount(prompt)
+
+    const cached = await maybeReturnCachedDraft({
+      tenantId: session.user.tenantId,
+      userId: session.user.id,
+      conversationId: conversation.id,
+      draft: conversation.draft,
+      draftCacheKey,
+    })
+    if (cached) return cached
 
     const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey) {
@@ -79,12 +101,6 @@ export async function POST(
 
     const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
     const client = new OpenAI({ apiKey })
-    const prompt = buildPersonalDraftReplyPrompt({
-      personalProfile: learnedProfileToPersonalStyle(context.learnedProfile),
-      messages: conversation.messages,
-      conversationSummary,
-      userInstruction,
-    })
 
     let rawResponse: OpenAI.Responses.Response
     try {
@@ -102,6 +118,13 @@ export async function POST(
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to generate AI draft"
+      await recordAiUsageEvent({
+        tenantId: session.user.tenantId,
+        feature: "draft.suggest",
+        model,
+        estimatedInputTokens: estimatedPromptTokens,
+        status: "failed",
+      })
       return NextResponse.json({ error: message }, { status: 502 })
     }
 
@@ -121,20 +144,40 @@ export async function POST(
     const availableSlots = Array.isArray(latestJob?.slotsJson)
       ? (latestJob.slotsJson as string[])
       : undefined
+    const draftInput = {
+      businessProfile: context.businessProfile,
+      knowledgeDocuments: context.knowledgeDocuments,
+      learnedReplyProfile: context.learnedProfile,
+      messages: conversation.messages,
+      conversationSummary,
+      availableSlots,
+      userInstruction,
+    }
+    const prompt = buildDraftReplyPrompt(draftInput)
+    draftCacheKey = buildDraftCacheKey(promptVersion, accountType, prompt)
+    estimatedPromptTokens = estimateTokenCount(prompt)
+
+    const cached = await maybeReturnCachedDraft({
+      tenantId: session.user.tenantId,
+      userId: session.user.id,
+      conversationId: conversation.id,
+      draft: conversation.draft,
+      draftCacheKey,
+    })
+    if (cached) return cached
 
     try {
-      result = await generateDraftReply({
-        businessProfile: context.businessProfile,
-        knowledgeDocuments: context.knowledgeDocuments,
-        learnedReplyProfile: context.learnedProfile,
-        messages: conversation.messages,
-        conversationSummary,
-        availableSlots,
-        userInstruction,
-      })
+      result = await generateDraftReply(draftInput)
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to generate AI draft"
       const status = message.includes("OPENAI_API_KEY") ? 503 : 502
+      await recordAiUsageEvent({
+        tenantId: session.user.tenantId,
+        feature: "draft.suggest",
+        model: process.env.OPENAI_MODEL || "gpt-5.4-mini",
+        estimatedInputTokens: estimatedPromptTokens,
+        status: "failed",
+      })
       return NextResponse.json({ error: message }, { status })
     }
   }
@@ -155,6 +198,7 @@ export async function POST(
     accountType,
     learnedProfileId,
     learnedProfilePromptVersion,
+    draftCacheKey,
     autoSendEligible: false,
     autoSendHoldReason: "manual_draft_suggestion",
     knowledgeDocumentIds,
@@ -198,7 +242,63 @@ export async function POST(
     },
   })
 
+  await recordAiUsageEvent({
+    tenantId: session.user.tenantId,
+    feature: "draft.suggest",
+    model: result.model,
+    estimatedInputTokens: estimatedPromptTokens,
+    estimatedOutputTokens: estimateTokenCount(JSON.stringify(result)),
+    status: "succeeded",
+  })
+
   return NextResponse.json({ draft, meta: metadataJson })
+}
+
+function buildDraftCacheKey(promptVersion: string, accountType: string, prompt: string): string {
+  return createHash("sha256").update(`${promptVersion}\n${accountType}\n${prompt}`).digest("hex")
+}
+
+async function maybeReturnCachedDraft(input: {
+  tenantId: string
+  userId: string
+  conversationId: string
+  draft: { id: string; text: string; status: string; metadataJson?: unknown } | null
+  draftCacheKey: string
+}): Promise<NextResponse | null> {
+  const metadata =
+    input.draft?.metadataJson &&
+    typeof input.draft.metadataJson === "object" &&
+    !Array.isArray(input.draft.metadataJson)
+      ? (input.draft.metadataJson as Record<string, unknown>)
+      : null
+
+  if (
+    input.draft?.status === "proposed" &&
+    input.draft.text.trim() &&
+    metadata?.draftCacheKey === input.draftCacheKey
+  ) {
+    const meta = { ...metadata, cacheHit: true }
+    await recordAiUsageEvent({
+      tenantId: input.tenantId,
+      feature: "draft.suggest.cache_hit",
+      model: typeof metadata.model === "string" ? metadata.model : "none",
+      status: "skipped",
+    })
+    await prisma.auditLog.create({
+      data: {
+        tenantId: input.tenantId,
+        userId: input.userId,
+        action: "draft.suggest.cache_hit",
+        payloadJson: {
+          conversationId: input.conversationId,
+          draftId: input.draft.id,
+        },
+      },
+    })
+    return NextResponse.json({ draft: input.draft, meta })
+  }
+
+  return null
 }
 
 async function parseUserInstruction(request: Request): Promise<string | null | NextResponse> {

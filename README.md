@@ -13,7 +13,8 @@ FlowDesk is an email-first AI inbox agent for individuals and small businesses. 
 - **Email-style thread view** — opened conversations read top-to-bottom like an email client, with sender/recipient/timestamp metadata and a reply composer below the thread
 - **Daily Command Center** — see the conversations that actually matter today, plus what can be safely ignored
 - **Richer attention classification** — distinguishes needs reply, needs action, review soon, read later, waiting on, FYI done, and quiet instead of treating all automated email as useless
-- **Deterministic account-action detection** — OTPs, verification links, password setup/reset, login approvals, account setup, and security alerts surface as action metadata without persisting OTP codes
+- **Deterministic account-action detection** — OTPs, verification links, password setup/reset, login approvals, account setup, and security alerts surface as action metadata without rich AI work
+- **Cost-aware AI usage** — deterministic rules handle low-value automated mail first; richer AI is skipped, deferred, or cached for drafts and relationship memory when it does not add user value
 - **Handle This** — ask FlowDesk to draft the next step from a thread-level assistant panel
 - **AI draft suggestions (human-approved)** — generate, edit, approve, and send replies through the email provider
 - **Personal mode by default** — personal/work-email accounts use personal writing style and inbox classification without CRM or sales language
@@ -31,8 +32,7 @@ Start here:
 - `docs/README.md` — documentation index
 - `docs/CURRENT_STATE.md` — current implemented/partial/deferred state
 - `docs/MASTER_PRODUCT_PLAN.md` — living master roadmap for the 45-feature product vision
-- `docs/superpowers/specs/2026-06-11-daily-command-center-design.md` — Daily Command Center design
-- `docs/superpowers/plans/2026-06-11-daily-command-center.md` — Daily Command Center implementation plan
+- `docs/archive/` — completed specs and implementation plans
 
 ## Deferred: SMS
 
@@ -49,7 +49,7 @@ Email is the active channel. SMS may return later only after customer demand jus
 - **PostgreSQL + Prisma 5**
 - **NextAuth** (credentials-based auth, JWT sessions)
 - **Google APIs** — Gmail API (email read/reply) + Google Calendar API (availability + events)
-- **OpenAI** — AI draft suggestions
+- **OpenAI** — draft suggestions, thread explanations, lead scoring, meeting prep/follow-up, reply-learning profiles, and gated relationship-memory extraction
 - **MindBody Public API v6** — optional connector foundation
 - **Railway** — hosting + managed Postgres
 
@@ -82,7 +82,7 @@ Required variables:
 - `NEXTAUTH_SECRET` — generate with `openssl rand -base64 32`
 - `ENCRYPTION_SECRET` — generate with `openssl rand -base64 32`
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — see Google OAuth setup below
-- `OPENAI_API_KEY`
+- `OPENAI_API_KEY` — required for AI draft suggestions, explanations, lead scoring, meeting prep/follow-up, reply-learning, and gated relationship-memory extraction
 - `OPENAI_MODEL` — defaults/recommended value: `gpt-5.4-mini`
 
 ### 3. Start Postgres

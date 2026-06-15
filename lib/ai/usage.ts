@@ -13,7 +13,7 @@ export async function recordAiUsageEvent(input: {
   status: string
 }): Promise<void> {
   await prisma.aiUsageEvent
-    .create({
+    ?.create({
       data: {
         tenantId: input.tenantId,
         feature: input.feature,

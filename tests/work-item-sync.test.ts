@@ -11,6 +11,8 @@ const {
   mockAuditCreate,
   mockKbDocFindMany,
   mockTenantFindUnique,
+  mockConversationUpdate,
+  mockSyncPersonMemoryWithLLM,
 } = vi.hoisted(() => ({
   mockConversationFindFirst: vi.fn(),
   mockStateUpsert: vi.fn(),
@@ -22,11 +24,13 @@ const {
   mockAuditCreate: vi.fn(),
   mockKbDocFindMany: vi.fn(),
   mockTenantFindUnique: vi.fn(),
+  mockConversationUpdate: vi.fn(),
+  mockSyncPersonMemoryWithLLM: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    conversation: { findFirst: mockConversationFindFirst },
+    conversation: { findFirst: mockConversationFindFirst, update: mockConversationUpdate },
     conversationState: { upsert: mockStateUpsert, update: mockStateUpdate, findUnique: mockStateFindUnique },
     inboxTask: { upsert: mockTaskUpsert },
     lead: { upsert: mockLeadUpsert, findFirst: mockLeadFindFirst },
@@ -34,6 +38,10 @@ vi.mock("@/lib/prisma", () => ({
     knowledgeDocument: { findMany: mockKbDocFindMany },
     tenant: { findUnique: mockTenantFindUnique },
   },
+}))
+
+vi.mock("@/lib/agent/person-memory", () => ({
+  syncPersonMemoryWithLLM: mockSyncPersonMemoryWithLLM,
 }))
 
 import { syncConversationWorkItems } from "@/lib/agent/work-item-sync"
@@ -48,6 +56,7 @@ const conversation = {
   status: "needs_reply",
   lastMessageAt: now,
   contact: { name: "Sarah Patel", phoneE164: "sarah@example.com" },
+  contactId: "contact-1",
   channel: { emailAddress: "owner@example.com", type: "email" },
   messages: [
     {
@@ -75,6 +84,8 @@ describe("syncConversationWorkItems", () => {
     mockAuditCreate.mockResolvedValue({})
     mockKbDocFindMany.mockResolvedValue([])
     mockTenantFindUnique.mockResolvedValue({ accountType: "business" })
+    mockConversationUpdate.mockResolvedValue({})
+    mockSyncPersonMemoryWithLLM.mockResolvedValue({ status: "llm_completed" })
   })
 
   it("loads the conversation scoped to the tenant", async () => {
@@ -303,5 +314,116 @@ describe("syncConversationWorkItems", () => {
     const action = (updateCall![0] as Record<string, { metadataJson: { action: Record<string, unknown> } }>).data.metadataJson.action
     expect(action.hasDetectedCode).toBe(true)
     expect(action.detectedCode).toBe("847291")
+  })
+
+  it("skips relationship-memory LLM for OTP emails", async () => {
+    mockTenantFindUnique.mockResolvedValue({ accountType: "personal" })
+    mockConversationFindFirst.mockResolvedValue({
+      ...conversation,
+      label: null,
+      messages: [
+        {
+          id: "msg-otp",
+          direction: "inbound",
+          body: "Your verification code is 847291. This code expires in 10 minutes.",
+          fromE164: "noreply@app.com",
+          createdAt: now,
+        },
+      ],
+    })
+
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    expect(mockSyncPersonMemoryWithLLM).not.toHaveBeenCalled()
+    expect(mockAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "ai.person_memory.skipped",
+          payloadJson: expect.objectContaining({ reason: expect.stringMatching(/transactional/i) }),
+        }),
+      })
+    )
+  })
+
+  it("skips relationship-memory LLM for LinkedIn job alerts", async () => {
+    mockConversationFindFirst.mockResolvedValue({
+      ...conversation,
+      label: null,
+      messages: [
+        {
+          id: "msg-linkedin",
+          direction: "inbound",
+          body: "Your LinkedIn job alert has 12 new jobs for software engineer.",
+          fromE164: "jobs-noreply@linkedin.com",
+          createdAt: now,
+        },
+      ],
+    })
+
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    expect(mockSyncPersonMemoryWithLLM).not.toHaveBeenCalled()
+  })
+
+  it("runs relationship-memory LLM for real human reply threads with a contact", async () => {
+    mockConversationFindFirst.mockResolvedValue({
+      ...conversation,
+      label: null,
+      messages: [
+        {
+          id: "msg-human",
+          direction: "inbound",
+          body: "Could you reply with the final address for tomorrow's meeting?",
+          fromE164: "alice@example.com",
+          createdAt: now,
+        },
+      ],
+    })
+
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    expect(mockSyncPersonMemoryWithLLM).toHaveBeenCalledWith(
+      "tenant-1",
+      "contact-1",
+      expect.objectContaining({ featureContext: "work_item_sync" })
+    )
+  })
+
+  it("can skip rich AI relationship work while still syncing deterministic state", async () => {
+    mockConversationFindFirst.mockResolvedValue({
+      ...conversation,
+      label: null,
+      messages: [
+        {
+          id: "msg-human",
+          direction: "inbound",
+          body: "Could you reply with the final address for tomorrow's meeting?",
+          fromE164: "alice@example.com",
+          createdAt: now,
+        },
+      ],
+    })
+
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+      enableRichAi: false,
+    })
+
+    expect(mockStateUpsert).toHaveBeenCalled()
+    expect(mockSyncPersonMemoryWithLLM).not.toHaveBeenCalled()
   })
 })

@@ -11,6 +11,7 @@ const {
   mockToolCallCreate,
   mockToolCallUpdate,
   mockAuditCreate,
+  mockAiUsageCreate,
   mockGetFullBusinessContext,
   mockClassify,
   mockCheckAvailability,
@@ -23,6 +24,7 @@ const {
   mockToolCallCreate:         vi.fn(),
   mockToolCallUpdate:         vi.fn(),
   mockAuditCreate:            vi.fn(),
+  mockAiUsageCreate:          vi.fn(),
   mockGetFullBusinessContext: vi.fn(),
   mockClassify:               vi.fn(),
   mockCheckAvailability:      vi.fn(),
@@ -35,6 +37,7 @@ vi.mock('@/lib/prisma', () => ({
     agentJob:      { create: mockJobCreate, findUnique: mockJobFindUnique, update: mockJobUpdate },
     agentToolCall: { create: mockToolCallCreate, update: mockToolCallUpdate },
     auditLog:      { create: mockAuditCreate },
+    aiUsageEvent:  { create: mockAiUsageCreate },
     tenant:        { findUnique: mockTenantFindUnique },
   },
 }))
@@ -223,6 +226,7 @@ describe('runAgentJob', () => {
     mockToolCallCreate.mockResolvedValue({ id: 'tc-1' })
     mockToolCallUpdate.mockResolvedValue({})
     mockAuditCreate.mockResolvedValue({})
+    mockAiUsageCreate.mockResolvedValue({})
   })
 
   it('marks job completed and writes an audit log on success', async () => {
@@ -299,6 +303,53 @@ describe('runAgentJob', () => {
     )
     expect(mockToolCallUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'completed' }) })
+    )
+  })
+
+  it('records AI usage metrics for classification success and failure', async () => {
+    mockClassify.mockResolvedValueOnce(goodClassification)
+
+    await runAgentJob(JOB_ID)
+
+    expect(mockAiUsageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tenantId: TENANT,
+          feature: 'agent.classify',
+          status: 'succeeded',
+          estimatedInputTokens: expect.any(Number),
+          estimatedOutputTokens: expect.any(Number),
+        }),
+      })
+    )
+
+    vi.clearAllMocks()
+    mockJobFindUnique.mockResolvedValue(baseJob)
+    mockJobUpdate.mockResolvedValue({})
+    mockConvFindFirst.mockResolvedValue({
+      id: CONV_ID,
+      tenantId: TENANT,
+      messages: [{ direction: 'inbound', body: 'Hello', createdAt: new Date() }],
+    })
+    mockGetFullBusinessContext.mockResolvedValue({ profile: null, documents: [] })
+    mockTenantFindUnique.mockResolvedValue({ accountType: 'business' })
+    mockToolCallCreate.mockResolvedValue({ id: 'tc-1' })
+    mockToolCallUpdate.mockResolvedValue({})
+    mockAuditCreate.mockResolvedValue({})
+    mockAiUsageCreate.mockResolvedValue({})
+    mockClassify.mockRejectedValueOnce(new Error('OpenAI error'))
+
+    await runAgentJob(JOB_ID)
+
+    expect(mockAiUsageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tenantId: TENANT,
+          feature: 'agent.classify',
+          status: 'failed',
+          estimatedInputTokens: expect.any(Number),
+        }),
+      })
     )
   })
 

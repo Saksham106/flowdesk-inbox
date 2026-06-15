@@ -7,12 +7,15 @@ import { scoreLeadForConversation } from "@/lib/agent/lead-scoring"
 import { classifySupportSignals } from "@/lib/agent/support-classifier"
 import { classifySalesSignals } from "@/lib/agent/sales-classifier"
 import { classifyEmailType } from "@/lib/agent/email-classifier"
+import { evaluatePersonMemoryPolicy } from "@/lib/ai/usage-policy"
+import { recordAiUsageEvent } from "@/lib/ai/usage"
 import { extractEmail } from "@/lib/google"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
   conversationId: string
   now?: Date
+  enableRichAi?: boolean
 }
 
 export type SyncConversationWorkItemsResult = {
@@ -244,10 +247,6 @@ export async function syncConversationWorkItems(
     }
   }
 
-  if (conversation.contactId) {
-    await syncPersonMemoryWithLLM(conversation.tenantId, conversation.contactId)
-  }
-
   const supportSignals = isPersonal
     ? {
         isSupport: false,
@@ -346,13 +345,14 @@ export async function syncConversationWorkItems(
   // while adding richer attention metadata for no-reply transactional messages.
   let detectedEmailType: string | null = null
   let detectedAttentionCategory: string | null = null
+  let emailClassification: ReturnType<typeof classifyEmailType> | null = null
   const firstInbound = conversation.messages.find((m) => m.direction === "inbound")
   if (firstInbound) {
     const fromEmail = extractEmail(firstInbound.fromE164 ?? "")
     const bodyText = firstInbound.body
     // When a message has no body, Gmail sync stores it as "[Subject text]"
     const subjectHint = /^\[(.+)\]$/.test(bodyText.trim()) ? bodyText.trim().slice(1, -1) : ""
-    const classification = classifyEmailType({
+    emailClassification = classifyEmailType({
       fromEmail,
       subject: subjectHint,
       body: bodyText,
@@ -365,7 +365,7 @@ export async function syncConversationWorkItems(
       extractedCode,
       expiresIn,
       action,
-    } = classification
+    } = emailClassification
     detectedEmailType = emailType
     detectedAttentionCategory = attentionCategory
 
@@ -467,6 +467,52 @@ export async function syncConversationWorkItems(
       where: { id: conversation.id },
       data: { status: "closed" },
     })
+  }
+
+  if (conversation.contactId && input.enableRichAi !== false) {
+    const memoryPolicy = evaluatePersonMemoryPolicy({
+      conversation: {
+        id: conversation.id,
+        label: conversation.label,
+        status: conversation.status,
+        contactId: conversation.contactId,
+        messages: conversation.messages.map((message) => ({
+          direction: message.direction,
+          body: message.body,
+        })),
+      },
+      accountType: tenant?.accountType,
+      emailClassification,
+      isSalesLead: salesClassified,
+      isSupport: supportSignals.isSupport,
+    })
+
+    if (memoryPolicy.shouldRunLLM) {
+      await syncPersonMemoryWithLLM(conversation.tenantId, conversation.contactId, {
+        featureContext: "work_item_sync",
+      })
+    } else {
+      await recordAiUsageEvent({
+        tenantId: conversation.tenantId,
+        feature: "person_memory.policy_skipped",
+        model: "none",
+        status: "skipped",
+      })
+      await prisma.auditLog.create({
+        data: {
+          tenantId: conversation.tenantId,
+          action: "ai.person_memory.skipped",
+          payloadJson: {
+            conversationId: conversation.id,
+            contactId: conversation.contactId,
+            tier: memoryPolicy.tier,
+            reason: memoryPolicy.reason,
+            emailType: emailClassification?.emailType ?? null,
+            attentionCategory: emailClassification?.attentionCategory ?? null,
+          } as Prisma.InputJsonValue,
+        },
+      })
+    }
   }
 
   return {
