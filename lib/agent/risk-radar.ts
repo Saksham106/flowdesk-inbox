@@ -52,6 +52,65 @@ export type RiskRadar = {
   items: RiskRadarItem[]
 }
 
+const SENSITIVE_CATEGORIES: Array<{ category: string; pattern: RegExp }> = [
+  {
+    category: "legal",
+    pattern:
+      /\b(legal|lawsuit|sue|suing|attorney|lawyer|litigation|subpoena|deposition|settlement|court|arbitration|breach of contract|cease and desist|liability|indemnif|injunction)\b/i,
+  },
+  {
+    category: "immigration",
+    pattern:
+      /\b(immigration|visa|green card|uscis|i-140|i-485|i-864|deportation|asylum|refugee|work permit|residency|naturalization|undocumented)\b/i,
+  },
+  {
+    category: "tax",
+    pattern:
+      /\b(irs|tax (return|audit|lien|levy|debt|evasion)|w-2|1099|owing taxes|back taxes|tax penalty|tax fraud|owe the irs|accountant letter)\b/i,
+  },
+  {
+    category: "medical",
+    pattern:
+      /\b(diagnosis|medical (condition|record|bill|claim)|doctor'?s (note|order|referral)|cancer|surgery|prescription|hipaa|insurance claim|disability claim|mental health (treatment|diagnosis))\b/i,
+  },
+  {
+    category: "hr",
+    pattern:
+      /\b(human resources|hr department|termination|fired|laid off|layoff|wrongful (termination|dismissal)|discrimination|workplace harassment|hostile work environment|performance improvement plan|pip)\b/i,
+  },
+  {
+    category: "emotional",
+    pattern:
+      /\b(divorce|separation|custody|restraining order|domestic (violence|abuse)|grief|bereavement|suicide|self.harm|mental health crisis|breakdown|estranged)\b/i,
+  },
+  {
+    category: "financial",
+    pattern:
+      /\b(collections?|past due|overdue|debt collector|charged off|repossession|foreclosure|bankruptcy|wage garnishment|refund dispute|chargeback|fraud claim)\b/i,
+  },
+]
+
+export type SensitiveMatch = { phrase: string; category: string }
+
+export function detectSensitiveMatches(text: string): SensitiveMatch[] {
+  const seen = new Set<string>()
+  const results: SensitiveMatch[] = []
+
+  for (const { category, pattern } of SENSITIVE_CATEGORIES) {
+    const globalPattern = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : pattern.flags + "g")
+    const matches = text.matchAll(globalPattern)
+    for (const match of matches) {
+      const phrase = match[0].toLowerCase()
+      if (!seen.has(phrase)) {
+        seen.add(phrase)
+        results.push({ phrase, category })
+      }
+    }
+  }
+
+  return results
+}
+
 const NEAR_DEADLINE_PATTERN =
   /\b(today|tomorrow|asap|urgent|by\s+(?:eod|end of day|close of business)|before\s+(?:noon|5|five)|due\s+(?:today|tomorrow))\b/i
 const DEADLINE_PATTERN =

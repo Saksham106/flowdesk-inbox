@@ -334,6 +334,28 @@ export default function AIDraftPanel({
           </dl>
         ) : null}
 
+        {(() => {
+          const meta = draft?.metadataJson as Record<string, unknown> | null | undefined
+          const matches = meta?.sensitiveMatches
+          if (!Array.isArray(matches) || matches.length === 0) return null
+          return (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p className="text-xs font-medium text-amber-800">Sensitive content detected — review carefully before sending:</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {(matches as Array<{ phrase: string; category: string }>).map(({ phrase, category }) => (
+                  <span
+                    key={phrase}
+                    className="rounded-full border border-amber-200 bg-white px-2 py-0.5 text-xs text-amber-700"
+                    title={category}
+                  >
+                    {phrase}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
+
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         {notice ? <p className="text-sm text-green-700">{notice}</p> : null}
 

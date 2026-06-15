@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import OpenAI from "openai"
 
 import { authOptions } from "@/lib/auth"
+import { detectSensitiveMatches } from "@/lib/agent/risk-radar"
 import { getReplyGenerationContext } from "@/lib/agent/reply-context"
 import { generateDraftReply } from "@/lib/ai/provider"
 import { buildPersonalDraftReplyPrompt, draftReplyJsonSchema, normalizeDraftReplyOutput } from "@/lib/ai/prompts/draft-reply"
@@ -140,6 +141,9 @@ export async function POST(
 
   const suggestedLabel = accountType === "business" ? result.suggestedLabel : null
 
+  const conversationText = conversation.messages.map((m) => m.body).join("\n")
+  const sensitiveMatches = detectSensitiveMatches(conversationText)
+
   const metadataJson = {
     intent: result.intent,
     confidence: result.confidence,
@@ -155,6 +159,7 @@ export async function POST(
     autoSendHoldReason: "manual_draft_suggestion",
     knowledgeDocumentIds,
     ...(userInstruction ? { userInstruction } : {}),
+    ...(sensitiveMatches.length > 0 ? { sensitiveMatches } : {}),
   }
 
   const draft = await prisma.draft.upsert({
