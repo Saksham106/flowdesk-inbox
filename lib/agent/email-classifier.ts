@@ -161,15 +161,66 @@ function combinedText(subject: string, body: string): string {
   return `${subject}\n${body}`.trim()
 }
 
-function extractVerificationCode(text: string): string | undefined {
+const HTML_KEYWORD_BLOCKLIST = new Set([
+  "html", "body", "head", "style", "script", "doctype", "doctypehtml",
+  "div", "span", "table", "tbody", "thead", "tfoot", "tr", "td", "th",
+  "img", "href", "src", "class", "type", "meta", "link", "input",
+  "form", "button", "select", "option", "label", "nav", "header",
+  "footer", "main", "section", "article", "aside", "figure",
+])
+
+function stripHtmlForCodeExtraction(text: string): string {
+  return text
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<!DOCTYPE[^>]*>/gi, " ")
+    .replace(/<[^>]{0,500}>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function isValidCode(raw: string): boolean {
+  const code = raw.replace(/\s|-/g, "").toLowerCase()
+  if (HTML_KEYWORD_BLOCKLIST.has(code)) return false
+  if (code.length < 4) return false
+  // All digits: classic numeric OTP
+  if (/^\d+$/.test(code)) return code.length >= 4 && code.length <= 8
+  // Mixed alphanumeric must contain at least one digit (rules out English words like "Security")
+  if (/\d/.test(code) && /^[a-z0-9]+$/.test(code)) return code.length >= 4 && code.length <= 12
+  return false
+}
+
+function extractVerificationCode(rawText: string): string | undefined {
+  const text = stripHtmlForCodeExtraction(rawText)
+
+  // 1. Look for explicit "code is/: VALUE" phrase
   const afterPhrase = text.match(
     /\b(?:verification|security|authentication|login|access|2fa|mfa|one[-\s]?time)?\s*(?:code|passcode|password|pin|otp)\s+(?:is|:)\s*([A-Z0-9][A-Z0-9 -]{3,14}[A-Z0-9])\b/i
   )
-  if (afterPhrase?.[1]) return afterPhrase[1].replace(/\s|-/g, "")
+  if (afterPhrase?.[1] && isValidCode(afterPhrase[1])) {
+    return afterPhrase[1].replace(/\s|-/g, "")
+  }
 
-  const match = text.match(CODE_PATTERN)
-  if (!match?.[1]) return undefined
-  return match[1].replace(/\s|-/g, "")
+  // 2. Find numeric sequences (4-8 digits) — most common OTP format
+  for (const m of text.matchAll(/\b(\d{4,8})\b/g)) {
+    if (isValidCode(m[1])) return m[1]
+  }
+
+  // 3. Alphanumeric codes must be near a keyword to avoid false positives
+  const alphanumMatch = text.match(
+    /\b(?:code|otp|passcode|pin)\b[^.]{0,40}?\b([A-Z0-9]{3,4}[-\s]?[A-Z0-9]{3,4})\b/i
+  )
+  if (alphanumMatch?.[1] && isValidCode(alphanumMatch[1])) {
+    return alphanumMatch[1].replace(/\s|-/g, "")
+  }
+
+  return undefined
 }
 
 function extractExpiry(text: string): string | undefined {
