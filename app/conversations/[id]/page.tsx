@@ -30,6 +30,7 @@ import { SALES_SUGGESTED_ACTIONS } from "@/lib/agent/sales-classifier";
 import EmailBody from "@/app/components/EmailBody";
 import { resolveAccountMode } from "@/lib/account-mode";
 import { getSafeInboxReturnPath } from "@/lib/client-navigation";
+import { markGmailThreadRead } from "@/lib/google";
 
 export const dynamic = "force-dynamic";
 
@@ -119,6 +120,34 @@ export default async function ConversationPage({
 
   if (!conversation) {
     notFound();
+  }
+
+  const openedAt = new Date()
+  await Promise.all([
+    prisma.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        readAt: openedAt,
+        lastOpenedAt: openedAt,
+        gmailUnread: false,
+      },
+    }),
+    prisma.message.updateMany({
+      where: { conversationId: conversation.id },
+      data: { isRead: true },
+    }),
+  ])
+
+  if (conversation.channel.provider === "google") {
+    markGmailThreadRead(
+      conversation.channelId,
+      conversation.messages.map((message) => message.providerMessageId)
+    ).catch((err) => {
+      console.warn("Failed to mark Gmail thread read on open", {
+        conversationId: conversation.id,
+        message: err instanceof Error ? err.message : "Unknown error",
+      })
+    })
   }
 
   const accountType = tenant?.accountType ?? sessionAccountType ?? "personal";

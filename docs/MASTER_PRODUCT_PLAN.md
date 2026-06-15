@@ -1,6 +1,6 @@
 # FlowDesk Inbox Master Product Plan
 
-Last updated: 2026-06-14
+Last updated: 2026-06-15
 
 This is the living master plan for FlowDesk Inbox. It exists so humans and AI agents can share the same product map, update it as reality changes, and avoid treating one feature request as the whole product.
 
@@ -59,10 +59,13 @@ Existing foundations in the codebase:
 - Approval requests and audit logs.
 - Agent jobs, classification, follow-up batch jobs, autopilot settings.
 - Rich email attention categories stored in `ConversationState.metadataJson.attentionCategory`: `needs_reply`, `needs_action`, `review_soon`, `read_later`, `waiting_on`, `fyi_done`, and `quiet`.
+- Redacted account-action metadata for OTPs, verification links, password setup/reset, login approvals, account setup, and security alerts. OTP codes are not persisted.
+- Local user/read state is separate from raw Gmail state: user overrides, done/closed status, local reads, Gmail unread labels, and Gmail raw metadata are stored independently.
 - `Tenant.accountType` personal/business mode, with personal-safe defaults and business-only gates for CRM, sales, support, lead, and revenue surfaces.
 - Business and personal reply/profile settings.
 - Daily command center first slice.
 - Inbox Gmail sync control with last-synced/error status and app-load/tab-return/periodic/manual sync triggers.
+- Gmail sync now has server-side per-channel locking, race-tolerant idempotent message upserts, and partial thread-failure logging.
 
 Recently shipped first slice:
 
@@ -361,9 +364,19 @@ Shipped reliability and attention slice (2026-06-14):
 - No-reply transactional emails with OTPs, password reset/setup, verification, security/token, billing, delivery, or calendar invite language stay actionable instead of being auto-closed as FYI.
 - Verification codes and explicit expiry phrases can be extracted into metadata for future display/copy UX; FlowDesk does not auto-use codes.
 
+Shipped sync/state/action hardening slice (2026-06-15):
+
+- Gmail sync now uses `GmailCredential.syncLockExpiresAt` as a short database-backed lock. Concurrent syncs for the same channel skip cleanly instead of racing on first load.
+- Gmail message sync tolerates concurrent unique conflicts on provider message IDs and remains idempotent across manual, auto, push, and retry sync paths.
+- Raw Gmail state (`gmailUnread`, `gmailRawState`, `gmailLabelIds`) is separate from local state (`userState`, `readAt`, `isRead`). Sync imports provider read/unread but does not overwrite explicit local actions.
+- Mark Done/Closed writes a `user_override` conversation state so AI classification and future syncs cannot resurrect the card into Handle First.
+- Opening a Gmail conversation marks it read locally and attempts safe Gmail writeback by removing `UNREAD`; failures are logged but do not block the UI.
+- Account-action detection now emits structured, redacted action metadata for Home cards while keeping OTP codes out of persisted metadata and logs.
+- Home section selection is thread-level exclusive: Handle First, Needs Action, Waiting On, Read Later, and Quietly Handled no longer duplicate the same conversation.
+
 ### Next Slice: v2.4 — Classification Correction And Inbox Filters
 
-Make the new attention taxonomy first-class: add filters/counts for Needs Action, Review Soon, Read Later, and Quiet; expose "why this was classified this way"; and add user correction controls that can teach or override future classification.
+Make the new attention taxonomy first-class: add filters/counts for Needs Action, Review Soon, Read Later, and Quiet; expose "why this was classified this way"; and add user correction/undo controls on top of the now-persisted user override path.
 
 ## Data Model Roadmap
 
@@ -503,6 +516,7 @@ After an AI agent finishes work:
 | 2026-06-14 | Fix HTML email light-mode rendering and add desktop panel resizing. | The iframe renderer now strips dark-mode-only email hints and forces a light color scheme by default so Amazon-style transactional emails do not render black when Gmail shows them light. Desktop inbox/conversation layouts now have localStorage-backed resize handles for the inbox list and context panel, with mobile unchanged. |
 | 2026-06-14 | Add real Gmail sync controls and preserve inbox navigation context. | The inbox now exposes the existing Gmail sync API with manual/app-load/tab-return/periodic triggers, visible sync state, and duplicate request protection. Conversation routes preserve the active inbox filter through validated return URLs instead of resetting the list to All. |
 | 2026-06-14 | Upgrade classification from broad no-reply buckets to attention categories in metadata. | Avoided a broad schema/status migration by keeping `Conversation.status` stable and storing `attentionCategory`, reason, confidence, and optional code/expiry in `ConversationState.metadataJson`. Only `quiet` and `fyi_done` are auto-close candidates; action/security/read-later emails remain visible. |
+| 2026-06-15 | Separate raw Gmail state, AI classification, and user override/read state. | The Mark Done resurrection bug showed that sync/provider state and local intent were sharing too much surface area. Added local state/read fields, raw Gmail label fields, a user override source, server-side sync locking, and redacted action metadata so sync is idempotent and explicit user actions win. |
 
 ## Open Product Questions
 

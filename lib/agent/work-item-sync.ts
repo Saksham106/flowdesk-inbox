@@ -68,29 +68,46 @@ export async function syncConversationWorkItems(
     accountType: tenant?.accountType,
   })
 
-  await prisma.conversationState.upsert({
+  const initialState = await prisma.conversationState.findUnique({
     where: { conversationId: conversation.id },
-    create: {
-      tenantId: conversation.tenantId,
-      conversationId: conversation.id,
-      state: summary.state.state,
-      priority: summary.state.priority,
-      reason: summary.state.reason,
-      nextAction: summary.state.nextAction,
-      confidence: summary.state.confidence,
-      source: summary.state.source,
-      metadataJson: summary.state.metadata as Prisma.InputJsonValue,
-    },
-    update: {
-      state: summary.state.state,
-      priority: summary.state.priority,
-      reason: summary.state.reason,
-      nextAction: summary.state.nextAction,
-      confidence: summary.state.confidence,
-      source: summary.state.source,
-      metadataJson: summary.state.metadata as Prisma.InputJsonValue,
-    },
+    select: { source: true, metadataJson: true },
   })
+  const initialMeta =
+    initialState?.metadataJson &&
+    typeof initialState.metadataJson === "object" &&
+    !Array.isArray(initialState.metadataJson)
+      ? (initialState.metadataJson as Record<string, unknown>)
+      : {}
+  const hasUserOverride =
+    initialState?.source === "user_override" ||
+    initialMeta.userOverride === true ||
+    conversation.status === "closed"
+
+  if (!hasUserOverride) {
+    await prisma.conversationState.upsert({
+      where: { conversationId: conversation.id },
+      create: {
+        tenantId: conversation.tenantId,
+        conversationId: conversation.id,
+        state: summary.state.state,
+        priority: summary.state.priority,
+        reason: summary.state.reason,
+        nextAction: summary.state.nextAction,
+        confidence: summary.state.confidence,
+        source: summary.state.source,
+        metadataJson: summary.state.metadata as Prisma.InputJsonValue,
+      },
+      update: {
+        state: summary.state.state,
+        priority: summary.state.priority,
+        reason: summary.state.reason,
+        nextAction: summary.state.nextAction,
+        confidence: summary.state.confidence,
+        source: summary.state.source,
+        metadataJson: summary.state.metadata as Prisma.InputJsonValue,
+      },
+    })
+  }
 
   await prisma.auditLog.create({
     data: {
@@ -108,6 +125,7 @@ export async function syncConversationWorkItems(
   const hasOutboundMessages = conversation.messages.some((m) => m.direction === "outbound")
   if (
     summary.state.state === "fyi_only" &&
+    !hasUserOverride &&
     conversation.status === "needs_reply" &&
     !hasOutboundMessages
   ) {
@@ -346,6 +364,7 @@ export async function syncConversationWorkItems(
       confidence,
       extractedCode,
       expiresIn,
+      action,
     } = classification
     detectedEmailType = emailType
     detectedAttentionCategory = attentionCategory
@@ -361,6 +380,16 @@ export async function syncConversationWorkItems(
         ? (currentState.metadataJson as Record<string, unknown>)
         : {}
 
+    const persistedAction = action
+      ? {
+          type: action.type,
+          explanation: action.explanation,
+          ...(action.actionLink ? { actionLink: action.actionLink } : {}),
+          ...(action.expirationText ? { expirationText: action.expirationText } : {}),
+          hasDetectedCode: Boolean(action.detectedCode),
+        }
+      : null
+
     await prisma.conversationState.update({
       where: { conversationId: conversation.id },
       data: {
@@ -370,13 +399,13 @@ export async function syncConversationWorkItems(
           attentionCategory,
           attentionReason: reason,
           attentionConfidence: confidence,
-          ...(extractedCode ? { verificationCode: extractedCode } : {}),
+          ...(persistedAction ? { action: persistedAction } : {}),
           ...(expiresIn ? { expiresIn } : {}),
         } as Prisma.InputJsonValue,
       },
     })
 
-    if (attentionCategory === "needs_action") {
+    if (!hasUserOverride && attentionCategory === "needs_action") {
       await prisma.conversationState.update({
         where: { conversationId: conversation.id },
         data: {
@@ -390,7 +419,7 @@ export async function syncConversationWorkItems(
           source: "deterministic",
         },
       })
-    } else if (attentionCategory === "review_soon") {
+    } else if (!hasUserOverride && attentionCategory === "review_soon") {
       await prisma.conversationState.update({
         where: { conversationId: conversation.id },
         data: {
@@ -402,7 +431,7 @@ export async function syncConversationWorkItems(
           source: "deterministic",
         },
       })
-    } else if (attentionCategory === "read_later") {
+    } else if (!hasUserOverride && attentionCategory === "read_later") {
       await prisma.conversationState.update({
         where: { conversationId: conversation.id },
         data: {
@@ -424,6 +453,7 @@ export async function syncConversationWorkItems(
     detectedEmailType !== null &&
     detectedAttentionCategory !== null &&
     AUTO_CLOSE_ATTENTION_CATEGORIES.has(detectedAttentionCategory) &&
+    !hasUserOverride &&
     summary.state.state !== "fyi_only" &&
     conversation.status === "needs_reply" &&
     !hasOutboundMessages

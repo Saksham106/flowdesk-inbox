@@ -435,6 +435,22 @@ describe("buildDailyCommandCenter new sections", () => {
     expect(result.counts.readLater).toBe(1)
   })
 
+  it("does not duplicate a pure action email between Handle First and Needs Action", () => {
+    const multiBucket = conversation({
+      id: "multi-1",
+      conversationState: {
+        metadataJson: { attentionCategory: "needs_action" },
+      },
+    })
+
+    const result = buildDailyCommandCenter([multiBucket], now)
+
+    expect(result.topActions).toHaveLength(0)
+    expect(result.sections.needsAction.map((item) => item.id)).toEqual(["multi-1"])
+    expect(result.sections.readLater).toHaveLength(0)
+    expect(result.sections.safelyIgnored).toHaveLength(0)
+  })
+
   it("computes quietlyHandledBreakdown from safelyIgnored emails", () => {
     const newsletter = conversation({
       id: "nl-1",
@@ -561,5 +577,29 @@ describe("buildDailyCommandCenter with persisted states", () => {
     expect(analyzed.state).toBe("done")
     expect(analyzed.safelyIgnored).toBe(true)
     expect(analyzed.needsReply).toBe(false)
+  })
+
+  it("lets an explicit closed user state beat fresh persisted AI state", () => {
+    const persisted = makePersistedState({
+      conversationId: "conv-closed",
+      state: "needs_reply",
+      priority: "high",
+      reason: "Old AI state",
+      nextAction: "Draft a reply.",
+    })
+
+    const result = buildDailyCommandCenter(
+      [
+        conversation({ id: "conv-closed", status: "closed" }),
+      ],
+      now,
+      "business",
+      new Map([["conv-closed", persisted]])
+    )
+
+    expect(result.topActions).toHaveLength(0)
+    expect(result.sections.needsReply).toHaveLength(0)
+    expect(result.sections.safelyIgnored.map((item) => item.id)).toEqual(["conv-closed"])
+    expect(result.conversations[0].state).toBe("done")
   })
 })

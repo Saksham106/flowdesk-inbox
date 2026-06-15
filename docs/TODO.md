@@ -1,6 +1,6 @@
 # FlowDesk Remaining-Work To-Do List
 
-Last updated: 2026-06-14
+Last updated: 2026-06-15
 
 This is the canonical checklist of what has **not** been completed from the master product plan. It complements `MASTER_PRODUCT_PLAN.md` (the roadmap and feature index) and `CURRENT_STATE.md` (what exists). When work ships, check items off here and update both companion docs in the same branch.
 
@@ -16,10 +16,12 @@ Most Phase 1 foundations are shipped (command center, task/lead extraction, appr
 - [x] **Email Risk Radar** (#22) — shipped 2026-06-12: `/risk-radar` read-only view with deadline-soon, final-notice, unanswered-N-days, and sensitive-content signal groups built on `lib/agent/risk-radar.ts`.
 - [x] **Auto-draft based on user intent** (#30) — shipped 2026-06-12: AI draft panel accepts an optional rough instruction ("say yes but only next week"), passes it into draft generation, and records it in draft metadata while preserving approval-gated sending.
 - [x] **Smart labels taxonomy — first attention slice** (#42) — shipped 2026-06-14: deterministic and LLM classification now support `needs_reply`, `needs_action`, `review_soon`, `read_later`, `waiting_on`, `fyi_done`, and `quiet`; stored in `ConversationState.metadataJson.attentionCategory`.
+- [x] **Account-action detection slice** (#21/#42) — shipped 2026-06-15: deterministic OTP, verify-email, password setup/reset, login approval, account setup, and security alert detection; redacted action metadata is surfaced to Home cards without persisting OTP codes.
+- [x] **Read/done sync persistence hardening** (#6/#42) — shipped 2026-06-15: local user overrides and read state are separate from raw Gmail state; Gmail sync no longer resurrects done items in Handle First.
 - [ ] **Smart labels taxonomy — product-complete UI** (#42) — expose the full taxonomy as first-class filters/actions, add correction controls, and decide whether categories graduate from metadata to schema fields.
 - [ ] **Richer sensitive detection** (#10) — more categories (legal, immigration, tax, medical, HR, emotional) and highlighted risky parts inside drafts.
 - [ ] **Command-center source signals** (#1) — meetings-needing-prep and bills/deadlines sections need calendar events and attachment/deadline signals.
-- [ ] **Trust UX** (#44) — per-action "why" explanations and undo on top of the existing audit log.
+- [ ] **Trust UX** (#44) — per-action "why" explanations and undo on top of the existing audit log. Some action metadata/reasons now exist, but visible correction/undo UX remains.
 - [ ] **Confidence policy thresholds** (#29) — confidence is displayed; policy gating by threshold per category is not implemented.
 - [ ] **Task assignment and manual task creation** (#13).
 - [ ] **Safely-ignored reasons and bulk archive** (#25) — reasons now exist in attention metadata; still needs a visible bulk archive/cleanup workflow.
@@ -40,7 +42,7 @@ Most Phase 1 foundations are shipped (command center, task/lead extraction, appr
 
 ## Phase 3: Personal Chief Of Staff — Not Started
 
-- [ ] **Personal life admin mode** (#21) — first attention rules now catch codes, account setup, security, billing, delivery, and calendar RSVP; still needs broader bill/travel/school/medical/subscription flows and privacy UX.
+- [ ] **Personal life admin mode** (#21) — first attention rules now catch codes, account setup, security, billing, delivery, calendar RSVP, and common account-action links; still needs broader bill/travel/school/medical/subscription flows and privacy UX.
 - [ ] **VIP protection** (#33).
 - [ ] **Reply later / smart snooze intelligence** (#34).
 - [ ] **Smart attachment intelligence** (#16) — PDF/invoice/contract extraction.

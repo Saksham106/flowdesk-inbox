@@ -23,6 +23,8 @@ export type CommandCenterInputConversation = {
   externalThreadId: string
   label: string | null
   status: string
+  readAt?: Date | null
+  gmailUnread?: boolean | null
   lastMessageAt: Date
   contact: { name: string; phoneE164?: string | null } | null
   channel: { emailAddress?: string | null; type?: string | null }
@@ -95,6 +97,14 @@ export type CommandCenterConversation = {
   leadScore: number | null
   estimatedValue: number | null
   emailType: string | null
+  isRead: boolean
+  action: {
+    type: string
+    explanation: string
+    actionLink?: string
+    expirationText?: string
+    hasDetectedCode?: boolean
+  } | null
 }
 
 export type AgentSummary = {
@@ -280,6 +290,24 @@ function getAttentionReason(conversation: CommandCenterInputConversation): strin
   return typeof reason === "string" && reason.trim() ? reason.trim() : null
 }
 
+function getActionMetadata(conversation: CommandCenterInputConversation): CommandCenterConversation["action"] {
+  const state = conversation.conversationState
+  if (!state?.metadataJson || typeof state.metadataJson !== "object" || Array.isArray(state.metadataJson)) return null
+  const action = (state.metadataJson as Record<string, unknown>).action
+  if (!action || typeof action !== "object" || Array.isArray(action)) return null
+  const record = action as Record<string, unknown>
+  const type = typeof record.type === "string" ? record.type : null
+  const explanation = typeof record.explanation === "string" ? record.explanation : null
+  if (!type || !explanation) return null
+  return {
+    type,
+    explanation,
+    ...(typeof record.actionLink === "string" ? { actionLink: record.actionLink } : {}),
+    ...(typeof record.expirationText === "string" ? { expirationText: record.expirationText } : {}),
+    ...(typeof record.hasDetectedCode === "boolean" ? { hasDetectedCode: record.hasDetectedCode } : {}),
+  }
+}
+
 function isAutoEmail(conversation: CommandCenterInputConversation): boolean {
   const attentionCategory = getAttentionCategory(conversation)
   if (attentionCategory) return IGNORABLE_ATTENTION_CATEGORIES.has(attentionCategory)
@@ -452,13 +480,15 @@ export function analyzeConversationForCommandCenter(
     leadScore: opportunity && conversation.lead ? conversation.lead.score : null,
     estimatedValue: conversation.lead?.estimatedValue ?? null,
     emailType: getEmailType(conversation),
+    isRead: Boolean(conversation.readAt) || conversation.gmailUnread === false,
+    action: getActionMetadata(conversation),
   }
 }
 
 /** Convert a persisted ConversationState to a CommandCenterConversation for display */
 export function persistedStateToCommandCenterConversation(
   persisted: PersistedCommandCenterState,
-  conversation: Pick<CommandCenterInputConversation, "id" | "externalThreadId" | "label" | "status" | "lastMessageAt" | "contact" | "channel">,
+  conversation: Pick<CommandCenterInputConversation, "id" | "externalThreadId" | "label" | "status" | "readAt" | "gmailUnread" | "lastMessageAt" | "contact" | "channel">,
   lead?: { score: number; scoreExplanation: string | null; estimatedValue?: number | null } | null
 ): CommandCenterConversation {
   const meta = persisted.metadataJson as Record<string, unknown> | null
@@ -503,6 +533,8 @@ export function persistedStateToCommandCenterConversation(
     leadScore: opportunity && lead ? lead.score : null,
     estimatedValue: lead?.estimatedValue ?? null,
     emailType: typeof meta?.emailType === "string" ? meta.emailType : null,
+    isRead: Boolean(conversation.readAt) || conversation.gmailUnread === false,
+    action: getActionMetadata({ ...conversation, messages: [], conversationState: { metadataJson: meta } }),
   }
 }
 
@@ -521,6 +553,9 @@ export function buildDailyCommandCenter(
 ): DailyCommandCenter {
   const accountMode = resolveAccountMode(accountType ?? "business")
   const analyzed = conversations.map((conversation) => {
+    if (conversation.status === "closed") {
+      return analyzeConversationForCommandCenter(conversation, now, accountMode)
+    }
     // Use persisted state if available and fresh
     const persisted = persistedStates?.get(conversation.id)
     if (persisted && isPersistedStateFresh(persisted, now)) {
@@ -531,9 +566,28 @@ export function buildDailyCommandCenter(
   const approvals = analyzed.filter(
     (conversation) => conversation.state === "waiting_on_you" || conversation.approvalReason
   )
-  const needsActionItems = analyzed.filter(c => c.needsAction)
-  const readLaterItems = analyzed.filter(c => c.readLater)
-  const safelyIgnoredItems = analyzed.filter(c => c.safelyIgnored)
+  const topActions = analyzed
+    .filter((conversation) =>
+      conversation.priority !== "none" &&
+      !conversation.safelyIgnored &&
+      !conversation.readLater &&
+      (!conversation.needsAction || conversation.needsReply || conversation.sensitive || conversation.opportunity || Boolean(conversation.approvalReason))
+    )
+    .sort((a, b) => score(b) - score(a) || b.lastMessageAt.getTime() - a.lastMessageAt.getTime())
+    .slice(0, 7)
+  const assigned = new Set(topActions.map((conversation) => conversation.id))
+  const takeUnassigned = (items: CommandCenterConversation[]) =>
+    items.filter((item) => {
+      if (assigned.has(item.id)) return false
+      assigned.add(item.id)
+      return true
+    })
+
+  const needsReplyItems = takeUnassigned(analyzed.filter((conversation) => conversation.state === "needs_reply"))
+  const needsActionItems = takeUnassigned(analyzed.filter(c => c.needsAction))
+  const waitingOnItems = takeUnassigned(analyzed.filter((conversation) => conversation.state === "waiting_on_them"))
+  const readLaterItems = takeUnassigned(analyzed.filter(c => c.readLater))
+  const safelyIgnoredItems = takeUnassigned(analyzed.filter(c => c.safelyIgnored))
   const breakdown: QuietlyHandledBreakdown = { newsletter: 0, notification: 0, marketing: 0, other: 0 }
   for (const item of safelyIgnoredItems) {
     if (item.emailType === "newsletter") breakdown.newsletter++
@@ -541,10 +595,6 @@ export function buildDailyCommandCenter(
     else if (item.emailType === "marketing") breakdown.marketing++
     else breakdown.other++
   }
-  const topActions = analyzed
-    .filter((conversation) => conversation.priority !== "none" && !conversation.safelyIgnored)
-    .sort((a, b) => score(b) - score(a) || b.lastMessageAt.getTime() - a.lastMessageAt.getTime())
-    .slice(0, 7)
 
   const importantCount = topActions.length
 
@@ -566,13 +616,13 @@ export function buildDailyCommandCenter(
       support: analyzed.filter((conversation) => conversation.state === "support").length,
       salesQualified: analyzed.filter((conversation) => conversation.state === "sales_qualified").length,
       safelyIgnored: safelyIgnoredItems.length,
-      needsAction: needsActionItems.length,
-      readLater: readLaterItems.length,
+      needsAction: analyzed.filter(c => c.needsAction).length,
+      readLater: analyzed.filter(c => c.readLater).length,
     },
     topActions,
     sections: {
-      needsReply: analyzed.filter((conversation) => conversation.state === "needs_reply"),
-      waitingOnThem: analyzed.filter((conversation) => conversation.state === "waiting_on_them"),
+      needsReply: needsReplyItems,
+      waitingOnThem: waitingOnItems,
       meetings: analyzed.filter((conversation) => conversation.state === "scheduled"),
       approvals,
       opportunities: analyzed.filter((conversation) => conversation.opportunity),

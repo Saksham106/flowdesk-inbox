@@ -110,6 +110,7 @@ type GmailMessage = {
   textBody: string;
   cleanSnippet: string;
   renderMode: "html" | "plainText" | "fallback";
+  labelIds: string[];
   date: Date;
   rfc822MessageId: string;
 };
@@ -213,6 +214,7 @@ export async function fetchThread(
       textBody: extracted.textBody,
       cleanSnippet: extracted.cleanSnippet,
       renderMode: extracted.renderMode,
+      labelIds: msg.labelIds ?? [],
       date: new Date(parseInt(msg.internalDate ?? "0")),
       rfc822MessageId: getHeader(headers, "Message-ID"),
     };
@@ -223,6 +225,152 @@ export async function fetchThread(
 export function extractEmail(raw: string): string {
   const match = raw.match(/<([^>]+)>/);
   return (match ? match[1] : raw).trim().toLowerCase();
+}
+
+function isPrismaUniqueConflict(err: unknown): boolean {
+  return typeof err === "object" && err !== null && "code" in err && (err as { code?: unknown }).code === "P2002";
+}
+
+async function findOrCreateEmailContact({
+  tenantId,
+  email,
+  displayName,
+}: {
+  tenantId: string;
+  email: string;
+  displayName: string;
+}) {
+  const existing = await prisma.contact.findUnique({
+    where: { tenantId_phoneE164: { tenantId, phoneE164: email } },
+  });
+  if (existing) return existing;
+
+  try {
+    return await prisma.contact.create({
+      data: { tenantId, name: displayName || email, phoneE164: email },
+    });
+  } catch (err) {
+    if (!isPrismaUniqueConflict(err)) throw err;
+    const raced = await prisma.contact.findUnique({
+      where: { tenantId_phoneE164: { tenantId, phoneE164: email } },
+    });
+    if (raced) return raced;
+    throw err;
+  }
+}
+
+async function upsertGmailMessage({
+  conversationId,
+  channelEmail,
+  msg,
+}: {
+  conversationId: string;
+  channelEmail: string;
+  msg: GmailMessage;
+}) {
+  const providerMessageId = `gmail_${msg.id}`;
+  const isOutbound = extractEmail(msg.from) === channelEmail.toLowerCase();
+  const isRead = !msg.labelIds.includes("UNREAD");
+
+  try {
+    await prisma.message.upsert({
+      where: { providerMessageId },
+      create: {
+        conversationId,
+        direction: isOutbound ? "outbound" : "inbound",
+        fromE164: msg.from,
+        toE164: msg.to,
+        body: msg.body || `[${msg.subject}]`,
+        providerMessageId,
+        isRead,
+        gmailLabelIds: msg.labelIds,
+        createdAt: msg.date,
+      },
+      update: {
+        gmailLabelIds: msg.labelIds,
+        ...(isRead ? { isRead: true } : {}),
+      },
+    });
+  } catch (err) {
+    if (!isPrismaUniqueConflict(err)) throw err;
+    const existing = await prisma.message.findUnique({
+      where: { providerMessageId },
+      select: { id: true, conversationId: true },
+    });
+    if (!existing) throw err;
+  }
+}
+
+async function syncFetchedGmailThread({
+  messages,
+  threadId,
+  channelId,
+  tenantId,
+  channelEmail,
+}: {
+  messages: GmailMessage[];
+  threadId: string;
+  channelId: string;
+  tenantId: string;
+  channelEmail: string;
+}) {
+  if (messages.length === 0) return null;
+
+  const firstMsg = messages[0];
+  const lastMsg = messages[messages.length - 1];
+  const isFirstOutbound = extractEmail(firstMsg.from) === channelEmail.toLowerCase();
+  const externalRaw = isFirstOutbound ? firstMsg.to : firstMsg.from;
+  const externalEmail = extractEmail(externalRaw);
+  const externalDisplayName = externalRaw.replace(/<[^>]+>/, "").trim() || externalEmail;
+  const gmailUnread = messages.some((msg) => msg.labelIds.includes("UNREAD"));
+
+  const contact = await findOrCreateEmailContact({
+    tenantId,
+    email: externalEmail,
+    displayName: externalDisplayName,
+  });
+
+  const conversation = await prisma.conversation.upsert({
+    where: { tenantId_channelId_externalThreadId: { tenantId, channelId, externalThreadId: threadId } },
+    create: {
+      tenantId,
+      channelId,
+      externalThreadId: threadId,
+      contactId: contact.id,
+      status: "needs_reply",
+      gmailUnread,
+      gmailRawState: {
+        threadId,
+        unread: gmailUnread,
+        lastLabelIds: lastMsg.labelIds,
+      },
+      lastMessageAt: lastMsg.date,
+    },
+    update: {
+      lastMessageAt: lastMsg.date,
+      contactId: contact.id,
+      gmailUnread,
+      gmailRawState: {
+        threadId,
+        unread: gmailUnread,
+        lastLabelIds: lastMsg.labelIds,
+      },
+    },
+  });
+
+  for (const msg of messages) {
+    await upsertGmailMessage({ conversationId: conversation.id, channelEmail, msg });
+  }
+
+  syncConversationWorkItems({ tenantId, conversationId: conversation.id }).catch((err) => {
+    console.warn("Failed to sync derived work items", {
+      tenantId,
+      conversationId: conversation.id,
+      message: err instanceof Error ? err.message : "Unknown error",
+    });
+  });
+
+  return conversation;
 }
 
 // Pulls recent INBOX threads and upserts them as Conversations + Messages
@@ -244,65 +392,24 @@ export async function syncGmailChannel(channelId: string, tenantId: string): Pro
   for (const thread of threads) {
     if (!thread.id) continue;
 
-    const messages = await fetchThread(gmail, thread.id);
-    if (messages.length === 0) continue;
-
-    const firstMsg = messages[0];
-    const lastMsg = messages[messages.length - 1];
-
-    // Determine the external email (the one that isn't ours)
-    const isFirstOutbound = extractEmail(firstMsg.from) === channel.emailAddress.toLowerCase();
-    const externalRaw = isFirstOutbound ? firstMsg.to : firstMsg.from;
-    const externalEmail = extractEmail(externalRaw);
-    const externalDisplayName = externalRaw.replace(/<[^>]+>/, "").trim() || externalEmail;
-
-    // Auto-create or find the contact (uses email in phoneE164 field)
-    let contact = await prisma.contact.findUnique({
-      where: { tenantId_phoneE164: { tenantId, phoneE164: externalEmail } },
-    });
-    if (!contact) {
-      contact = await prisma.contact.create({
-        data: { tenantId, name: externalDisplayName || externalEmail, phoneE164: externalEmail },
+    try {
+      const messages = await fetchThread(gmail, thread.id);
+      const conversation = await syncFetchedGmailThread({
+        messages,
+        threadId: thread.id,
+        channelId,
+        tenantId,
+        channelEmail: channel.emailAddress,
       });
-    }
-
-    // Upsert conversation
-    const conversation = await prisma.conversation.upsert({
-      where: { tenantId_channelId_externalThreadId: { tenantId, channelId, externalThreadId: thread.id } },
-      create: {
+      if (conversation) synced++;
+    } catch (err) {
+      console.warn("Failed to sync Gmail thread", {
         tenantId,
         channelId,
-        externalThreadId: thread.id,
-        contactId: contact.id,
-        status: "needs_reply",
-        lastMessageAt: lastMsg.date,
-      },
-      update: {
-        lastMessageAt: lastMsg.date,
-        contactId: contact.id,
-      },
-    });
-
-    // Upsert each message
-    for (const msg of messages) {
-      const isOutbound = extractEmail(msg.from) === channel.emailAddress.toLowerCase();
-      await prisma.message.upsert({
-        where: { providerMessageId: `gmail_${msg.id}` },
-        create: {
-          conversationId: conversation.id,
-          direction: isOutbound ? "outbound" : "inbound",
-          fromE164: msg.from,
-          toE164: msg.to,
-          body: msg.body || `[${msg.subject}]`,
-          providerMessageId: `gmail_${msg.id}`,
-          createdAt: msg.date,
-        },
-        update: {},
+        threadId: thread.id,
+        message: err instanceof Error ? err.message : "Unknown error",
       });
     }
-
-    syncConversationWorkItems({ tenantId, conversationId: conversation.id }).catch(() => null);
-    synced++;
   }
 
   return synced;
@@ -349,6 +456,22 @@ export async function sendGmailReply(
   });
 
   return res.data.id ?? "";
+}
+
+export async function markGmailThreadRead(channelId: string, providerMessageIds: string[]): Promise<void> {
+  const gmailIds = providerMessageIds
+    .map((id) => id.match(/^gmail_(.+)$/)?.[1])
+    .filter((id): id is string => Boolean(id));
+  if (gmailIds.length === 0) return;
+
+  const gmail = await getGmailClient(channelId);
+  for (const id of gmailIds) {
+    await gmail.users.messages.modify({
+      userId: "me",
+      id,
+      requestBody: { removeLabelIds: ["UNREAD"] },
+    });
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -514,59 +637,7 @@ async function syncThreadFromHistory(
   channelEmail: string
 ) {
   const messages = await fetchThread(gmail, threadId);
-  if (messages.length === 0) return;
-
-  const firstMsg = messages[0];
-  const lastMsg = messages[messages.length - 1];
-
-  const isFirstOutbound = extractEmail(firstMsg.from).toLowerCase() === channelEmail.toLowerCase();
-  const externalRaw = isFirstOutbound ? firstMsg.to : firstMsg.from;
-  const externalEmail = extractEmail(externalRaw);
-  const externalDisplayName = externalRaw.replace(/<[^>]+>/, "").trim() || externalEmail;
-
-  let contact = await prisma.contact.findUnique({
-    where: { tenantId_phoneE164: { tenantId, phoneE164: externalEmail } },
-  });
-  if (!contact) {
-    contact = await prisma.contact.create({
-      data: { tenantId, name: externalDisplayName || externalEmail, phoneE164: externalEmail },
-    });
-  }
-
-  const conversation = await prisma.conversation.upsert({
-    where: { tenantId_channelId_externalThreadId: { tenantId, channelId, externalThreadId: threadId } },
-    create: {
-      tenantId,
-      channelId,
-      externalThreadId: threadId,
-      contactId: contact.id,
-      status: "needs_reply",
-      lastMessageAt: lastMsg.date,
-    },
-    update: {
-      lastMessageAt: lastMsg.date,
-      contactId: contact.id,
-    },
-  });
-
-  for (const msg of messages) {
-    const isOutbound = extractEmail(msg.from).toLowerCase() === channelEmail.toLowerCase();
-    await prisma.message.upsert({
-      where: { providerMessageId: `gmail_${msg.id}` },
-      create: {
-        conversationId: conversation.id,
-        direction: isOutbound ? "outbound" : "inbound",
-        fromE164: msg.from,
-        toE164: msg.to,
-        body: msg.body || `[${msg.subject}]`,
-        providerMessageId: `gmail_${msg.id}`,
-        createdAt: msg.date,
-      },
-      update: {},
-    });
-  }
-
-  syncConversationWorkItems({ tenantId, conversationId: conversation.id }).catch(() => null);
+  await syncFetchedGmailThread({ messages, threadId, channelId, tenantId, channelEmail });
 }
 
 /**

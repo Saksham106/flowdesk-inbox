@@ -7,6 +7,7 @@ const {
   mockChannelFindFirst,
   mockCredFindUnique,
   mockCredUpdate,
+  mockCredUpdateMany,
   mockSyncGmailChannel,
   mockSyncGmailChannelIncremental,
   mockWatchGmailChannel,
@@ -14,6 +15,7 @@ const {
   mockChannelFindFirst: vi.fn(),
   mockCredFindUnique: vi.fn(),
   mockCredUpdate: vi.fn(),
+  mockCredUpdateMany: vi.fn(),
   mockSyncGmailChannel: vi.fn(),
   mockSyncGmailChannelIncremental: vi.fn(),
   mockWatchGmailChannel: vi.fn(),
@@ -22,7 +24,7 @@ const {
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     channel: { findFirst: mockChannelFindFirst },
-    gmailCredential: { findUnique: mockCredFindUnique, update: mockCredUpdate },
+    gmailCredential: { findUnique: mockCredFindUnique, update: mockCredUpdate, updateMany: mockCredUpdateMany },
   },
 }))
 
@@ -72,6 +74,7 @@ describe('POST /api/connectors/gmail/sync — tenant isolation', () => {
     mockSyncGmailChannel.mockResolvedValue(3)
     mockSyncGmailChannelIncremental.mockResolvedValue({ synced: 2, newHistoryId: 'history-2' })
     mockWatchGmailChannel.mockResolvedValue({ expiration: new Date(), historyId: 'history-2' })
+    mockCredUpdateMany.mockResolvedValue({ count: 1 })
   })
 
   it('returns 401 with no session', async () => {
@@ -157,5 +160,19 @@ describe('POST /api/connectors/gmail/sync — tenant isolation', () => {
         data: expect.objectContaining({ lastSyncError: null }),
       })
     )
+  })
+
+  it('returns 202 without starting another sync when the channel is already locked', async () => {
+    mockSession = { user: { tenantId: 'tenant-A' } }
+    mockChannelFindFirst.mockResolvedValue({ id: 'ch-1', tenantId: 'tenant-A', type: 'email' })
+    mockCredUpdateMany.mockResolvedValue({ count: 0 })
+
+    const res = await POST(makeReq({ channelId: 'ch-1' }) as never)
+    const body = await res.json()
+
+    expect(res.status).toBe(202)
+    expect(body).toEqual({ ok: true, skipped: 'sync_in_progress' })
+    expect(mockSyncGmailChannel).not.toHaveBeenCalled()
+    expect(mockSyncGmailChannelIncremental).not.toHaveBeenCalled()
   })
 })

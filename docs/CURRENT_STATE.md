@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-14 (Gmail sync controls and richer email attention classification)
+Last updated: 2026-06-15 (sync idempotency, user override preservation, read state, action-email metadata)
 
 This file is the codebase-facing companion to `MASTER_PRODUCT_PLAN.md`. It answers: what exists today, what is partial, and what should not be treated as active scope.
 
@@ -91,6 +91,16 @@ Gmail sync controls and inbox refresh polish (2026-06-14):
 - The top-left `F` app mark in `AppRail` is now a keyboard/focus-accessible link to `/inbox`.
 - The home-page "Safely ignored" list remains collapsible and now previews only a small sample plus a remaining count to avoid duplicating the inbox list.
 
+Gmail sync reliability, local state, and read handling (2026-06-15):
+
+- `POST /api/connectors/gmail/sync` now takes a short database-backed lock on `GmailCredential.syncLockExpiresAt` before syncing. Concurrent requests for the same channel return `202 { skipped: "sync_in_progress" }` instead of racing.
+- Gmail sync is idempotent at the thread/message layer. Message upserts tolerate `P2002` unique conflicts caused by overlapping first syncs by confirming the message already exists and continuing. Contact creation has the same race-safe fallback.
+- Gmail sync stores raw provider state separately from local state: `Conversation.gmailUnread`, `Conversation.gmailRawState`, and `Message.gmailLabelIds`.
+- Local user/read state has first-class fields: `Conversation.userState`, `userStateSource`, `userStateUpdatedAt`, `readAt`, `lastOpenedAt`, and `Message.isRead`.
+- Opening a conversation marks it read locally and attempts safe Gmail writeback by removing `UNREAD` from Gmail messages. Gmail writeback failures are logged and do not block the page.
+- Marking a conversation closed/done writes a `ConversationState` row with `source: "user_override"` and metadata `{ userOverride: true, userState: ... }`. Deterministic work-item sync will not overwrite that user override, so done conversations do not reappear in Handle First after auto-sync.
+- Full sync catches and logs individual thread failures with tenant/channel/thread context and continues syncing other threads. OTP/security codes are not logged.
+
 Email attention classification (2026-06-14):
 
 - `lib/agent/email-classifier.ts` now returns both the legacy `emailType` (`needs_reply`, `notification`, `newsletter`, `marketing`, `fyi`) and a richer `attentionCategory`.
@@ -103,12 +113,20 @@ Email attention classification (2026-06-14):
   - `fyi_done` — safe informational or completed transaction email.
   - `quiet` — low-value automated/marketing/noise.
 - Deterministic rules run before broad no-reply/domain rules so no-reply transactional emails containing codes, links, account setup, billing, security, or RSVP language are not incorrectly closed as useless.
-- The classifier stores `attentionCategory`, `attentionReason`, `attentionConfidence`, and optional `verificationCode` / `expiresIn` in `ConversationState.metadataJson`. No Prisma migration was needed.
+- The classifier stores `attentionCategory`, `attentionReason`, `attentionConfidence`, redacted `action` metadata, and optional `expiresIn` in `ConversationState.metadataJson`. OTP codes are not persisted; metadata records only whether a code was detected.
+- Structured action metadata can include action type, explanation, action link, expiration text, and `hasDetectedCode`. Action types include OTP code, verify email, confirm account, create password, reset password, login approval, account setup, and security alert.
 - `lib/agent/work-item-sync.ts` maps `needs_action` to `waiting_on_you` with high priority, `review_soon` to `risky_urgent` with high priority, and `read_later` to low-priority `fyi_only`; only `quiet` and `fyi_done` are eligible for auto-close.
 - `lib/agent/command-center.ts`, the inbox list, conversation detail, and `/api/admin/close-fyi` now prefer `attentionCategory` over the legacy `emailType` when deciding whether something is safely ignorable.
 - `lib/ai/prompts/classify.ts` schema and prompt now include `attentionCategory` and `classificationReason`, keeping LLM classification aligned with deterministic attention categories.
 - Tests cover OTP/code extraction, password reset, GitHub token/security alert, newsletter/read-later, human reply request, marketing quiet, LinkedIn job alert quiet, LLM schema normalization, and metadata merge behavior.
-- Safety note: FlowDesk extracts verification codes for display/copy surfaces later, but does not auto-use them and does not include them in audit logs.
+- Safety note: FlowDesk extracts verification codes only in local classifier output for immediate app use. It does not auto-use them, does not persist them in `ConversationState.metadataJson`, and does not include them in audit logs.
+
+Home command-center ranking/dedupe (2026-06-15):
+
+- Home cards expose read state and redacted action metadata through `CommandCenterConversation`.
+- Handle First, Needs Action, Waiting On, Read Later, and Quietly Handled sections are mutually exclusive at render-selection time. A thread already selected for a higher-priority section is excluded from lower sections.
+- Pure action emails (OTP, verification link, password setup/reset) appear in Needs Action and not also in Handle First. Reply/urgent/opportunity/review-style items can still appear in Handle First.
+- Handle First cards are now clickable like Needs Action cards, with keyboard activation and child buttons/links stopping propagation.
 
 Conversation page layout redesign (2026-06-12):
 

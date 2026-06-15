@@ -21,7 +21,24 @@ export type EmailClassifierResult = {
   confidence: number
   extractedCode?: string
   expiresIn?: string
+  action?: {
+    type:
+      | "otp_code"
+      | "verify_email"
+      | "confirm_account"
+      | "create_password"
+      | "reset_password"
+      | "login_approval"
+      | "account_setup"
+      | "security_alert"
+    explanation: string
+    detectedCode?: string
+    actionLink?: string
+    expirationText?: string
+  }
 }
+
+type ActionType = NonNullable<EmailClassifierResult["action"]>["type"]
 
 const NO_REPLY_LOCAL_PATTERN =
   /^(noreply|no-reply|donotreply|do-not-reply|do\.not\.reply|notifications?|mailer-daemon|bounce|alert|automated)$/i
@@ -96,6 +113,9 @@ const VERIFY_ACCOUNT_PATTERN =
   /\b(verify your (email|account)|confirm your (email|account)|activate your account|complete your account setup|finish setting up your account)\b/i
 const SECURITY_REVIEW_PATTERN =
   /\b(security alert|security notice|suspicious|unusual (activity|login|sign.{0,6}in)|new (personal access )?token|token (created|added|generated)|new ssh key|recovery email changed|password was changed|new sign.{0,6}in|login from a new device)\b/i
+const LOGIN_APPROVAL_PATTERN =
+  /\b(approve (this )?(sign[-\s]?in|login)|sign[-\s]?in approval|login approval|confirm (this )?(sign[-\s]?in|login)|authorize (this )?(sign[-\s]?in|login))\b/i
+const URL_PATTERN = /\bhttps?:\/\/[^\s<>"')]+/i
 const BILLING_PROBLEM_PATTERN =
   /\b(payment failed|failed payment|could not process your payment|billing problem|invoice overdue|past due|card declined|subscription suspended|service interruption|action required.{0,40}(billing|payment|invoice))\b/i
 const CALENDAR_INVITE_PATTERN =
@@ -132,7 +152,7 @@ function result(
   attentionCategory: AttentionCategory,
   reason: string,
   confidence: number,
-  extras: Pick<EmailClassifierResult, "extractedCode" | "expiresIn"> = {}
+  extras: Pick<EmailClassifierResult, "extractedCode" | "expiresIn" | "action"> = {}
 ): EmailClassifierResult {
   return { emailType, attentionCategory, reason, confidence, ...extras }
 }
@@ -157,6 +177,22 @@ function extractExpiry(text: string): string | undefined {
   return match?.[1]?.replace(/\s+/g, " ")
 }
 
+function extractActionLink(text: string): string | undefined {
+  return text.match(URL_PATTERN)?.[0]?.replace(/[.,;:!?]+$/, "")
+}
+
+function passwordActionType(text: string): ActionType {
+  if (/\b(reset your password|password reset)\b/i.test(text)) return "reset_password"
+  if (/\b(create (a )?password|set up (a )?password|choose (a )?password)\b/i.test(text)) return "create_password"
+  return "account_setup"
+}
+
+function verificationActionType(text: string): ActionType {
+  if (/\bconfirm your (email|account)\b/i.test(text)) return "confirm_account"
+  if (/\b(activate your account|complete your account setup|finish setting up your account)\b/i.test(text)) return "account_setup"
+  return "verify_email"
+}
+
 export function classifyEmailType(input: EmailClassifierInput): EmailClassifierResult {
   const { subject, body } = input
   const text = combinedText(subject, body)
@@ -164,21 +200,61 @@ export function classifyEmailType(input: EmailClassifierInput): EmailClassifierR
   const localPart = extractLocalPart(input.fromEmail)
 
   if (OTP_PATTERN.test(text)) {
+    const extractedCode = extractVerificationCode(text)
+    const expiresIn = extractExpiry(text)
     return result("notification", "needs_action", "Verification code requires user action.", 0.95, {
-      extractedCode: extractVerificationCode(text),
-      expiresIn: extractExpiry(text),
+      extractedCode,
+      expiresIn,
+      action: {
+        type: "otp_code",
+        explanation: "Use the one-time code only in the service that requested it.",
+        ...(extractedCode ? { detectedCode: extractedCode } : {}),
+        ...(expiresIn ? { expirationText: expiresIn } : {}),
+      },
+    })
+  }
+
+  if (LOGIN_APPROVAL_PATTERN.test(text)) {
+    const expiresIn = extractExpiry(text)
+    const actionLink = extractActionLink(text)
+    return result("notification", "needs_action", "Sign-in approval requires user action.", 0.94, {
+      expiresIn,
+      action: {
+        type: "login_approval",
+        explanation: "Approve or deny the sign-in request in the originating service.",
+        ...(actionLink ? { actionLink } : {}),
+        ...(expiresIn ? { expirationText: expiresIn } : {}),
+      },
     })
   }
 
   if (PASSWORD_ACTION_PATTERN.test(text)) {
+    const expiresIn = extractExpiry(text)
+    const actionLink = extractActionLink(text)
+    const type = passwordActionType(text)
     return result("notification", "needs_action", "Password setup or reset link requires user action.", 0.94, {
-      expiresIn: extractExpiry(text),
+      expiresIn,
+      action: {
+        type,
+        explanation: type === "reset_password" ? "Reset the password if you requested it." : "Create or set up the account password.",
+        ...(actionLink ? { actionLink } : {}),
+        ...(expiresIn ? { expirationText: expiresIn } : {}),
+      },
     })
   }
 
   if (VERIFY_ACCOUNT_PATTERN.test(text)) {
+    const expiresIn = extractExpiry(text)
+    const actionLink = extractActionLink(text)
+    const type = verificationActionType(text)
     return result("notification", "needs_action", "Account verification or setup requires user action.", 0.93, {
-      expiresIn: extractExpiry(text),
+      expiresIn,
+      action: {
+        type,
+        explanation: "Verify or confirm the account action in the originating service.",
+        ...(actionLink ? { actionLink } : {}),
+        ...(expiresIn ? { expirationText: expiresIn } : {}),
+      },
     })
   }
 
@@ -187,7 +263,13 @@ export function classifyEmailType(input: EmailClassifierInput): EmailClassifierR
   }
 
   if (SECURITY_REVIEW_PATTERN.test(text)) {
-    return result("notification", "review_soon", "Security-sensitive account alert should be reviewed soon.", 0.93)
+    return result("notification", "review_soon", "Security-sensitive account alert should be reviewed soon.", 0.93, {
+      action: {
+        type: "security_alert",
+        explanation: "Review the security alert and take action only if the activity was not yours.",
+        ...(extractActionLink(text) ? { actionLink: extractActionLink(text) } : {}),
+      },
+    })
   }
 
   if (BILLING_PROBLEM_PATTERN.test(text)) {

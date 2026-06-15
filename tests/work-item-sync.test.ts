@@ -250,4 +250,24 @@ describe("syncConversationWorkItems", () => {
     )
     expect(updateCallsWithSales).toHaveLength(0)
   })
+
+  it("does not overwrite a user override state during deterministic sync", async () => {
+    mockStateFindUnique.mockResolvedValue({
+      source: "user_override",
+      metadataJson: { userOverride: true, userState: "done" },
+    })
+
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    expect(mockStateUpsert).not.toHaveBeenCalled()
+    expect(mockStateUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ state: expect.any(String) }),
+      })
+    )
+  })
 })

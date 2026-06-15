@@ -23,7 +23,7 @@ export default function NeedsActionSection({ items }: Props) {
           <Link
             key={item.id}
             href={item.href}
-            className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-2.5 hover:bg-amber-50 transition"
+            className={`flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-2.5 hover:bg-amber-50 transition ${item.isRead ? "opacity-80" : "ring-1 ring-amber-200"}`}
           >
             <div className="flex-1 min-w-0">
               <p className="text-[11px] font-semibold text-amber-900">{item.displayName}</p>

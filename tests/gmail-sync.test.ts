@@ -10,6 +10,8 @@ const {
   mockContactCreate,
   mockConversationUpsert,
   mockMessageUpsert,
+  mockMessageFindUnique,
+  mockSyncConversationWorkItems,
   mockThreadsList,
   mockThreadsGet,
 } = vi.hoisted(() => ({
@@ -19,6 +21,8 @@ const {
   mockContactCreate:        vi.fn(),
   mockConversationUpsert:   vi.fn(),
   mockMessageUpsert:        vi.fn(),
+  mockMessageFindUnique:     vi.fn(),
+  mockSyncConversationWorkItems: vi.fn(),
   mockThreadsList:          vi.fn(),
   mockThreadsGet:           vi.fn(),
 }))
@@ -33,7 +37,7 @@ vi.mock('@/lib/prisma', () => ({
     gmailCredential: { findUnique: mockCredFindUnique },
     contact: { findUnique: mockContactFindUnique, create: mockContactCreate },
     conversation: { upsert: mockConversationUpsert },
-    message: { upsert: mockMessageUpsert },
+    message: { upsert: mockMessageUpsert, findUnique: mockMessageFindUnique },
   },
 }))
 
@@ -48,7 +52,7 @@ vi.mock('googleapis', () => ({
     gmail: vi.fn().mockReturnValue({
       users: {
         threads: { list: mockThreadsList, get: mockThreadsGet },
-        messages: { send: vi.fn() },
+        messages: { send: vi.fn(), modify: vi.fn() },
       },
     }),
   },
@@ -57,6 +61,10 @@ vi.mock('googleapis', () => ({
 vi.mock('@/lib/crypto', () => ({
   encryptString: (s: string) => `enc:${s}`,
   decryptString: (s: string) => s.replace(/^enc:/, ''),
+}))
+
+vi.mock('@/lib/agent/work-item-sync', () => ({
+  syncConversationWorkItems: mockSyncConversationWorkItems,
 }))
 
 import { syncGmailChannel } from '@/lib/google'
@@ -132,6 +140,8 @@ describe('syncGmailChannel', () => {
     mockContactCreate.mockResolvedValue({ id: 'contact-1', name: 'customer@example.com', phoneE164: 'customer@example.com' })
     mockConversationUpsert.mockResolvedValue({ id: 'conv-1' })
     mockMessageUpsert.mockResolvedValue({})
+    mockMessageFindUnique.mockResolvedValue(null)
+    mockSyncConversationWorkItems.mockResolvedValue({})
 
     const count = await syncGmailChannel(CHANNEL_ID, TENANT_ID)
 
@@ -303,5 +313,22 @@ describe('syncGmailChannel', () => {
 
     expect(mockMessageUpsert.mock.calls[0][0].create.body).toContain('<table>')
     expect(mockMessageUpsert.mock.calls[0][0].create.body).toContain('Transactional layout')
+  })
+
+  it('treats a concurrent duplicate message insert as already synced', async () => {
+    const thread = makeThread('thread-race', 'customer@example.com', CHANNEL_EMAIL)
+    mockThreadsList.mockResolvedValue({ data: { threads: [{ id: 'thread-race' }] } })
+    mockThreadsGet.mockResolvedValue(thread)
+    mockContactFindUnique.mockResolvedValue({ id: 'c-race', phoneE164: 'customer@example.com' })
+    mockConversationUpsert.mockResolvedValue({ id: 'conv-race' })
+    mockMessageUpsert.mockRejectedValueOnce(Object.assign(new Error('Unique constraint failed on providerMessageId'), { code: 'P2002' }))
+    mockMessageFindUnique.mockResolvedValueOnce({ id: 'message-race', conversationId: 'conv-race' })
+
+    await expect(syncGmailChannel(CHANNEL_ID, TENANT_ID)).resolves.toBe(1)
+
+    expect(mockMessageFindUnique).toHaveBeenCalledWith({
+      where: { providerMessageId: 'gmail_msg_thread-race' },
+      select: { id: true, conversationId: true },
+    })
   })
 })

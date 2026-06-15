@@ -8,10 +8,12 @@ FlowDesk is an email-first AI inbox agent for individuals and small businesses. 
 
 - **Gmail and Outlook sync** — connect an email account and import email threads into FlowDesk
 - **Manual and automatic Gmail refresh controls** — the inbox shell exposes real Gmail sync with last-synced/error status, app-load sync, tab-return sync, and periodic sync while open
+- **Idempotent Gmail sync with local overrides** — duplicate syncs are locked per account, Gmail read/unread is imported separately from local read/done state, and user actions win over AI classification
 - **Conversation inbox** — view email threads with status, drafts, and assistant context
 - **Email-style thread view** — opened conversations read top-to-bottom like an email client, with sender/recipient/timestamp metadata and a reply composer below the thread
 - **Daily Command Center** — see the conversations that actually matter today, plus what can be safely ignored
 - **Richer attention classification** — distinguishes needs reply, needs action, review soon, read later, waiting on, FYI done, and quiet instead of treating all automated email as useless
+- **Deterministic account-action detection** — OTPs, verification links, password setup/reset, login approvals, account setup, and security alerts surface as action metadata without persisting OTP codes
 - **Handle This** — ask FlowDesk to draft the next step from a thread-level assistant panel
 - **AI draft suggestions (human-approved)** — generate, edit, approve, and send replies through the email provider
 - **Personal mode by default** — personal/work-email accounts use personal writing style and inbox classification without CRM or sales language
@@ -128,7 +130,10 @@ Optional real-time sync:
 
 Inbox sync behavior:
 - Gmail sync runs through `POST /api/connectors/gmail/sync`; the inbox and settings controls call this route directly.
-- The inbox Gmail sync control prevents concurrent syncs and triggers sync on app load, when the tab/window becomes active again, every 5 minutes while open, and when the user clicks **Sync**.
+- The inbox Gmail sync control prevents duplicate client requests and triggers sync on app load, when the tab/window becomes active again, every 5 minutes while open, and when the user clicks **Sync**.
+- The sync API also takes a short database-backed per-channel lock via `GmailCredential.syncLockExpiresAt`; overlapping server requests return `202 { skipped: "sync_in_progress" }`.
+- Gmail raw state (`gmailUnread`, `gmailRawState`, `gmailLabelIds`) is stored separately from local user/read state (`userState`, `readAt`, `isRead`). Sync imports Gmail read/unread, but user actions such as Mark Done and local reads are not overwritten by AI classification.
+- Opening a Gmail conversation marks it read locally and attempts safe Gmail writeback by removing `UNREAD`; writeback failures are logged but do not block the UI.
 - If Gmail push is configured, Pub/Sub notifications trigger incremental sync server-side; the client controls are still useful as a visible manual fallback.
 
 ### Google Calendar

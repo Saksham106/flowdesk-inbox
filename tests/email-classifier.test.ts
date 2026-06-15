@@ -14,6 +14,36 @@ describe("classifyEmailType", () => {
     expect(result.expiresIn).toBe("10 minutes")
     expect(result.reason).toMatch(/verification code/i)
     expect(result.confidence).toBeGreaterThanOrEqual(0.9)
+    expect(result.action?.type).toBe("otp_code")
+    expect(result.action?.detectedCode).toBe("482910")
+  })
+
+  it("classifies verify email links with structured action metadata", () => {
+    const result = classifyEmailType({
+      fromEmail: "accounts@example.com",
+      subject: "Verify your email",
+      body: "Verify your email by visiting https://example.com/verify?token=abc. This link expires in 24 hours.",
+    })
+
+    expect(result.attentionCategory).toBe("needs_action")
+    expect(result.action).toMatchObject({
+      type: "verify_email",
+      explanation: expect.stringMatching(/verify/i),
+      actionLink: "https://example.com/verify?token=abc",
+      expirationText: "24 hours",
+    })
+  })
+
+  it("classifies create password links with structured action metadata", () => {
+    const result = classifyEmailType({
+      fromEmail: "setup@example.com",
+      subject: "Create your password",
+      body: "Create a password to finish account setup: https://example.com/create-password",
+    })
+
+    expect(result.attentionCategory).toBe("needs_action")
+    expect(result.action?.type).toBe("create_password")
+    expect(result.action?.actionLink).toBe("https://example.com/create-password")
   })
 
   it("classifies password reset email as needs_action", () => {
@@ -24,6 +54,7 @@ describe("classifyEmailType", () => {
     })
     expect(result.attentionCategory).toBe("needs_action")
     expect(result.reason).toMatch(/password/i)
+    expect(result.action?.type).toBe("reset_password")
   })
 
   it("classifies GitHub token security alert as review_soon", () => {
@@ -35,6 +66,7 @@ describe("classifyEmailType", () => {
     expect(result.emailType).toBe("notification")
     expect(result.attentionCategory).toBe("review_soon")
     expect(result.reason).toMatch(/security|token/i)
+    expect(result.action?.type).toBe("security_alert")
   })
 
   it("classifies newsletters as read_later instead of quiet", () => {

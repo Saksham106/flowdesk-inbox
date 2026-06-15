@@ -129,6 +129,7 @@ model GmailCredential {
   historyId             String?
   lastSyncedAt          DateTime?
   lastSyncError         String?
+  syncLockExpiresAt     DateTime?
   createdAt             DateTime  @default(now())
   channel               Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
 }
@@ -207,6 +208,13 @@ model Conversation {
   contactId        String?
   label            String?
   status           ConversationStatus @default(needs_reply)
+  userState        String?
+  userStateSource  String?
+  userStateUpdatedAt DateTime?
+  readAt           DateTime?
+  lastOpenedAt     DateTime?
+  gmailUnread      Boolean            @default(false)
+  gmailRawState    Json?
   lastMessageAt    DateTime           @default(now())
   createdAt        DateTime           @default(now())
   tenant           Tenant             @relation(fields: [tenantId], references: [id])
@@ -233,6 +241,8 @@ model Message {
   toE164            String
   body              String
   providerMessageId String
+  isRead            Boolean          @default(false)
+  gmailLabelIds     Json?
   createdAt         DateTime         @default(now())
   conversation      Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 

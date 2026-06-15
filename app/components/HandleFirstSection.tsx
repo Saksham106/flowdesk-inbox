@@ -1,5 +1,6 @@
 "use client"
 
+import type React from "react"
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -70,9 +71,28 @@ function HandleFirstCard({ item }: CardProps) {
   }
 
   const priorityClass = PRIORITY_STYLES[item.priority] ?? ""
+  const readClass = item.isRead ? "opacity-80" : "ring-1 ring-blue-100"
+
+  function openCard() {
+    router.push(item.href)
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault()
+      openCard()
+    }
+  }
 
   return (
-    <div className={`rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:shadow-sm ${priorityClass}`}>
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={openCard}
+      onKeyDown={handleKeyDown}
+      className={`cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${priorityClass} ${readClass}`}
+      aria-label={`Open ${item.displayName}`}
+    >
       <div className="flex items-baseline justify-between gap-2 mb-1">
         <p className="text-[12px] font-semibold text-slate-900 truncate">{item.displayName}</p>
         <span className="text-[10px] text-slate-400 flex-shrink-0">{relativeTime(item.lastMessageAt)}</span>
@@ -82,7 +102,10 @@ function HandleFirstCard({ item }: CardProps) {
       <div className="flex items-center gap-2 flex-wrap">
         {item.needsReply && (
           <button
-            onClick={handleDraftReply}
+            onClick={(event) => {
+              event.stopPropagation()
+              handleDraftReply()
+            }}
             disabled={draftLoading}
             className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-blue-600 text-white disabled:opacity-60 hover:bg-blue-700 transition"
           >
@@ -92,6 +115,7 @@ function HandleFirstCard({ item }: CardProps) {
         {item.approvalReason && !item.needsReply && (
           <Link
             href={item.href}
+            onClick={(event) => event.stopPropagation()}
             className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition"
           >
             Review Draft
@@ -99,12 +123,16 @@ function HandleFirstCard({ item }: CardProps) {
         )}
         <Link
           href={item.href}
+          onClick={(event) => event.stopPropagation()}
           className="text-[10px] font-medium px-2.5 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
         >
           Open
         </Link>
         <button
-          onClick={handleMarkDone}
+          onClick={(event) => {
+            event.stopPropagation()
+            handleMarkDone()
+          }}
           className="text-[10px] font-medium px-2.5 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
         >
           Mark Done

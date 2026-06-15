@@ -26,6 +26,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Channel not found" }, { status: 404 })
   }
 
+  const lockUntil = new Date(Date.now() + 2 * 60 * 1000)
+  const lock = await prisma.gmailCredential.updateMany({
+    where: {
+      channelId,
+      OR: [
+        { syncLockExpiresAt: null },
+        { syncLockExpiresAt: { lt: new Date() } },
+      ],
+    },
+    data: { syncLockExpiresAt: lockUntil },
+  })
+
+  if (lock.count === 0) {
+    return NextResponse.json({ ok: true, skipped: "sync_in_progress" }, { status: 202 })
+  }
+
   try {
     let result
     if (incremental) {
@@ -52,7 +68,7 @@ export async function POST(request: Request) {
 
     await prisma.gmailCredential.update({
       where: { channelId },
-      data: { lastSyncedAt: new Date(), lastSyncError: null },
+      data: { lastSyncedAt: new Date(), lastSyncError: null, syncLockExpiresAt: null },
     })
 
     return NextResponse.json({ ok: true, ...result })
@@ -61,7 +77,7 @@ export async function POST(request: Request) {
 
     await prisma.gmailCredential.update({
       where: { channelId },
-      data: { lastSyncError: message },
+      data: { lastSyncError: message, syncLockExpiresAt: null },
     }).catch(() => {})
 
     return NextResponse.json({ error: message }, { status: 500 })
