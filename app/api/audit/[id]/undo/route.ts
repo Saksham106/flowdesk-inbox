@@ -50,6 +50,7 @@ export async function POST(
         payloadJson: {
           originalLogId: logId,
           draftId,
+          conversationId: typeof payload.conversationId === "string" ? payload.conversationId : undefined,
           reason: "User undid autopilot draft approval",
         },
       },

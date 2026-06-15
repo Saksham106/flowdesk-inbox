@@ -67,11 +67,12 @@ export default async function AuditPage({ searchParams }: Props) {
   const pageSize = 50
   const filterAction = searchParams.action
 
+  const allowedActions = isPersonal ? auditActionsForPersonal : AGENT_ACTIONS
   const where = {
     tenantId,
-    ...(filterAction
-      ? { action: filterAction }
-      : { action: { in: isPersonal ? auditActionsForPersonal : AGENT_ACTIONS } }),
+    action: filterAction && allowedActions.includes(filterAction)
+      ? filterAction
+      : { in: allowedActions },
   }
 
   const [logs, total] = await Promise.all([
