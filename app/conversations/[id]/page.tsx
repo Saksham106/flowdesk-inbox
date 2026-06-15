@@ -10,7 +10,8 @@ import ExplainThreadPanel from "@/app/conversations/[id]/ExplainThreadPanel";
 import HandleThisPanel from "@/app/conversations/[id]/HandleThisPanel";
 import WorkItemsPanel from "@/app/conversations/[id]/WorkItemsPanel";
 import StatusButton from "@/app/conversations/[id]/StatusButton";
-import LabelSelect from "@/app/conversations/[id]/LabelSelect";
+import LabelSelect from "@/app/conversations/[id]/LabelSelect"
+import AttentionCorrectionSelect from "@/app/conversations/[id]/AttentionCorrectionSelect";
 import SaveContactForm from "@/app/conversations/[id]/SaveContactForm";
 import AutoDraftTrigger from "@/app/conversations/[id]/AutoDraftTrigger";
 import AutoRefresh from "@/app/components/AutoRefresh";
@@ -340,6 +341,12 @@ export default async function ConversationPage({
           />
         </div>
       )}
+      <div className="mt-3 border-t border-slate-100 pt-3">
+        <AttentionCorrectionSelect
+          conversationId={conversation.id}
+          current={attentionCategory ?? undefined}
+        />
+      </div>
     </div>
   )
 
