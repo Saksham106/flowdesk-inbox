@@ -235,7 +235,8 @@ export default async function AppListColumn({
               conv.draft?.status === "proposed" || conv.draft?.status === "approved"
             const isSelected = conv.id === activeConversationId
             const isUnread = !conv.readAt && conv.gmailUnread !== false && !fyi
-            const isRead = !!conv.readAt
+
+            const isClosed = conv.status === "closed"
 
             return (
               <Link
@@ -247,7 +248,7 @@ export default async function AppListColumn({
                     : isUnread
                       ? "hover:bg-blue-50/60"
                       : "hover:bg-slate-50"
-                } ${fyi ? "opacity-40" : ""}`}
+                }`}
               >
                 <div className="flex items-baseline justify-between gap-1">
                   <div className="flex min-w-0 items-center gap-1.5">
@@ -258,11 +259,9 @@ export default async function AppListColumn({
                       className={`min-w-0 truncate text-xs ${
                         isUnread
                           ? "font-bold text-slate-900"
-                          : fyi
-                            ? "font-normal text-slate-400"
-                            : isRead && conv.status !== "needs_reply"
-                              ? "font-medium text-slate-500"
-                              : "font-semibold text-slate-800"
+                          : fyi || isClosed
+                            ? "font-normal text-slate-500"
+                            : "font-semibold text-slate-800"
                       }`}
                     >
                       {name}
@@ -273,7 +272,9 @@ export default async function AppListColumn({
                   </span>
                 </div>
                 {snippet && (
-                  <p className={`mt-0.5 truncate text-[11px] ${isUnread ? "text-slate-500" : "text-slate-400"}`}>{snippet}</p>
+                  <p className={`mt-0.5 truncate text-[11px] ${
+                    isUnread ? "text-slate-600" : fyi || isClosed ? "text-slate-400" : "text-slate-500"
+                  }`}>{snippet}</p>
                 )}
                 <div className="mt-1 flex items-center gap-1.5">
                   {(attentionStyle || style) && (
