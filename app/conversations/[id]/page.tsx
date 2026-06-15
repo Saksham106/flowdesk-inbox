@@ -500,6 +500,12 @@ export default async function ConversationPage({
         channelType={conversation.channel.type}
         canSuggest={canSuggestReply}
         isPersonal={isPersonal}
+        senderAddress={
+          conversation.messages.length > 0
+            ? conversation.messages[conversation.messages.length - 1].fromE164
+            : (conversation.channel.emailAddress ?? undefined)
+        }
+        threadSubject={conversation.externalThreadId}
         initialDraft={
           conversation.draft
             ? {
@@ -690,7 +696,7 @@ export default async function ConversationPage({
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-hidden">
               {replyComposer}
             </div>
           </section>
