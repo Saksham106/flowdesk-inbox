@@ -6,6 +6,7 @@ import SearchInput from "@/app/inbox/SearchInput"
 import GmailSyncControl from "@/app/components/GmailSyncControl"
 import InboxScrollContainer from "@/app/components/InboxScrollContainer"
 import { buildConversationHref } from "@/lib/client-navigation"
+import InboxRow from "@/app/components/InboxRow"
 
 interface Props {
   tenantId: string
@@ -226,68 +227,34 @@ export default async function AppListColumn({
             const attention = attentionCategory(conv)
             const attentionStyle = attention ? ATTENTION_STYLE[attention] : null
             const displayStatus = fyi ? "closed" : conv.status
-            const style = STATUS_STYLE[displayStatus]
+            const style = STATUS_STYLE[displayStatus] ?? { dot: "bg-slate-300", text: "text-slate-500" }
             const name = conv.contact?.name ?? conv.externalThreadId
             const snippet = conv.messages[0]?.body
               ? stripHtmlToText(conv.messages[0].body, 75)
               : ""
             const hasDraft =
               conv.draft?.status === "proposed" || conv.draft?.status === "approved"
-            const isSelected = conv.id === activeConversationId
-            const isUnread = !conv.readAt && conv.gmailUnread !== false && !fyi
-
             const isClosed = conv.status === "closed"
 
             return (
-              <Link
+              <InboxRow
                 key={conv.id}
+                id={conv.id}
                 href={buildConversationHref(conv.id, returnTo)}
-                className={`block border-b border-slate-50 px-3 py-2.5 transition ${
-                  isSelected
-                    ? "border-l-2 border-l-blue-500 bg-blue-50"
-                    : isUnread
-                      ? "hover:bg-blue-50/60"
-                      : "hover:bg-slate-50"
-                }`}
-              >
-                <div className="flex items-baseline justify-between gap-1">
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    {isUnread && (
-                      <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
-                    )}
-                    <p
-                      className={`min-w-0 truncate text-xs ${
-                        isUnread
-                          ? "font-bold text-slate-900"
-                          : fyi || isClosed
-                            ? "font-normal text-slate-500"
-                            : "font-semibold text-slate-800"
-                      }`}
-                    >
-                      {name}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-[10px] text-slate-400">
-                    {relativeTime(conv.lastMessageAt)}
-                  </span>
-                </div>
-                {snippet && (
-                  <p className={`mt-0.5 truncate text-[11px] ${
-                    isUnread ? "text-slate-600" : fyi || isClosed ? "text-slate-400" : "text-slate-500"
-                  }`}>{snippet}</p>
-                )}
-                <div className="mt-1 flex items-center gap-1.5">
-                  {(attentionStyle || style) && (
-                    <span className={`flex items-center gap-1 text-[10px] font-semibold ${attentionStyle?.text ?? style.text}`}>
-                      <span className={`inline-block h-1.5 w-1.5 rounded-full ${attentionStyle?.dot ?? style.dot}`} />
-                      {attentionStyle?.label ?? (fyi ? "No reply needed" : STATUS_LABEL[displayStatus])}
-                    </span>
-                  )}
-                  {hasDraft && !fyi && (
-                    <span className="text-[10px] font-semibold text-blue-600">✦ draft</span>
-                  )}
-                </div>
-              </Link>
+                isSelected={conv.id === activeConversationId}
+                isUnread={!conv.readAt && conv.gmailUnread !== false && !fyi}
+                isFyi={fyi}
+                isClosed={isClosed}
+                name={name}
+                snippet={snippet}
+                timeLabel={relativeTime(conv.lastMessageAt)}
+                statusDot={attentionStyle?.dot ?? style.dot}
+                statusText={attentionStyle?.text ?? style.text}
+                statusLabel={attentionStyle?.label ?? (fyi ? "No reply needed" : STATUS_LABEL[displayStatus] ?? displayStatus)}
+                hasDraft={hasDraft}
+                initialReadAt={conv.readAt !== null}
+                initialStatus={conv.status}
+              />
             )
           })
         )}
