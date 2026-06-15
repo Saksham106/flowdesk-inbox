@@ -14,6 +14,7 @@ type GmailSyncChannel = {
   emailAddress: string | null
   lastSyncedAt: Date | string | null
   lastSyncError: string | null
+  watchExpiresAt?: Date | string | null
 }
 
 interface Props {

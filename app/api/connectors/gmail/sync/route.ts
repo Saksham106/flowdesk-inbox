@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { syncGmailChannel, syncGmailChannelIncremental, watchGmailChannel } from "@/lib/google"
+import { runGmailSync } from "@/lib/gmail-sync"
 
 export const runtime = "nodejs"
 
@@ -26,60 +26,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Channel not found" }, { status: 404 })
   }
 
-  const lockUntil = new Date(Date.now() + 2 * 60 * 1000)
-  const lock = await prisma.gmailCredential.updateMany({
-    where: {
-      channelId,
-      OR: [
-        { syncLockExpiresAt: null },
-        { syncLockExpiresAt: { lt: new Date() } },
-      ],
-    },
-    data: { syncLockExpiresAt: lockUntil },
-  })
-
-  if (lock.count === 0) {
-    return NextResponse.json({ ok: true, skipped: "sync_in_progress" }, { status: 202 })
-  }
-
   try {
-    let result
-    if (incremental) {
-      const cred = await prisma.gmailCredential.findUnique({ where: { channelId } })
-      if (cred?.historyId) {
-        result = await syncGmailChannelIncremental(channelId, session.user.tenantId)
-      } else {
-        const count = await syncGmailChannel(channelId, session.user.tenantId)
-        result = { synced: count }
-      }
-
-      if (process.env.GMAIL_PUSH_TOPIC) {
-        try {
-          await watchGmailChannel(channelId, process.env.GMAIL_PUSH_TOPIC)
-        } catch {
-          // Non-blocking, log but don't fail sync
-          console.warn("Failed to setup Gmail watch for channel", channelId)
-        }
-      }
-    } else {
-      const count = await syncGmailChannel(channelId, session.user.tenantId)
-      result = { synced: count }
-    }
-
-    await prisma.gmailCredential.update({
-      where: { channelId },
-      data: { lastSyncedAt: new Date(), lastSyncError: null, syncLockExpiresAt: null },
+    const result = await runGmailSync({
+      channelId,
+      tenantId: session.user.tenantId,
+      requestedMode: "manual",
+      incremental: Boolean(incremental),
+      ensureWatch: true,
     })
 
-    return NextResponse.json({ ok: true, ...result })
+    return NextResponse.json(result, { status: result.skipped === "sync_in_progress" ? 202 : 200 })
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown sync error"
-
-    await prisma.gmailCredential.update({
-      where: { channelId },
-      data: { lastSyncError: message, syncLockExpiresAt: null },
-    }).catch(() => {})
-
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

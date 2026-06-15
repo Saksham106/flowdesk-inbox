@@ -81,6 +81,8 @@ const baseJob = {
 
 const goodClassification = {
   intent: 'booking_request',
+  attentionCategory: 'needs_reply' as const,
+  classificationReason: 'Customer is asking about booking an appointment.',
   confidence: 0.85,
   riskLevel: 'low' as const,
   suggestedLabel: 'Lead' as const,

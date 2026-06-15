@@ -73,19 +73,21 @@ Email body rendering and readable-text safety (updated 2026-06-14):
 - Tests in `tests/email-body.test.ts`, `tests/email-iframe.test.ts`, `tests/gmail-sync.test.ts`, `tests/explain-thread.test.ts`, and `tests/ai-draft-provider.test.ts` cover sanitization, unsafe attributes, scheme restriction, plain-text linkification, light-mode iframe wrapping, MIME preference for HTML over CSS-junk plain text, nested multipart HTML extraction, cleaned snippets, and cleaned AI prompt inputs.
 - Known gap: external HTTPS images in HTML emails can now survive sync/render safely, but inline `cid:` images are not yet resolved from Gmail attachment parts.
 
-Gmail incremental sync and push notifications (2026-06-14):
+Gmail incremental sync and push notifications (updated 2026-06-15):
 
-- `lib/google.ts` supports Gmail History API incremental sync from stored `GmailCredential.historyId`, Gmail watch setup/stop/renewal, and Pub/Sub push notification processing by Gmail account email address.
-- `POST /api/connectors/gmail/sync` accepts `incremental: true`; it uses incremental sync when a history cursor exists and falls back to a full sync before establishing the watch when one does not.
-- `POST /api/connectors/gmail/push?secret=<GMAIL_PUSH_SECRET>` decodes Pub/Sub push payloads and triggers incremental sync for the matching Gmail channel.
-- `GET /api/cron/gmail-watch` renews Gmail watches for channels with a history cursor; `DELETE /api/cron/gmail-watch` stops a channel watch and clears the cursor.
+- `lib/gmail-sync.ts` is the shared Gmail sync runner for manual sync, OAuth initial sync, and Pub/Sub push notifications. It takes the per-channel database lock, records `lastSyncMode`/`lastSyncStatus`/`lastSyncError`, and prevents duplicate push/manual sync work.
+- `lib/google.ts` contains the Gmail API primitives: recent inbox sync, History API incremental sync, watch setup/stop/renewal, and Gmail read writeback.
+- `POST /api/connectors/gmail/sync` accepts `incremental: true`; the runner uses incremental sync when a history cursor exists and otherwise does a safe recent sync and stores a fresh cursor.
+- `POST /api/connectors/gmail/push?secret=<GMAIL_PUSH_SECRET>` decodes Pub/Sub push payloads and routes the matching Gmail channel through the shared locked runner.
+- If Gmail History API rejects an expired/invalid cursor, the runner performs a safe recent sync fallback, refreshes the history cursor, and leaves the user able to sync again.
+- `watchGmailChannel` stores the watch response `historyId` and `watchExpiresAt`. `GET /api/cron/gmail-watch` renews only missing/expiring watches; `DELETE /api/cron/gmail-watch` stops a channel watch and clears the cursor/watch expiration.
 - `SyncGmailButton` requests incremental sync after the channel has a previous sync timestamp.
 
 Gmail sync controls and inbox refresh polish (2026-06-14):
 
 - `app/components/GmailSyncControl.tsx` exposes a real Gmail sync control in the inbox shell, backed by `POST /api/connectors/gmail/sync`; it never fakes sync state.
 - The control shows loading, last-synced time, and inline success/error status. It is shown in the desktop inbox list header and mobile inbox header when a Gmail channel exists.
-- Client-side sync triggers now cover app load, returning to the tab/window, a 5-minute interval while open, and manual **Sync**. The control blocks concurrent syncs and rate-limits automatic triggers with a 60-second cooldown.
+- Client-side sync triggers now treat healthy Gmail push watches as primary. With a healthy `watchExpiresAt`, app-load/focus sync only runs as a stale fallback; without push/watch health, the previous polling fallback remains. Manual **Sync** always remains available.
 - `AutoRefresh` still only refreshes rendered server data; Gmail synchronization itself is handled by the sync API, Gmail push notifications, and the new `GmailSyncControl`.
 - Conversation links now preserve inbox filter context through a validated `returnTo=/inbox?...` query. Opening a conversation from **Reply**, **Closed**, search, or Sales preserves the left-list filter and mobile back link.
 - The top-left `F` app mark in `AppRail` is now a keyboard/focus-accessible link to `/inbox`.

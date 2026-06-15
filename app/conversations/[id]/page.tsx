@@ -113,7 +113,7 @@ export default async function ConversationPage({
         id: true,
         emailAddress: true,
         gmailCredential: {
-          select: { lastSyncedAt: true, lastSyncError: true },
+          select: { lastSyncedAt: true, lastSyncError: true, watchExpiresAt: true },
         },
       },
       orderBy: { createdAt: "asc" },
@@ -170,6 +170,7 @@ export default async function ConversationPage({
       emailAddress: channel.emailAddress,
       lastSyncedAt: channel.gmailCredential?.lastSyncedAt ?? null,
       lastSyncError: channel.gmailCredential?.lastSyncError ?? null,
+      watchExpiresAt: channel.gmailCredential?.watchExpiresAt ?? null,
     }));
 
   await syncConversationWorkItems({

@@ -17,10 +17,14 @@ function relativeTime(date: Date): string {
 export default function SyncGmailButton({
   channelId,
   lastSyncedAt,
+  lastSyncMode,
+  lastSyncStatus,
   lastSyncError,
 }: {
   channelId: string;
   lastSyncedAt: Date | null;
+  lastSyncMode?: string | null;
+  lastSyncStatus?: string | null;
   lastSyncError: string | null;
 }) {
   const router = useRouter();
@@ -66,6 +70,11 @@ export default function SyncGmailButton({
       {displaySyncedAt && !displayError && (
         <p className="text-xs text-slate-400">
           Synced {relativeTime(new Date(displaySyncedAt))}
+        </p>
+      )}
+      {lastSyncMode && (
+        <p className="text-xs text-slate-400">
+          {lastSyncStatus ? `${lastSyncStatus} · ` : ""}{lastSyncMode.replaceAll("_", " ")}
         </p>
       )}
       {displayError && (

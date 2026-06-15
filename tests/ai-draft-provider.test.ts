@@ -84,6 +84,7 @@ describe('buildDraftReplyPrompt', () => {
           sourceType: 'faq',
         },
       ],
+      conversationSummary: null,
       messages: [
         {
           direction: 'inbound',
@@ -112,6 +113,7 @@ describe('buildDraftReplyPrompt', () => {
         businessHoursJson: null,
       },
       knowledgeDocuments: [],
+      conversationSummary: null,
       messages: [
         {
           direction: 'inbound',
@@ -131,6 +133,7 @@ describe('buildDraftReplyPrompt', () => {
     const prompt = buildDraftReplyPrompt({
       businessProfile: null,
       knowledgeDocuments: [],
+      conversationSummary: null,
       messages: [
         {
           direction: 'inbound',
@@ -151,6 +154,7 @@ describe('buildPersonalDraftReplyPrompt', () => {
   it('includes rough user instructions for personal drafts', () => {
     const prompt = buildPersonalDraftReplyPrompt({
       personalProfile: null,
+      conversationSummary: null,
       messages: [
         {
           direction: 'inbound',
@@ -169,6 +173,7 @@ describe('buildPersonalDraftReplyPrompt', () => {
   it('does not expose business labels in personal draft instructions', () => {
     const prompt = buildPersonalDraftReplyPrompt({
       personalProfile: null,
+      conversationSummary: null,
       messages: [
         {
           direction: 'inbound',
@@ -187,6 +192,7 @@ describe('buildPersonalDraftReplyPrompt', () => {
   it('uses cleaned readable message content for personal drafts', () => {
     const prompt = buildPersonalDraftReplyPrompt({
       personalProfile: null,
+      conversationSummary: null,
       messages: [
         {
           direction: 'inbound',
@@ -211,6 +217,7 @@ describe('generateDraftReplyWithOpenAI', () => {
       generateDraftReplyWithOpenAI({
         businessProfile: null,
         knowledgeDocuments: [],
+        conversationSummary: null,
         messages: [],
       })
     ).rejects.toThrow('OPENAI_API_KEY is not configured')

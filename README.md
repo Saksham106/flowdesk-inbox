@@ -129,10 +129,11 @@ Optional real-time sync:
 - Schedule `GET /api/cron/gmail-watch` daily with `Authorization: Bearer <CRON_SECRET>` so Gmail watches renew before their 7-day expiration.
 
 Inbox sync behavior:
-- Gmail sync runs through `POST /api/connectors/gmail/sync`; the inbox and settings controls call this route directly.
-- The inbox Gmail sync control prevents duplicate client requests and triggers sync on app load, when the tab/window becomes active again, every 5 minutes while open, and when the user clicks **Sync**.
-- The sync API also takes a short database-backed per-channel lock via `GmailCredential.syncLockExpiresAt`; overlapping server requests return `202 { skipped: "sync_in_progress" }`.
+- Gmail sync runs through the shared runner in `lib/gmail-sync.ts`; manual sync, OAuth initial sync, and Pub/Sub push notifications all use the same database-backed per-channel lock.
+- The inbox Gmail sync control prevents duplicate client requests. When Gmail push/watch is healthy it only auto-syncs as a stale fallback; when push is not configured or the watch is unhealthy it keeps the 5-minute polling fallback. Manual **Sync** always remains available.
+- Overlapping server requests return `202 { skipped: "sync_in_progress" }`.
 - Gmail raw state (`gmailUnread`, `gmailRawState`, `gmailLabelIds`) is stored separately from local user/read state (`userState`, `readAt`, `isRead`). Sync imports Gmail read/unread, but user actions such as Mark Done and local reads are not overwritten by AI classification.
+- Sync observability is stored on `GmailCredential.lastSyncMode`, `lastSyncStatus`, `lastSyncError`, `lastSyncedAt`, and `watchExpiresAt`.
 - Opening a Gmail conversation marks it read locally and attempts safe Gmail writeback by removing `UNREAD`; writeback failures are logged but do not block the UI.
 - If Gmail push is configured, Pub/Sub notifications trigger incremental sync server-side; the client controls are still useful as a visible manual fallback.
 

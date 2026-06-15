@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 
-import { processGmailPushNotification } from "@/lib/google"
+import { processGmailPushNotification } from "@/lib/gmail-sync"
 
 export const runtime = "nodejs"
 

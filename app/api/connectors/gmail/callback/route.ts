@@ -4,7 +4,8 @@ import type { Credentials } from "google-auth-library";
 
 import { prisma } from "@/lib/prisma";
 import { encryptString } from "@/lib/crypto";
-import { createOAuth2Client, verifyState, syncGmailChannel, watchGmailChannel } from "@/lib/google";
+import { createOAuth2Client, verifyState } from "@/lib/google";
+import { runGmailSync } from "@/lib/gmail-sync";
 
 export const runtime = "nodejs";
 
@@ -99,10 +100,13 @@ export async function GET(request: Request) {
 
   // Initial sync — import recent threads into inbox
   try {
-    await syncGmailChannel(channelId, tenantId);
-    if (process.env.GMAIL_PUSH_TOPIC) {
-      await watchGmailChannel(channelId, process.env.GMAIL_PUSH_TOPIC);
-    }
+    await runGmailSync({
+      channelId,
+      tenantId,
+      requestedMode: "oauth_callback",
+      incremental: false,
+      ensureWatch: true,
+    });
   } catch (err) {
     console.error("[gmail/callback] initial sync failed:", err);
   }

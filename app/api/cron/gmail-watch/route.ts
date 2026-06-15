@@ -16,7 +16,13 @@ export async function GET(request: Request) {
   }
 
   const channels = await prisma.gmailCredential.findMany({
-    where: { historyId: { not: null } },
+    where: {
+      historyId: { not: null },
+      OR: [
+        { watchExpiresAt: null },
+        { watchExpiresAt: { lt: new Date(Date.now() + 24 * 60 * 60 * 1000) } },
+      ],
+    },
     include: { channel: true },
   })
 
@@ -51,7 +57,7 @@ export async function DELETE(request: Request) {
     await stopGmailWatch(channelId)
     await prisma.gmailCredential.update({
       where: { channelId },
-      data: { historyId: null },
+      data: { historyId: null, watchExpiresAt: null },
     })
     return NextResponse.json({ ok: true })
   } catch (err) {

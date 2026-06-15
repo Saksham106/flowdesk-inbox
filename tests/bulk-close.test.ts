@@ -21,7 +21,6 @@ vi.mock("next-auth", () => ({ getServerSession: mockGetServerSession }))
 vi.mock("@/lib/auth", () => ({ authOptions: {} }))
 
 import { POST } from "@/app/api/conversations/bulk-close/route"
-import { NextRequest } from "next/server"
 
 describe("POST /api/conversations/bulk-close", () => {
   beforeEach(() => {
@@ -36,8 +35,7 @@ describe("POST /api/conversations/bulk-close", () => {
   })
 
   it("closes all FYI/quiet conversations and returns count", async () => {
-    const req = new NextRequest("http://localhost/api/conversations/bulk-close", { method: "POST" })
-    const res = await POST(req)
+    const res = await POST()
     const body = await res.json()
     expect(res.status).toBe(200)
     expect(body.closed).toBe(2)
@@ -50,8 +48,7 @@ describe("POST /api/conversations/bulk-close", () => {
 
   it("returns 401 when not authenticated", async () => {
     mockGetServerSession.mockResolvedValue(null)
-    const req = new NextRequest("http://localhost/api/conversations/bulk-close", { method: "POST" })
-    const res = await POST(req)
+    const res = await POST()
     expect(res.status).toBe(401)
   })
 })

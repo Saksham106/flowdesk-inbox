@@ -86,6 +86,8 @@ const CONV_ID = 'conv-1'
 
 const classification: ClassifyResult = {
   intent: 'appointment booking request',
+  attentionCategory: 'needs_reply',
+  classificationReason: 'Customer is asking to book an appointment.',
   confidence: 0.92,
   riskLevel: 'low',
   requiresApproval: false,

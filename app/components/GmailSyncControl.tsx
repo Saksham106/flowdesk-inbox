@@ -8,6 +8,7 @@ type GmailSyncChannel = {
   emailAddress: string | null;
   lastSyncedAt: Date | string | null;
   lastSyncError: string | null;
+  watchExpiresAt?: Date | string | null;
 };
 
 type SyncStatus = {
@@ -17,6 +18,8 @@ type SyncStatus = {
 
 const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 const AUTO_SYNC_COOLDOWN_MS = 60 * 1000;
+const PUSH_STALE_FALLBACK_MS = 30 * 60 * 1000;
+const WATCH_HEALTH_BUFFER_MS = 10 * 60 * 1000;
 
 function relativeTime(date: Date): string {
   const diff = Date.now() - date.getTime();
@@ -50,6 +53,19 @@ export default function GmailSyncControl({
   const lastStartedAtRef = useRef(0);
 
   const hasChannels = channels.length > 0;
+  const hasHealthyPush = useMemo(
+    () =>
+      channels.some((channel) => {
+        if (!channel.watchExpiresAt) return false;
+        return new Date(channel.watchExpiresAt).getTime() > Date.now() + WATCH_HEALTH_BUFFER_MS;
+      }),
+    [channels]
+  );
+  const shouldPollWithHealthyPush = useCallback(() => {
+    if (!hasHealthyPush) return true;
+    if (!lastSyncedAt) return true;
+    return Date.now() - lastSyncedAt.getTime() > PUSH_STALE_FALLBACK_MS;
+  }, [hasHealthyPush, lastSyncedAt]);
   const initialError = useMemo(
     () => channels.find((channel) => channel.lastSyncError)?.lastSyncError ?? null,
     [channels]
@@ -68,6 +84,7 @@ export default function GmailSyncControl({
       if (!hasChannels || inFlightRef.current) return;
       const now = Date.now();
       if (source === "auto" && now - lastStartedAtRef.current < AUTO_SYNC_COOLDOWN_MS) return;
+      if (source === "auto" && !shouldPollWithHealthyPush()) return;
 
       inFlightRef.current = true;
       lastStartedAtRef.current = now;
@@ -105,7 +122,7 @@ export default function GmailSyncControl({
         setLoading(false);
       }
     },
-    [channels, hasChannels, lastSyncedAt, router]
+    [channels, hasChannels, lastSyncedAt, router, shouldPollWithHealthyPush]
   );
 
   useEffect(() => {
@@ -122,14 +139,14 @@ export default function GmailSyncControl({
     };
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("focus", onVisibility);
-    const interval = window.setInterval(() => runSync("auto"), AUTO_SYNC_INTERVAL_MS);
+    const interval = hasHealthyPush ? null : window.setInterval(() => runSync("auto"), AUTO_SYNC_INTERVAL_MS);
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("focus", onVisibility);
-      window.clearInterval(interval);
+      if (interval) window.clearInterval(interval);
     };
-  }, [hasChannels, runSync]);
+  }, [hasChannels, hasHealthyPush, runSync]);
 
   if (!hasChannels) {
     return null;

@@ -58,7 +58,7 @@ export default async function SettingsPage({ searchParams }: Props) {
   ] = await Promise.all([
     prisma.channel.findMany({
       where: { tenantId: session.user.tenantId, type: "email" },
-      include: { gmailCredential: { select: { createdAt: true, lastSyncedAt: true, lastSyncError: true } } },
+      include: { gmailCredential: { select: { createdAt: true, lastSyncedAt: true, lastSyncError: true, watchExpiresAt: true, lastSyncMode: true, lastSyncStatus: true } } },
       orderBy: { createdAt: "asc" },
     }),
     prisma.channel.findMany({
@@ -231,6 +231,8 @@ export default async function SettingsPage({ searchParams }: Props) {
                       <SyncGmailButton
                         channelId={channel.id}
                         lastSyncedAt={channel.gmailCredential?.lastSyncedAt ?? null}
+                        lastSyncMode={channel.gmailCredential?.lastSyncMode ?? null}
+                        lastSyncStatus={channel.gmailCredential?.lastSyncStatus ?? null}
                         lastSyncError={channel.gmailCredential?.lastSyncError ?? null}
                       />
                       <DisconnectGmailButton channelId={channel.id} />

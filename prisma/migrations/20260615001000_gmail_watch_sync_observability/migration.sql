@@ -1,0 +1,4 @@
+ALTER TABLE "GmailCredential"
+  ADD COLUMN IF NOT EXISTS "watchExpiresAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "lastSyncMode" TEXT,
+  ADD COLUMN IF NOT EXISTS "lastSyncStatus" TEXT;

@@ -127,7 +127,10 @@ model GmailCredential {
   refreshTokenEncrypted String
   tokenExpiry           DateTime?
   historyId             String?
+  watchExpiresAt        DateTime?
   lastSyncedAt          DateTime?
+  lastSyncMode          String?
+  lastSyncStatus        String?
   lastSyncError         String?
   syncLockExpiresAt     DateTime?
   createdAt             DateTime  @default(now())

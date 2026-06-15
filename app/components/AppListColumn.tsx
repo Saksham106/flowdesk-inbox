@@ -18,6 +18,7 @@ interface Props {
     emailAddress: string | null
     lastSyncedAt: Date | null
     lastSyncError: string | null
+    watchExpiresAt?: Date | string | null
   }[]
   className?: string
 }

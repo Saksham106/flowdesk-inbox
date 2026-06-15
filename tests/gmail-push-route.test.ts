@@ -4,7 +4,7 @@ const { mockProcessGmailPushNotification } = vi.hoisted(() => ({
   mockProcessGmailPushNotification: vi.fn(),
 }))
 
-vi.mock('@/lib/google', () => ({
+vi.mock('@/lib/gmail-sync', () => ({
   processGmailPushNotification: mockProcessGmailPushNotification,
 }))
 
