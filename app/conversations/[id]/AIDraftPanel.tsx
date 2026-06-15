@@ -12,6 +12,7 @@ type DraftMetadata = {
   suggestedLabel?: unknown;
   escalationReason?: unknown;
   userInstruction?: unknown;
+  sensitiveMatches?: Array<{ phrase: string; category: string }>;
 };
 
 type DraftSnapshot = {
