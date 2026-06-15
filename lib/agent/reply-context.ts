@@ -72,7 +72,7 @@ export async function getReplyGenerationContext(input: {
   const [businessProfile, knowledgeDocuments, learnedProfile, personMemory, conversationState] = await Promise.all([
     prisma.businessProfile.findUnique({ where: { tenantId: input.tenantId } }),
     prisma.knowledgeDocument.findMany({
-      where: { tenantId: input.tenantId },
+      where: { tenantId: input.tenantId, NOT: { sourceType: "concierge_template" } },
       orderBy: { createdAt: "desc" },
       take: 50,
     }),

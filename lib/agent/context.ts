@@ -46,7 +46,7 @@ export async function getFullBusinessContext(tenantId: string): Promise<{
   const [profile, documents] = await Promise.all([
     getBusinessProfile(tenantId),
     prisma.knowledgeDocument.findMany({
-      where: { tenantId },
+      where: { tenantId, NOT: { sourceType: "concierge_template" } },
       orderBy: { createdAt: 'desc' },
       take: 50,
     }),
