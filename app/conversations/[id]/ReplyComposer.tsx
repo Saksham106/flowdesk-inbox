@@ -42,7 +42,8 @@ export default function ReplyComposer({
   const [action, setAction] = useState<ActionState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [showInstruction, setShowInstruction] = useState(false);
+  const [showInstruction, setShowInstruction] = useState(false)
+  const [isFocused, setIsFocused] = useState(false);
 
   const isEmail = channelType === "email";
   const canAI = isEmail && canSuggest;
@@ -199,7 +200,9 @@ export default function ReplyComposer({
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
-        rows={hasDraftText ? 6 : 4}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => { if (!hasDraftText) setIsFocused(false) }}
+        rows={isFocused || hasDraftText ? 5 : 2}
         placeholder={canAI ? "Type a reply, or add an instruction below and click Draft with AI…" : "Type your reply…"}
         className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm leading-relaxed text-slate-900 focus:border-slate-400 focus:outline-none disabled:bg-slate-50"
         disabled={isBusy}
