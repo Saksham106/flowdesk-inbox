@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import ManualTaskForm from "./ManualTaskForm"
 
 type ConversationStateView = {
   state: string
@@ -36,12 +37,14 @@ export default function WorkItemsPanel({
   state,
   tasks,
   lead,
+  conversationId,
   isPersonal = false,
   bare = false,
 }: {
   state: ConversationStateView
   tasks: InboxTaskView[]
   lead: LeadView
+  conversationId: string
   isPersonal?: boolean
   bare?: boolean
 }) {
@@ -49,6 +52,7 @@ export default function WorkItemsPanel({
   const [closingTaskId, setClosingTaskId] = useState<string | null>(null)
   const [stagingLeadId, setStagingLeadId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showTaskForm, setShowTaskForm] = useState(false)
 
   async function closeTask(taskId: string) {
     setClosingTaskId(taskId)
@@ -148,7 +152,7 @@ export default function WorkItemsPanel({
                     disabled={closingTaskId === task.id}
                     className="shrink-0 rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
                   >
-                    {closingTaskId === task.id ? "…" : "Close"}
+                    {closingTaskId === task.id ? "..." : "Close"}
                   </button>
                 ) : (
                   <span className="shrink-0 rounded bg-slate-100 px-2 py-1 text-xs text-slate-400">
@@ -160,6 +164,20 @@ export default function WorkItemsPanel({
           </ul>
         </div>
       ) : null}
+
+      <button
+        type="button"
+        onClick={() => setShowTaskForm(true)}
+        className="mt-2 text-xs text-blue-600 hover:underline"
+      >
+        + Add task
+      </button>
+      {showTaskForm && (
+        <ManualTaskForm
+          conversationId={conversationId}
+          onDone={() => setShowTaskForm(false)}
+        />
+      )}
 
       {lead && !isPersonal ? (
         <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs">

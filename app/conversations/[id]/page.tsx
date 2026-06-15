@@ -429,6 +429,7 @@ export default async function ConversationPage({
           state={stateRecord}
           tasks={inboxTasks}
           lead={lead}
+          conversationId={conversation.id}
           isPersonal={isPersonal}
           bare
         />
