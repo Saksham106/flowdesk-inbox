@@ -602,4 +602,24 @@ describe("buildDailyCommandCenter with persisted states", () => {
     expect(result.sections.safelyIgnored.map((item) => item.id)).toEqual(["conv-closed"])
     expect(result.conversations[0].state).toBe("done")
   })
+
+  it("surfaces detectedCode from conversationState action metadata", () => {
+    const conv = conversation({
+      conversationState: {
+        metadataJson: {
+          attentionCategory: "needs_action",
+          attentionReason: "OTP required",
+          action: {
+            type: "otp_code",
+            explanation: "Use the one-time code only in the service that requested it.",
+            hasDetectedCode: true,
+            detectedCode: "847291",
+          },
+        },
+      },
+    })
+    const result = analyzeConversationForCommandCenter(conv, now)
+    expect(result.action?.hasDetectedCode).toBe(true)
+    expect(result.action?.detectedCode).toBe("847291")
+  })
 })

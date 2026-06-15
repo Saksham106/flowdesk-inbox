@@ -387,6 +387,7 @@ export async function syncConversationWorkItems(
           ...(action.actionLink ? { actionLink: action.actionLink } : {}),
           ...(action.expirationText ? { expirationText: action.expirationText } : {}),
           hasDetectedCode: Boolean(action.detectedCode),
+          ...(action.detectedCode ? { detectedCode: action.detectedCode } : {}),
         }
       : null
 

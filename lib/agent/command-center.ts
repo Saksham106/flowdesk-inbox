@@ -105,6 +105,7 @@ export type CommandCenterConversation = {
     actionLink?: string
     expirationText?: string
     hasDetectedCode?: boolean
+    detectedCode?: string
   } | null
 }
 
@@ -306,6 +307,7 @@ function getActionMetadata(conversation: CommandCenterInputConversation): Comman
     ...(typeof record.actionLink === "string" ? { actionLink: record.actionLink } : {}),
     ...(typeof record.expirationText === "string" ? { expirationText: record.expirationText } : {}),
     ...(typeof record.hasDetectedCode === "boolean" ? { hasDetectedCode: record.hasDetectedCode } : {}),
+    ...(typeof record.detectedCode === "string" ? { detectedCode: record.detectedCode } : {}),
   }
 }
 

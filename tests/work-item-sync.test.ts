@@ -270,4 +270,38 @@ describe("syncConversationWorkItems", () => {
       })
     )
   })
+
+  it("persists detectedCode in action metadata when the email contains an OTP", async () => {
+    mockTenantFindUnique.mockResolvedValue({ accountType: "personal" })
+    mockConversationFindFirst.mockResolvedValue({
+      ...conversation,
+      messages: [
+        {
+          id: "msg-otp",
+          direction: "inbound",
+          body: "Your verification code is 847291. This code expires in 10 minutes.",
+          createdAt: now,
+        },
+      ],
+    })
+    mockStateFindUnique.mockResolvedValue(null)
+
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    const updateCall = mockStateUpdate.mock.calls.find(
+      (c: unknown[]) =>
+        typeof c[0] === "object" &&
+        c[0] !== null &&
+        (c[0] as Record<string, unknown>)?.data !== undefined &&
+        ((c[0] as Record<string, { metadataJson?: { action?: { type?: string } } }>).data?.metadataJson?.action?.type) === "otp_code"
+    )
+    expect(updateCall).toBeDefined()
+    const action = (updateCall![0] as Record<string, { metadataJson: { action: Record<string, unknown> } }>).data.metadataJson.action
+    expect(action.hasDetectedCode).toBe(true)
+    expect(action.detectedCode).toBe("847291")
+  })
 })
