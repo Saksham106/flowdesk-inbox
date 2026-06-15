@@ -54,7 +54,14 @@ export default async function AuditPage({ searchParams }: Props) {
     where: { id: tenantId },
     select: { accountType: true },
   })
-  if (tenant?.accountType === "personal") redirect("/inbox")
+  const isPersonal = tenant?.accountType === "personal"
+  const auditActionsForPersonal = [
+    "conversation.attention_corrected",
+    "person_memory.synced",
+    "draft.suggest",
+    "draft.approve",
+    "draft.sent",
+  ]
 
   const page = Math.max(1, parseInt(searchParams.page ?? "1", 10))
   const pageSize = 50
@@ -62,7 +69,9 @@ export default async function AuditPage({ searchParams }: Props) {
 
   const where = {
     tenantId,
-    ...(filterAction ? { action: filterAction } : { action: { in: AGENT_ACTIONS } }),
+    ...(filterAction
+      ? { action: filterAction }
+      : { action: { in: isPersonal ? auditActionsForPersonal : AGENT_ACTIONS } }),
   }
 
   const [logs, total] = await Promise.all([
@@ -141,6 +150,8 @@ export default async function AuditPage({ searchParams }: Props) {
                   <th className="px-4 py-3 text-left font-medium">Action</th>
                   <th className="px-4 py-3 text-left font-medium">By</th>
                   <th className="px-4 py-3 text-left font-medium">Details</th>
+                  <th className="px-4 py-3 text-left font-medium">Why</th>
+                  <th className="px-4 py-3 text-left font-medium">Undo</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -185,6 +196,21 @@ export default async function AuditPage({ searchParams }: Props) {
                         )}
                         {payload.error != null && (
                           <span className="ml-2 text-red-500">{String(payload.error)}</span>
+                        )}
+                      </td>
+                      <td className="max-w-xs px-4 py-3 text-xs text-slate-500">
+                        {payload.reason ? String(payload.reason) : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {log.action === "autopilot.draft_approved" && (
+                          <form action={`/api/audit/${log.id}/undo`} method="POST">
+                            <button
+                              type="submit"
+                              className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-50"
+                            >
+                              Undo
+                            </button>
+                          </form>
                         )}
                       </td>
                     </tr>
