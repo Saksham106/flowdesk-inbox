@@ -492,7 +492,8 @@ model AutopilotSetting {
   tenantId             String    @unique
   enabled              Boolean   @default(false)
   confidenceThreshold  Float     @default(0.85)
-  allowedIntentsJson   Json?
+  allowedIntentsJson     Json?
+  categoryThresholdsJson Json?
   maxAutoSendsPerDay   Int       @default(10)
   disableAfterFailures Int       @default(3)
   currentFailures      Int       @default(0)
