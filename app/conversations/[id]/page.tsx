@@ -440,7 +440,7 @@ export default async function ConversationPage({
     </div>
   ) : null
 
-  const extraCards = (
+  const extraCards = isAutoEmailConversation ? null : (
     <>
       {summaryCard}
       <ExplainThreadPanel conversationId={conversation.id} />
