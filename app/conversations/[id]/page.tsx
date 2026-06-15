@@ -554,7 +554,7 @@ export default async function ConversationPage({
               </div>
 
               {/* Scrollable messages */}
-              <div className="flex-1 overflow-y-auto px-3 py-4">
+              <div className="flex-1 overflow-y-auto px-2 py-3">
                 <div className="space-y-4">
                   {conversation.messages.length === 0 ? (
                     <p className="text-sm text-slate-500">No messages yet.</p>
@@ -564,7 +564,7 @@ export default async function ConversationPage({
                       return (
                         <article
                           key={message.id}
-                          className={`overflow-hidden rounded-xl border px-4 py-3 ${
+                          className={`overflow-hidden rounded-xl border px-3 py-2.5 ${
                             isOutbound ? "border-blue-100 bg-blue-50" : "border-slate-200 bg-white"
                           }`}
                         >

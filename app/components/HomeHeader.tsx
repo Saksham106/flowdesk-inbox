@@ -1,7 +1,5 @@
 "use client"
 
-import GmailSyncControl from "@/app/components/GmailSyncControl"
-
 type GmailSyncChannel = {
   id: string
   emailAddress: string | null
@@ -31,18 +29,13 @@ interface Props {
   gmailChannels: GmailSyncChannel[]
 }
 
-export default function HomeHeader({ date, firstName, gmailChannels }: Props) {
+export default function HomeHeader({ date, firstName }: Props) {
   return (
-    <div className="mb-3 flex items-center justify-between gap-4">
-      <div>
-        <p className="text-base font-semibold text-slate-900">
-          {greeting(date)}{firstName ? `, ${firstName}` : ""}
-        </p>
-        <p className="text-[11px] text-slate-400 mt-0.5">{dateLabel(date)}</p>
-      </div>
-      <div className="flex items-center gap-3 flex-shrink-0">
-        <GmailSyncControl channels={gmailChannels} compact />
-      </div>
+    <div className="mb-3">
+      <p className="text-base font-semibold text-slate-900">
+        {greeting(date)}{firstName ? `, ${firstName}` : ""}
+      </p>
+      <p className="text-[11px] text-slate-400 mt-0.5">{dateLabel(date)}</p>
     </div>
   )
 }

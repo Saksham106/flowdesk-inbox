@@ -48,7 +48,7 @@ export default function HomeCommandCenter({
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="px-5 py-5 max-w-5xl">
+      <div className="px-5 py-5 max-w-5xl mx-auto">
 
         {/* Header */}
         <HomeHeader date={date} firstName={firstName} gmailChannels={gmailChannels} />
