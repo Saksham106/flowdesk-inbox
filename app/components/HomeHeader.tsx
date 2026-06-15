@@ -1,13 +1,5 @@
 "use client"
 
-type GmailSyncChannel = {
-  id: string
-  emailAddress: string | null
-  lastSyncedAt: Date | string | null
-  lastSyncError: string | null
-  watchExpiresAt?: Date | string | null
-}
-
 function greeting(date: Date): string {
   const hour = date.getHours()
   if (hour < 12) return "Good morning"
@@ -26,7 +18,6 @@ function dateLabel(date: Date): string {
 interface Props {
   date: Date
   firstName: string | null
-  gmailChannels: GmailSyncChannel[]
 }
 
 export default function HomeHeader({ date, firstName }: Props) {

@@ -51,7 +51,7 @@ export default function HomeCommandCenter({
       <div className="px-5 py-5 max-w-5xl mx-auto">
 
         {/* Header */}
-        <HomeHeader date={date} firstName={firstName} gmailChannels={gmailChannels} />
+        <HomeHeader date={date} firstName={firstName} />
 
         {/* Stats */}
         <HomeStats pills={statPills} />
