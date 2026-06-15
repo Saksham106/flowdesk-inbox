@@ -341,4 +341,56 @@ describe("classifyEmailType", () => {
     })
     expect(result.action?.actionLink).toBeUndefined()
   })
+
+  it("extracts OTP from HTML email body without returning doctypehtml", () => {
+    const htmlBody = `<!doctype html>
+<html>
+<head><style>body { font-family: sans-serif; }</style></head>
+<body>
+<div class="container">
+  <p>Hi there,</p>
+  <p>Your verification code is <strong>847291</strong>. It expires in 10 minutes.</p>
+  <p>Do not share this code with anyone.</p>
+</div>
+</body>
+</html>`
+    const result = classifyEmailType({
+      fromEmail: "noreply@auth.example.com",
+      subject: "Your verification code",
+      body: htmlBody,
+    })
+    expect(result.attentionCategory).toBe("needs_action")
+    expect(result.action?.detectedCode).toBe("847291")
+    expect(result.action?.detectedCode).not.toBe("doctypehtml")
+    expect(result.extractedCode).toBe("847291")
+  })
+
+  it("does not return html keywords as a verification code", () => {
+    const htmlBody = `<!DOCTYPE html><html><body><p>One-time code sent to your device.</p></body></html>`
+    const result = classifyEmailType({
+      fromEmail: "noreply@service.com",
+      subject: "One-time code",
+      body: htmlBody,
+    })
+    expect(result.action?.detectedCode).not.toBe("doctypehtml")
+    expect(result.action?.detectedCode).not.toBe("html")
+    expect(result.action?.detectedCode).not.toBe("body")
+  })
+
+  it("extracts a numeric OTP from HTML with surrounding boilerplate", () => {
+    const htmlBody = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Security Code</title></head>
+<body style="margin:0;padding:0">
+<table width="100%"><tr><td>
+<p style="font-size:16px">Use code <b>392817</b> to sign in.</p>
+<p style="font-size:11px">This code expires in 5 minutes.</p>
+</td></tr></table>
+</body></html>`
+    const result = classifyEmailType({
+      fromEmail: "security@app.com",
+      subject: "Your login code",
+      body: htmlBody,
+    })
+    expect(result.action?.detectedCode).toBe("392817")
+  })
 })

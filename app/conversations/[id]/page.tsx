@@ -9,7 +9,9 @@ import CalendarHoldPanel from "@/app/conversations/[id]/CalendarHoldPanel";
 import ExplainThreadPanel from "@/app/conversations/[id]/ExplainThreadPanel";
 import HandleThisPanel from "@/app/conversations/[id]/HandleThisPanel";
 import WorkItemsPanel from "@/app/conversations/[id]/WorkItemsPanel";
+import ThreadStatusHeader from "@/app/conversations/[id]/ThreadStatusHeader";
 import StatusButton from "@/app/conversations/[id]/StatusButton";
+import MarkReadButton from "@/app/conversations/[id]/MarkReadButton";
 import LabelSelect from "@/app/conversations/[id]/LabelSelect"
 import AttentionCorrectionSelect from "@/app/conversations/[id]/AttentionCorrectionSelect";
 import SaveContactForm from "@/app/conversations/[id]/SaveContactForm";
@@ -492,7 +494,7 @@ export default async function ConversationPage({
   )
 
   const replyComposer = (
-    <div className="px-5 py-4">
+    <div className="px-4 py-2">
       <ReplyComposer
         conversationId={conversation.id}
         channelType={conversation.channel.type}
@@ -539,19 +541,16 @@ export default async function ConversationPage({
             <div className="flex h-full min-w-0 flex-col overflow-hidden border-r border-slate-200 bg-white">
               {/* Sticky thread header */}
               <div className="shrink-0 border-b border-slate-200 px-5 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h1 className="min-w-0 truncate text-base font-bold text-slate-900">{displayName}</h1>
-                      <StatusBadge status={isAutoEmailConversation ? "closed" : conversation.status} />
-                      {conversation.label && !isPersonal && <LabelBadge label={conversation.label} />}
-                    </div>
-                    <p className="min-w-0 break-all text-xs text-slate-500">
-                      {conversation.channel.emailAddress ?? conversation.externalThreadId}
-                    </p>
-                  </div>
-                  <StatusButton conversationId={conversation.id} currentStatus={conversation.status} />
-                </div>
+                <ThreadStatusHeader
+                  conversationId={conversation.id}
+                  initialStatus={conversation.status}
+                  displayName={displayName}
+                  channelAddress={conversation.channel.emailAddress ?? conversation.externalThreadId}
+                  label={conversation.label}
+                  isPersonal={isPersonal}
+                  isAutoEmail={isAutoEmailConversation}
+                  isRead={Boolean(conversation.readAt)}
+                />
               </div>
 
               {/* Scrollable messages */}
@@ -598,10 +597,7 @@ export default async function ConversationPage({
               </div>
 
               {/* Reply composer — anchored at bottom, full thread-column width */}
-              <div className="shrink-0 border-t-2 border-slate-200 bg-white">
-                <div className="flex items-center px-5 pt-3">
-                  <h2 className="text-sm font-bold text-slate-900">Reply to {displayName}</h2>
-                </div>
+              <div className="shrink-0 border-t border-slate-200 bg-white">
                 {replyComposer}
               </div>
             </div>
@@ -621,7 +617,7 @@ export default async function ConversationPage({
       <div className="lg:hidden min-h-screen bg-slate-50">
         <header className="border-b border-slate-200 bg-white">
           <div className="mx-auto flex max-w-[1200px] items-center justify-between px-4 sm:px-6 py-4">
-            <div>
+            <div className="min-w-0">
               <Link href={inboxReturnPath} className="text-sm text-slate-500 hover:text-slate-700">
                 ← Back to inbox
               </Link>
@@ -634,7 +630,10 @@ export default async function ConversationPage({
                 {conversation.channel.emailAddress ?? conversation.externalThreadId}
               </p>
             </div>
-            <StatusButton conversationId={conversation.id} currentStatus={conversation.status} />
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <MarkReadButton conversationId={conversation.id} isRead={Boolean(conversation.readAt)} />
+              <StatusButton conversationId={conversation.id} currentStatus={conversation.status} />
+            </div>
           </div>
         </header>
 
@@ -692,9 +691,6 @@ export default async function ConversationPage({
             </div>
 
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-100 px-5 py-3">
-                <h2 className="text-sm font-semibold text-slate-800">Reply</h2>
-              </div>
               {replyComposer}
             </div>
           </section>

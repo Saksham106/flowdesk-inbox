@@ -170,7 +170,7 @@ export default function ReplyComposer({
       : null;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {/* Draft status indicator */}
       {draftStatusLabel && (
         <div className="flex items-center justify-between">
