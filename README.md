@@ -9,10 +9,12 @@ FlowDesk is an email-first AI inbox agent for individuals and small businesses. 
 - **Gmail and Outlook sync** — connect an email account and import email threads into FlowDesk
 - **Manual and automatic Gmail refresh controls** — the inbox shell exposes real Gmail sync with last-synced/error status, app-load sync, tab-return sync, and periodic sync while open
 - **Idempotent Gmail sync with local overrides** — duplicate syncs are locked per account, Gmail read/unread is imported separately from local read/done state, and user actions win over AI classification
+- **Gmail read/archive/trash writeback** — read, archive, and trash actions update Gmail where supported while preserving local override metadata
 - **Conversation inbox** — view email threads with status, drafts, and assistant context
 - **Email-style thread view** — opened conversations read top-to-bottom like an email client, with sender/recipient/timestamp metadata and a reply composer below the thread
 - **Daily Command Center** — see the conversations that actually matter today, plus what can be safely ignored
 - **Richer attention classification** — distinguishes needs reply, needs action, review soon, read later, waiting on, FYI done, and quiet instead of treating all automated email as useless
+- **Deterministic preference learning** — repeated manual attention corrections can create sender/domain rules that users apply, dismiss, disable, and inspect in Settings
 - **Deterministic account-action detection** — OTPs, verification links, password setup/reset, login approvals, account setup, and security alerts surface as action metadata without rich AI work
 - **Cost-aware AI usage** — deterministic rules handle low-value automated mail first; richer AI is skipped, deferred, or cached for drafts and relationship memory when it does not add user value
 - **Handle This** — ask FlowDesk to draft the next step from a thread-level assistant panel

@@ -1,15 +1,15 @@
 # FlowDesk Documentation Index
 
-Last updated: 2026-06-15
+Last updated: 2026-06-16
 
 Use this directory as the source of truth for product direction, current implementation state, and feature-level plans.
 
 ## Living Docs (read these first)
 
 - `../README.md` — local setup, environment variables, connectors, deployment, and scripts.
-- `MASTER_PRODUCT_PLAN.md` — living 45-feature roadmap, phase map, decision log, and feature index.
-- `CURRENT_STATE.md` — what is currently implemented, what is partial, and what is known to be blocked or deferred.
-- `TODO.md` — canonical checklist of remaining work, mapped to the feature index.
+- `CURRENT_STATE.md` — concise factual snapshot of what the app can do today and known gaps.
+- `TODO.md` — actionable remaining-work checklist only; no shipped-history ledger.
+- `MASTER_PRODUCT_PLAN.md` — 45-feature roadmap, phase map, decision log, and feature index.
 
 ## Archive
 
@@ -18,14 +18,14 @@ Historical design specs and implementation plans are in `docs/archive/`:
 - `archive/specs/` — design specs written before each feature was built.
 - `archive/plans/` — step-by-step implementation plans (checklists now completed).
 
-These are read-only reference. All shipped behavior is documented in `CURRENT_STATE.md`. All roadmap status is in `MASTER_PRODUCT_PLAN.md`.
+These are read-only reference. Current behavior is summarized in `CURRENT_STATE.md`; detailed shipped history should stay archived instead of being re-added to living docs.
 
 ## Documentation Rules
 
-- Keep `MASTER_PRODUCT_PLAN.md` strategic and phase-oriented.
-- Keep `CURRENT_STATE.md` factual and codebase-oriented.
+- Keep `CURRENT_STATE.md` factual, concise, and codebase-oriented.
 - Keep `TODO.md` as the actionable remaining-work checklist.
-- When a feature ships, update all three docs in the same branch as the code change.
+- Keep `MASTER_PRODUCT_PLAN.md` strategic and phase-oriented.
+- When a feature ships, update only the living docs whose source of truth changed.
 - New specs go in `docs/superpowers/specs/`, new plans in `docs/superpowers/plans/` (auto-created by the planning workflow; moved to archive once implemented).
 - Do not add new one-off handoff docs when an existing index, state doc, spec, or plan can be updated.
 
@@ -52,10 +52,11 @@ During implementation:
 Before finishing:
 
 1. Update `CURRENT_STATE.md` for factual implementation changes.
-2. Update `MASTER_PRODUCT_PLAN.md` when roadmap status, phase, or next-slice recommendations change.
-3. Update `README.md` when setup, commands, environment variables, connectors, or deployment steps change.
-4. Update `.github/copilot-instructions.md` if repo-wide agent behavior expectations change.
-5. Run relevant verification and record blocked checks in the final response or the relevant plan.
+2. Update `TODO.md` when remaining work changes.
+3. Update `MASTER_PRODUCT_PLAN.md` when roadmap status, phase, or next-slice recommendations change.
+4. Update `README.md` when setup, commands, environment variables, connectors, or deployment steps change.
+5. Update `.github/copilot-instructions.md` if repo-wide agent behavior expectations change.
+6. Run relevant verification and record blocked checks in the final response or the relevant plan.
 
 Stale docs are treated as bugs. A future teammate or agent should never have to guess which Markdown file is true.
 
@@ -64,3 +65,4 @@ Stale docs are treated as bugs. A future teammate or agent should never have to 
 - `SPRINTS.md` — removed; contained stale checkbox plans from the old email-first reset.
 - `docs/AI_DRAFT_MVP_HANDOFF.md` — removed; described old stacked PRs. Still-relevant facts folded into `CURRENT_STATE.md`.
 - `docs/superpowers/specs/` and `docs/superpowers/plans/` — all historical files moved to `docs/archive/` (2026-06-14). Living docs supersede them.
+- `CURRENT_STATE.md` and `TODO.md` were condensed on 2026-06-16 so living docs stay readable; detailed implementation history remains in archived specs/plans and git history.
