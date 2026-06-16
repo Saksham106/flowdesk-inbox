@@ -391,15 +391,20 @@ export async function syncConversationWorkItems(
         }
       : null
 
+    // Preserve a user-corrected attentionCategory — the spread of currentMeta above
+    // already includes it, so we only need to suppress the AI-derived override.
+    const isUserAttentionCorrected =
+      currentMeta.attentionCorrectedByUser === true || currentMeta.userOverride === true
+
     await prisma.conversationState.update({
       where: { conversationId: conversation.id },
       data: {
         metadataJson: {
           ...currentMeta,
           emailType,
-          attentionCategory,
-          attentionReason: reason,
-          attentionConfidence: confidence,
+          ...(isUserAttentionCorrected
+            ? {}
+            : { attentionCategory, attentionReason: reason, attentionConfidence: confidence }),
           ...(persistedAction ? { action: persistedAction } : {}),
           ...(expiresIn ? { expiresIn } : {}),
         } as Prisma.InputJsonValue,

@@ -247,6 +247,7 @@ model Message {
   fromE164          String
   toE164            String
   body              String
+  subject           String?
   providerMessageId String
   isRead            Boolean          @default(false)
   gmailLabelIds     Json?

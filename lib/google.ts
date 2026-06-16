@@ -281,6 +281,7 @@ async function upsertGmailMessage({
         fromE164: msg.from,
         toE164: msg.to,
         body: msg.body || `[${msg.subject}]`,
+        subject: msg.subject || null,
         providerMessageId,
         isRead,
         gmailLabelIds: msg.labelIds,
@@ -472,6 +473,22 @@ export async function markGmailThreadRead(channelId: string, providerMessageIds:
       requestBody: { removeLabelIds: ["UNREAD"] },
     });
   }
+}
+
+// Removes the INBOX label from a thread (archive). The thread remains in All Mail.
+export async function archiveGmailThread(channelId: string, gmailThreadId: string): Promise<void> {
+  const gmail = await getGmailClient(channelId);
+  await gmail.users.threads.modify({
+    userId: "me",
+    id: gmailThreadId,
+    requestBody: { removeLabelIds: ["INBOX"] },
+  });
+}
+
+// Moves a thread to Gmail Trash. The thread is NOT permanently deleted.
+export async function trashGmailThread(channelId: string, gmailThreadId: string): Promise<void> {
+  const gmail = await getGmailClient(channelId);
+  await gmail.users.threads.trash({ userId: "me", id: gmailThreadId });
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

@@ -1,12 +1,13 @@
 import Link from "next/link"
 import { Suspense } from "react"
 import { prisma } from "@/lib/prisma"
-import { stripHtmlToText } from "@/lib/email-body"
+import { stripHtmlToText, buildPreviewText } from "@/lib/email-body"
 import SearchInput from "@/app/inbox/SearchInput"
 import GmailSyncControl from "@/app/components/GmailSyncControl"
 import InboxScrollContainer from "@/app/components/InboxScrollContainer"
 import { buildConversationHref } from "@/lib/client-navigation"
 import InboxRow from "@/app/components/InboxRow"
+import { resolveAccountMode } from "@/lib/account-mode"
 
 interface Props {
   tenantId: string
@@ -33,9 +34,10 @@ type ConvRow = {
   readAt: Date | null
   gmailUnread: boolean | null
   contact: { name: string } | null
-  messages: { body: string }[]
+  messages: { body: string; subject: string | null }[]
   draft: { status: string } | null
   stateRecord: { state: string; metadataJson: unknown } | null
+  channel: { provider: string }
 }
 
 function isFyi(conv: ConvRow): boolean {
@@ -106,6 +108,7 @@ export default async function AppListColumn({
   className = "w-[280px] shrink-0",
 }: Props) {
   const isBusiness = accountType === "business"
+  const isPersonal = resolveAccountMode(accountType) === "personal"
 
   const where: Record<string, unknown> = { tenantId }
   if (status) where.status = status
@@ -136,6 +139,7 @@ export default async function AppListColumn({
         contact: true,
         draft: { select: { status: true } },
         stateRecord: { select: { state: true, metadataJson: true } },
+        channel: { select: { provider: true } },
       },
     }) as Promise<ConvRow[]>,
     prisma.conversation.groupBy({
@@ -229,9 +233,9 @@ export default async function AppListColumn({
             const displayStatus = fyi ? "closed" : conv.status
             const style = STATUS_STYLE[displayStatus] ?? { dot: "bg-slate-300", text: "text-slate-500" }
             const name = conv.contact?.name ?? conv.externalThreadId
-            const snippet = conv.messages[0]?.body
-              ? stripHtmlToText(conv.messages[0].body, 75)
-              : ""
+            const msg0 = conv.messages[0]
+            const bodySnippet = msg0?.body ? stripHtmlToText(msg0.body, 75) : ""
+            const snippet = buildPreviewText(msg0?.subject, bodySnippet)
             const hasDraft =
               conv.draft?.status === "proposed" || conv.draft?.status === "approved"
             const isClosed = conv.status === "closed"
@@ -255,6 +259,8 @@ export default async function AppListColumn({
                 initialReadAt={conv.readAt !== null}
                 initialStatus={conv.status}
                 attentionCategory={attention}
+                isPersonal={isPersonal}
+                isGmail={conv.channel.provider === "google"}
               />
             )
           })
