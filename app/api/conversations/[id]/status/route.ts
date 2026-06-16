@@ -34,6 +34,26 @@ export async function PATCH(
   }
 
   const now = new Date();
+
+  // Merge with existing metadata to preserve attentionCategory, emailType, action, etc.
+  const existingState = await prisma.conversationState.findUnique({
+    where: { conversationId: params.id },
+    select: { metadataJson: true },
+  });
+  const prevMeta =
+    existingState?.metadataJson &&
+    typeof existingState.metadataJson === "object" &&
+    !Array.isArray(existingState.metadataJson)
+      ? (existingState.metadataJson as Record<string, unknown>)
+      : {};
+
+  const mergedMeta = {
+    ...prevMeta,
+    userOverride: true,
+    userState: status === "closed" ? "done" : status,
+    updatedAt: now.toISOString(),
+  };
+
   await prisma.conversation.update({
     where: { id: params.id },
     data: {
@@ -56,11 +76,7 @@ export async function PATCH(
       nextAction: status === "closed" ? "No action needed." : "Review the conversation.",
       confidence: 1,
       source: "user_override",
-      metadataJson: {
-        userOverride: true,
-        userState: status === "closed" ? "done" : status,
-        updatedAt: now.toISOString(),
-      },
+      metadataJson: mergedMeta,
     },
     update: {
       state: status === "closed" ? "done" : status === "in_progress" ? "waiting_on_them" : "needs_reply",
@@ -69,11 +85,7 @@ export async function PATCH(
       nextAction: status === "closed" ? "No action needed." : "Review the conversation.",
       confidence: 1,
       source: "user_override",
-      metadataJson: {
-        userOverride: true,
-        userState: status === "closed" ? "done" : status,
-        updatedAt: now.toISOString(),
-      },
+      metadataJson: mergedMeta,
     },
   });
 
