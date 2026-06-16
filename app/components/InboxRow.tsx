@@ -32,6 +32,7 @@ type InboxRowProps = {
   initialStatus: string
   attentionCategory: string | null
   isPersonal: boolean
+  isGmail: boolean
 }
 
 export default function InboxRow({
@@ -50,6 +51,7 @@ export default function InboxRow({
   initialStatus,
   attentionCategory: initialAttention,
   isPersonal,
+  isGmail,
 }: InboxRowProps) {
   const router = useRouter()
   const [isRead, setIsRead]         = useState(initialReadAt)
@@ -60,6 +62,7 @@ export default function InboxRow({
   const attentionBtnRef             = useRef<HTMLButtonElement>(null)
   const portalRef                   = useRef<HTMLDivElement>(null)
 
+  const [archiveError, setArchiveError] = useState<string | null>(null)
   const isUnread = !isRead && !isFyi
   const isClosed = status === "closed"
 
@@ -106,6 +109,21 @@ export default function InboxRow({
     })
     if (!res.ok) setStatus(status)
     router.refresh()
+  }
+
+  async function archiveConversation(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    setArchiveError(null)
+    const prevStatus = status
+    setStatus("closed")
+    const res = await fetch(`/api/conversations/${id}/archive`, { method: "PATCH" })
+    if (!res.ok) {
+      setStatus(prevStatus)
+      setArchiveError("Archive failed")
+    } else {
+      router.refresh()
+    }
   }
 
   function openAttentionDropdown(e: React.MouseEvent) {
@@ -217,6 +235,28 @@ export default function InboxRow({
             <circle cx="3.5" cy="3.5" r="0.75" fill="currentColor" stroke="none" />
           </svg>
         </button>
+
+        {/* Archive — Gmail only */}
+        {isGmail && (
+          <button
+            type="button"
+            onClick={archiveConversation}
+            title={archiveError ?? "Archive"}
+            aria-label="Archive"
+            className={`flex h-6 w-6 items-center justify-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              archiveError
+                ? "text-red-500 hover:bg-red-50"
+                : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            }`}
+          >
+            {/* Archive: inbox-with-down-arrow icon */}
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="1" y="1" width="10" height="3" rx="0.5" />
+              <path d="M2 4v6.5h8V4" />
+              <path d="M4.5 6.5L6 8l1.5-1.5M6 8V5.5" />
+            </svg>
+          </button>
+        )}
 
         {/* Done / Reopen — business accounts only */}
         {!isPersonal && (

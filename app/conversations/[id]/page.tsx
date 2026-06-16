@@ -555,6 +555,7 @@ export default async function ConversationPage({
                   isPersonal={isPersonal}
                   isAutoEmail={isAutoEmailConversation}
                   isRead={Boolean(conversation.readAt)}
+                  isGmail={conversation.channel.provider === "google"}
                 />
               </div>
 

@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-16 (personal/business action split — personal accounts no longer see confusing done/reopen quick action or Close/Reopen thread button; inbox preview now shows subject + snippet combined; attention/read/status persistence fixes; reopen icon SVG + attention dropdown z-index via React portal + email iframe height; richer inbox hover actions; email link sandbox fix; sync idempotency; Home card UX; Phase 1 gaps + Phase 2 concierge templates; inbox UX polish)
+Last updated: 2026-06-16 (Gmail archive + trash with writeback; personal/business action split — personal accounts no longer see confusing done/reopen quick action or Close/Reopen thread button; inbox preview now shows subject + snippet combined; attention/read/status persistence fixes; reopen icon SVG + attention dropdown z-index via React portal + email iframe height; richer inbox hover actions; email link sandbox fix; sync idempotency; Home card UX; Phase 1 gaps + Phase 2 concierge templates; inbox UX polish)
 
 This file is the codebase-facing companion to `MASTER_PRODUCT_PLAN.md`. It answers: what exists today, what is partial, and what should not be treated as active scope.
 
@@ -426,6 +426,19 @@ Phase 1 gaps + Phase 2 concierge templates slice (2026-06-15):
 - **Person-memory editing + LLM upgrade** (#5) — `PersonMemoryEditShell`/`PersonMemoryEditPanel` client forms. `PATCH /api/person-memory/[contactId]` partial-update route. `syncPersonMemoryWithLLM` LLM extraction with `gpt-5.4-mini`; skips low-value email via the AI usage policy, caches by content hash/source/model, and falls back to regex heuristic on <3 messages, no API key, cache-skip, or LLM error. `[RELATIONSHIP_DATA: ...]` bracketing on personMemory fields in meeting-prep and meeting-follow-up prompts for prompt-injection mitigation.
 - **Local-business concierge templates** (#36) — 8 templates across 6 categories in `lib/agent/concierge-templates.ts`. `POST /api/settings/seed-templates` idempotent seed (business-only). `ConciergeTemplateSeedButton` in `/settings`. Template picker in `ReplyComposer`. Concierge templates excluded from AI reply context via `sourceType: "concierge_template"` filter in `lib/agent/reply-context.ts` and `lib/agent/context.ts`.
 
+Gmail archive and trash actions (2026-06-16):
+
+- **Gmail API methods**: `archiveGmailThread(channelId, gmailThreadId)` removes the `INBOX` label via `threads.modify`; `trashGmailThread(channelId, gmailThreadId)` moves to Gmail Trash via `threads.trash`. Both are thread-level operations. Neither permanently deletes mail.
+- **`PATCH /api/conversations/[id]/archive`** — provider-gated (returns 400 for non-Gmail channels); calls Gmail writeback, then closes the conversation locally and upserts `ConversationState` with `source: "user_override"` + `archivedAt` metadata so sync never reopens it.
+- **`PATCH /api/conversations/[id]/trash`** — same pattern, calls `threads.trash`, writes `trashedAt` metadata.
+- Both routes read and merge existing `metadataJson` before writing, preserving attentionCategory and other user signals.
+- **`app/components/InboxRow.tsx`** — accepts `isGmail: boolean` prop; renders an archive icon button in the hover strip for Gmail conversations. On API failure, the icon turns red with an error tooltip and status is rolled back.
+- **`app/components/AppListColumn.tsx`** — adds `channel: { select: { provider: true } }` to the Prisma include and passes `isGmail={conv.channel.provider === "google"}` to each `InboxRow`.
+- **`app/conversations/[id]/ThreadStatusHeader.tsx`** — accepts `isGmail: boolean` prop; adds an "Archive" button and a "···" (More) button for Gmail conversations. The More menu contains "Move to trash" with an inline confirmation step before the destructive write. Errors from both actions surface inline next to the buttons and roll back optimistic status. Outside-click dismisses the menu.
+- **`app/conversations/[id]/page.tsx`** — passes `isGmail={conversation.channel.provider === "google"}` to `ThreadStatusHeader`.
+- **Outlook and other providers**: archive and trash UI is hidden because the routes return 400 for non-Google channels. No broken actions are shown.
+- **Tests**: `tests/gmail-archive-trash.test.ts` — 8 tests covering correct API call shape, mutual exclusion (archive does not call trash and vice versa), missing-credential error, and Gmail API error propagation.
+
 Inbox preview text improvements (2026-06-16):
 
 - `prisma/schema.prisma` — `Message.subject String?` field added; migration at `prisma/migrations/20260616000000_add_message_subject/`.
@@ -538,7 +551,7 @@ npx tsc --noEmit
 
 Observed result:
 
-- `npm test`: 509 tests passed across 48 files.
+- `npm test`: 517 tests passed across 49 files.
 - `npx tsc --noEmit`: no errors.
 
 Browser smoke-test note:

@@ -37,6 +37,7 @@ type ConvRow = {
   messages: { body: string; subject: string | null }[]
   draft: { status: string } | null
   stateRecord: { state: string; metadataJson: unknown } | null
+  channel: { provider: string }
 }
 
 function isFyi(conv: ConvRow): boolean {
@@ -138,6 +139,7 @@ export default async function AppListColumn({
         contact: true,
         draft: { select: { status: true } },
         stateRecord: { select: { state: true, metadataJson: true } },
+        channel: { select: { provider: true } },
       },
     }) as Promise<ConvRow[]>,
     prisma.conversation.groupBy({
@@ -258,6 +260,7 @@ export default async function AppListColumn({
                 initialStatus={conv.status}
                 attentionCategory={attention}
                 isPersonal={isPersonal}
+                isGmail={conv.channel.provider === "google"}
               />
             )
           })
