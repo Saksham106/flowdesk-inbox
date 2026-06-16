@@ -86,13 +86,16 @@ export default function ThreadStatusHeader({
         >
           {optimisticRead ? "Mark unread" : "Mark read"}
         </button>
-        <button
-          onClick={toggleStatus}
-          disabled={loading}
-          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-        >
-          {loading ? "…" : status === "closed" ? "Reopen" : "Close"}
-        </button>
+        {!isPersonal && (
+          <button
+            onClick={toggleStatus}
+            disabled={loading}
+            title={status === "closed" ? "Reopen thread" : "Close thread"}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {loading ? "…" : status === "closed" ? "Reopen" : "Close"}
+          </button>
+        )}
       </div>
     </div>
   )

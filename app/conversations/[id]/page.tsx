@@ -637,7 +637,9 @@ export default async function ConversationPage({
             </div>
             <div className="flex shrink-0 flex-col items-end gap-2">
               <MarkReadButton conversationId={conversation.id} isRead={Boolean(conversation.readAt)} />
-              <StatusButton conversationId={conversation.id} currentStatus={conversation.status} />
+              {!isPersonal && (
+                <StatusButton conversationId={conversation.id} currentStatus={conversation.status} />
+              )}
             </div>
           </div>
         </header>

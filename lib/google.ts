@@ -281,6 +281,7 @@ async function upsertGmailMessage({
         fromE164: msg.from,
         toE164: msg.to,
         body: msg.body || `[${msg.subject}]`,
+        subject: msg.subject || null,
         providerMessageId,
         isRead,
         gmailLabelIds: msg.labelIds,

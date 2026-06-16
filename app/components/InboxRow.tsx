@@ -31,6 +31,7 @@ type InboxRowProps = {
   initialReadAt: boolean
   initialStatus: string
   attentionCategory: string | null
+  isPersonal: boolean
 }
 
 export default function InboxRow({
@@ -48,6 +49,7 @@ export default function InboxRow({
   initialReadAt,
   initialStatus,
   attentionCategory: initialAttention,
+  isPersonal,
 }: InboxRowProps) {
   const router = useRouter()
   const [isRead, setIsRead]         = useState(initialReadAt)
@@ -216,27 +218,29 @@ export default function InboxRow({
           </svg>
         </button>
 
-        {/* Done / Reopen */}
-        <button
-          type="button"
-          onClick={toggleStatus}
-          title={isClosed ? "Reopen" : "Done"}
-          aria-label={isClosed ? "Reopen" : "Done"}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-        >
-          {isClosed ? (
-            // Reopen: 270° arc (right → bottom → left → top) with arrowhead at top
-            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M10 6A4 4 0 1 1 6 2" />
-              <path d="M4.5 3.5L6 2L7.5 3.5" />
-            </svg>
-          ) : (
-            // Done: checkmark
-            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M2 6.5 5 9.5 10 3" />
-            </svg>
-          )}
-        </button>
+        {/* Done / Reopen — business accounts only */}
+        {!isPersonal && (
+          <button
+            type="button"
+            onClick={toggleStatus}
+            title={isClosed ? "Reopen thread" : "Close thread"}
+            aria-label={isClosed ? "Reopen thread" : "Close thread"}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            {isClosed ? (
+              // Reopen: 270° arc with arrowhead
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M10 6A4 4 0 1 1 6 2" />
+                <path d="M4.5 3.5L6 2L7.5 3.5" />
+              </svg>
+            ) : (
+              // Close: checkmark
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M2 6.5 5 9.5 10 3" />
+              </svg>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Attention dropdown — portal into document.body so it escapes the inbox scroll container
