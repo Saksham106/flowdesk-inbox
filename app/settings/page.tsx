@@ -17,6 +17,7 @@ import FollowUpSettingsForm from "@/app/settings/FollowUpSettingsForm";
 import AutopilotSettingsForm from "@/app/settings/AutopilotSettingsForm";
 import PersonalStylePanel from "@/app/settings/PersonalStylePanel"
 import ConciergeTemplateSeedButton from "./ConciergeTemplateSeedButton";
+import SenderRulesPanel from "@/app/settings/SenderRulesPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -99,6 +100,11 @@ export default async function SettingsPage({ searchParams }: Props) {
       orderBy: { createdAt: "desc" },
     }),
   ]);
+
+  const senderRules = await prisma.senderRule.findMany({
+    where: { tenantId: session.user.tenantId, status: { in: ["suggested", "active"] } },
+    orderBy: { createdAt: "desc" },
+  });
 
   const isPersonal = tenant?.accountType === "personal";
 
@@ -507,6 +513,21 @@ export default async function SettingsPage({ searchParams }: Props) {
             />
           </div>
         </section>
+
+        {/* Attention Rules */}
+        {senderRules.length > 0 && (
+          <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="font-semibold">Attention Rules</h2>
+              <p className="mt-0.5 text-sm text-slate-500">
+                FlowDesk noticed you consistently change certain senders&apos; attention tag. Accept a rule to apply it automatically.
+              </p>
+            </div>
+            <div className="px-6 py-5">
+              <SenderRulesPanel initialRules={senderRules} />
+            </div>
+          </section>
+        )}
 
         {/* Autopilot / Auto-Send */}
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">

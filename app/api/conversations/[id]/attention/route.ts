@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import type { AttentionCategory } from "@/lib/agent/email-classifier"
+import { recordAttentionCorrection } from "@/lib/agent/preference-learning"
 
 const VALID_CATEGORIES: AttentionCategory[] = [
   "needs_reply",
@@ -171,6 +172,8 @@ export async function PATCH(
     },
   })
 
+  const previousAttention = typeof prevMeta.attentionCategory === "string" ? prevMeta.attentionCategory : null
+
   await prisma.auditLog.create({
     data: {
       tenantId,
@@ -178,10 +181,15 @@ export async function PATCH(
       payloadJson: {
         conversationId,
         attentionCategory,
-        previous: typeof prevMeta.attentionCategory === "string" ? prevMeta.attentionCategory : null,
+        previous: previousAttention,
         reason: "User manually corrected attention category",
       },
     },
+  })
+
+  // Record the correction for preference learning (fire-and-forget; never blocks the response)
+  recordAttentionCorrection({ tenantId, conversationId, previousAttention, newAttention: attentionCategory }).catch((err) => {
+    console.warn("preference-learning: failed to record correction", { conversationId, err })
   })
 
   return NextResponse.json({ ok: true })

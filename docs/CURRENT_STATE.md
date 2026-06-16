@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-16 (Gmail archive + trash with writeback; personal/business action split — personal accounts no longer see confusing done/reopen quick action or Close/Reopen thread button; inbox preview now shows subject + snippet combined; attention/read/status persistence fixes; reopen icon SVG + attention dropdown z-index via React portal + email iframe height; richer inbox hover actions; email link sandbox fix; sync idempotency; Home card UX; Phase 1 gaps + Phase 2 concierge templates; inbox UX polish)
+Last updated: 2026-06-16 (preference learning — deterministic sender rules from repeated attention corrections, suggest/accept/dismiss UI in settings; Gmail archive + trash with writeback; personal/business action split — personal accounts no longer see confusing done/reopen quick action or Close/Reopen thread button; inbox preview now shows subject + snippet combined; attention/read/status persistence fixes; reopen icon SVG + attention dropdown z-index via React portal + email iframe height; richer inbox hover actions; email link sandbox fix; sync idempotency; Home card UX; Phase 1 gaps + Phase 2 concierge templates; inbox UX polish)
 
 This file is the codebase-facing companion to `MASTER_PRODUCT_PLAN.md`. It answers: what exists today, what is partial, and what should not be treated as active scope.
 
@@ -104,6 +104,23 @@ Gmail sync reliability, local state, and read handling (2026-06-15):
 - Opening a conversation marks it read locally and attempts safe Gmail writeback by removing `UNREAD` from Gmail messages. Gmail writeback failures are logged and do not block the page.
 - Marking a conversation closed/done writes a `ConversationState` row with `source: "user_override"` and metadata `{ userOverride: true, userState: ... }`. Deterministic work-item sync will not overwrite that user override, so done conversations do not reappear in Handle First after auto-sync.
 - Full sync catches and logs individual thread failures with tenant/channel/thread context and continues syncing other threads. OTP/security codes are not logged.
+
+Preference learning — deterministic sender rules (2026-06-16):
+
+- Users can manually correct the attention/tag on any email via the right rail or inbox row hover actions. When the same sender (or same domain) has been corrected to the same category three times, a `SenderRule` with `status: "suggested"` is created.
+- `ClassificationCorrection` table logs every manual attention change with `fromEmail`, `fromDomain`, `previousAttention`, and `newAttention`. Indexed for fast per-sender and per-domain counts.
+- `SenderRule` table stores suggested/active/dismissed rules with `matchType` (email | domain), `matchValue`, `targetAttention`, and `triggerCount`. Unique constraint prevents duplicate rules per tenant + type + value + target.
+- `lib/agent/preference-learning.ts` — three exported functions:
+  - `extractDomainFromEmail` — pure helper extracting the `@domain.tld` part from a raw email/header string.
+  - `recordAttentionCorrection` — called fire-and-forget from `PATCH /api/conversations/[id]/attention`. Reads the first inbound message to find `fromEmail` + `fromDomain`, creates the correction row, counts per-sender corrections, and upserts a suggested rule at threshold (3). Email-level rule takes priority; falls back to domain-level if email count is below threshold.
+  - `applyActiveRule` — called from `lib/agent/work-item-sync.ts` for every non-user-corrected conversation. Returns the `targetAttention` of the first matching active rule (email match before domain match), or `null` if none applies.
+- `lib/agent/work-item-sync.ts` — after AI classification, if the conversation is not user-corrected (`attentionCorrectedByUser !== true && userOverride !== true`), calls `applyActiveRule`. If a rule matches, `attentionCategory` is overridden and `attentionSource` is set to `"rule"` in `metadataJson`. Manual user corrections always take precedence.
+- `app/api/sender-rules/[id]/route.ts` — `PATCH` endpoint accepting `{ action: "accept" | "dismiss" }`. `accept` moves rule to `status: "active"` (starts applying on next sync); `dismiss` moves to `status: "dismissed"` (hidden, not applied). Tenant-scoped; returns 404 for cross-tenant access.
+- `app/settings/SenderRulesPanel.tsx` — client component showing suggested rules (amber card with Apply/Dismiss buttons) and active rules (compact list with Disable button). Optimistically updates local state, calls the PATCH endpoint, and triggers `router.refresh()`. Returns `null` when no rules exist (panel is invisible until at least one rule is suggested).
+- `app/settings/page.tsx` — fetches `senderRules` with `status: { in: ["suggested", "active"] }` and renders `<SenderRulesPanel>` in a new "Attention Rules" section between Reply Learning and Autopilot. The section is hidden when there are no rules.
+- No AI calls, no silent rule creation — rules are only created at suggestion time and must be accepted by the user.
+- Migrations: `prisma/migrations/20260616001000_preference_learning/migration.sql` — creates both tables with indexes and foreign keys.
+- Tests: `tests/preference-learning.test.ts` — 15 tests covering `extractDomainFromEmail`, `recordAttentionCorrection` (no message → noop, creates correction row, threshold, email-vs-domain priority), and `applyActiveRule` (no match, email match, domain fallback, email-priority, no domain).
 
 Email attention classification (2026-06-14):
 

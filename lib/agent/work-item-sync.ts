@@ -10,6 +10,7 @@ import { classifyEmailType } from "@/lib/agent/email-classifier"
 import { evaluatePersonMemoryPolicy } from "@/lib/ai/usage-policy"
 import { recordAiUsageEvent } from "@/lib/ai/usage"
 import { extractEmail } from "@/lib/google"
+import { applyActiveRule } from "@/lib/agent/preference-learning"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
@@ -359,7 +360,7 @@ export async function syncConversationWorkItems(
     })
     const {
       emailType,
-      attentionCategory,
+      attentionCategory: classifiedAttention,
       reason,
       confidence,
       extractedCode,
@@ -367,7 +368,6 @@ export async function syncConversationWorkItems(
       action,
     } = emailClassification
     detectedEmailType = emailType
-    detectedAttentionCategory = attentionCategory
 
     const currentState = await prisma.conversationState.findUnique({
       where: { conversationId: conversation.id },
@@ -380,6 +380,23 @@ export async function syncConversationWorkItems(
         ? (currentState.metadataJson as Record<string, unknown>)
         : {}
 
+    // Explicit user correction always wins — no rule or AI can override it.
+    const isUserAttentionCorrected =
+      currentMeta.attentionCorrectedByUser === true || currentMeta.userOverride === true
+
+    // If user hasn't explicitly corrected, check whether an active SenderRule applies.
+    // Rule wins over AI classification; explicit user correction (above) still wins over rule.
+    let attentionCategory = classifiedAttention
+    let attentionSource: "ai" | "rule" | "user" = "ai"
+    if (!isUserAttentionCorrected) {
+      const ruleAttention = await applyActiveRule({ tenantId: conversation.tenantId, fromEmail })
+      if (ruleAttention) {
+        attentionCategory = ruleAttention
+        attentionSource = "rule"
+      }
+    }
+    detectedAttentionCategory = attentionCategory
+
     const persistedAction = action
       ? {
           type: action.type,
@@ -391,11 +408,6 @@ export async function syncConversationWorkItems(
         }
       : null
 
-    // Preserve a user-corrected attentionCategory — the spread of currentMeta above
-    // already includes it, so we only need to suppress the AI-derived override.
-    const isUserAttentionCorrected =
-      currentMeta.attentionCorrectedByUser === true || currentMeta.userOverride === true
-
     await prisma.conversationState.update({
       where: { conversationId: conversation.id },
       data: {
@@ -404,7 +416,7 @@ export async function syncConversationWorkItems(
           emailType,
           ...(isUserAttentionCorrected
             ? {}
-            : { attentionCategory, attentionReason: reason, attentionConfidence: confidence }),
+            : { attentionCategory, attentionReason: attentionSource === "rule" ? "Applied from your learned preference rule." : reason, attentionConfidence: attentionSource === "rule" ? 1 : confidence, attentionSource }),
           ...(persistedAction ? { action: persistedAction } : {}),
           ...(expiresIn ? { expiresIn } : {}),
         } as Prisma.InputJsonValue,
