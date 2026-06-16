@@ -15,34 +15,45 @@ export default function EmailBodyIframe({ html }: Props) {
     const iframe = iframeRef.current;
     if (!iframe) return;
 
+    let ro: ResizeObserver | null = null;
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+
     function measure() {
       try {
         const doc = iframe?.contentDocument ?? iframe?.contentWindow?.document;
-        if (doc?.body) {
-          const h = doc.documentElement.scrollHeight || doc.body.scrollHeight;
-          setHeight(Math.max(80, h + 4));
-        }
+        if (!doc?.body) return;
+        const h = doc.documentElement.scrollHeight || doc.body.scrollHeight;
+        const next = Math.max(80, h);
+        // Only update when the change is meaningful — prevents ResizeObserver
+        // feedback loops where each setHeight triggers another body resize.
+        setHeight((prev) => (Math.abs(prev - next) < 8 ? prev : next));
       } catch {
         // cross-origin guard (shouldn't happen with srcdoc)
       }
     }
 
-    iframe.addEventListener("load", measure);
-    // Also observe resize (images loading late, etc.)
-    let ro: ResizeObserver | null = null;
-    iframe.addEventListener("load", () => {
+    function onLoad() {
+      measure();
       try {
-        const doc = iframe.contentDocument ?? iframe.contentWindow?.document;
-        if (doc?.body) {
-          ro = new ResizeObserver(measure);
-          ro.observe(doc.body);
-        }
+        const doc = iframe?.contentDocument ?? iframe?.contentWindow?.document;
+        if (!doc?.body) return;
+        ro = new ResizeObserver(measure);
+        ro.observe(doc.body);
+        // Disconnect after content settles to prevent long-running layout loops
+        // (late-loading images are the main reason to keep observing briefly).
+        settleTimer = setTimeout(() => {
+          ro?.disconnect();
+          ro = null;
+        }, 2000);
       } catch { /* ignore */ }
-    });
+    }
+
+    iframe.addEventListener("load", onLoad);
 
     return () => {
-      iframe.removeEventListener("load", measure);
+      iframe.removeEventListener("load", onLoad);
       ro?.disconnect();
+      if (settleTimer !== null) clearTimeout(settleTimer);
     };
   }, [html]);
 

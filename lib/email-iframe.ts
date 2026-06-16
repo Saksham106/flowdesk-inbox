@@ -34,10 +34,14 @@ export function stripEmailDarkModeHints(html: string): string {
 function lightModeContainmentCss(): string {
   return `
     :root { color-scheme: light only; supported-color-schemes: light; background: #ffffff; }
-    html, body { max-width: 100%; overflow-x: hidden; background: #ffffff; }
-    body { box-sizing: border-box; color: #111827; font-size: 14px; line-height: 1.5; word-break: break-word; overflow-wrap: anywhere; }
+    /* overflow:hidden on html prevents the iframe doc from growing its own scrollbar;
+       height is driven entirely by the parent's measured iframe height. */
+    html { overflow: hidden; max-width: 100%; background: #ffffff; }
+    body { max-width: 100%; overflow-x: hidden; background: #ffffff; box-sizing: border-box; color: #111827; font-size: 14px; line-height: 1.5; word-break: break-word; overflow-wrap: anywhere; }
     *, *::before, *::after { box-sizing: border-box; max-width: 100%; }
-    table { max-width: 100% !important; width: auto; border-collapse: collapse; table-layout: auto; }
+    /* Do NOT set width:auto — that overrides HTML width="" attributes and breaks
+       newsletter centering (e.g. <table width="600" align="center">). */
+    table { max-width: 100% !important; border-collapse: collapse; table-layout: auto; }
     td, th { overflow-wrap: anywhere; word-break: break-word; }
     img, video { max-width: 100% !important; height: auto !important; }
     pre, code { white-space: pre-wrap; overflow-wrap: anywhere; }
