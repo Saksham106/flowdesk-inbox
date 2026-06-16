@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-16 (richer inbox hover actions with attention picker + SVG icons + tooltips across page buttons; email link sandbox fix, attention correction persistence, expiration-aware Needs Action cleanup, manual dashboard dismissal, email iframe rendering fixes; sync idempotency, user override preservation, read state, action-email metadata; Home card UX, right rail cleanup, summary HTML fix; Phase 1 gaps + Phase 2 concierge templates; inbox UX polish, AI cost controls)
+Last updated: 2026-06-16 (fix reopen icon SVG + attention dropdown z-index via React portal + email iframe height measurement using body.scrollHeight; richer inbox hover actions with attention picker + SVG icons + tooltips across page buttons; email link sandbox fix, attention correction persistence, expiration-aware Needs Action cleanup, manual dashboard dismissal, email iframe rendering fixes; sync idempotency, user override preservation, read state, action-email metadata; Home card UX, right rail cleanup, summary HTML fix; Phase 1 gaps + Phase 2 concierge templates; inbox UX polish, AI cost controls)
 
 This file is the codebase-facing companion to `MASTER_PRODUCT_PLAN.md`. It answers: what exists today, what is partial, and what should not be treated as active scope.
 

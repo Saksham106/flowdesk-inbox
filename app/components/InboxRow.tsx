@@ -1,5 +1,6 @@
 "use client"
 
+import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -49,25 +50,32 @@ export default function InboxRow({
   attentionCategory: initialAttention,
 }: InboxRowProps) {
   const router = useRouter()
-  const [isRead, setIsRead]           = useState(initialReadAt)
-  const [status, setStatus]           = useState(initialStatus)
-  const [attention, setAttention]     = useState(initialAttention)
-  const [showAttention, setShowAtt]   = useState(false)
-  const attentionRef                  = useRef<HTMLDivElement>(null)
+  const [isRead, setIsRead]         = useState(initialReadAt)
+  const [status, setStatus]         = useState(initialStatus)
+  const [attention, setAttention]   = useState(initialAttention)
+  const [showAttention, setShowAtt] = useState(false)
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null)
+  const attentionBtnRef             = useRef<HTMLButtonElement>(null)
+  const portalRef                   = useRef<HTMLDivElement>(null)
 
   const isUnread = !isRead && !isFyi
   const isClosed = status === "closed"
 
-  // Close the attention dropdown when the user clicks outside it
+  // Close attention dropdown on outside click or any scroll (covers inbox list scroll)
   useEffect(() => {
     if (!showAttention) return
     function onOutside(e: MouseEvent) {
-      if (attentionRef.current && !attentionRef.current.contains(e.target as Node)) {
-        setShowAtt(false)
-      }
+      const t = e.target as Node
+      if (attentionBtnRef.current?.contains(t) || portalRef.current?.contains(t)) return
+      setShowAtt(false)
     }
+    function onScroll() { setShowAtt(false) }
     document.addEventListener("mousedown", onOutside)
-    return () => document.removeEventListener("mousedown", onOutside)
+    window.addEventListener("scroll", onScroll, true)
+    return () => {
+      document.removeEventListener("mousedown", onOutside)
+      window.removeEventListener("scroll", onScroll, true)
+    }
   }, [showAttention])
 
   async function toggleRead(e: React.MouseEvent) {
@@ -96,6 +104,16 @@ export default function InboxRow({
     })
     if (!res.ok) setStatus(status)
     router.refresh()
+  }
+
+  function openAttentionDropdown(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!showAttention && attentionBtnRef.current) {
+      const rect = attentionBtnRef.current.getBoundingClientRect()
+      setDropdownPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+    }
+    setShowAtt((v) => !v)
   }
 
   async function changeAttention(e: React.MouseEvent, cat: string) {
@@ -181,41 +199,22 @@ export default function InboxRow({
             : <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />}
         </button>
 
-        {/* Attention / tag picker */}
-        <div ref={attentionRef} className="relative">
-          <button
-            type="button"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowAtt((v) => !v) }}
-            title="Change tag"
-            aria-label="Change tag"
-            aria-expanded={showAttention}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-[11px] text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            {/* Tag icon */}
-            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M1 1h4.5L11 6.5 6.5 11 1 5.5V1Z" />
-              <circle cx="3.5" cy="3.5" r="0.75" fill="currentColor" stroke="none" />
-            </svg>
-          </button>
-
-          {showAttention && (
-            <div className="absolute right-0 top-full z-50 mt-1 min-w-[126px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-              {ATTENTION_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={(e) => changeAttention(e, opt.value)}
-                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] hover:bg-slate-50 focus:outline-none ${
-                    attention === opt.value ? "font-semibold text-slate-900" : "text-slate-700"
-                  }`}
-                >
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${opt.dot}`} />
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Attention / tag picker — dropdown rendered in a portal to escape the scroll container */}
+        <button
+          ref={attentionBtnRef}
+          type="button"
+          onClick={openAttentionDropdown}
+          title="Change tag"
+          aria-label="Change tag"
+          aria-expanded={showAttention}
+          className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        >
+          {/* Tag icon */}
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M1 1h4.5L11 6.5 6.5 11 1 5.5V1Z" />
+            <circle cx="3.5" cy="3.5" r="0.75" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
 
         {/* Done / Reopen */}
         <button
@@ -223,13 +222,47 @@ export default function InboxRow({
           onClick={toggleStatus}
           title={isClosed ? "Reopen" : "Done"}
           aria-label={isClosed ? "Reopen" : "Done"}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-[11px] text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
-          {isClosed
-            ? <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10 6A4 4 0 1 1 6 2M10 2v4H6" /></svg>
-            : <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2 6.5 5 9.5 10 3" /></svg>}
+          {isClosed ? (
+            // Reopen: 270° arc (right → bottom → left → top) with arrowhead at top
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M10 6A4 4 0 1 1 6 2" />
+              <path d="M4.5 3.5L6 2L7.5 3.5" />
+            </svg>
+          ) : (
+            // Done: checkmark
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M2 6.5 5 9.5 10 3" />
+            </svg>
+          )}
         </button>
       </div>
+
+      {/* Attention dropdown — portal into document.body so it escapes the inbox scroll container
+          and is never covered by sibling rows' hover strips */}
+      {showAttention && dropdownPos && typeof document !== "undefined" && createPortal(
+        <div
+          ref={portalRef}
+          style={{ position: "fixed", top: dropdownPos.top, right: dropdownPos.right, zIndex: 9999 }}
+          className="min-w-[126px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+        >
+          {ATTENTION_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={(e) => changeAttention(e, opt.value)}
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] hover:bg-slate-50 focus:outline-none ${
+                attention === opt.value ? "font-semibold text-slate-900" : "text-slate-700"
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${opt.dot}`} />
+              {opt.label}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

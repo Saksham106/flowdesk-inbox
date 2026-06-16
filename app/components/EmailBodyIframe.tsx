@@ -22,10 +22,11 @@ export default function EmailBodyIframe({ html }: Props) {
       try {
         const doc = iframe?.contentDocument ?? iframe?.contentWindow?.document;
         if (!doc?.body) return;
-        const h = doc.documentElement.scrollHeight || doc.body.scrollHeight;
-        const next = Math.max(80, h);
-        // Only update when the change is meaningful — prevents ResizeObserver
-        // feedback loops where each setHeight triggers another body resize.
+        // Prefer body.scrollHeight: documentElement.scrollHeight returns the current viewport
+        // height (not content height) when `html { overflow: hidden }` is set in the injected CSS.
+        const h = doc.body.scrollHeight || doc.documentElement.scrollHeight;
+        // +16px buffer prevents hairline clips at the article's overflow:hidden rounded corners.
+        const next = Math.max(80, h + 16);
         setHeight((prev) => (Math.abs(prev - next) < 8 ? prev : next));
       } catch {
         // cross-origin guard (shouldn't happen with srcdoc)
@@ -37,14 +38,30 @@ export default function EmailBodyIframe({ html }: Props) {
       try {
         const doc = iframe?.contentDocument ?? iframe?.contentWindow?.document;
         if (!doc?.body) return;
+
+        // Re-measure after remote images load — newsletters can have many images that
+        // arrive after the initial load event, expanding the body well beyond the first measurement.
+        const pending = Array.from(doc.images).filter((img) => !img.complete);
+        if (pending.length > 0) {
+          void Promise.all(
+            pending.map(
+              (img) => new Promise<void>((res) => {
+                img.addEventListener("load", () => res(), { once: true });
+                img.addEventListener("error", () => res(), { once: true });
+              })
+            )
+          ).then(measure);
+        }
+
+        // Re-measure when web fonts finish loading
+        void doc.fonts?.ready?.then(measure);
+
         ro = new ResizeObserver(measure);
         ro.observe(doc.body);
-        // Disconnect after content settles to prevent long-running layout loops
-        // (late-loading images are the main reason to keep observing briefly).
         settleTimer = setTimeout(() => {
           ro?.disconnect();
           ro = null;
-        }, 2000);
+        }, 3000);
       } catch { /* ignore */ }
     }
 
