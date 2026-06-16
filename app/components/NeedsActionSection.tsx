@@ -109,6 +109,7 @@ function NeedsActionCard({ item }: { item: CommandCenterConversation }) {
                 <button
                   type="button"
                   onClick={(e) => copyCode(e, action.detectedCode!)}
+                  title="Copy code"
                   className="text-[10px] font-semibold text-violet-700 hover:text-violet-900 transition"
                 >
                   {copied ? "Copied!" : "Copy"}
@@ -132,6 +133,7 @@ function NeedsActionCard({ item }: { item: CommandCenterConversation }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(event) => event.stopPropagation()}
+                title="Open link"
                 className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-600 text-white hover:bg-amber-700 transition"
               >
                 Open link →
@@ -144,6 +146,7 @@ function NeedsActionCard({ item }: { item: CommandCenterConversation }) {
             type="button"
             onClick={dismissAction}
             disabled={dismissing}
+            title="Dismiss"
             className="text-[10px] font-semibold px-2 py-1 rounded-md border border-amber-300 bg-white/70 text-amber-800 transition hover:bg-white disabled:opacity-60"
           >
             {dismissing ? "Saving..." : "Not needed"}

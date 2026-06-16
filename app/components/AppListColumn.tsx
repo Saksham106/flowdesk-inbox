@@ -254,6 +254,7 @@ export default async function AppListColumn({
                 hasDraft={hasDraft}
                 initialReadAt={conv.readAt !== null}
                 initialStatus={conv.status}
+                attentionCategory={attention}
               />
             )
           })

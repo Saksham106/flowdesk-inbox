@@ -63,6 +63,7 @@ export default function HandleThisPanel({
         type="button"
         onClick={handleThis}
         disabled={!canSuggest || isHandling}
+        title={isHandling ? undefined : isPersonal ? "Suggest reply" : "Generate draft + next step"}
         className="w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isHandling ? "Working…" : isPersonal ? "Suggest reply" : "Handle this"}
