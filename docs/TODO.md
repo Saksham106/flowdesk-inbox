@@ -1,6 +1,6 @@
 # FlowDesk Remaining-Work To-Do List
 
-Last updated: 2026-06-15 (UI/UX cleanup: Home cards, right rail, summary HTML)
+Last updated: 2026-06-16 (attention persistence, email link reliability, expired Needs Action cleanup, dashboard dismissal)
 
 This is the canonical checklist of what has **not** been completed from the master product plan. It complements `MASTER_PRODUCT_PLAN.md` (the roadmap and feature index) and `CURRENT_STATE.md` (what exists). When work ships, check items off here and update both companion docs in the same branch.
 
@@ -18,9 +18,9 @@ Most Phase 1 foundations are shipped (command center, task/lead extraction, appr
 - [x] **Smart labels taxonomy — first attention slice** (#42) — shipped 2026-06-14: deterministic and LLM classification now support `needs_reply`, `needs_action`, `review_soon`, `read_later`, `waiting_on`, `fyi_done`, and `quiet`; stored in `ConversationState.metadataJson.attentionCategory`.
 - [x] **Account-action detection slice** (#21/#42) — shipped 2026-06-15: deterministic OTP, verify-email, password setup/reset, login approval, account setup, and security alert detection; redacted action metadata is surfaced to Home cards without persisting OTP codes.
 - [x] **Read/done sync persistence hardening** (#6/#42) — shipped 2026-06-15: local user overrides and read state are separate from raw Gmail state; Gmail sync no longer resurrects done items in Handle First.
-- [x] **Smart labels taxonomy — product-complete UI** (#42) — shipped 2026-06-15: attention filter tabs (Reply/Review/Later) in inbox, `AttentionCorrectionSelect` dropdown on conversation pages, `PATCH /api/conversations/[id]/attention` route, bulk-close workflow for quiet/fyi_done categories. Action metadata badges (OTP, password reset, security alert, expiry warnings, action links) surfaced on Home cards.
+- [x] **Smart labels taxonomy — product-complete UI** (#42) — shipped 2026-06-15 and hardened 2026-06-16: attention filter tabs (Reply/Review/Later) in inbox, `AttentionCorrectionSelect` dropdown on conversation pages, persisted `PATCH /api/conversations/[id]/attention` user overrides, bulk-close workflow for quiet/fyi_done categories. Action metadata badges (OTP, password reset, security alert, expiry warnings, action links) surfaced on Home cards. Expired action items now leave Needs Action automatically; Needs Action cards have a persisted "Not needed" dismissal.
 - [x] **Richer sensitive detection** (#10) — shipped 2026-06-15: expanded classifier to legal, immigration, tax, medical, HR, emotional categories; highlighted risky snippet in AI draft panel.
-- [x] **Command-center source signals** (#1) — shipped 2026-06-15: Bills & Deadlines section in home command center powered by `buildBillsSection` from `lib/agent/command-center.ts`, driven by `InboxTask.dueAt` signals sorted ascending.
+- [x] **Command-center source signals** (#1) — shipped 2026-06-15 and hardened 2026-06-16: Bills & Deadlines section in home command center powered by `buildBillsSection` from `lib/agent/command-center.ts`, driven by `InboxTask.dueAt` signals sorted ascending. Expired security/reset action alerts are filtered out so stale items do not linger as current deadlines.
 - [x] **Trust UX** (#44) — shipped 2026-06-15: "Why" column with audit log explanations and "Undo" button on `/audit`; `POST /api/audit/[id]/undo` reverts autopilot draft approvals with tenant isolation + re-audit.
 - [x] **Confidence policy thresholds** (#29) — shipped 2026-06-15: `AutopilotSetting.categoryThresholdsJson` schema field; per-category threshold gate in `lib/agent/autopilot.ts` with case-insensitive intent lookup; settings UI in `/settings`; server-side validation [0.5, 1.0].
 - [x] **Task assignment and manual task creation** (#13) — shipped 2026-06-15: `POST /api/tasks` with `source: "manual"`, `ManualTaskForm` and `WorkItemsPanel` with "+ Add task" toggle on conversation pages.
@@ -42,7 +42,7 @@ Most Phase 1 foundations are shipped (command center, task/lead extraction, appr
 
 ## Phase 3: Personal Chief Of Staff — Not Started
 
-- [ ] **Personal life admin mode** (#21) — first attention rules now catch codes, account setup, security, billing, delivery, calendar RSVP, and common account-action links; still needs broader bill/travel/school/medical/subscription flows and privacy UX.
+- [ ] **Personal life admin mode** (#21) — first attention rules now catch codes, account setup, security, billing, delivery, calendar RSVP, and common account-action links; expired OTP/reset/security actions are auto-downgraded and can be manually dismissed. Still needs broader bill/travel/school/medical/subscription flows and privacy UX.
 - [ ] **VIP protection** (#33).
 - [ ] **Reply later / smart snooze intelligence** (#34).
 - [ ] **Smart attachment intelligence** (#16) — PDF/invoice/contract extraction.

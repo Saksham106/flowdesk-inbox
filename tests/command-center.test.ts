@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   analyzeConversationForCommandCenter,
+  buildBillsSection,
   buildDailyCommandCenter,
   buildRelationshipContext,
   type CommandCenterInputConversation,
@@ -358,6 +359,69 @@ describe("needsAction flag", () => {
     expect(result.needsAction).toBe(true)
   })
 
+  it("is false for expired OTP action emails", () => {
+    const conv = conversation({
+      id: "expired-otp",
+      lastMessageAt: new Date("2026-06-11T12:30:00.000Z"),
+      messages: [
+        {
+          direction: "inbound",
+          body: "Your verification code is 847291. This code expires in 15 minutes.",
+          createdAt: new Date("2026-06-11T12:30:00.000Z"),
+        },
+      ],
+      conversationState: {
+        metadataJson: {
+          attentionCategory: "needs_action",
+          emailType: "notification",
+          action: {
+            type: "otp_code",
+            explanation: "Use the one-time code only in the service that requested it.",
+            detectedCode: "847291",
+            expirationText: "15 minutes",
+          },
+        },
+      },
+    })
+
+    const result = analyzeConversationForCommandCenter(conv, now)
+
+    expect(result.needsAction).toBe(false)
+    expect(result.state).toBe("fyi_only")
+    expect(result.priority).toBe("none")
+    expect(result.safelyIgnored).toBe(true)
+    expect(result.reason).toMatch(/expired/i)
+  })
+
+  it("uses sensible defaults when action expiration text is missing", () => {
+    const conv = conversation({
+      id: "old-reset",
+      lastMessageAt: new Date("2026-06-10T12:00:00.000Z"),
+      messages: [
+        {
+          direction: "inbound",
+          body: "Reset your password using this link.",
+          createdAt: new Date("2026-06-10T12:00:00.000Z"),
+        },
+      ],
+      conversationState: {
+        metadataJson: {
+          attentionCategory: "needs_action",
+          emailType: "notification",
+          action: {
+            type: "reset_password",
+            explanation: "Reset the password if you requested it.",
+          },
+        },
+      },
+    })
+
+    const result = analyzeConversationForCommandCenter(conv, now)
+
+    expect(result.needsAction).toBe(false)
+    expect(result.safelyIgnored).toBe(true)
+  })
+
   it("is false when attentionCategory is needs_reply", () => {
     const conv = conversation({
       conversationState: {
@@ -420,6 +484,36 @@ describe("buildDailyCommandCenter new sections", () => {
     expect(result.sections.needsAction).toHaveLength(1)
     expect(result.sections.needsAction[0].id).toBe("action-1")
     expect(result.counts.needsAction).toBe(1)
+  })
+
+  it("excludes expired needs_action emails from Needs Action counts and section", () => {
+    const expiredAction = conversation({
+      id: "expired-action",
+      lastMessageAt: new Date("2026-06-11T12:00:00.000Z"),
+      messages: [
+        {
+          direction: "inbound",
+          body: "Your login code is 847291. It expires in 10 minutes.",
+          createdAt: new Date("2026-06-11T12:00:00.000Z"),
+        },
+      ],
+      conversationState: {
+        metadataJson: {
+          attentionCategory: "needs_action",
+          action: {
+            type: "otp_code",
+            explanation: "Use the one-time code only in the service that requested it.",
+            expirationText: "10 minutes",
+          },
+        },
+      },
+    })
+
+    const result = buildDailyCommandCenter([expiredAction], now)
+
+    expect(result.sections.needsAction).toHaveLength(0)
+    expect(result.counts.needsAction).toBe(0)
+    expect(result.sections.safelyIgnored.map((item) => item.id)).toEqual(["expired-action"])
   })
 
   it("populates sections.readLater and counts.readLater", () => {
@@ -621,5 +715,71 @@ describe("buildDailyCommandCenter with persisted states", () => {
     const result = analyzeConversationForCommandCenter(conv, now)
     expect(result.action?.hasDetectedCode).toBe(true)
     expect(result.action?.detectedCode).toBe("847291")
+  })
+
+  it("downgrades fresh persisted needs_action state when the action is expired", () => {
+    const persisted = makePersistedState({
+      conversationId: "persisted-expired-otp",
+      state: "waiting_on_you",
+      priority: "high",
+      reason: "OTP required",
+      nextAction: "Complete the requested action.",
+      updatedAt: new Date("2026-06-11T13:45:00.000Z"),
+      metadataJson: {
+        attentionCategory: "needs_action",
+        emailType: "notification",
+        action: {
+          type: "otp_code",
+          explanation: "Use the one-time code only in the service that requested it.",
+        },
+      },
+    })
+
+    const result = buildDailyCommandCenter(
+      [
+        conversation({
+          id: "persisted-expired-otp",
+          lastMessageAt: new Date("2026-06-11T12:30:00.000Z"),
+        }),
+      ],
+      now,
+      "business",
+      new Map([["persisted-expired-otp", persisted]])
+    )
+
+    expect(result.sections.needsAction).toHaveLength(0)
+    expect(result.counts.needsAction).toBe(0)
+    expect(result.sections.safelyIgnored.map((item) => item.id)).toEqual(["persisted-expired-otp"])
+  })
+})
+
+describe("buildBillsSection", () => {
+  it("does not show expired security review actions as billing/security alerts", () => {
+    const expiredSecurity = conversation({
+      id: "expired-security",
+      lastMessageAt: new Date("2026-06-09T12:00:00.000Z"),
+      messages: [
+        {
+          direction: "inbound",
+          body: "Review this security alert.",
+          createdAt: new Date("2026-06-09T12:00:00.000Z"),
+        },
+      ],
+      conversationState: {
+        metadataJson: {
+          attentionCategory: "review_soon",
+          emailType: "notification",
+          action: {
+            type: "security_alert",
+            explanation: "Review the security alert.",
+          },
+        },
+      },
+    })
+
+    const result = buildBillsSection([], [expiredSecurity], now)
+
+    expect(result.items).toHaveLength(0)
+    expect(result.count).toBe(0)
   })
 })

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { buildEmailIframeSrcDoc } from "@/lib/email-iframe";
+import { buildEmailIframeSrcDoc, EMAIL_IFRAME_SANDBOX } from "@/lib/email-iframe";
 
 interface Props {
   html: string;
@@ -61,7 +61,7 @@ export default function EmailBodyIframe({ html }: Props) {
     <iframe
       ref={iframeRef}
       srcDoc={buildEmailIframeSrcDoc(html)}
-      sandbox="allow-popups allow-same-origin"
+      sandbox={EMAIL_IFRAME_SANDBOX}
       style={{ width: "100%", maxWidth: "100%", minWidth: 0, height: `${height}px`, border: "none", display: "block", overflow: "hidden" }}
       title="Email content"
       loading="lazy"

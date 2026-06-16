@@ -2,6 +2,8 @@ const DARK_MODE_MEDIA_RE = /@media[^{]*prefers-color-scheme\s*:\s*dark[^{]*\{/gi
 const COLOR_SCHEME_META_RE =
   /<meta\b(?=[^>]*(?:name=["']?(?:color-scheme|supported-color-schemes)["']?|content=["']?[^"'>]*\blight\s+dark\b))[^>]*>/gi;
 
+export const EMAIL_IFRAME_SANDBOX = "allow-popups allow-popups-to-escape-sandbox allow-same-origin";
+
 function removeBalancedCssBlocks(css: string, pattern: RegExp): string {
   let output = "";
   let cursor = 0;

@@ -6,11 +6,17 @@ import { useRouter } from "next/navigation"
 import type { CommandCenterConversation } from "@/lib/agent/command-center"
 
 const ACTION_TYPE_LABELS: Record<string, string> = {
+  otp_code: "Code detected",
   otp: "Code detected",
   verification_code: "Code detected",
+  login_approval: "Login approval",
+  reset_password: "Password reset",
   password_reset: "Password reset",
   create_password: "Create password",
+  verify_email: "Email verification",
   email_verification: "Email verification",
+  confirm_account: "Confirm account",
+  account_setup: "Account setup",
   security_alert: "Security alert",
   magic_link: "Login link",
   action_required: "Action required",
@@ -29,6 +35,11 @@ function NeedsActionCard({ item }: { item: CommandCenterConversation }) {
   const router = useRouter()
   const action = item.action
   const [copied, setCopied] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
+  const [dismissing, setDismissing] = useState(false)
+  const [dismissError, setDismissError] = useState<string | null>(null)
+
+  if (dismissed) return null
 
   function openCard() {
     router.push(item.href)
@@ -47,6 +58,26 @@ function NeedsActionCard({ item }: { item: CommandCenterConversation }) {
       setCopied(true)
       setTimeout(() => setCopied(false), 500)
     })
+  }
+
+  async function dismissAction(event: React.MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation()
+    setDismissing(true)
+    setDismissError(null)
+    try {
+      const res = await fetch(`/api/conversations/${item.id}/attention`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ attentionCategory: "fyi_done" }),
+      })
+      if (!res.ok) throw new Error("Dismiss failed")
+      setDismissed(true)
+      router.refresh()
+    } catch {
+      setDismissError("Couldn't dismiss")
+    } finally {
+      setDismissing(false)
+    }
   }
 
   return (
@@ -108,6 +139,17 @@ function NeedsActionCard({ item }: { item: CommandCenterConversation }) {
             )}
           </div>
         )}
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={dismissAction}
+            disabled={dismissing}
+            className="text-[10px] font-semibold px-2 py-1 rounded-md border border-amber-300 bg-white/70 text-amber-800 transition hover:bg-white disabled:opacity-60"
+          >
+            {dismissing ? "Saving..." : "Not needed"}
+          </button>
+          {dismissError && <span className="text-[10px] text-red-600">{dismissError}</span>}
+        </div>
       </div>
     </div>
   )

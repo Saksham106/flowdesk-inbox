@@ -85,6 +85,17 @@ describe("sanitizeEmailHtml", () => {
     expect(result).toContain('href="https://docs.google.com/abc"');
   });
 
+  it("preserves complex HTML email hrefs without double-encoding query params", () => {
+    const url =
+      "https://tailscale.com/blog/ai-without-lock-in?utm_campaign=aperture-onboarding&utm_medium=email&_hsenc=p2ANqtz-8LQ1jYlpQDfPleiso5vWOj8eTTmQ6LmJQzUlsHvOLSHmZhE3xql-UmVOME_OyPYS1IQNXV3LWWKu10yYBEosAcfDNueoOEB_vyatWUtRoMDcFZ494&_hsmi=423871348&utm_content=423871348&utm_source=hs_email";
+    const result = sanitizeEmailHtml(`<a href="${url}">read more</a>`);
+
+    expect(result).toContain("https://tailscale.com/blog/ai-without-lock-in");
+    expect(result).toContain("utm_campaign=aperture-onboarding");
+    expect(result).toContain("&amp;utm_medium=email");
+    expect(result).not.toContain("&amp;amp;");
+  });
+
   it("strips javascript: href on links", () => {
     const result = sanitizeEmailHtml('<a href="javascript:alert(1)">click</a>');
     expect(result).not.toContain("javascript:");
@@ -113,6 +124,16 @@ describe("sanitizeEmailHtmlForIframe", () => {
       '<img src="data:image/svg+xml,<svg onload=alert(1)>" alt="x">'
     );
     expect(result).not.toContain("data:image");
+  });
+
+  it("preserves HubSpot-style tracking hrefs for iframe rendering", () => {
+    const trackingUrl =
+      "https://info.tailscale.com/e3t/Ctc/OT+113/d4K34c04/VX8QL33KvRDRW6lM-WB6GpGF8W9fbdmV5Qmkd9N8GDX6T3qgz0W7Y8-PT6lZ3mBW2k9_gr3nCxcXW40hBfy4sz-8vW6lkkpC1xp3bYW2Pb0yc3tVbGrW139cm71dxZCgVdfvmx8rbR2QW82vFsQ3jgwSPW6t8m9y8x5f_VW8WKzcZ2M9L_3W7bql6N5PyB3qW46t3bk6-CY1wN4Kx2nRhLfqlW6p8RLp7kyGV8W3jMBbw590yLzMhLvRJ9vjr4N7H834gvyZQbW4WpQsj3cF8QTW37FZYr2fgJv6N1Dks5K35g0gW8b0-D68X9V5zW4RMR3X4X87QkW8vNMWC8LFDKDW3y5SWz8r3VS6W63G4nC8mw2-YVtbn5P40K3j2W5Wvqd53B78zGf5_nShY04";
+    const result = sanitizeEmailHtmlForIframe(`<a href="${trackingUrl}">Open</a>`);
+
+    expect(result).toContain('href="https://info.tailscale.com/e3t/Ctc/OT+113/');
+    expect(result).toContain('target="_blank"');
+    expect(result).toContain('rel="noopener noreferrer"');
   });
 });
 
@@ -149,6 +170,16 @@ describe("linkifyText", () => {
   it("escapes & character", () => {
     const result = linkifyText("cats & dogs");
     expect(result).toContain("&amp;");
+  });
+
+  it("does not double-encode plain-text URLs with query params", () => {
+    const result = linkifyText(
+      "Read https://www.linkedin.com/jobs/view/123?trk=email_job_alert&refId=abc%2B123"
+    );
+
+    expect(result).toContain("trk=email_job_alert&amp;refId=abc%2B123");
+    expect(result).not.toContain("&amp;amp;");
+    expect(result).not.toContain("%252B");
   });
 
   it("escapes double quotes", () => {

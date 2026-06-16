@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -21,12 +21,19 @@ export default function AttentionCorrectionSelect({
   current?: string
 }) {
   const router = useRouter()
+  const [selected, setSelected] = useState(current ?? "")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setSelected(current ?? "")
+  }, [current])
 
   async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const value = e.target.value
     if (!value) return
+    const previous = selected
+    setSelected(value)
     setSaving(true)
     setError(null)
     try {
@@ -38,9 +45,11 @@ export default function AttentionCorrectionSelect({
       if (res.ok) {
         router.refresh()
       } else {
+        setSelected(previous)
         setError("Failed to update")
       }
     } catch {
+      setSelected(previous)
       setError("Failed to update")
     } finally {
       setSaving(false)
@@ -51,7 +60,7 @@ export default function AttentionCorrectionSelect({
     <div className="mt-2">
       <label className="text-xs text-slate-500">Attention</label>
       <select
-        value={current ?? ""}
+        value={selected}
         onChange={handleChange}
         disabled={saving}
         className="mt-0.5 block w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900 disabled:opacity-60"

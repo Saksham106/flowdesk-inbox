@@ -1,6 +1,6 @@
 # FlowDesk Inbox Master Product Plan
 
-Last updated: 2026-06-15
+Last updated: 2026-06-16
 
 This is the living master plan for FlowDesk Inbox. It exists so humans and AI agents can share the same product map, update it as reality changes, and avoid treating one feature request as the whole product.
 
@@ -375,9 +375,17 @@ Shipped sync/state/action hardening slice (2026-06-15):
 - Account-action detection now emits structured, redacted action metadata for Home cards while keeping OTP codes out of persisted metadata and logs.
 - Home section selection is thread-level exclusive: Handle First, Needs Action, Waiting On, Read Later, and Quietly Handled no longer duplicate the same conversation.
 
-### Next Slice: v2.4 — Classification Correction And Inbox Filters
+Shipped link and dashboard stale-action hardening slice (2026-06-16):
 
-Make the new attention taxonomy first-class: add filters/counts for Needs Action, Review Soon, Read Later, and Quiet; expose "why this was classified this way"; and add user correction/undo controls on top of the now-persisted user override path.
+- Email HTML/link rendering preserves Gmail-provided hrefs, including final URLs and provider tracking URLs with query strings. Sanitizers enforce safe schemes and new-tab rel/target attributes without rewriting or double-encoding href values.
+- Sandboxed email iframes now allow popups to escape the iframe sandbox so tracking redirects open in normal top-level tabs while scripts and top navigation remain blocked.
+- Right-rail attention corrections are persisted as user overrides and update `Conversation.status`, `Conversation.userState`, and `ConversationState` consistently.
+- Needs Action is expiration-aware: explicit expiry text and conservative defaults remove stale OTP/reset/login/security actions from Needs Action and Bills & Deadlines without deleting emails.
+- Needs Action cards include a persisted **Not needed** dismissal backed by the attention correction endpoint.
+
+### Next Slice: v2.4 — Classification Filters And Explainability
+
+Make the attention taxonomy more inspectable: add full filters/counts for Needs Action, Review Soon, Read Later, Quiet, and Expired/FYI; expose "why this was classified this way"; add undo/history for user corrections; and refine expiration defaults from real inbox feedback.
 
 ## Data Model Roadmap
 
@@ -519,6 +527,7 @@ After an AI agent finishes work:
 | 2026-06-14 | Upgrade classification from broad no-reply buckets to attention categories in metadata. | Avoided a broad schema/status migration by keeping `Conversation.status` stable and storing `attentionCategory`, reason, confidence, and optional code/expiry in `ConversationState.metadataJson`. Only `quiet` and `fyi_done` are auto-close candidates; action/security/read-later emails remain visible. |
 | 2026-06-15 | Separate raw Gmail state, AI classification, and user override/read state. | The Mark Done resurrection bug showed that sync/provider state and local intent were sharing too much surface area. Added local state/read fields, raw Gmail label fields, a user override source, server-side sync locking, and redacted action metadata so sync is idempotent and explicit user actions win. |
 | 2026-06-15 | Add AI usage policy, caching, and lazy rich-AI behavior. | Low-value automated email now stays on deterministic paths; relationship-memory LLM extraction is skipped or cached by content hash; manual draft suggestions reuse cached drafts for unchanged prompts; conversation opens sync deterministic state without eager rich-AI regeneration. |
+| 2026-06-16 | Treat email links and stale action items as trust-critical UX. | Email hrefs must be preserved exactly through Gmail sync, sanitization, and iframe rendering; tracking redirects need normal top-level popup behavior. Needs Action should represent current work, so OTP/reset/security items now expire by explicit text/default TTLs and can be manually dismissed through persisted attention correction. |
 
 ## Open Product Questions
 

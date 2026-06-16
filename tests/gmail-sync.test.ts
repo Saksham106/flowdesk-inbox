@@ -265,6 +265,52 @@ describe('syncGmailChannel', () => {
     expect(body).not.toContain('a {text-decoration: none;}')
   })
 
+  it('preserves HTML hrefs from Gmail without rewriting tracking or final URLs', async () => {
+    const finalUrl = 'https://tailscale.com/blog/ai-without-lock-in?utm_campaign=aperture-onboarding&utm_medium=email&_hsmi=423871348&utm_source=hs_email'
+    const trackingUrl = 'https://info.tailscale.com/e3t/Ctc/OT+113/d4K34c04/VX8QL33KvRDRW6lM-WB6GpGF8W9fbdmV5Qmkd9N8GDX6T3qgz0W7Y8-PT6lZ3mBW2k9_gr3nCxcXW40hBfy4sz-8v'
+    mockThreadsList.mockResolvedValue({ data: { threads: [{ id: 'thread-links' }] } })
+    mockThreadsGet.mockResolvedValue({
+      data: {
+        messages: [
+          {
+            id: 'msg_links',
+            threadId: 'thread-links',
+            internalDate: '1700000000000',
+            payload: {
+              mimeType: 'multipart/alternative',
+              headers: [
+                { name: 'From', value: 'newsletter@tailscale.com' },
+                { name: 'To', value: CHANNEL_EMAIL },
+                { name: 'Subject', value: 'Links' },
+                { name: 'Message-ID', value: '<links@mail.example.com>' },
+              ],
+              parts: [
+                { mimeType: 'text/plain', body: { data: b64(`Read ${finalUrl}`) } },
+                {
+                  mimeType: 'text/html',
+                  body: {
+                    data: b64(`<html><body><a href="${finalUrl}">Final</a><a href="${trackingUrl}">Tracking</a></body></html>`),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    })
+    mockContactFindUnique.mockResolvedValue({ id: 'c-links', phoneE164: 'newsletter@tailscale.com' })
+    mockConversationUpsert.mockResolvedValue({ id: 'conv-links' })
+    mockMessageUpsert.mockResolvedValue({})
+
+    await syncGmailChannel(CHANNEL_ID, TENANT_ID)
+
+    const body = mockMessageUpsert.mock.calls[0][0].create.body
+    expect(body).toContain(`href="${finalUrl}"`)
+    expect(body).toContain(`href="${trackingUrl}"`)
+    expect(body).not.toContain('&amp;amp;')
+    expect(body).not.toContain('%252B')
+  })
+
   it('finds HTML inside nested multipart/related payloads', async () => {
     mockThreadsList.mockResolvedValue({ data: { threads: [{ id: 'thread-related' }] } })
     mockThreadsGet.mockResolvedValue({
