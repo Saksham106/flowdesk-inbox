@@ -93,6 +93,8 @@ model Tenant {
   personMemories            PersonMemory[]
   followUpSetting           FollowUpSetting?
   autopilotSetting          AutopilotSetting?
+  classificationCorrections ClassificationCorrection[]
+  senderRules               SenderRule[]
 }
 
 model User {
@@ -561,4 +563,40 @@ model PersonalProfile {
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
   tenant                  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// Logs each manual attention correction so repeated patterns can be detected.
+model ClassificationCorrection {
+  id                String   @id @default(cuid())
+  tenantId          String
+  conversationId    String
+  fromEmail         String
+  fromDomain        String
+  previousAttention String?
+  newAttention      String
+  createdAt         DateTime @default(now())
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, fromEmail, newAttention])
+  @@index([tenantId, fromDomain, newAttention])
+  @@index([tenantId, createdAt])
+}
+
+// A rule learned from repeated user corrections or manually created.
+// status: "suggested" → awaiting user approval, "active" → applied automatically,
+// "dismissed" → user declined.
+model SenderRule {
+  id              String   @id @default(cuid())
+  tenantId        String
+  matchType       String   // "email" | "domain"
+  matchValue      String   // e.g. "tim@5by5.tv" or "beehiiv.com"
+  targetAttention String   // e.g. "quiet", "read_later"
+  status          String   @default("suggested")
+  triggerCount    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, matchType, matchValue, targetAttention])
+  @@index([tenantId, status])
 }

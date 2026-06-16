@@ -37,6 +37,7 @@ vi.mock("@/lib/prisma", () => ({
     auditLog: { create: mockAuditCreate },
     knowledgeDocument: { findMany: mockKbDocFindMany },
     tenant: { findUnique: mockTenantFindUnique },
+    senderRule: { findFirst: vi.fn().mockResolvedValue(null) },
   },
 }))
 
