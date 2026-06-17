@@ -34,7 +34,8 @@ import { SALES_SUGGESTED_ACTIONS } from "@/lib/agent/sales-classifier";
 import EmailBody from "@/app/components/EmailBody";
 import { resolveAccountMode } from "@/lib/account-mode";
 import { getSafeInboxReturnPath } from "@/lib/client-navigation";
-import { markGmailThreadRead } from "@/lib/google";
+import { markGmailThreadRead } from "@/lib/google"
+import PhishingWarningBanner from "@/app/conversations/[id]/PhishingWarningBanner";
 
 export const dynamic = "force-dynamic";
 
@@ -264,6 +265,9 @@ export default async function ConversationPage({
   const isVip = convMeta.isVip === true
   const vipLabel = typeof convMeta.vipLabel === "string" ? convMeta.vipLabel : null
 
+  const phishingVerdict = typeof convMeta.phishingVerdict === "string" ? convMeta.phishingVerdict : null
+  const phishingMarkedSafe = convMeta.phishingMarkedSafe === true
+
   const isSalesLead = convMeta.isSalesLead === true
   const closingStage =
     typeof convMeta.closingStage === "string" ? convMeta.closingStage : "prospect"
@@ -336,6 +340,13 @@ export default async function ConversationPage({
     <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800">
       ⭐ VIP{vipLabel ? ` — ${vipLabel}` : ""}
     </div>
+  ) : null
+
+  const phishingBanner = phishingVerdict && phishingVerdict !== "safe" && !phishingMarkedSafe ? (
+    <PhishingWarningBanner
+      conversationId={conversation.id}
+      verdict={phishingVerdict as "suspicious" | "likely_phishing"}
+    />
   ) : null
 
   // Reusable sidebar panels shared between desktop and mobile layouts
@@ -619,6 +630,7 @@ export default async function ConversationPage({
           right={
             <div className="space-y-2.5">
               {vipBanner}
+              {phishingBanner}
               {contactCard}
               {assistantCard}
               {businessPanels}
@@ -712,6 +724,7 @@ export default async function ConversationPage({
 
           <aside className="min-w-0 space-y-3">
             {vipBanner}
+            {phishingBanner}
             {contactCard}
             {assistantCard}
             {businessPanels}

@@ -12,6 +12,7 @@ import { recordAiUsageEvent } from "@/lib/ai/usage"
 import { extractEmail } from "@/lib/google"
 import { detectLifeAdminType } from "@/lib/agent/life-admin"
 import { detectVip } from "@/lib/agent/vip-detector"
+import { detectPhishing } from "@/lib/agent/phishing-detector"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
@@ -536,6 +537,43 @@ export async function syncConversationWorkItems(
           } as Prisma.InputJsonValue,
         },
       })
+    }
+  }
+
+  // Phishing detection
+  if (firstInbound) {
+    const fromHeader = firstInbound.fromE164 ?? ""
+    const fromEmail = extractEmail(fromHeader)
+    const phishingResult = detectPhishing(
+      fromHeader,
+      fromEmail,
+      firstInbound.body.slice(0, 200),
+      firstInbound.body
+    )
+    if (phishingResult.verdict !== "safe") {
+      const currentState = await prisma.conversationState.findUnique({
+        where: { conversationId: conversation.id },
+        select: { metadataJson: true },
+      })
+      const currentMeta =
+        currentState?.metadataJson &&
+        typeof currentState.metadataJson === "object" &&
+        !Array.isArray(currentState.metadataJson)
+          ? (currentState.metadataJson as Record<string, unknown>)
+          : {}
+      if (!currentMeta.phishingMarkedSafe) {
+        await prisma.conversationState.update({
+          where: { conversationId: conversation.id },
+          data: {
+            metadataJson: {
+              ...currentMeta,
+              phishingVerdict: phishingResult.verdict,
+              phishingScore: phishingResult.score,
+              phishingSignals: phishingResult.signals,
+            } as Prisma.InputJsonValue,
+          },
+        })
+      }
     }
   }
 
