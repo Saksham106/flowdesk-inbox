@@ -21,6 +21,7 @@ import VipContactsForm from "@/app/settings/VipContactsForm"
 import SenderRulesPanel from "@/app/settings/SenderRulesPanel";
 import AiBudgetPanel from "@/app/settings/AiBudgetPanel";
 import { getAiBudgetStatus } from "@/lib/ai/budget";
+import TrainAgentPanel from "@/app/settings/TrainAgentPanel"
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,7 @@ export default async function SettingsPage({ searchParams }: Props) {
     learnedReplyProfile,
     latestLearningUsage,
     vipContacts,
+    agentRulesRaw,
   ] = await Promise.all([
     prisma.channel.findMany({
       where: { tenantId: session.user.tenantId, type: "email" },
@@ -108,6 +110,10 @@ export default async function SettingsPage({ searchParams }: Props) {
       orderBy: { createdAt: "asc" },
       select: { id: true, email: true, label: true },
     }),
+    prisma.agentRule.findMany({
+      where: { tenantId: session.user.tenantId, status: { not: "dismissed" } },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
 
   const [senderRules, aiBudgetStatus] = await Promise.all([
@@ -117,6 +123,15 @@ export default async function SettingsPage({ searchParams }: Props) {
     }),
     getAiBudgetStatus(session.user.tenantId),
   ]);
+
+  const agentRules = agentRulesRaw.map((r) => ({
+    id: r.id,
+    plainText: r.plainText,
+    ruleType: r.ruleType,
+    conditionsJson: (r.conditionsJson ?? {}) as Record<string, string>,
+    actionJson: (r.actionJson ?? {}) as Record<string, string>,
+    status: r.status,
+  }))
 
   const isPersonal = tenant?.accountType === "personal";
 
@@ -560,9 +575,6 @@ export default async function SettingsPage({ searchParams }: Props) {
                   ? {
                       enabled: autopilotSetting.enabled,
                       confidenceThreshold: autopilotSetting.confidenceThreshold,
-                      allowedIntents: Array.isArray(autopilotSetting.allowedIntentsJson)
-                        ? (autopilotSetting.allowedIntentsJson as string[])
-                        : [],
                       maxAutoSendsPerDay: autopilotSetting.maxAutoSendsPerDay,
                       disableAfterFailures: autopilotSetting.disableAfterFailures,
                       currentFailures: autopilotSetting.currentFailures,
@@ -570,12 +582,25 @@ export default async function SettingsPage({ searchParams }: Props) {
                       categoryThresholds:
                         typeof autopilotSetting.categoryThresholdsJson === "object" &&
                         autopilotSetting.categoryThresholdsJson !== null
-                          ? (autopilotSetting.categoryThresholdsJson as Record<string, number>)
+                          ? (autopilotSetting.categoryThresholdsJson as Record<string, number | { action: string; threshold?: number }>)
                           : {},
                     }
                   : null
               }
             />
+          </div>
+        </section>
+
+        {/* Train My Agent */}
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="font-semibold">Train My Agent</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Describe rules in plain English. FlowDesk will apply them automatically.
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <TrainAgentPanel initialRules={agentRules} />
           </div>
         </section>
 

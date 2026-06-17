@@ -40,7 +40,7 @@ export async function PATCH(request: Request) {
     maxAutoSendsPerDay?: number
     disableAfterFailures?: number
     resetFailures?: boolean
-    categoryThresholds?: Record<string, number>
+    categoryThresholds?: Record<string, unknown>
   }
 
   const updateData: Record<string, unknown> = {}
@@ -82,10 +82,37 @@ export async function PATCH(request: Request) {
     if (typeof categoryThresholds !== "object" || categoryThresholds === null || Array.isArray(categoryThresholds)) {
       return NextResponse.json({ error: "categoryThresholds must be an object" }, { status: 400 })
     }
-    for (const [intent, threshold] of Object.entries(categoryThresholds)) {
-      if (typeof threshold !== "number" || !Number.isFinite(threshold) || threshold < 0.5 || threshold > 1) {
+    const VALID_ACTIONS = ["auto_send", "require_approval", "never"]
+    for (const [key, value] of Object.entries(categoryThresholds)) {
+      if (typeof value === "number") {
+        // Legacy format: bare number threshold
+        if (!Number.isFinite(value) || value < 0.5 || value > 1) {
+          return NextResponse.json(
+            { error: `categoryThresholds["${key}"] must be a number between 0.5 and 1.0` },
+            { status: 400 }
+          )
+        }
+      } else if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+        // New format: CategoryPolicy object { action, threshold? }
+        const policy = value as Record<string, unknown>
+        if (!VALID_ACTIONS.includes(policy.action as string)) {
+          return NextResponse.json(
+            { error: `categoryThresholds["${key}"].action must be one of: ${VALID_ACTIONS.join(", ")}` },
+            { status: 400 }
+          )
+        }
+        if (policy.threshold !== undefined && policy.threshold !== null) {
+          const t = policy.threshold as number
+          if (typeof t !== "number" || !Number.isFinite(t) || t < 0.5 || t > 1) {
+            return NextResponse.json(
+              { error: `categoryThresholds["${key}"].threshold must be a number between 0.5 and 1.0` },
+              { status: 400 }
+            )
+          }
+        }
+      } else {
         return NextResponse.json(
-          { error: `categoryThresholds["${intent}"] must be a number between 0.5 and 1.0` },
+          { error: `categoryThresholds["${key}"] must be a number or a policy object` },
           { status: 400 }
         )
       }

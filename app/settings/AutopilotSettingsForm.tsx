@@ -2,17 +2,27 @@
 
 import { useState } from "react"
 
-const INTENT_OPTIONS = ["FAQ", "Lead", "Reschedule", "Pricing", "Complaint"]
+const CATEGORY_OPTIONS = [
+  { key: "needs_reply", label: "Reply needed" },
+  { key: "needs_action", label: "Needs action" },
+  { key: "review_soon", label: "Review soon" },
+  { key: "read_later", label: "Read later" },
+  { key: "fyi_done", label: "FYI / Done" },
+  { key: "quiet", label: "Quiet" },
+]
+
+type CategoryPolicy = { action: "auto_send" | "require_approval" | "never"; threshold?: number }
+
+type RawCategoryPolicy = { action: string; threshold?: number }
 
 type AutopilotSnapshot = {
   enabled: boolean
   confidenceThreshold: number
-  allowedIntents: string[]
   maxAutoSendsPerDay: number
   disableAfterFailures: number
   currentFailures: number
   disabledAt: string | null
-  categoryThresholds: Record<string, number>
+  categoryThresholds: Record<string, RawCategoryPolicy | number>
 } | null
 
 export default function AutopilotSettingsForm({
@@ -26,11 +36,25 @@ export default function AutopilotSettingsForm({
 }) {
   const [enabled, setEnabled] = useState(initial?.enabled ?? false)
   const [threshold, setThreshold] = useState(String(initial?.confidenceThreshold ?? 0.85))
-  const [allowedIntents, setAllowedIntents] = useState<string[]>(initial?.allowedIntents ?? [])
   const [maxSends, setMaxSends] = useState(String(initial?.maxAutoSendsPerDay ?? 10))
   const [disableAfter, setDisableAfter] = useState(String(initial?.disableAfterFailures ?? 3))
-  const [categoryThresholds, setCategoryThresholds] = useState<Record<string, number>>(
-    initial?.categoryThresholds ?? {}
+  const [categoryPolicies, setCategoryPolicies] = useState<Record<string, CategoryPolicy>>(
+    (() => {
+      const raw = initial?.categoryThresholds ?? {}
+      const result: Record<string, CategoryPolicy> = {}
+      const VALID_ACTIONS: CategoryPolicy["action"][] = ["auto_send", "require_approval", "never"]
+      for (const [k, v] of Object.entries(raw)) {
+        if (typeof v === "number") {
+          result[k] = { action: "auto_send", threshold: v }
+        } else if (typeof v === "object" && v !== null) {
+          const action = (v as RawCategoryPolicy).action
+          if (VALID_ACTIONS.includes(action as CategoryPolicy["action"])) {
+            result[k] = { action: action as CategoryPolicy["action"], threshold: (v as RawCategoryPolicy).threshold }
+          }
+        }
+      }
+      return result
+    })()
   )
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -39,12 +63,6 @@ export default function AutopilotSettingsForm({
   const isDisabled = !!initial?.disabledAt
   const blockedByLearning = requiresLearnedProfile && !hasLearnedProfile
   const currentFailures = initial?.currentFailures ?? 0
-
-  function toggleIntent(intent: string) {
-    setAllowedIntents((prev) =>
-      prev.includes(intent) ? prev.filter((i) => i !== intent) : [...prev, intent]
-    )
-  }
 
   async function handleSave() {
     setSaving(true)
@@ -57,10 +75,9 @@ export default function AutopilotSettingsForm({
         body: JSON.stringify({
           enabled,
           confidenceThreshold: parseFloat(threshold),
-          allowedIntents,
           maxAutoSendsPerDay: parseInt(maxSends, 10),
           disableAfterFailures: parseInt(disableAfter, 10),
-          categoryThresholds,
+          categoryThresholds: categoryPolicies,
         }),
       })
       const data = await res.json()
@@ -109,7 +126,7 @@ export default function AutopilotSettingsForm({
 
       {!isDisabled && currentFailures > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-          {currentFailures} consecutive failure{currentFailures !== 1 ? "s" : ""} — will auto-disable after {initial?.disableAfterFailures}.
+          {currentFailures} consecutive failure{currentFailures !== 1 ? "s" : ""} &mdash; will auto-disable after {initial?.disableAfterFailures}.
         </div>
       )}
 
@@ -155,7 +172,7 @@ export default function AutopilotSettingsForm({
         {/* Confidence threshold */}
         <div>
           <label className="text-xs font-medium text-slate-600">
-            Minimum confidence threshold (0.5 – 1.0)
+            Minimum confidence threshold (0.5 &ndash; 1.0)
           </label>
           <input
             type="number"
@@ -171,57 +188,54 @@ export default function AutopilotSettingsForm({
           </p>
         </div>
 
-        {/* Per-intent confidence overrides */}
+        {/* Per-category autopilot policy */}
         <div>
-          <p className="text-xs font-medium text-slate-600">Per-intent confidence overrides (optional)</p>
+          <p className="text-xs font-medium text-slate-600">Per-category policy</p>
           <p className="mt-0.5 text-xs text-slate-400">
-            Set a stricter threshold for specific intents, e.g. Complaint &rarr; 0.95.
+            Override autopilot behavior for specific attention categories.
           </p>
           <div className="mt-2 space-y-2">
-            {INTENT_OPTIONS.map((intent) => (
-              <div key={intent} className="flex items-center gap-2">
-                <span className="w-24 shrink-0 text-xs text-slate-600">{intent}</span>
-                <input
-                  type="number"
-                  step={0.05}
-                  min={0.5}
-                  max={1.0}
-                  placeholder="—"
-                  value={categoryThresholds[intent] ?? ""}
-                  onChange={(e) => {
-                    const val = e.target.value === "" ? undefined : parseFloat(e.target.value)
-                    setCategoryThresholds((prev) => {
-                      const next = { ...prev }
-                      if (val === undefined) delete next[intent]
-                      else next[intent] = val
-                      return next
-                    })
-                  }}
-                  className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Allowed intents */}
-        <div>
-          <p className="text-xs font-medium text-slate-600">Allowed intents (leave empty to allow all)</p>
-          <div className="mt-1 flex flex-wrap gap-2">
-            {INTENT_OPTIONS.map((intent) => (
-              <button
-                key={intent}
-                type="button"
-                onClick={() => toggleIntent(intent)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  allowedIntents.includes(intent)
-                    ? "bg-slate-900 text-white"
-                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                {intent}
-              </button>
-            ))}
+            {CATEGORY_OPTIONS.map(({ key, label }) => {
+              const policy = categoryPolicies[key]
+              return (
+                <div key={key} className="flex items-center gap-2">
+                  <span className="w-28 shrink-0 text-xs text-slate-600">{label}</span>
+                  <select
+                    value={policy?.action ?? ""}
+                    onChange={(e) => {
+                      const action = e.target.value as CategoryPolicy["action"] | ""
+                      setCategoryPolicies((prev) => {
+                        const next = { ...prev }
+                        if (!action) { delete next[key]; return next }
+                        next[key] = { action, threshold: prev[key]?.threshold }
+                        return next
+                      })
+                    }}
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  >
+                    <option value="">Default</option>
+                    <option value="auto_send">Auto-send</option>
+                    <option value="require_approval">Require approval</option>
+                    <option value="never">Never auto-send</option>
+                  </select>
+                  {policy?.action === "auto_send" && (
+                    <input
+                      type="number"
+                      step={0.05}
+                      min={0.5}
+                      max={1.0}
+                      placeholder="threshold"
+                      value={policy.threshold ?? ""}
+                      onChange={(e) => {
+                        const val = e.target.value === "" ? undefined : parseFloat(e.target.value)
+                        setCategoryPolicies((prev) => ({ ...prev, [key]: { ...prev[key], threshold: val } }))
+                      }}
+                      className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    />
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
 
@@ -260,7 +274,7 @@ export default function AutopilotSettingsForm({
         disabled={saving || blockedByLearning}
         className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
       >
-        {saving ? "Saving…" : "Save"}
+        {saving ? "Saving..." : "Save"}
       </button>
     </div>
   )
