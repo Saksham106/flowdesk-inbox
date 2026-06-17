@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { trashGmailThread } from "@/lib/google";
+import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata";
+import { revalidateInboxViews } from "@/lib/cache-tags";
 
 export async function PATCH(
   _request: Request,
@@ -46,6 +48,7 @@ export async function PATCH(
     !Array.isArray(existingState.metadataJson)
       ? (existingState.metadataJson as Record<string, unknown>)
       : {};
+  const metadataJson = { ...prevMeta, userOverride: true, userState: "done", trashedAt: now.toISOString(), updatedAt: now.toISOString() };
 
   await Promise.all([
     prisma.conversation.update({
@@ -63,7 +66,8 @@ export async function PATCH(
         nextAction: "No action needed.",
         confidence: 1,
         source: "user_override",
-        metadataJson: { ...prevMeta, userOverride: true, userState: "done", trashedAt: now.toISOString(), updatedAt: now.toISOString() },
+        metadataJson,
+        ...conversationStateMetadataData(metadataJson),
       },
       update: {
         state: "done",
@@ -72,10 +76,12 @@ export async function PATCH(
         nextAction: "No action needed.",
         confidence: 1,
         source: "user_override",
-        metadataJson: { ...prevMeta, userOverride: true, userState: "done", trashedAt: now.toISOString(), updatedAt: now.toISOString() },
+        metadataJson,
+        ...conversationStateMetadataData(metadataJson),
       },
     }),
   ]);
 
+  revalidateInboxViews(session.user.tenantId, params.id);
   return NextResponse.json({ ok: true });
 }

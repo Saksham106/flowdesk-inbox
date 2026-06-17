@@ -12,6 +12,7 @@ import { summarizeConversation } from "@/lib/ai/summarize"
 import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import { checkAiBudget, estimateCostUsd } from "@/lib/ai/budget"
 import { prisma } from "@/lib/prisma"
+import { revalidateInboxViews } from "@/lib/cache-tags"
 
 export const runtime = "nodejs"
 
@@ -268,6 +269,7 @@ export async function POST(
     status: "succeeded",
   })
 
+  revalidateInboxViews(session.user.tenantId, conversation.id)
   return NextResponse.json({ draft, meta: metadataJson })
 }
 

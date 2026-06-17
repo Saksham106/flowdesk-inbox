@@ -33,8 +33,11 @@ The core promise is: show what matters, explain why, safely handle routine work,
 ### Inbox And Thread Experience
 
 - `/inbox` Home shows the command center, follow-ups, bills/deadlines, safely ignored mail, and other high-signal sections.
+- `/inbox` Home keeps its initial command-center query bounded and reuses included conversation state instead of issuing a duplicate state lookup.
 - Inbox list tabs support status, sales, and attention-oriented filtering.
+- Inbox list data uses a short tenant-scoped cache tag and indexed `ConversationState` filter columns for common sales/attention filters.
 - Conversation detail pages at `/conversations/[id]` render chronological email-style thread blocks with sender/recipient/timestamp metadata.
+- Conversation detail pages cap initial message fetches and avoid running work-item sync on every page open; sync is driven by provider sync/new message paths and explicit actions.
 - Reply composer supports manual send and AI draft generation. CC/BCC fields are present in the UI but are not yet forwarded by send APIs.
 - Email HTML rendering uses sanitized iframe rendering with light-mode protection, safe links, safe schemes, and page-width containment.
 - Inbox previews use stored `Message.subject` plus cleaned body snippets through `buildPreviewText`.

@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { runGmailSync } from "@/lib/gmail-sync"
+import { revalidateInboxViews } from "@/lib/cache-tags"
 
 export const runtime = "nodejs"
 
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
       ensureWatch: true,
     })
 
+    revalidateInboxViews(session.user.tenantId)
     return NextResponse.json(result, { status: result.skipped === "sync_in_progress" ? 202 : 200 })
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown sync error"

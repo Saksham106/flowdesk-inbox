@@ -4,6 +4,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { markGmailThreadRead } from "@/lib/google";
+import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata";
+import { revalidateInboxViews } from "@/lib/cache-tags";
 
 const VALID_STATUSES = ["needs_reply", "in_progress", "closed"] as const;
 type Status = (typeof VALID_STATUSES)[number];
@@ -77,6 +79,7 @@ export async function PATCH(
       confidence: 1,
       source: "user_override",
       metadataJson: mergedMeta,
+      ...conversationStateMetadataData(mergedMeta),
     },
     update: {
       state: status === "closed" ? "done" : status === "in_progress" ? "waiting_on_them" : "needs_reply",
@@ -86,6 +89,7 @@ export async function PATCH(
       confidence: 1,
       source: "user_override",
       metadataJson: mergedMeta,
+      ...conversationStateMetadataData(mergedMeta),
     },
   });
 
@@ -109,5 +113,6 @@ export async function PATCH(
     });
   }
 
+  revalidateInboxViews(session.user.tenantId, params.id);
   return NextResponse.json({ ok: true });
 }

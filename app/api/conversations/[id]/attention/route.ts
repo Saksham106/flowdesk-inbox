@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import type { AttentionCategory } from "@/lib/agent/email-classifier"
 import { recordAttentionCorrection } from "@/lib/agent/preference-learning"
+import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
+import { revalidateInboxViews } from "@/lib/cache-tags"
 
 const VALID_CATEGORIES: AttentionCategory[] = [
   "needs_reply",
@@ -160,6 +162,7 @@ export async function PATCH(
       confidence: 1,
       source: "user_override",
       metadataJson,
+      ...conversationStateMetadataData(metadataJson),
     },
     update: {
       state: derived.state,
@@ -169,6 +172,7 @@ export async function PATCH(
       confidence: 1,
       source: "user_override",
       metadataJson,
+      ...conversationStateMetadataData(metadataJson),
     },
   })
 
@@ -192,5 +196,6 @@ export async function PATCH(
     console.warn("preference-learning: failed to record correction", { conversationId, err })
   })
 
+  revalidateInboxViews(tenantId, conversationId)
   return NextResponse.json({ ok: true })
 }

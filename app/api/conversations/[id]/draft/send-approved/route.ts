@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { ConversationSendError, sendConversationMessage } from "@/lib/conversations/send-message"
 import { prisma } from "@/lib/prisma"
+import { revalidateInboxViews } from "@/lib/cache-tags"
 
 export const runtime = "nodejs"
 
@@ -87,5 +88,6 @@ export async function POST(
     },
   })
 
+  revalidateInboxViews(session.user.tenantId, conversation.id)
   return NextResponse.json({ ok: true })
 }

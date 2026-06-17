@@ -375,6 +375,10 @@ model ConversationState {
   confidence     Float    @default(0)
   source         String   @default("deterministic")
   metadataJson   Json?
+  attentionCategory String?
+  emailType      String?
+  isSalesLead    Boolean  @default(false)
+  isSupport      Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -382,6 +386,9 @@ model ConversationState {
 
   @@index([tenantId, state])
   @@index([tenantId, priority])
+  @@index([tenantId, attentionCategory])
+  @@index([tenantId, isSalesLead])
+  @@index([tenantId, isSupport])
 }
 
 model InboxTask {

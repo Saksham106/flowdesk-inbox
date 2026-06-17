@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { Suspense } from "react"
+import { unstable_cache } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { stripHtmlToText, buildPreviewText } from "@/lib/email-body"
 import SearchInput from "@/app/inbox/SearchInput"
@@ -8,6 +9,7 @@ import InboxScrollContainer from "@/app/components/InboxScrollContainer"
 import { buildConversationHref } from "@/lib/client-navigation"
 import InboxRow from "@/app/components/InboxRow"
 import { resolveAccountMode } from "@/lib/account-mode"
+import { inboxTag } from "@/lib/cache-tags"
 
 interface Props {
   tenantId: string
@@ -39,11 +41,23 @@ type ConvRow = {
   contact: { name: string } | null
   messages: { body: string; subject: string | null }[]
   draft: { status: string } | null
-  stateRecord: { state: string; metadataJson: unknown } | null
+  stateRecord: {
+    state: string
+    metadataJson: unknown
+    attentionCategory: string | null
+    emailType: string | null
+  } | null
   channel: { provider: string }
 }
 
 function isFyi(conv: ConvRow): boolean {
+  if (conv.stateRecord?.attentionCategory === "quiet" || conv.stateRecord?.attentionCategory === "fyi_done") {
+    return true
+  }
+  if (conv.stateRecord?.attentionCategory) return false
+  if (conv.stateRecord?.emailType === "notification" || conv.stateRecord?.emailType === "newsletter" || conv.stateRecord?.emailType === "marketing") {
+    return true
+  }
   const meta = conv.stateRecord?.metadataJson
   if (meta && typeof meta === "object" && !Array.isArray(meta)) {
     const attentionCategory = (meta as Record<string, unknown>).attentionCategory
@@ -57,6 +71,7 @@ function isFyi(conv: ConvRow): boolean {
 }
 
 function attentionCategory(conv: ConvRow): string | null {
+  if (conv.stateRecord?.attentionCategory) return conv.stateRecord.attentionCategory
   const meta = conv.stateRecord?.metadataJson
   if (!meta || typeof meta !== "object" || Array.isArray(meta)) return null
   const value = (meta as Record<string, unknown>).attentionCategory
@@ -100,6 +115,63 @@ const ATTENTION_STYLE: Record<string, { dot: string; text: string; label: string
   quiet: { dot: "bg-slate-300", text: "text-slate-500", label: "Quiet" },
 }
 
+function getCachedListData(input: {
+  tenantId: string
+  status?: string | null
+  q?: string
+  sales: boolean
+}) {
+  const key = [
+    "app-list-column",
+    input.tenantId,
+    input.status ?? "all",
+    input.q ?? "",
+    input.sales ? "sales" : "standard",
+  ]
+
+  return unstable_cache(
+    async () => {
+      const where: Record<string, unknown> = { tenantId: input.tenantId }
+      if (input.status) where.status = input.status
+      if (input.sales) {
+        where.stateRecord = {
+          is: {
+            isSalesLead: true,
+          },
+        }
+      }
+      if (input.q) {
+        where.OR = [
+          { externalThreadId: { contains: input.q, mode: "insensitive" } },
+          { contact: { name: { contains: input.q, mode: "insensitive" } } },
+        ]
+      }
+
+      return Promise.all([
+        prisma.conversation.findMany({
+          where,
+          orderBy: { lastMessageAt: "desc" },
+          take: 50,
+          include: {
+            messages: { orderBy: { createdAt: "desc" }, take: 1 },
+            contact: true,
+            draft: { select: { status: true } },
+            stateRecord: { select: { state: true, metadataJson: true, attentionCategory: true, emailType: true } },
+            channel: { select: { provider: true } },
+          },
+        }) as Promise<ConvRow[]>,
+        prisma.conversation.groupBy({
+          by: ["status"],
+          where: { tenantId: input.tenantId },
+          _count: { status: true },
+        }),
+      ])
+    },
+    key,
+    { revalidate: 60, tags: [inboxTag(input.tenantId)] }
+  )()
+}
+
 export default async function AppListColumn({
   tenantId,
   accountType,
@@ -113,44 +185,12 @@ export default async function AppListColumn({
   const isBusiness = accountType === "business"
   const isPersonal = resolveAccountMode(accountType) === "personal"
 
-  const where: Record<string, unknown> = { tenantId }
-  if (status) where.status = status
-  if (sales && isBusiness) {
-    where.stateRecord = {
-      is: {
-        metadataJson: {
-          path: ["isSalesLead"],
-          equals: true,
-        },
-      },
-    }
-  }
-  if (q) {
-    where.OR = [
-      { externalThreadId: { contains: q, mode: "insensitive" } },
-      { contact: { name: { contains: q, mode: "insensitive" } } },
-    ]
-  }
-
-  const [conversations, counts] = await Promise.all([
-    prisma.conversation.findMany({
-      where,
-      orderBy: { lastMessageAt: "desc" },
-      take: 50,
-      include: {
-        messages: { orderBy: { createdAt: "desc" }, take: 1 },
-        contact: true,
-        draft: { select: { status: true } },
-        stateRecord: { select: { state: true, metadataJson: true } },
-        channel: { select: { provider: true } },
-      },
-    }) as Promise<ConvRow[]>,
-    prisma.conversation.groupBy({
-      by: ["status"],
-      where: { tenantId },
-      _count: { status: true },
-    }),
-  ])
+  const [conversations, counts] = await getCachedListData({
+    tenantId,
+    status,
+    q,
+    sales: sales && isBusiness,
+  })
 
   const countMap = Object.fromEntries(counts.map((r) => [r.status, r._count.status]))
 
