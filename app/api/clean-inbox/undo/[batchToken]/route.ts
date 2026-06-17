@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { Prisma } from "@prisma/client"
 import { parseBatchToken } from "@/app/api/clean-inbox/archive-batch/route"
 
 export async function POST(
@@ -28,6 +29,14 @@ export async function POST(
   await prisma.conversation.updateMany({
     where: { id: { in: ids }, tenantId },
     data: { status: "needs_reply" },
+  })
+
+  await prisma.auditLog.create({
+    data: {
+      tenantId,
+      action: "clean_inbox.undo",
+      payloadJson: { batchToken: params.batchToken, restoredCount: ids.length } as Prisma.InputJsonValue,
+    },
   })
 
   return NextResponse.json({ ok: true, restored: ids.length })
