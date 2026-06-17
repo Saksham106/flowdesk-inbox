@@ -9,7 +9,6 @@ export type LifeAdminResult = {
   type: LifeAdminType | null
   amount?: number
   currency?: string
-  description?: string
 }
 
 const BILL_PATTERN =
@@ -17,7 +16,7 @@ const BILL_PATTERN =
 const TRAVEL_PATTERN =
   /\b(flight|confirmation|booking|reservation|itinerary|hotel|check-in|departure|arrival|boarding pass|e-ticket)\b/i
 const MEDICAL_PATTERN =
-  /\b(appointment|reminder|dr\.|doctor|clinic|hospital|health|dental|vision|therapy|telehealth|patient)\b/i
+  /\b(appointment|dr\.|doctor|clinic|hospital|dental|vision|therapy|telehealth|patient)\b/i
 const SUBSCRIPTION_PATTERN =
   /\b(subscription|renews?|renewal|auto.renew|next billing|your plan|membership renews?)\b/i
 const SCHOOL_PATTERN =
@@ -33,7 +32,7 @@ function extractAmount(text: string): { amount?: number; currency?: string } {
 }
 
 export function detectLifeAdminType(
-  fromEmail: string,
+  _fromEmail: string,
   subject: string,
   body: string
 ): LifeAdminResult {
