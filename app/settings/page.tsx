@@ -17,6 +17,7 @@ import FollowUpSettingsForm from "@/app/settings/FollowUpSettingsForm";
 import AutopilotSettingsForm from "@/app/settings/AutopilotSettingsForm";
 import PersonalStylePanel from "@/app/settings/PersonalStylePanel"
 import ConciergeTemplateSeedButton from "./ConciergeTemplateSeedButton";
+import VipContactsForm from "@/app/settings/VipContactsForm"
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,7 @@ export default async function SettingsPage({ searchParams }: Props) {
     tenant,
     learnedReplyProfile,
     latestLearningUsage,
+    vipContacts,
   ] = await Promise.all([
     prisma.channel.findMany({
       where: { tenantId: session.user.tenantId, type: "email" },
@@ -97,6 +99,11 @@ export default async function SettingsPage({ searchParams }: Props) {
     prisma.aiUsageEvent.findFirst({
       where: { tenantId: session.user.tenantId, feature: "reply_learning.train" },
       orderBy: { createdAt: "desc" },
+    }),
+    prisma.vipContact.findMany({
+      where: { tenantId: session.user.tenantId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, email: true, label: true },
     }),
   ]);
 
@@ -543,6 +550,15 @@ export default async function SettingsPage({ searchParams }: Props) {
                   : null
               }
             />
+          </div>
+        </section>
+
+        {/* VIP Contacts */}
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="px-6 py-5">
+            <div className="mt-8">
+              <VipContactsForm initialVips={vipContacts} />
+            </div>
           </div>
         </section>
       </main>

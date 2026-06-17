@@ -261,6 +261,9 @@ export default async function ConversationPage({
   const suggestedKbDocId =
     typeof convMeta.suggestedKbDocId === "string" ? convMeta.suggestedKbDocId : null
 
+  const isVip = convMeta.isVip === true
+  const vipLabel = typeof convMeta.vipLabel === "string" ? convMeta.vipLabel : null
+
   const isSalesLead = convMeta.isSalesLead === true
   const closingStage =
     typeof convMeta.closingStage === "string" ? convMeta.closingStage : "prospect"
@@ -328,6 +331,12 @@ export default async function ConversationPage({
       } | null;
     } | null
   )?.metadataJson;
+
+  const vipBanner = isVip ? (
+    <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800">
+      ⭐ VIP{vipLabel ? ` — ${vipLabel}` : ""}
+    </div>
+  ) : null
 
   // Reusable sidebar panels shared between desktop and mobile layouts
   const contactCard = (
@@ -609,6 +618,7 @@ export default async function ConversationPage({
           }
           right={
             <div className="space-y-2.5">
+              {vipBanner}
               {contactCard}
               {assistantCard}
               {businessPanels}
@@ -701,6 +711,7 @@ export default async function ConversationPage({
           </section>
 
           <aside className="min-w-0 space-y-3">
+            {vipBanner}
             {contactCard}
             {assistantCard}
             {businessPanels}

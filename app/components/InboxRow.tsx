@@ -20,6 +20,8 @@ type InboxRowProps = {
   hasDraft: boolean
   initialReadAt: boolean
   initialStatus: string
+  isVip?: boolean
+  vipLabel?: string | null
 }
 
 export default function InboxRow({
@@ -36,6 +38,8 @@ export default function InboxRow({
   hasDraft,
   initialReadAt,
   initialStatus,
+  isVip,
+  vipLabel,
 }: InboxRowProps) {
   const router = useRouter()
   const [isRead, setIsRead] = useState(initialReadAt)
@@ -100,6 +104,11 @@ export default function InboxRow({
             >
               {name}
             </p>
+            {isVip && (
+              <span className="ml-1 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700">
+                ⭐ {vipLabel ?? "VIP"}
+              </span>
+            )}
           </div>
           <span className="shrink-0 text-[10px] text-slate-400">{timeLabel}</span>
         </div>

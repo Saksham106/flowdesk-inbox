@@ -236,6 +236,10 @@ export default async function AppListColumn({
               conv.draft?.status === "proposed" || conv.draft?.status === "approved"
             const isClosed = conv.status === "closed"
 
+            const meta = conv.stateRecord?.metadataJson as Record<string, unknown> | null ?? {}
+            const isVip = meta?.isVip === true
+            const vipLabel = typeof meta?.vipLabel === "string" ? meta.vipLabel : null
+
             return (
               <InboxRow
                 key={conv.id}
@@ -254,6 +258,8 @@ export default async function AppListColumn({
                 hasDraft={hasDraft}
                 initialReadAt={conv.readAt !== null}
                 initialStatus={conv.status}
+                isVip={isVip}
+                vipLabel={vipLabel}
               />
             )
           })
