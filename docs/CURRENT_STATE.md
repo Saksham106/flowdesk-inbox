@@ -104,6 +104,17 @@ The core promise is: show what matters, explain why, safely handle routine work,
 - Risk Radar exists as a deterministic read-only scan.
 - Meeting prep and post-meeting follow-up flows exist for business/calendar use cases.
 
+### Automations And Integrations (Phase 4)
+
+- Plain-English rule creation via `AgentRule` model and NL compiler; preview shows affected emails and conflicts.
+- Category-scoped autopilot policies (auto-send / require approval / never) per attention category.
+- `Snippet` model with weekly miner, settings panel, and reply composer picker.
+- `/clean-inbox` page with batch archive, batch unsubscribe, and 1-hour undo.
+- `SchedulingSession` model; scheduling requests detected during sync; Calendar-backed slot proposal.
+- `AutomationRun` trace model; step executor (create_task, update_attention, archive); rollback within 24h.
+- `WorkflowTemplate`/`WorkflowRun` models; 3 seeded default workflows; cron-driven step advancement.
+- Google Drive OAuth connect/disconnect; `searchDriveForContext` for draft context enrichment.
+
 ## Key Data Models
 
 - `Conversation`, `Message`, `Contact`, `Channel`
@@ -118,6 +129,8 @@ The core promise is: show what matters, explain why, safely handle routine work,
 - `AutopilotSetting`, `FollowUpSetting`
 - `GmailCredential`
 - `GmailPushEvent`, `GmailWritebackQueue`
+- `SchedulingSession`, `AutomationRun`, `WorkflowTemplate`, `WorkflowRun`
+- `AgentRule`, `Snippet`, `GoogleDriveCredential`
 
 ## Known Gaps
 
@@ -130,8 +143,13 @@ The core promise is: show what matters, explain why, safely handle routine work,
 - Lead sequence timing is fixed; no settings UI yet.
 - Risk Radar thresholds are deterministic and not user-configurable.
 - URL crawl is single-page only; no sitemap or scheduled re-crawl.
-- Attachment intelligence, natural-language search, Ask My Inbox, VIP protection, smart snooze, phishing/fraud protection, and team inbox features are not implemented as product features.
+- Team inbox features are not implemented as product features.
 - Paid plan enforcement is not implemented in code.
+- Full scheduling back-and-forth: confirmation detection and event booking not yet wired.
+- WorkflowTemplate builder UI (drag-and-drop or form) not yet implemented.
+- AutomationRun trigger conditions not yet user-configurable (system defaults only).
+- Google Drive context not yet injected into draft generation (lib exists, not wired).
+- Notion, Slack, Calendly integrations not yet implemented.
 
 ## Verification Pointers
 

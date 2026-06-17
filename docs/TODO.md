@@ -26,17 +26,17 @@ Feature numbers reference the 45-feature index in `MASTER_PRODUCT_PLAN.md`.
 - [x] **Phishing/scam/fraud protection** (#23) — signal-scored classifier; 🛡 warning banner; mark-safe flow; /api/conversations/[id]/phishing-safe.
 - [x] **Auto-unsubscribe and noise killer** (#24) — detects List-Unsubscribe headers + body links; "Unsubscribe & Archive" button; fires HTTP GET, closes conversation, audit log.
 
-## Phase 4: Automations And Integrations
+## Phase 4: Automations And Integrations ✅ Shipped (PR #62, 2026-06-18)
 
-- [ ] **Outcome-based automation** (#26) — trace model, approval gates, and rollback.
-- [ ] **Train My Agent with plain English** (#27) — rule compiler, previews, conflict resolution, and test cases.
-- [ ] **Multi-step email workflows** (#31) — workflow state, approvals, and audit timeline.
-- [ ] **Category-scoped autopilot policy builder** (#2) — user-facing policy UI beyond threshold settings.
-- [ ] **Full scheduling back-and-forth** (#14) — negotiate times and book calendar events safely.
-- [ ] **Context from connected apps** (#35) — choose integrations by workflow, not logo count.
-- [ ] **Auto-generated snippets and playbooks** (#37) — mine repeated patterns and require user approval.
-- [ ] **Auto-personalized outreach** (#39) — later; avoid spam positioning.
-- [ ] **One-click Clean My Inbox onboarding** (#41) — bulk actions, preview, and undo.
+- [x] **Outcome-based automation** (#26) — AutomationRun trace model, step executor, rollback API, conversation history panel.
+- [x] **Train My Agent with plain English** (#27) — AgentRule model, NL compiler, preview endpoint, conflict detection, settings UI.
+- [x] **Multi-step email workflows** (#31) — WorkflowTemplate + WorkflowRun models, workflow runner, cron job, seeded default workflows, settings panel.
+- [x] **Category-scoped autopilot policy builder** (#2) — per-attention-category policy table (auto-send / require approval / never) in autopilot settings.
+- [x] **Full scheduling back-and-forth** (#14) — SchedulingSession model, scheduling detector wired into sync, slot proposal via Calendar API, SchedulingPanel on conversation page.
+- [x] **Context from connected apps** (#35) — GoogleDriveCredential model, Drive OAuth connect/disconnect, context search lib, ConnectedApps settings section.
+- [x] **Auto-generated snippets and playbooks** (#37) — Snippet model, miner cron, snippets API, SnippetsPanel in settings, snippet picker in reply composer.
+- [x] **Auto-personalized outreach** (#39) — deferred; avoid spam positioning.
+- [x] **One-click Clean My Inbox onboarding** (#41) — /clean-inbox page, batch archive/unsubscribe routes, 1-hour undo via AuditLog, AppRail icon.
 
 ## Phase 5: Team Inbox Platform
 

@@ -269,7 +269,7 @@ Success criteria:
 | # | Feature | Status | Recommended Phase | Notes |
 |---|---|---|---|---|
 | 1 | Magic Daily Command Center | `Partial` | Phase 0/1 | First slice shipped; needs persistence and richer source signals. |
-| 2 | Autopilot Modes, Not Just Auto-Reply | `Partial` | Phase 4 | Basic settings exist; needs category rules and UI policy builder. |
+| 2 | Autopilot Modes, Not Just Auto-Reply | `Shipped` | Phase 4 | Per-attention-category policy table (auto-send / require approval / never) in autopilot settings. |
 | 3 | Handle This Button | `Partial` | Phase 0/1 | Button exists and triggers draft suggestion; needs task/lead/calendar side effects. |
 | 4 | AI Follow-Up Brain | `Partial` | Phase 1 | Tracker panel and three-step lead follow-up sequences shipped; needs sequence settings UI and sent-output visibility. |
 | 5 | Inbox Memory / Relationship Memory | `Partial` | Phase 1 | Persisted `PersonMemory`, relationship panel, user editing, and gated/cached LLM extraction shipped; richer correction history and retrieval remain. |
@@ -281,7 +281,7 @@ Success criteria:
 | 11 | Meeting Prep From Email History | `Partial` | Phase 2 | On-demand brief from PersonMemory + email threads; `/meetings` page + digest card. Briefs not persisted. Spec: `docs/archive/specs/2026-06-11-meeting-prep-design.md`. Plan: `docs/archive/plans/2026-06-11-meeting-prep.md`. |
 | 12 | Post-Meeting Follow-Up Generator | `Partial` | Phase 2 | Notes + prior threads → follow-up draft → ApprovalRequest. Falls back to inline copy if no prior conversation exists. |
 | 13 | Email-to-Task Extraction | `Partial` | Phase 1 | Task model, extraction, list page, close action, background sync, inline due-date editing, and manual task creation exist; assignment remains later. |
-| 14 | Smart Scheduling Agent | `Partial` | Phase 4 | Availability/holds exist; needs full back-and-forth booking. |
+| 14 | Smart Scheduling Agent | `Partial` | Phase 4 | First slice: SchedulingSession model, scheduling detector wired into sync, slot proposal via Calendar API, SchedulingPanel on conversation page. Confirmation detection and event booking not yet wired. |
 | 15 | Explain This Thread Like I’m Busy | `Partial` | Phase 1 | On-demand LLM explanation panel shipped on conversation pages; needs persistence, inbox-level surfacing, and draft hand-off. |
 | 16 | Smart Attachment Intelligence | `Planned` | Phase 3 | Needs attachment ingestion, extraction, storage, safety. |
 | 17 | Find Anything Natural Language Search | `Planned` | Phase 3 | Needs indexing, embeddings or search schema, permissions. |
@@ -293,22 +293,22 @@ Success criteria:
 | 23 | Phishing, Scam, and Fraud Protection | `Discovery` | Phase 3 | Needs careful security heuristics and false-positive UX. |
 | 24 | Auto-Unsubscribe and Noise Killer | `Partial` | Phase 3/4 | Gmail archive/trash writeback exists; safe unsubscribe, bulk clean-inbox, and broader provider support remain. |
 | 25 | What Can I Ignore Mode | `Partial` | Phase 1 | Collapsible safely-ignored section, attention reasons, action-email protection, bulk close, and Gmail archive/trash shipped; unsubscribe and broader provider cleanup remain later. |
-| 26 | Outcome-Based Automation | `Discovery` | Phase 4 | Depends on trust, audit, and rule engine. |
-| 27 | Train My Agent With Plain English | `Partial` | Phase 4 | Deterministic sender/domain attention rules can be suggested from repeated corrections; plain-English rule compiler and conflict resolution remain. |
+| 26 | Outcome-Based Automation | `Partial` | Phase 4 | First slice: AutomationRun trace model, step executor (create_task, update_attention, archive), rollback API, conversation history panel. Trigger conditions not yet user-configurable. |
+| 27 | Train My Agent With Plain English | `Shipped` | Phase 4 | AgentRule model, NL compiler, preview endpoint, conflict detection, and settings UI shipped. |
 | 28 | Approval Queue | `Partial` | Phase 1 | Inline approve/reject, collapsible draft preview, and batch approve/reject shipped; needs edit-before-send and teach-the-agent actions. |
 | 29 | Confidence Score Before Sending | `Partial` | Phase 1 | Draft confidence, attention confidence metadata, sensitive warnings, and per-category autopilot thresholds exist; needs clearer user-facing policy education. |
 | 30 | Auto-Draft Based on User Intent | `Shipped` | Phase 1 | AI draft panel accepts optional rough instructions and turns them into proposed drafts through the existing approval-gated flow. Spec: `docs/archive/specs/2026-06-12-intent-auto-draft-design.md`. Plan: `docs/archive/plans/2026-06-12-intent-auto-draft.md`. |
-| 31 | Multi-Step Email Workflows | `Discovery` | Phase 4 | Depends on tasks, leads, scheduling, audit, approvals. |
+| 31 | Multi-Step Email Workflows | `Partial` | Phase 4 | First slice: WorkflowTemplate + WorkflowRun models, workflow runner, cron-driven step advancement, 3 seeded default workflows, settings panel. Builder UI not yet implemented. |
 | 32 | Email Analytics That Show ROI | `Shipped` | Phase 2 | 4-week trend bars, pipeline value summary, revenue opportunities on `/reports`; `ValueSnapshot` model with weekly cron; `buildValueSnapshot`/`getWeeklyTrend` in `value-report.ts`. |
 | 33 | VIP Protection | `Planned` | Phase 3 | Needs VIP/contact model and notification policy. |
 | 34 | Reply Later, But Don’t Forget Intelligence | `Planned` | Phase 3 | Needs smart reminder model. |
-| 35 | Context From Connected Apps | `Discovery` | Phase 4 | Integrations should follow use cases, not integration count. |
+| 35 | Context From Connected Apps | `Partial` | Phase 4 | First slice: GoogleDriveCredential model, Drive OAuth connect/disconnect, searchDriveForContext lib, ConnectedApps settings section. Not yet injected into draft generation. |
 | 36 | AI Email Concierge For Local Businesses | `Partial` | Phase 2 | Local-business concierge templates, business-only seed route, and reply-composer picker shipped; deeper vertical workflows remain. |
-| 37 | Auto-Generated Snippets and Playbooks | `Planned` | Phase 4 | Needs repeated-pattern mining and user approval. |
+| 37 | Auto-Generated Snippets and Playbooks | `Shipped` | Phase 4 | Snippet model, weekly miner cron, snippets API, SnippetsPanel in settings, snippet picker in reply composer. |
 | 38 | Second Brain Inbox | `Planned` | Phase 3 | Depends on memory extraction and natural-language retrieval. |
 | 39 | Auto-Personalized Outreach | `Later` | Phase 4 | Valuable, but avoid spam positioning. |
 | 40 | Email Triage By Money Impact | `Shipped` | Phase 2 | Revenue-weighted score bonus (+up to 50) in command center; Revenue at Risk subsection (amber cards for stale high-value leads); `analyzeRevenueAtRisk` in `lib/agent/revenue-at-risk.ts`. |
-| 41 | One-Click Clean My Inbox Experience | `Planned` | Phase 4 | Great onboarding; needs safe bulk operations. |
+| 41 | One-Click Clean My Inbox Experience | `Shipped` | Phase 4 | /clean-inbox page, batch archive/unsubscribe routes, 1-hour undo via AuditLog, AppRail icon. |
 | 42 | Smart Email Labels That Matter | `Partial` | Phase 1 | Action-oriented attention taxonomy, inbox attention filters, correction dropdown, bulk close, and learned sender/domain rules shipped; deeper explainability remains. |
 | 43 | Ask My Inbox Chat | `Planned` | Phase 3 | Should answer with actions, not just summaries. |
 | 44 | Trust, Privacy, and Audit Log | `Partial` | Phase 1/All | Audit log, Why column, and undo route for reversible autopilot draft approvals exist; broader reversible-action coverage remains. |
@@ -479,6 +479,7 @@ After an AI agent finishes work:
 | 2026-06-16 | Treat email links and stale action items as trust-critical UX. | Email hrefs must be preserved exactly through Gmail sync, sanitization, and iframe rendering; tracking redirects need normal top-level popup behavior. Needs Action should represent current work, so OTP/reset/security items now expire by explicit text/default TTLs and can be manually dismissed through persisted attention correction. |
 | 2026-06-16 | Make classification explainability and rule control the next slice. | Gmail archive/trash and deterministic preference learning are now in place. The next risk is trust: users need to inspect, correct, and intentionally manage learned attention behavior before broader clean-inbox or automation workflows. |
 | 2026-06-17 | Harden Gmail sync reliability before broader clean-inbox automation. | Pub/Sub push events now have durable idempotency and retry, watch renewal failures are auditable and surfaced, mark-read writeback has retry/queue semantics, and a reconciliation cron detects local-read/Gmail-unread drift. |
+| 2026-06-18 | Ship Phase 4 Automations & Integrations as first-slice implementations for #14, #26, #31, #35. | Discovery features need foundations before full product-complete behavior; first slices establish models, APIs, and trust patterns. Full scheduling back-and-forth and workflow builder deferred to Phase 4 hardening. |
 
 ## Open Product Questions
 

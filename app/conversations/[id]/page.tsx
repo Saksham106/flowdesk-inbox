@@ -38,6 +38,10 @@ import UnsubscribeButton from "@/app/conversations/[id]/UnsubscribeButton";
 import SnoozeButton from "@/app/conversations/[id]/SnoozeButton";
 import SecondBrainPanel from "@/app/conversations/[id]/SecondBrainPanel";
 import type { ExtractedFact } from "@/lib/agent/second-brain";
+import SchedulingPanel from "@/app/conversations/[id]/SchedulingPanel";
+import AutomationRunHistory from "@/app/conversations/[id]/AutomationRunHistory";
+import type { ProposedSlot } from "@/lib/agent/scheduling";
+import type { AutomationStep } from "@/lib/agent/automation-runner";
 
 export const revalidate = 60;
 
@@ -131,6 +135,19 @@ export default async function ConversationPage({
   if (!conversation) {
     notFound();
   }
+
+  const [schedulingSession, automationRuns, calendarCredentials] = await Promise.all([
+    prisma.schedulingSession.findUnique({ where: { conversationId: conversation.id } }),
+    prisma.automationRun.findMany({
+      where: { conversationId: conversation.id, tenantId: session.user.tenantId },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    }),
+    prisma.googleCalendarCredential.findMany({
+      where: { tenantId: session.user.tenantId },
+      select: { email: true },
+    }),
+  ]);
 
   const openedAt = new Date()
   await Promise.all([
@@ -532,6 +549,35 @@ export default async function ConversationPage({
     </>
   )
 
+  const phase4Panels = (
+    <>
+      {calendarCredentials.length > 0 && (
+        <SchedulingPanel
+          conversationId={conversation.id}
+          calendarEmails={calendarCredentials.map((c) => c.email)}
+          initialSession={schedulingSession ? {
+            id: schedulingSession.id,
+            status: schedulingSession.status,
+            proposedTimesJson: schedulingSession.proposedTimesJson as ProposedSlot[] | null,
+            confirmedTime: schedulingSession.confirmedTime,
+            calendarEmail: schedulingSession.calendarEmail,
+            eventId: schedulingSession.eventId,
+          } : null}
+        />
+      )}
+      <AutomationRunHistory
+        runs={automationRuns.map((r) => ({
+          id: r.id,
+          trigger: r.trigger,
+          status: r.status,
+          stepsJson: r.stepsJson as AutomationStep[],
+          createdAt: r.createdAt.toISOString(),
+          rolledBackAt: r.rolledBackAt?.toISOString() ?? null,
+        }))}
+      />
+    </>
+  )
+
   const replyComposer = (
     <div className="px-4 py-2">
       <ReplyComposer
@@ -657,6 +703,7 @@ export default async function ConversationPage({
               {assistantCard}
               {businessPanels}
               {extraCards}
+              {phase4Panels}
             </div>
           }
         />
@@ -756,6 +803,7 @@ export default async function ConversationPage({
             {assistantCard}
             {businessPanels}
             {extraCards}
+            {phase4Panels}
           </aside>
         </main>
       </div>
