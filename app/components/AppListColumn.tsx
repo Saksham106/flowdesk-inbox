@@ -6,7 +6,6 @@ import SearchInput from "@/app/inbox/SearchInput"
 import GmailSyncControl from "@/app/components/GmailSyncControl"
 import InboxScrollContainer from "@/app/components/InboxScrollContainer"
 import { buildConversationHref } from "@/lib/client-navigation"
-import InboxRow from "@/app/components/InboxRow"
 import InboxRowWithSnooze from "@/app/components/InboxRowWithSnooze"
 
 interface Props {

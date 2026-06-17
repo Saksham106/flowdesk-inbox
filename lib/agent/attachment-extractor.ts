@@ -36,7 +36,9 @@ export function detectAttachments(rawEmailBody: string): DetectedAttachment[] {
 
 export async function extractPdfText(base64Data: string): Promise<string> {
   // Dynamic import to avoid issues at module load time
-  const pdfParse = (await import("pdf-parse")).default
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mod = (await import("pdf-parse")) as any
+  const pdfParse = mod.default ?? mod
   const buffer = Buffer.from(base64Data, "base64")
   const result = await pdfParse(buffer)
   return result.text.slice(0, 5000) // cap at 5000 chars

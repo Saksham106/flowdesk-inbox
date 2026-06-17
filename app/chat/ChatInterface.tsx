@@ -92,7 +92,7 @@ export default function ChatInterface() {
           <div className="text-center text-sm text-slate-400 mt-16">
             <p className="text-2xl mb-2">💬</p>
             <p>Ask anything about your inbox</p>
-            <p className="text-xs mt-1 text-slate-300">e.g. "Any unpaid invoices?" or "What did John say last week?"</p>
+            <p className="text-xs mt-1 text-slate-300">e.g. &ldquo;Any unpaid invoices?&rdquo; or &ldquo;What did John say last week?&rdquo;</p>
           </div>
         )}
         {messages.map((m, i) => (
