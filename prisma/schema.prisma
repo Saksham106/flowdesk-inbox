@@ -95,6 +95,7 @@ model Tenant {
   autopilotSetting          AutopilotSetting?
   vipContacts               VipContact[]
   snoozeReminders           SnoozeReminder[]
+  emailAttachments          EmailAttachment[]
 }
 
 model User {
@@ -238,6 +239,7 @@ model Conversation {
   inboxTasks       InboxTask[]
   leads            Lead[]
   snoozeReminders  SnoozeReminder[]
+  emailAttachments EmailAttachment[]
 
   @@unique([tenantId, channelId, externalThreadId])
   @@index([tenantId, lastMessageAt])
@@ -255,6 +257,7 @@ model Message {
   gmailLabelIds     Json?
   createdAt         DateTime         @default(now())
   conversation      Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  emailAttachments  EmailAttachment[]
 
   @@unique([providerMessageId])
   @@index([conversationId, createdAt])
@@ -594,4 +597,22 @@ model SnoozeReminder {
 
   @@index([tenantId, status, snoozeUntil])
   @@index([conversationId])
+}
+
+model EmailAttachment {
+  id            String      @id @default(cuid())
+  tenantId      String
+  messageId     String
+  conversationId String
+  filename      String
+  mimeType      String
+  sizeBytes     Int?
+  extractedText String?
+  createdAt     DateTime    @default(now())
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  message       Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  conversation  Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([messageId])
 }
