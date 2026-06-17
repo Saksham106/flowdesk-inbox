@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth"
 import { explainThread } from "@/lib/ai/provider"
 import { buildExplainThreadPrompt } from "@/lib/ai/prompts/explain-thread"
 import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
+import { checkAiBudget, estimateCostUsd } from "@/lib/ai/budget"
 import { prisma } from "@/lib/prisma"
 
 export const runtime = "nodejs"
@@ -45,6 +46,16 @@ export async function POST(
     contactName: conversation.contact?.name ?? null,
     conversationStatus: conversation.status,
     messages: conversation.messages,
+  }
+
+  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
+  const promptTokens = estimateTokenCount(buildExplainThreadPrompt(input))
+  const budgetCheck = await checkAiBudget(
+    session.user.tenantId,
+    estimateCostUsd(model, promptTokens, 800)
+  )
+  if (!budgetCheck.allowed) {
+    return NextResponse.json({ error: budgetCheck.reason }, { status: 429 })
   }
 
   let result: Awaited<ReturnType<typeof explainThread>>

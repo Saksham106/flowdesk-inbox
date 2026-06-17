@@ -93,6 +93,7 @@ model Tenant {
   personMemories            PersonMemory[]
   followUpSetting           FollowUpSetting?
   autopilotSetting          AutopilotSetting?
+  aiBudget                  AiBudget?
   classificationCorrections ClassificationCorrection[]
   senderRules               SenderRule[]
   gmailPushEvents           GmailPushEvent[]
@@ -585,12 +586,22 @@ model AiUsageEvent {
   model           String
   estimatedInputTokens  Int      @default(0)
   estimatedOutputTokens Int      @default(0)
+  estimatedCostUsd      Float    @default(0)
   status          String
   createdAt       DateTime @default(now())
   tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, createdAt])
   @@index([feature])
+}
+
+model AiBudget {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  dailyLimitUsd   Float    @default(5.0)
+  monthlyLimitUsd Float    @default(50.0)
+  updatedAt       DateTime @updatedAt
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model PersonalProfile {

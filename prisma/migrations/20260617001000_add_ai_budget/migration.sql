@@ -1,0 +1,17 @@
+ALTER TABLE "AiUsageEvent"
+  ADD COLUMN IF NOT EXISTS "estimatedCostUsd" DOUBLE PRECISION NOT NULL DEFAULT 0;
+
+CREATE TABLE "AiBudget" (
+  "id" TEXT NOT NULL,
+  "tenantId" TEXT NOT NULL,
+  "dailyLimitUsd" DOUBLE PRECISION NOT NULL DEFAULT 5.0,
+  "monthlyLimitUsd" DOUBLE PRECISION NOT NULL DEFAULT 50.0,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+
+  CONSTRAINT "AiBudget_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "AiBudget_tenantId_key" ON "AiBudget"("tenantId");
+
+ALTER TABLE "AiBudget" ADD CONSTRAINT "AiBudget_tenantId_fkey"
+  FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;

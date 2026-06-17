@@ -18,6 +18,8 @@ import AutopilotSettingsForm from "@/app/settings/AutopilotSettingsForm";
 import PersonalStylePanel from "@/app/settings/PersonalStylePanel"
 import ConciergeTemplateSeedButton from "./ConciergeTemplateSeedButton";
 import SenderRulesPanel from "@/app/settings/SenderRulesPanel";
+import AiBudgetPanel from "@/app/settings/AiBudgetPanel";
+import { getAiBudgetStatus } from "@/lib/ai/budget";
 
 export const dynamic = "force-dynamic";
 
@@ -101,10 +103,13 @@ export default async function SettingsPage({ searchParams }: Props) {
     }),
   ]);
 
-  const senderRules = await prisma.senderRule.findMany({
-    where: { tenantId: session.user.tenantId, status: { in: ["suggested", "active"] } },
-    orderBy: { createdAt: "desc" },
-  });
+  const [senderRules, aiBudgetStatus] = await Promise.all([
+    prisma.senderRule.findMany({
+      where: { tenantId: session.user.tenantId, status: { in: ["suggested", "active"] } },
+      orderBy: { createdAt: "desc" },
+    }),
+    getAiBudgetStatus(session.user.tenantId),
+  ]);
 
   const isPersonal = tenant?.accountType === "personal";
 
@@ -564,6 +569,20 @@ export default async function SettingsPage({ searchParams }: Props) {
                   : null
               }
             />
+          </div>
+        </section>
+
+        {/* AI Spend Budget */}
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="font-semibold">AI Spend Budget</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Set daily and monthly limits for AI usage (drafts, explanations, lead scoring). Calls that would
+              exceed a limit are blocked automatically.
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <AiBudgetPanel initial={aiBudgetStatus} />
           </div>
         </section>
       </main>
