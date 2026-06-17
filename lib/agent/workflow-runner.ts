@@ -50,12 +50,13 @@ export async function advanceWorkflowStep(runId: string): Promise<"advanced" | "
   const step = steps[currentStep]
 
   if (step.type === "wait") {
-    const nextRunAt = computeNextRunAt(step, new Date())
+    // The look-ahead from the previous step already applied this wait's delay.
+    // The wait is now complete — advance past it and immediately process the next step.
     await prisma.workflowRun.update({
       where: { id: runId },
-      data: { currentStep: currentStep + 1, nextRunAt },
+      data: { currentStep: currentStep + 1 },
     })
-    return "advanced"
+    return advanceWorkflowStep(runId)
   }
 
   if (step.type === "close_conversation") {
