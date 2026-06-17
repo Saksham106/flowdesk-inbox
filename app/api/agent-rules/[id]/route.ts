@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Prisma } from "@prisma/client"
 
-const ALLOWED_STATUSES = ["active", "dismissed", "suggested"]
+const ALLOWED_STATUSES = ["active", "dismissed", "suggested", "paused"]
 
 export async function PATCH(
   request: Request,

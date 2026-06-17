@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { Prisma } from "@prisma/client"
 
 export const runtime = "nodejs"
 
@@ -120,14 +121,23 @@ export async function PATCH(request: Request) {
     updateData.categoryThresholdsJson = categoryThresholds
   }
 
-  const setting = await prisma.autopilotSetting.upsert({
-    where: { tenantId: session.user.tenantId },
-    update: updateData,
-    create: {
-      tenantId: session.user.tenantId,
-      enabled: false,
-    },
-  })
+  const [setting] = await prisma.$transaction([
+    prisma.autopilotSetting.upsert({
+      where: { tenantId: session.user.tenantId },
+      update: updateData,
+      create: {
+        tenantId: session.user.tenantId,
+        enabled: false,
+      },
+    }),
+    prisma.auditLog.create({
+      data: {
+        tenantId: session.user.tenantId,
+        action: "autopilot_setting.update",
+        payloadJson: updateData as Prisma.InputJsonValue,
+      },
+    }),
+  ])
 
   return NextResponse.json({ setting })
 }
