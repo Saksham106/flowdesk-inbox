@@ -69,7 +69,11 @@ export default function GmailSyncControl({
     if (failed?.watchRenewalError) return `Push sync unhealthy: ${failed.watchRenewalError}`;
 
     const expiring = channels.find((channel) => {
-      if (!channel.watchExpiresAt) return true;
+      if (!channel.watchExpiresAt) {
+        // Push was never configured — no renewal was ever attempted, so just poll silently.
+        // Only warn if a renewal was previously attempted but the expiry got cleared.
+        return !!(channel.watchLastRenewalAttempt);
+      }
       return new Date(channel.watchExpiresAt).getTime() <= Date.now() + WATCH_WARNING_BUFFER_MS;
     });
     if (expiring) return "Push sync needs renewal; polling fallback is active";
