@@ -108,7 +108,14 @@ export default async function ConversationPage({
         id: true,
         emailAddress: true,
         gmailCredential: {
-          select: { lastSyncedAt: true, lastSyncError: true, watchExpiresAt: true },
+          select: {
+            lastSyncedAt: true,
+            lastSyncError: true,
+            watchExpiresAt: true,
+            watchLastRenewalAttempt: true,
+            watchRenewalError: true,
+            lastHistoryFallbackAt: true,
+          },
         },
       },
       orderBy: { createdAt: "asc" },
@@ -138,7 +145,8 @@ export default async function ConversationPage({
   if (conversation.channel.provider === "google") {
     markGmailThreadRead(
       conversation.channelId,
-      conversation.messages.map((message) => message.providerMessageId)
+      conversation.messages.map((message) => message.providerMessageId),
+      { tenantId: session.user.tenantId, conversationId: conversation.id }
     ).catch((err) => {
       console.warn("Failed to mark Gmail thread read on open", {
         conversationId: conversation.id,
@@ -166,6 +174,9 @@ export default async function ConversationPage({
       lastSyncedAt: channel.gmailCredential?.lastSyncedAt ?? null,
       lastSyncError: channel.gmailCredential?.lastSyncError ?? null,
       watchExpiresAt: channel.gmailCredential?.watchExpiresAt ?? null,
+      watchLastRenewalAttempt: channel.gmailCredential?.watchLastRenewalAttempt ?? null,
+      watchRenewalError: channel.gmailCredential?.watchRenewalError ?? null,
+      lastHistoryFallbackAt: channel.gmailCredential?.lastHistoryFallbackAt ?? null,
     }));
 
   await syncConversationWorkItems({

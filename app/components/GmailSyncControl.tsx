@@ -9,6 +9,9 @@ type GmailSyncChannel = {
   lastSyncedAt: Date | string | null;
   lastSyncError: string | null;
   watchExpiresAt?: Date | string | null;
+  watchLastRenewalAttempt?: Date | string | null;
+  watchRenewalError?: string | null;
+  lastHistoryFallbackAt?: Date | string | null;
 };
 
 type SyncStatus = {
@@ -20,6 +23,7 @@ const AUTO_SYNC_INTERVAL_MS = 15 * 60 * 1000;
 const AUTO_SYNC_COOLDOWN_MS = 60 * 1000;
 const PUSH_STALE_FALLBACK_MS = 30 * 60 * 1000;
 const WATCH_HEALTH_BUFFER_MS = 10 * 60 * 1000;
+const WATCH_WARNING_BUFFER_MS = 24 * 60 * 60 * 1000;
 
 function relativeTime(date: Date): string {
   const diff = Date.now() - date.getTime();
@@ -56,11 +60,27 @@ export default function GmailSyncControl({
   const hasHealthyPush = useMemo(
     () =>
       channels.some((channel) => {
+        if (channel.watchRenewalError) return false;
         if (!channel.watchExpiresAt) return false;
         return new Date(channel.watchExpiresAt).getTime() > Date.now() + WATCH_HEALTH_BUFFER_MS;
       }),
     [channels]
   );
+  const pushHealthWarning = useMemo(() => {
+    const failed = channels.find((channel) => channel.watchRenewalError);
+    if (failed?.watchRenewalError) return `Push sync unhealthy: ${failed.watchRenewalError}`;
+
+    const expiring = channels.find((channel) => {
+      if (!channel.watchExpiresAt) return true;
+      return new Date(channel.watchExpiresAt).getTime() <= Date.now() + WATCH_WARNING_BUFFER_MS;
+    });
+    if (expiring) return "Push sync needs renewal; polling fallback is active";
+
+    const fallback = channels.find((channel) => channel.lastHistoryFallbackAt);
+    if (fallback?.lastHistoryFallbackAt) return "Incremental sync recovered with a recent-sync fallback";
+
+    return null;
+  }, [channels]);
   const shouldPollWithHealthyPush = useCallback(() => {
     if (!hasHealthyPush) return true;
     if (!lastSyncedAt) return true;
@@ -72,6 +92,12 @@ export default function GmailSyncControl({
   );
   const displayStatus =
     status ??
+    (pushHealthWarning
+      ? {
+          type: "error" as const,
+          message: pushHealthWarning,
+        }
+      : null) ??
     (initialError
       ? {
           type: "error" as const,

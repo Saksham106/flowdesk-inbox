@@ -98,7 +98,14 @@ export default async function InboxPage({ searchParams }: Props) {
         id: true,
         emailAddress: true,
         gmailCredential: {
-          select: { lastSyncedAt: true, lastSyncError: true, watchExpiresAt: true },
+          select: {
+            lastSyncedAt: true,
+            lastSyncError: true,
+            watchExpiresAt: true,
+            watchLastRenewalAttempt: true,
+            watchRenewalError: true,
+            lastHistoryFallbackAt: true,
+          },
         },
       },
       orderBy: { createdAt: "asc" },
@@ -347,6 +354,9 @@ export default async function InboxPage({ searchParams }: Props) {
       lastSyncedAt: channel.gmailCredential?.lastSyncedAt ?? null,
       lastSyncError: channel.gmailCredential?.lastSyncError ?? null,
       watchExpiresAt: channel.gmailCredential?.watchExpiresAt ?? null,
+      watchLastRenewalAttempt: channel.gmailCredential?.watchLastRenewalAttempt ?? null,
+      watchRenewalError: channel.gmailCredential?.watchRenewalError ?? null,
+      lastHistoryFallbackAt: channel.gmailCredential?.lastHistoryFallbackAt ?? null,
     }));
 
   const listTabs = [

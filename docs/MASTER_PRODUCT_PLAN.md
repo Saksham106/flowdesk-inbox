@@ -61,14 +61,14 @@ Existing foundations in the codebase:
 - Rich email attention categories stored in `ConversationState.metadataJson.attentionCategory`: `needs_reply`, `needs_action`, `review_soon`, `read_later`, `waiting_on`, `fyi_done`, and `quiet`.
 - Account-action metadata for OTPs, verification links, password setup/reset, login approvals, account setup, and security alerts. OTP/security codes are persisted only for direct user display/copy and are not auto-used.
 - Local user/read state is separate from raw Gmail state: user overrides, done/closed status, local reads, Gmail unread labels, and Gmail raw metadata are stored independently.
-- Gmail archive/trash writeback exists for Gmail conversations and preserves local user overrides.
+- Gmail read/archive/trash writeback exists for Gmail conversations and preserves local user overrides. Failed mark-read writebacks are queued and retried.
 - Preference learning exists for repeated manual attention corrections: suggested sender/domain rules can be applied, dismissed, disabled, and auto-applied during sync.
 - Cost-aware AI usage policy: deterministic rules handle low-value automated mail first; richer person-memory extraction is skipped for low-value mail, cached by content hash for eligible mail, and conversation opens avoid eager rich-AI regeneration.
 - `Tenant.accountType` personal/business mode, with personal-safe defaults and business-only gates for CRM, sales, support, lead, and revenue surfaces.
 - Business and personal reply/profile settings.
 - Daily command center first slice.
 - Inbox Gmail sync control with last-synced/error status and app-load/tab-return/periodic/manual sync triggers.
-- Gmail sync now has server-side per-channel locking, race-tolerant idempotent message upserts, and partial thread-failure logging.
+- Gmail sync now has server-side per-channel locking, race-tolerant idempotent message upserts, durable push-event tracking, watch renewal health, history fallback visibility, state drift reconciliation, and partial thread-failure logging.
 
 Recently shipped first slice:
 
@@ -478,6 +478,7 @@ After an AI agent finishes work:
 | 2026-06-15 | Add AI usage policy, caching, and lazy rich-AI behavior. | Low-value automated email now stays on deterministic paths; relationship-memory LLM extraction is skipped or cached by content hash; manual draft suggestions reuse cached drafts for unchanged prompts; conversation opens sync deterministic state without eager rich-AI regeneration. |
 | 2026-06-16 | Treat email links and stale action items as trust-critical UX. | Email hrefs must be preserved exactly through Gmail sync, sanitization, and iframe rendering; tracking redirects need normal top-level popup behavior. Needs Action should represent current work, so OTP/reset/security items now expire by explicit text/default TTLs and can be manually dismissed through persisted attention correction. |
 | 2026-06-16 | Make classification explainability and rule control the next slice. | Gmail archive/trash and deterministic preference learning are now in place. The next risk is trust: users need to inspect, correct, and intentionally manage learned attention behavior before broader clean-inbox or automation workflows. |
+| 2026-06-17 | Harden Gmail sync reliability before broader clean-inbox automation. | Pub/Sub push events now have durable idempotency and retry, watch renewal failures are auditable and surfaced, mark-read writeback has retry/queue semantics, and a reconciliation cron detects local-read/Gmail-unread drift. |
 
 ## Open Product Questions
 

@@ -1,6 +1,6 @@
 # FlowDesk Remaining Work
 
-Last updated: 2026-06-16
+Last updated: 2026-06-17
 
 This is the actionable checklist of work that is still unfinished. Shipped history belongs in `CURRENT_STATE.md`, `MASTER_PRODUCT_PLAN.md`, or `docs/archive/`, not here.
 

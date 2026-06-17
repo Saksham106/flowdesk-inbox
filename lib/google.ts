@@ -459,19 +459,77 @@ export async function sendGmailReply(
   return res.data.id ?? "";
 }
 
-export async function markGmailThreadRead(channelId: string, providerMessageIds: string[]): Promise<void> {
+const GMAIL_WRITEBACK_MAX_ATTEMPTS = 3;
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "Unknown Gmail error";
+}
+
+function nextWritebackAttemptDate(attempts: number): Date {
+  const delayMinutes = Math.min(60, 2 ** Math.max(0, attempts - 1));
+  return new Date(Date.now() + delayMinutes * 60 * 1000);
+}
+
+export async function markGmailThreadRead(
+  channelId: string,
+  providerMessageIds: string[],
+  queueContext?: { tenantId: string; conversationId: string }
+): Promise<void> {
   const gmailIds = providerMessageIds
     .map((id) => id.match(/^gmail_(.+)$/)?.[1])
     .filter((id): id is string => Boolean(id));
   if (gmailIds.length === 0) return;
 
   const gmail = await getGmailClient(channelId);
-  for (const id of gmailIds) {
-    await gmail.users.messages.modify({
-      userId: "me",
-      id,
-      requestBody: { removeLabelIds: ["UNREAD"] },
-    });
+  try {
+    for (const id of gmailIds) {
+      let lastError: unknown = null;
+      for (let attempt = 1; attempt <= GMAIL_WRITEBACK_MAX_ATTEMPTS; attempt++) {
+        try {
+          await gmail.users.messages.modify({
+            userId: "me",
+            id,
+            requestBody: { removeLabelIds: ["UNREAD"] },
+          });
+          lastError = null;
+          break;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      if (lastError) throw lastError;
+    }
+  } catch (err) {
+    if (queueContext) {
+      const message = errorMessage(err);
+      await prisma.gmailWritebackQueue.upsert({
+        where: {
+          conversationId_action: {
+            conversationId: queueContext.conversationId,
+            action: "mark_read",
+          },
+        },
+        create: {
+          tenantId: queueContext.tenantId,
+          channelId,
+          conversationId: queueContext.conversationId,
+          action: "mark_read",
+          providerMessageIdsJson: providerMessageIds,
+          attempts: 1,
+          lastError: message,
+          status: "pending",
+          nextAttemptAt: nextWritebackAttemptDate(1),
+        },
+        update: {
+          providerMessageIdsJson: providerMessageIds,
+          attempts: { increment: 1 },
+          lastError: message,
+          status: "pending",
+          nextAttemptAt: nextWritebackAttemptDate(2),
+        },
+      });
+    }
+    throw err;
   }
 }
 
@@ -675,6 +733,8 @@ export async function watchGmailChannel(
     data: {
       historyId: watchHistoryId,
       watchExpiresAt: expiration,
+      watchLastRenewalAttempt: new Date(),
+      watchRenewalError: null,
       lastSyncMode: "watch_renewal",
       lastSyncStatus: "success",
       lastSyncError: null,
@@ -703,7 +763,7 @@ export async function renewGmailWatchIfNeeded(
   const cred = await prisma.gmailCredential.findUnique({ where: { channelId } });
   if (!cred) return false;
 
-  const renewalWindow = 24 * 60 * 60 * 1000;
+  const renewalWindow = 48 * 60 * 60 * 1000;
   if (cred.watchExpiresAt && cred.watchExpiresAt.getTime() - Date.now() > renewalWindow) {
     return false;
   }

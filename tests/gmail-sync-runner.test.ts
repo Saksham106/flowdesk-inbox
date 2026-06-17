@@ -9,6 +9,9 @@ const {
   mockSyncGmailChannelIncremental,
   mockWatchGmailChannel,
   mockFetchLatestHistoryId,
+  mockPushFindUnique,
+  mockPushUpsert,
+  mockPushUpdate,
 } = vi.hoisted(() => ({
   mockChannelFindFirst: vi.fn(),
   mockCredFindUnique: vi.fn(),
@@ -18,6 +21,9 @@ const {
   mockSyncGmailChannelIncremental: vi.fn(),
   mockWatchGmailChannel: vi.fn(),
   mockFetchLatestHistoryId: vi.fn(),
+  mockPushFindUnique: vi.fn(),
+  mockPushUpsert: vi.fn(),
+  mockPushUpdate: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -27,6 +33,11 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mockCredFindUnique,
       update: mockCredUpdate,
       updateMany: mockCredUpdateMany,
+    },
+    gmailPushEvent: {
+      findUnique: mockPushFindUnique,
+      upsert: mockPushUpsert,
+      update: mockPushUpdate,
     },
   },
 }))
@@ -50,6 +61,7 @@ const channel = {
 function pubsubPayload(emailAddress = "owner@example.com", historyId = "history-2") {
   return {
     message: {
+      messageId: "pubsub-message-1",
       data: Buffer.from(JSON.stringify({ emailAddress, historyId })).toString("base64url"),
     },
   }
@@ -67,6 +79,9 @@ describe("Gmail sync runner", () => {
     mockSyncGmailChannelIncremental.mockResolvedValue({ synced: 2, newHistoryId: "history-2" })
     mockWatchGmailChannel.mockResolvedValue({ expiration: new Date("2026-06-16T00:00:00Z"), historyId: "history-2" })
     mockFetchLatestHistoryId.mockResolvedValue("history-3")
+    mockPushFindUnique.mockResolvedValue(null)
+    mockPushUpsert.mockResolvedValue({})
+    mockPushUpdate.mockResolvedValue({})
   })
 
   it("uses one DB lock for manual incremental sync", async () => {
@@ -104,6 +119,51 @@ describe("Gmail sync runner", () => {
     const result = await processGmailPushNotification(pubsubPayload())
 
     expect(result).toEqual({ ok: true, channelId: "channel-1", skipped: "sync_in_progress" })
+    expect(mockPushUpdate).toHaveBeenCalledWith({
+      where: { messageId: "pubsub-message-1" },
+      data: expect.objectContaining({
+        status: "failed",
+        error: "sync_in_progress",
+        processedAt: expect.any(Date),
+      }),
+    })
+    expect(mockSyncGmailChannel).not.toHaveBeenCalled()
+    expect(mockSyncGmailChannelIncremental).not.toHaveBeenCalled()
+  })
+
+  it("records Gmail push event lifecycle by Pub/Sub message id", async () => {
+    await processGmailPushNotification(pubsubPayload())
+
+    expect(mockPushUpsert).toHaveBeenCalledWith({
+      where: { messageId: "pubsub-message-1" },
+      create: expect.objectContaining({
+        tenantId: "tenant-1",
+        channelId: "channel-1",
+        historyId: "history-2",
+        messageId: "pubsub-message-1",
+        status: "processing",
+      }),
+      update: expect.objectContaining({
+        status: "processing",
+        error: null,
+      }),
+    })
+    expect(mockPushUpdate).toHaveBeenCalledWith({
+      where: { messageId: "pubsub-message-1" },
+      data: expect.objectContaining({
+        status: "completed",
+        processedAt: expect.any(Date),
+      }),
+    })
+  })
+
+  it("does not reprocess completed Gmail push events", async () => {
+    mockPushFindUnique.mockResolvedValue({ messageId: "pubsub-message-1", status: "completed" })
+
+    const result = await processGmailPushNotification(pubsubPayload())
+
+    expect(result).toEqual({ ok: true, skipped: "push_already_completed" })
+    expect(mockCredUpdateMany).not.toHaveBeenCalled()
     expect(mockSyncGmailChannel).not.toHaveBeenCalled()
     expect(mockSyncGmailChannelIncremental).not.toHaveBeenCalled()
   })
@@ -126,7 +186,11 @@ describe("Gmail sync runner", () => {
     expect(mockCredUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { channelId: "channel-1" },
-        data: expect.objectContaining({ historyId: "history-3", lastSyncMode: "history_fallback" }),
+        data: expect.objectContaining({
+          historyId: "history-3",
+          lastSyncMode: "history_fallback",
+          lastHistoryFallbackAt: expect.any(Date),
+        }),
       })
     )
   })

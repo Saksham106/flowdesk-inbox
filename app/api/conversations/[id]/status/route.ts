@@ -98,7 +98,10 @@ export async function PATCH(
       where: { conversationId: params.id },
       data: { isRead: true },
     });
-    markGmailThreadRead(conversation.channelId, messages.map((message) => message.providerMessageId)).catch((err) => {
+    markGmailThreadRead(conversation.channelId, messages.map((message) => message.providerMessageId), {
+      tenantId: session.user.tenantId,
+      conversationId: params.id,
+    }).catch((err) => {
       console.warn("Failed to mark Gmail thread read after status update", {
         conversationId: params.id,
         message: err instanceof Error ? err.message : "Unknown error",

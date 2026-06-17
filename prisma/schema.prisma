@@ -95,6 +95,8 @@ model Tenant {
   autopilotSetting          AutopilotSetting?
   classificationCorrections ClassificationCorrection[]
   senderRules               SenderRule[]
+  gmailPushEvents           GmailPushEvent[]
+  gmailWritebackQueue       GmailWritebackQueue[]
 }
 
 model User {
@@ -120,6 +122,8 @@ model Channel {
   gmailCredential          GmailCredential?
   outlookCredential        OutlookCredential?
   learnedReplyProfiles     LearnedReplyProfile[]
+  gmailPushEvents          GmailPushEvent[]
+  gmailWritebackQueue      GmailWritebackQueue[]
 }
 
 model GmailCredential {
@@ -130,6 +134,9 @@ model GmailCredential {
   tokenExpiry           DateTime?
   historyId             String?
   watchExpiresAt        DateTime?
+  watchLastRenewalAttempt DateTime?
+  watchRenewalError     String?
+  lastHistoryFallbackAt DateTime?
   lastSyncedAt          DateTime?
   lastSyncMode          String?
   lastSyncStatus        String?
@@ -137,6 +144,44 @@ model GmailCredential {
   syncLockExpiresAt     DateTime?
   createdAt             DateTime  @default(now())
   channel               Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+}
+
+model GmailPushEvent {
+  id          String    @id @default(cuid())
+  tenantId    String
+  channelId   String
+  historyId   String?
+  messageId   String    @unique
+  status      String    @default("received")
+  error       String?
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channel     Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, channelId])
+  @@index([status])
+}
+
+model GmailWritebackQueue {
+  id                     String   @id @default(cuid())
+  tenantId               String
+  channelId              String
+  conversationId         String
+  action                 String
+  providerMessageIdsJson Json
+  attempts               Int      @default(0)
+  lastError              String?
+  status                 String   @default("pending")
+  nextAttemptAt          DateTime @default(now())
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  tenant                 Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channel                Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  conversation           Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, action])
+  @@index([tenantId, status, nextAttemptAt])
 }
 
 model OutlookCredential {
@@ -237,6 +282,7 @@ model Conversation {
   stateRecord      ConversationState?
   inboxTasks       InboxTask[]
   leads            Lead[]
+  gmailWritebacks  GmailWritebackQueue[]
 
   @@unique([tenantId, channelId, externalThreadId])
   @@index([tenantId, lastMessageAt])

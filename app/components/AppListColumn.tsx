@@ -22,6 +22,9 @@ interface Props {
     lastSyncedAt: Date | null
     lastSyncError: string | null
     watchExpiresAt?: Date | string | null
+    watchLastRenewalAttempt?: Date | string | null
+    watchRenewalError?: string | null
+    lastHistoryFallbackAt?: Date | string | null
   }[]
   className?: string
 }

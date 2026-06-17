@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-16
+Last updated: 2026-06-17
 
 This file is the factual snapshot of what the codebase can do today. Strategic roadmap details live in `MASTER_PRODUCT_PLAN.md`; unfinished work lives in `TODO.md`; historical specs and implementation plans live in `docs/archive/`.
 
@@ -27,7 +27,8 @@ The core promise is: show what matters, explain why, safely handle routine work,
 - Outlook connect/callback/sync/disconnect routes exist.
 - Google Calendar connect/callback/disconnect and calendar hold support exist.
 - MindBody has an optional business-mode connector foundation.
-- Gmail sync uses per-channel locking, idempotent message upserts, partial thread-failure logging, push/watch health, app-load/tab-return/stale fallback sync, and a manual sync control.
+- Gmail sync uses per-channel locking, idempotent message upserts, durable push-event tracking, partial thread-failure logging, push/watch health, app-load/tab-return/stale fallback sync, and a manual sync control.
+- Gmail watch renewal records per-channel health, audit-log entries, and monitor-visible cron failures. History cursor fallback is timestamped for UI visibility.
 
 ### Inbox And Thread Experience
 
@@ -48,6 +49,9 @@ The core promise is: show what matters, explain why, safely handle routine work,
   - Archive/trash close the conversation locally, mark it read, and preserve existing `ConversationState.metadataJson`.
 - Raw Gmail state (`gmailUnread`, `gmailRawState`, `gmailLabelIds`) is separate from local read/user state.
 - User overrides survive sync and AI classification.
+- Gmail mark-read writeback retries transient failures, queues failed mark-read writes in `GmailWritebackQueue`, and can be retried by `GET /api/cron/gmail-writeback`.
+- `GET /api/cron/gmail-state-reconcile` detects recent local-read/Gmail-unread drift, logs `conversation_state.drift_detected`, and queues mark-read writeback.
+- Failed Gmail push events are persisted in `GmailPushEvent` and can be retried by `GET /api/cron/gmail-push-retry`.
 
 ### Classification And Attention
 
@@ -107,6 +111,7 @@ The core promise is: show what matters, explain why, safely handle routine work,
 - `ClassificationCorrection`, `SenderRule`
 - `AutopilotSetting`, `FollowUpSetting`
 - `GmailCredential`
+- `GmailPushEvent`, `GmailWritebackQueue`
 
 ## Known Gaps
 
@@ -140,6 +145,10 @@ Recently relevant focused tests:
 - `tests/email-body.test.ts`
 - `tests/email-iframe.test.ts`
 - `tests/gmail-sync.test.ts`
+- `tests/gmail-sync-runner.test.ts`
+- `tests/gmail-watch-cron.test.ts`
+- `tests/gmail-read-writeback.test.ts`
+- `tests/gmail-state-reconcile-cron.test.ts`
 
 ## Documentation Rules
 
