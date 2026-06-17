@@ -5,8 +5,8 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
+// Reuse across hot reloads in dev AND across route invocations in prod to avoid
+// exhausting the Postgres connection limit on Railway's shared Postgres instance.
 export const prisma = global.prisma ?? new PrismaClient();
 
-if (process.env.NODE_ENV !== "production") {
-  global.prisma = prisma;
-}
+global.prisma = prisma;
