@@ -31,6 +31,7 @@ export async function proposeSchedulingSlots(
   tenantId: string,
   calendarEmail: string
 ): Promise<ProposedSlot[]> {
+  // Slot times are in UTC. Timezone conversion (using the calendar owner's configured tz) is a planned improvement.
   let calendar: Awaited<ReturnType<typeof getCalendarClient>>
   try {
     calendar = await getCalendarClient(tenantId, calendarEmail)
@@ -72,23 +73,5 @@ export async function proposeSchedulingSlots(
   }
 
   return slots
-}
-
-export function detectConfirmation(body: string, proposedSlots: ProposedSlot[]): ProposedSlot | null {
-  const lower = body.toLowerCase()
-  for (const slot of proposedSlots) {
-    const slotDate = new Date(slot.start)
-    const dayName = slotDate.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase()
-    const timeStr = slotDate.toLocaleTimeString("en-US", { hour: "numeric", hour12: true }).toLowerCase()
-    if (lower.includes(dayName) && lower.includes(timeStr.replace(":00", ""))) {
-      return slot
-    }
-    // Also check the label text
-    const labelLower = slot.label.toLowerCase()
-    const labelWords = labelLower.split(/[\s,]+/).filter((w) => w.length > 3)
-    const matchCount = labelWords.filter((w) => lower.includes(w)).length
-    if (matchCount >= 3) return slot
-  }
-  return null
 }
 

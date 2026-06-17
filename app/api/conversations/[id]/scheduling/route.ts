@@ -72,13 +72,40 @@ export async function PATCH(
 
   const body = await request.json()
 
-  const updated = await prisma.schedulingSession.update({
-    where: { conversationId: params.id },
-    data: {
-      ...(body.confirmedTime && { confirmedTime: body.confirmedTime, status: "confirmed" }),
-      ...(body.eventId && { eventId: body.eventId, status: "booked" }),
-      ...(body.status && !body.confirmedTime && !body.eventId && { status: body.status }),
-    },
-  })
+  const VALID_STATUSES = ["detecting", "proposing", "confirmed", "booked"]
+  if (body.status && !VALID_STATUSES.includes(body.status)) {
+    return NextResponse.json({ error: "Invalid status" }, { status: 422 })
+  }
+  if (body.confirmedTime && isNaN(Date.parse(body.confirmedTime))) {
+    return NextResponse.json({ error: "Invalid confirmedTime" }, { status: 422 })
+  }
+
+  let updated: Awaited<ReturnType<typeof prisma.schedulingSession.update>>
+
+  if (body.confirmedTime) {
+    const [schedulingSession] = await prisma.$transaction([
+      prisma.schedulingSession.update({
+        where: { conversationId: params.id },
+        data: { confirmedTime: body.confirmedTime, status: "confirmed" },
+      }),
+      prisma.auditLog.create({
+        data: {
+          tenantId: session.user.tenantId,
+          action: "scheduling_session.confirmed",
+          payloadJson: { conversationId: params.id, confirmedTime: body.confirmedTime } as Prisma.InputJsonValue,
+        },
+      }),
+    ])
+    updated = schedulingSession
+  } else {
+    updated = await prisma.schedulingSession.update({
+      where: { conversationId: params.id },
+      data: {
+        ...(body.eventId && { eventId: body.eventId, status: "booked" }),
+        ...(body.status && !body.eventId && { status: body.status }),
+      },
+    })
+  }
+
   return NextResponse.json({ schedulingSession: updated })
 }
