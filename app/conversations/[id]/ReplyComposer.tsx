@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 type DraftStatus = "none" | "proposed" | "approved" | "sent";
 
@@ -40,6 +40,7 @@ export default function ReplyComposer({
   threadSubject?: string;
 }) {
   const router = useRouter();
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [draft, setDraft] = useState<DraftSnapshot | null>(initialDraft);
   const [text, setText] = useState(initialDraft?.text ?? "");
   const [instruction, setInstruction] = useState("");
@@ -76,7 +77,23 @@ export default function ReplyComposer({
   }
 
   function insertSnippet(content: string, id: string) {
-    setText((prev) => prev + (prev ? "\n\n" : "") + content)
+    const ta = textareaRef.current
+    if (!ta) {
+      setText((prev) => prev + (prev ? "\n\n" : "") + content)
+    } else {
+      const start = ta.selectionStart
+      const end = ta.selectionEnd
+      const before = text.slice(0, start)
+      const after = text.slice(end)
+      const newText = before + content + after
+      setText(newText)
+      // Restore cursor position after React re-render
+      requestAnimationFrame(() => {
+        ta.selectionStart = start + content.length
+        ta.selectionEnd = start + content.length
+        ta.focus()
+      })
+    }
     setShowSnippets(false)
     fetch(`/api/snippets/${id}`, {
       method: "PATCH",
@@ -330,6 +347,7 @@ export default function ReplyComposer({
 
       {/* Main textarea */}
       <textarea
+        ref={textareaRef}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onFocus={() => setIsFocused(true)}
