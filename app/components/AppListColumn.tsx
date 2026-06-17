@@ -7,6 +7,7 @@ import GmailSyncControl from "@/app/components/GmailSyncControl"
 import InboxScrollContainer from "@/app/components/InboxScrollContainer"
 import { buildConversationHref } from "@/lib/client-navigation"
 import InboxRow from "@/app/components/InboxRow"
+import InboxRowWithSnooze from "@/app/components/InboxRowWithSnooze"
 
 interface Props {
   tenantId: string
@@ -239,9 +240,10 @@ export default async function AppListColumn({
             const meta = conv.stateRecord?.metadataJson as Record<string, unknown> | null ?? {}
             const isVip = meta?.isVip === true
             const vipLabel = typeof meta?.vipLabel === "string" ? meta.vipLabel : null
+            const snoozeUntil = typeof meta?.snoozeUntil === "string" ? meta.snoozeUntil : null
 
             return (
-              <InboxRow
+              <InboxRowWithSnooze
                 key={conv.id}
                 id={conv.id}
                 href={buildConversationHref(conv.id, returnTo)}
@@ -260,6 +262,7 @@ export default async function AppListColumn({
                 initialStatus={conv.status}
                 isVip={isVip}
                 vipLabel={vipLabel}
+                snoozeUntil={snoozeUntil}
               />
             )
           })

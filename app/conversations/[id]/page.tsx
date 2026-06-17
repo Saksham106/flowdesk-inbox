@@ -37,6 +37,7 @@ import { getSafeInboxReturnPath } from "@/lib/client-navigation";
 import { markGmailThreadRead } from "@/lib/google"
 import PhishingWarningBanner from "@/app/conversations/[id]/PhishingWarningBanner";
 import UnsubscribeButton from "@/app/conversations/[id]/UnsubscribeButton";
+import SnoozeButton from "@/app/conversations/[id]/SnoozeButton";
 
 export const dynamic = "force-dynamic";
 
@@ -270,6 +271,7 @@ export default async function ConversationPage({
   const phishingMarkedSafe = convMeta.phishingMarkedSafe === true
 
   const hasUnsubscribeLink = convMeta.hasUnsubscribeLink === true
+  const resurfacedFromSnooze = convMeta.resurfacedFromSnooze === true
 
   const isSalesLead = convMeta.isSalesLead === true
   const closingStage =
@@ -354,6 +356,14 @@ export default async function ConversationPage({
 
   const unsubscribeButton = hasUnsubscribeLink ? (
     <UnsubscribeButton conversationId={conversation.id} />
+  ) : null
+
+  const snoozeButton = <SnoozeButton conversationId={conversation.id} />
+
+  const resurfacedBanner = resurfacedFromSnooze ? (
+    <div className="flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm text-indigo-800">
+      💤 This conversation was snoozed and has just resurfaced.
+    </div>
   ) : null
 
   // Reusable sidebar panels shared between desktop and mobile layouts
@@ -638,7 +648,9 @@ export default async function ConversationPage({
             <div className="space-y-2.5">
               {vipBanner}
               {phishingBanner}
+              {resurfacedBanner}
               {unsubscribeButton}
+              {snoozeButton}
               {contactCard}
               {assistantCard}
               {businessPanels}
@@ -733,7 +745,9 @@ export default async function ConversationPage({
           <aside className="min-w-0 space-y-3">
             {vipBanner}
             {phishingBanner}
+            {resurfacedBanner}
             {unsubscribeButton}
+            {snoozeButton}
             {contactCard}
             {assistantCard}
             {businessPanels}

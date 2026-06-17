@@ -314,6 +314,7 @@ export default async function InboxPage({ searchParams }: Props) {
         if (!meta || typeof meta !== "object" || Array.isArray(meta)) return false;
         const m = meta as Record<string, unknown>;
         if (attentionFilter === "life_admin") return !!m.lifeAdminType;
+        if (attentionFilter === "snoozed") return typeof m.snoozeReminderId === "string";
         return m.attentionCategory === attentionFilter;
       })
     : mobileConversations;
@@ -529,12 +530,13 @@ export default async function InboxPage({ searchParams }: Props) {
                   Sales
                 </Link>
               )}
-              {(["needs_reply", "review_soon", "read_later", "life_admin"] as const).map((cat) => {
+              {(["needs_reply", "review_soon", "read_later", "life_admin", "snoozed"] as const).map((cat) => {
                 const labels: Record<string, string> = {
                   needs_reply: "Reply",
                   review_soon: "Review",
                   read_later: "Later",
                   life_admin: "Life Admin",
+                  snoozed: "Snoozed",
                 }
                 const isActive = attentionFilter === cat && !salesFilter && !activeStatus
                 return (

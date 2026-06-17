@@ -22,6 +22,8 @@ type InboxRowProps = {
   initialStatus: string
   isVip?: boolean
   vipLabel?: string | null
+  onSnooze?: () => void
+  snoozeUntil?: string | null
 }
 
 export default function InboxRow({
@@ -40,6 +42,8 @@ export default function InboxRow({
   initialStatus,
   isVip,
   vipLabel,
+  onSnooze,
+  snoozeUntil,
 }: InboxRowProps) {
   const router = useRouter()
   const [isRead, setIsRead] = useState(initialReadAt)
@@ -125,6 +129,11 @@ export default function InboxRow({
           {hasDraft && !isFyi && (
             <span className="text-[10px] font-semibold text-blue-600">✦ draft</span>
           )}
+          {snoozeUntil && (
+            <span className="text-xs text-indigo-500">
+              💤 {new Date(snoozeUntil).toLocaleDateString()}
+            </span>
+          )}
         </div>
       </Link>
 
@@ -150,6 +159,16 @@ export default function InboxRow({
         >
           {isClosed ? "↺" : "✓"}
         </button>
+        {onSnooze && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onSnooze() }}
+            className="rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-100"
+            title="Snooze"
+          >
+            💤
+          </button>
+        )}
       </div>
     </div>
   )
