@@ -312,7 +312,9 @@ export default async function InboxPage({ searchParams }: Props) {
     ? mobileConversations.filter((c) => {
         const meta = c.stateRecord?.metadataJson;
         if (!meta || typeof meta !== "object" || Array.isArray(meta)) return false;
-        return (meta as Record<string, unknown>).attentionCategory === attentionFilter;
+        const m = meta as Record<string, unknown>;
+        if (attentionFilter === "life_admin") return !!m.lifeAdminType;
+        return m.attentionCategory === attentionFilter;
       })
     : mobileConversations;
 
@@ -527,8 +529,13 @@ export default async function InboxPage({ searchParams }: Props) {
                   Sales
                 </Link>
               )}
-              {(["needs_reply", "review_soon", "read_later"] as const).map((cat) => {
-                const labels: Record<string, string> = { needs_reply: "Reply", review_soon: "Review", read_later: "Later" }
+              {(["needs_reply", "review_soon", "read_later", "life_admin"] as const).map((cat) => {
+                const labels: Record<string, string> = {
+                  needs_reply: "Reply",
+                  review_soon: "Review",
+                  read_later: "Later",
+                  life_admin: "Life Admin",
+                }
                 const isActive = attentionFilter === cat && !salesFilter && !activeStatus
                 return (
                   <Link

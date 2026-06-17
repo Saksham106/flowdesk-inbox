@@ -10,6 +10,7 @@ import { classifyEmailType } from "@/lib/agent/email-classifier"
 import { evaluatePersonMemoryPolicy } from "@/lib/ai/usage-policy"
 import { recordAiUsageEvent } from "@/lib/ai/usage"
 import { extractEmail } from "@/lib/google"
+import { detectLifeAdminType } from "@/lib/agent/life-admin"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
@@ -444,6 +445,67 @@ export async function syncConversationWorkItems(
           source: "deterministic",
         },
       })
+    }
+  }
+
+  // Life admin detection — runs for all accounts
+  if (firstInbound) {
+    const fromEmail = extractEmail(firstInbound.fromE164 ?? "")
+    const lifeAdminResult = detectLifeAdminType(
+      fromEmail,
+      firstInbound.body.slice(0, 200),
+      firstInbound.body
+    )
+    if (lifeAdminResult.type) {
+      const currentState = await prisma.conversationState.findUnique({
+        where: { conversationId: conversation.id },
+        select: { metadataJson: true },
+      })
+      const currentMeta =
+        currentState?.metadataJson &&
+        typeof currentState.metadataJson === "object" &&
+        !Array.isArray(currentState.metadataJson)
+          ? (currentState.metadataJson as Record<string, unknown>)
+          : {}
+      await prisma.conversationState.update({
+        where: { conversationId: conversation.id },
+        data: {
+          metadataJson: {
+            ...currentMeta,
+            lifeAdminType: lifeAdminResult.type,
+            lifeAdminAmount: lifeAdminResult.amount ?? null,
+            lifeAdminCurrency: lifeAdminResult.currency ?? null,
+          } as Prisma.InputJsonValue,
+        },
+      })
+      // Create InboxTask for actionable life-admin types
+      if (["bill_due", "medical_appointment", "subscription_renewal"].includes(lifeAdminResult.type)) {
+        const taskTitle =
+          lifeAdminResult.type === "bill_due"
+            ? `Pay bill${lifeAdminResult.amount ? ` — $${lifeAdminResult.amount}` : ""}`
+            : lifeAdminResult.type === "medical_appointment"
+            ? "Medical appointment"
+            : `Subscription renewal${lifeAdminResult.amount ? ` — $${lifeAdminResult.amount}` : ""}`
+        const deterministicKey = `life_admin:${conversation.id}:${lifeAdminResult.type}`
+        await prisma.inboxTask.upsert({
+          where: {
+            tenantId_deterministicKey: {
+              tenantId: conversation.tenantId,
+              deterministicKey,
+            },
+          },
+          create: {
+            tenantId: conversation.tenantId,
+            conversationId: conversation.id,
+            title: taskTitle,
+            status: "open",
+            source: "deterministic",
+            deterministicKey,
+            metadataJson: { lifeAdminType: lifeAdminResult.type } as Prisma.InputJsonValue,
+          },
+          update: { title: taskTitle },
+        })
+      }
     }
   }
 
