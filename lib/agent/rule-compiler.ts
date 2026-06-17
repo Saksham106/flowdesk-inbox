@@ -51,6 +51,8 @@ export async function compileRule(plainText: string): Promise<CompiledRule> {
   const regexResult = tryRegexCompile(plainText)
   if (regexResult) return regexResult
 
+  const sanitizedText = plainText.replace(/["\n\r]/g, " ").slice(0, 500)
+
   const prompt = `You are a rule compiler for an email assistant. Convert the user's plain-English rule into a structured JSON object.
 
 Supported ruleTypes: "attention"
@@ -58,7 +60,7 @@ Supported conditionsJson: { "matchType": "email"|"domain", "matchValue": "<email
 Supported actionJson: { "targetAttention": one of ${JSON.stringify(ATTENTION_VALUES)} }
 confidence: 0.0–1.0 (how certain you are about the interpretation)
 
-User rule: "${plainText}"
+User rule: "${sanitizedText}"
 
 Respond with ONLY valid JSON matching this shape:
 { "ruleType": "attention", "conditionsJson": {...}, "actionJson": {...}, "confidence": 0.0 }`
@@ -70,13 +72,21 @@ Respond with ONLY valid JSON matching this shape:
     max_tokens: 200,
   })
 
+  const validRuleTypes = ["attention"]
+  const validTargetAttentions = ["needs_reply","needs_action","review_soon","read_later","waiting_on","fyi_done","quiet"]
+
   const raw = completion.choices[0]?.message?.content?.trim() ?? ""
   try {
     const parsed = JSON.parse(raw)
+    const ruleType = validRuleTypes.includes(parsed.ruleType) ? parsed.ruleType : "attention"
+    const targetAttention = parsed.actionJson?.targetAttention
+    const safeTargetAttention = validTargetAttentions.includes(targetAttention)
+      ? targetAttention
+      : undefined
     return {
-      ruleType: parsed.ruleType ?? "attention",
+      ruleType,
       conditionsJson: parsed.conditionsJson ?? {},
-      actionJson: parsed.actionJson ?? {},
+      actionJson: safeTargetAttention ? { targetAttention: safeTargetAttention } : {},
       confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.5,
     }
   } catch {

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
         tenantId,
         phoneE164: matchType === "email"
           ? { equals: matchValue, mode: "insensitive" }
-          : { endsWith: `@${matchValue}`, mode: "insensitive" },
+          : { contains: `@${matchValue}`, mode: "insensitive" },
       },
       select: { id: true, name: true },
       take: 10,
