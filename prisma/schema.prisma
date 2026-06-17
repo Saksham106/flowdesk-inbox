@@ -256,6 +256,7 @@ model Message {
   providerMessageId String
   isRead            Boolean          @default(false)
   gmailLabelIds     Json?
+  searchVector      Unsupported("tsvector")?
   createdAt         DateTime         @default(now())
   conversation      Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   emailAttachments  EmailAttachment[]
