@@ -23,6 +23,7 @@ import AiBudgetPanel from "@/app/settings/AiBudgetPanel";
 import { getAiBudgetStatus } from "@/lib/ai/budget";
 import TrainAgentPanel from "@/app/settings/TrainAgentPanel"
 import SnippetsPanel from "@/app/settings/SnippetsPanel"
+import WorkflowsPanel from "@/app/settings/WorkflowsPanel"
 
 export const dynamic = "force-dynamic";
 
@@ -130,6 +131,57 @@ export default async function SettingsPage({ searchParams }: Props) {
     }),
     getAiBudgetStatus(session.user.tenantId),
   ]);
+
+  // Workflow templates — seed 3 defaults if tenant has none
+  const DEFAULT_WORKFLOW_TEMPLATES = [
+    {
+      name: "Lead Quiet Follow-up",
+      trigger: "lead_quiet_3d",
+      stepsJson: [
+        { type: "create_task", taskTitle: "Send follow-up to quiet lead", waitDaysAfterPrevious: 0 },
+        { type: "wait", days: 3 },
+        { type: "close_conversation" },
+      ],
+    },
+    {
+      name: "Scheduling Unconfirmed Nudge",
+      trigger: "scheduling_unconfirmed_2d",
+      stepsJson: [
+        { type: "create_task", taskTitle: "Nudge scheduling confirmation", waitDaysAfterPrevious: 0 },
+        { type: "wait", days: 2 },
+        { type: "close_conversation" },
+      ],
+    },
+    {
+      name: "VIP No-Reply Follow-up",
+      trigger: "vip_no_reply_2d",
+      stepsJson: [
+        { type: "create_task", taskTitle: "Follow up with VIP contact", waitDaysAfterPrevious: 0 },
+        { type: "wait", days: 2 },
+      ],
+    },
+  ]
+  let workflowTemplates = await prisma.workflowTemplate.findMany({
+    where: { tenantId: session.user.tenantId },
+    orderBy: { createdAt: "asc" },
+  })
+  if (workflowTemplates.length === 0) {
+    await prisma.workflowTemplate.createMany({
+      data: DEFAULT_WORKFLOW_TEMPLATES.map((t) => ({ ...t, tenantId: session.user.tenantId })),
+    })
+    workflowTemplates = await prisma.workflowTemplate.findMany({
+      where: { tenantId: session.user.tenantId },
+      orderBy: { createdAt: "asc" },
+    })
+  }
+  const workflowRuns = await prisma.workflowRun.findMany({
+    where: { tenantId: session.user.tenantId, status: "running" },
+    select: { workflowTemplateId: true },
+  })
+  const workflowActiveCounts = workflowRuns.reduce<Record<string, number>>((acc, r) => {
+    acc[r.workflowTemplateId] = (acc[r.workflowTemplateId] ?? 0) + 1
+    return acc
+  }, {})
 
   const agentRules = agentRulesRaw.map((r) => ({
     id: r.id,
@@ -621,6 +673,28 @@ export default async function SettingsPage({ searchParams }: Props) {
           </div>
           <div className="px-6 py-5">
             <SnippetsPanel initialSnippets={snippets} />
+          </div>
+        </section>
+
+        {/* Workflows */}
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="font-semibold">Workflows</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Multi-step email sequences that run automatically based on triggers.
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <WorkflowsPanel
+              initialTemplates={workflowTemplates.map((t) => ({
+                id: t.id,
+                name: t.name,
+                trigger: t.trigger,
+                stepsJson: t.stepsJson as Array<{ type: string; days?: number; taskTitle?: string }>,
+                enabled: t.enabled,
+              }))}
+              activeCounts={workflowActiveCounts}
+            />
           </div>
         </section>
 
