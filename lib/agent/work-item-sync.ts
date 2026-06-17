@@ -11,6 +11,7 @@ import { evaluatePersonMemoryPolicy } from "@/lib/ai/usage-policy"
 import { recordAiUsageEvent } from "@/lib/ai/usage"
 import { extractEmail } from "@/lib/google"
 import { detectLifeAdminType } from "@/lib/agent/life-admin"
+import { detectVip } from "@/lib/agent/vip-detector"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
@@ -506,6 +507,35 @@ export async function syncConversationWorkItems(
           update: { title: taskTitle },
         })
       }
+    }
+  }
+
+  // VIP detection
+  if (firstInbound) {
+    const fromEmail = extractEmail(firstInbound.fromE164 ?? "")
+    const vipResult = await detectVip(fromEmail, conversation.tenantId)
+    if (vipResult.isVip) {
+      const currentState = await prisma.conversationState.findUnique({
+        where: { conversationId: conversation.id },
+        select: { metadataJson: true },
+      })
+      const currentMeta =
+        currentState?.metadataJson &&
+        typeof currentState.metadataJson === "object" &&
+        !Array.isArray(currentState.metadataJson)
+          ? (currentState.metadataJson as Record<string, unknown>)
+          : {}
+      await prisma.conversationState.update({
+        where: { conversationId: conversation.id },
+        data: {
+          priority: "urgent",
+          metadataJson: {
+            ...currentMeta,
+            isVip: true,
+            vipLabel: vipResult.label ?? null,
+          } as Prisma.InputJsonValue,
+        },
+      })
     }
   }
 
