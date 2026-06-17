@@ -14,6 +14,7 @@ import { detectLifeAdminType } from "@/lib/agent/life-admin"
 import { detectVip } from "@/lib/agent/vip-detector"
 import { detectPhishing } from "@/lib/agent/phishing-detector"
 import { parseUnsubscribeInfo } from "@/lib/agent/unsubscribe"
+import { detectAttachments, extractPdfText } from "@/lib/agent/attachment-extractor"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
@@ -604,6 +605,42 @@ export async function syncConversationWorkItems(
       })
     }
   }
+
+  // Attachment detection (fire-and-forget — doesn't block sync)
+  void (async () => {
+    for (const message of conversation.messages) {
+      const rawBody = message.body
+      if (!rawBody) continue
+      const detected = detectAttachments(rawBody)
+      for (const att of detected) {
+        const existing = await prisma.emailAttachment.findFirst({
+          where: { messageId: message.id, filename: att.filename },
+          select: { id: true },
+        })
+        if (existing) continue
+
+        let extractedText: string | undefined
+        if (att.mimeType === "application/pdf" && att.base64Data) {
+          try {
+            extractedText = await extractPdfText(att.base64Data)
+          } catch {
+            // PDF extraction is best-effort
+          }
+        }
+
+        await prisma.emailAttachment.create({
+          data: {
+            tenantId: conversation.tenantId,
+            messageId: message.id,
+            conversationId: conversation.id,
+            filename: att.filename,
+            mimeType: att.mimeType,
+            extractedText: extractedText ?? null,
+          },
+        })
+      }
+    }
+  })()
 
   // Second-pass auto-close: classifyEmailType runs after summarizeWorkItems, so emails classified
   // as FYI by the email classifier (but not caught by pattern matching) need a second chance here.
