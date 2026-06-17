@@ -61,7 +61,7 @@ export async function advanceWorkflowStep(runId: string): Promise<"advanced" | "
 
   if (step.type === "close_conversation") {
     await prisma.conversation.update({
-      where: { id: run.conversationId },
+      where: { id: run.conversationId, tenantId: run.tenantId },
       data: { status: "closed" },
     })
     await prisma.auditLog.create({

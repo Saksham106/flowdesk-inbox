@@ -97,13 +97,25 @@ export async function PATCH(
       }),
     ])
     updated = schedulingSession
+  } else if (body.eventId) {
+    const [schedulingSession] = await prisma.$transaction([
+      prisma.schedulingSession.update({
+        where: { conversationId: params.id },
+        data: { eventId: body.eventId, status: "booked" },
+      }),
+      prisma.auditLog.create({
+        data: {
+          tenantId: session.user.tenantId,
+          action: "scheduling_session.booked",
+          payloadJson: { conversationId: params.id, eventId: body.eventId } as Prisma.InputJsonValue,
+        },
+      }),
+    ])
+    updated = schedulingSession
   } else {
     updated = await prisma.schedulingSession.update({
       where: { conversationId: params.id },
-      data: {
-        ...(body.eventId && { eventId: body.eventId, status: "booked" }),
-        ...(body.status && !body.eventId && { status: body.status }),
-      },
+      data: { ...(body.status && { status: body.status }) },
     })
   }
 
