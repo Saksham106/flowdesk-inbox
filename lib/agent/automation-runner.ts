@@ -64,9 +64,12 @@ export async function executeAutomationStep(step: AutomationStep): Promise<StepR
   }
 }
 
-export async function rollbackAutomationStep(step: AutomationStep & { rollbackData: Record<string, unknown> }): Promise<void> {
+export async function rollbackAutomationStep(
+  step: AutomationStep & { rollbackData: Record<string, unknown> },
+  tenantId: string
+): Promise<void> {
   if (step.type === "create_task" && step.rollbackData.taskId) {
-    await prisma.inboxTask.deleteMany({ where: { id: step.rollbackData.taskId as string } })
+    await prisma.inboxTask.deleteMany({ where: { id: step.rollbackData.taskId as string, tenantId } })
   }
   if (step.type === "update_attention" && step.rollbackData.previousAttention) {
     await prisma.conversationState.update({

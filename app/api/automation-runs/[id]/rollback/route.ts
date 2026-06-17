@@ -25,7 +25,7 @@ export async function POST(
   const steps = (run.stepsJson as AutomationStep[]).filter((s) => s.status === "completed").reverse()
   for (const step of steps) {
     if (step.rollbackData) {
-      await rollbackAutomationStep(step as AutomationStep & { rollbackData: Record<string, unknown> })
+      await rollbackAutomationStep(step as AutomationStep & { rollbackData: Record<string, unknown> }, run.tenantId)
     }
   }
 
