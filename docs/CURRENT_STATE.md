@@ -27,7 +27,7 @@ The core promise is: show what matters, explain why, safely handle routine work,
 - Outlook connect/callback/sync/disconnect routes exist.
 - Google Calendar connect/callback/disconnect and calendar hold support exist.
 - MindBody has an optional business-mode connector foundation.
-- Gmail sync uses per-channel locking, idempotent message upserts, durable push-event tracking, partial thread-failure logging, push/watch health, app-load/tab-return/stale fallback sync, and a manual sync control.
+- Gmail sync uses per-channel locking, idempotent message upserts, durable push-event tracking, partial thread-failure logging, push/watch health, app-load/tab-return/stale fallback sync, and a manual sync control that updates status without full page refresh.
 - Gmail watch renewal records per-channel health, audit-log entries, and monitor-visible cron failures. History cursor fallback is timestamped for UI visibility.
 
 ### Inbox And Thread Experience
@@ -36,6 +36,7 @@ The core promise is: show what matters, explain why, safely handle routine work,
 - `/inbox` Home keeps its initial command-center query bounded and reuses included conversation state instead of issuing a duplicate state lookup.
 - Inbox list tabs support status, sales, and attention-oriented filtering.
 - Inbox list data uses a short tenant-scoped cache tag and indexed `ConversationState` filter columns for common sales/attention filters.
+- Inbox auto-refresh polls lightweight summary data once per minute instead of forcing full route re-renders; search filters loaded rows immediately and defers URL/server search until pause or Enter.
 - Conversation detail pages at `/conversations/[id]` render chronological email-style thread blocks with sender/recipient/timestamp metadata.
 - Conversation detail pages cap initial message fetches and avoid running work-item sync on every page open; sync is driven by provider sync/new message paths and explicit actions.
 - Reply composer supports manual send and AI draft generation. CC/BCC fields are present in the UI but are not yet forwarded by send APIs.
@@ -53,7 +54,7 @@ The core promise is: show what matters, explain why, safely handle routine work,
 - Raw Gmail state (`gmailUnread`, `gmailRawState`, `gmailLabelIds`) is separate from local read/user state.
 - User overrides survive sync and AI classification.
 - Gmail mark-read writeback retries transient failures, queues failed mark-read writes in `GmailWritebackQueue`, and can be retried by `GET /api/cron/gmail-writeback`.
-- `GET /api/cron/gmail-state-reconcile` detects recent local-read/Gmail-unread drift, logs `conversation_state.drift_detected`, and queues mark-read writeback.
+- `GET /api/cron/gmail-state-reconcile` detects recent local-read/Gmail-unread drift, logs `conversation_state.drift_detected`, queues mark-read writeback for explicit user reads, and auto-reconciles non-user local reads back to Gmail unread state.
 - Failed Gmail push events are persisted in `GmailPushEvent` and can be retried by `GET /api/cron/gmail-push-retry`.
 
 ### Classification And Attention

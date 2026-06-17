@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type GmailSyncChannel = {
@@ -43,7 +42,6 @@ export default function GmailSyncControl({
   channels: GmailSyncChannel[];
   compact?: boolean;
 }) {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<SyncStatus>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(() => {
@@ -137,7 +135,6 @@ export default function GmailSyncControl({
           type: "success",
           message: totalSynced === 1 ? "Synced 1 update" : `Synced ${totalSynced} updates`,
         });
-        router.refresh();
       } catch (err) {
         setStatus({
           type: "error",
@@ -148,7 +145,7 @@ export default function GmailSyncControl({
         setLoading(false);
       }
     },
-    [channels, hasChannels, lastSyncedAt, router, shouldPollWithHealthyPush]
+    [channels, hasChannels, lastSyncedAt, shouldPollWithHealthyPush]
   );
 
   useEffect(() => {

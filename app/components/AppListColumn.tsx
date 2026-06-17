@@ -1,13 +1,10 @@
 import Link from "next/link"
-import { Suspense } from "react"
 import { unstable_cache } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { stripHtmlToText, buildPreviewText } from "@/lib/email-body"
-import SearchInput from "@/app/inbox/SearchInput"
 import GmailSyncControl from "@/app/components/GmailSyncControl"
-import InboxScrollContainer from "@/app/components/InboxScrollContainer"
 import { buildConversationHref } from "@/lib/client-navigation"
-import InboxRow from "@/app/components/InboxRow"
+import ClientFilteredInboxList, { type InboxListItem } from "@/app/components/ClientFilteredInboxList"
 import { resolveAccountMode } from "@/lib/account-mode"
 import { inboxTag } from "@/lib/cache-tags"
 
@@ -213,19 +210,52 @@ export default async function AppListColumn({
 
   const returnTo = currentInboxHref()
   const scrollKey = [status ?? "all", q ?? "", sales ? "s" : ""].join("_")
+  const emptyMessage = q || status || sales ? "No results." : "No conversations yet."
+  const listItems: InboxListItem[] = conversations.map((conv) => {
+    const fyi = isFyi(conv)
+    const attention = attentionCategory(conv)
+    const attentionStyle = attention ? ATTENTION_STYLE[attention] : null
+    const displayStatus = fyi ? "closed" : conv.status
+    const style = STATUS_STYLE[displayStatus] ?? { dot: "bg-slate-300", text: "text-slate-500" }
+    const name = conv.contact?.name ?? conv.externalThreadId
+    const msg0 = conv.messages[0]
+    const bodySnippet = msg0?.body ? stripHtmlToText(msg0.body, 75) : ""
+    const snippet = buildPreviewText(msg0?.subject, bodySnippet)
+    const hasDraft = conv.draft?.status === "proposed" || conv.draft?.status === "approved"
+    const isClosed = conv.status === "closed"
+
+    return {
+      id: conv.id,
+      href: buildConversationHref(conv.id, returnTo),
+      isSelected: conv.id === activeConversationId,
+      isUnread: !conv.readAt && conv.gmailUnread !== false && !fyi,
+      isFyi: fyi,
+      isClosed,
+      name,
+      snippet,
+      timeLabel: relativeTime(conv.lastMessageAt),
+      statusDot: attentionStyle?.dot ?? style.dot,
+      statusText: attentionStyle?.text ?? style.text,
+      statusLabel: attentionStyle?.label ?? (fyi ? "No reply needed" : STATUS_LABEL[displayStatus] ?? displayStatus),
+      hasDraft,
+      initialReadAt: conv.readAt !== null,
+      initialStatus: conv.status,
+      attentionCategory: attention,
+      isPersonal,
+      isGmail: conv.channel.provider === "google",
+      searchText: `${name} ${conv.externalThreadId} ${snippet}`.toLowerCase(),
+    }
+  })
 
   return (
-    <div className={`flex h-full flex-col border-r border-slate-200 bg-white ${className}`}>
-      {/* Header */}
-      <div className="border-b border-slate-100 px-3 pb-2 pt-3">
-        <div className="mb-2 flex items-start justify-between gap-2">
-          <p className="pt-1 text-sm font-semibold text-slate-900">Inbox</p>
-          <GmailSyncControl channels={gmailChannels} compact />
-        </div>
-        <Suspense>
-          <SearchInput defaultValue={q} />
-        </Suspense>
-        {/* Filter pills */}
+    <ClientFilteredInboxList
+      items={listItems}
+      defaultQuery={q ?? ""}
+      emptyMessage={emptyMessage}
+      scrollKey={scrollKey}
+      className={className}
+      headerEnd={<GmailSyncControl channels={gmailChannels} compact />}
+      filters={
         <div className="mt-2 flex flex-wrap gap-1">
           {STATUS_FILTERS.map(({ label, value }) => {
             const isActive = status === value || (value === null && !status)
@@ -260,55 +290,7 @@ export default async function AppListColumn({
             </Link>
           )}
         </div>
-      </div>
-
-      {/* Conversation rows */}
-      <InboxScrollContainer scrollKey={scrollKey} className="flex-1 overflow-y-auto">
-        {conversations.length === 0 ? (
-          <p className="px-4 py-8 text-xs text-slate-400">
-            {q || status || sales ? "No results." : "No conversations yet."}
-          </p>
-        ) : (
-          conversations.map((conv) => {
-            const fyi = isFyi(conv)
-            const attention = attentionCategory(conv)
-            const attentionStyle = attention ? ATTENTION_STYLE[attention] : null
-            const displayStatus = fyi ? "closed" : conv.status
-            const style = STATUS_STYLE[displayStatus] ?? { dot: "bg-slate-300", text: "text-slate-500" }
-            const name = conv.contact?.name ?? conv.externalThreadId
-            const msg0 = conv.messages[0]
-            const bodySnippet = msg0?.body ? stripHtmlToText(msg0.body, 75) : ""
-            const snippet = buildPreviewText(msg0?.subject, bodySnippet)
-            const hasDraft =
-              conv.draft?.status === "proposed" || conv.draft?.status === "approved"
-            const isClosed = conv.status === "closed"
-
-            return (
-              <InboxRow
-                key={conv.id}
-                id={conv.id}
-                href={buildConversationHref(conv.id, returnTo)}
-                isSelected={conv.id === activeConversationId}
-                isUnread={!conv.readAt && conv.gmailUnread !== false && !fyi}
-                isFyi={fyi}
-                isClosed={isClosed}
-                name={name}
-                snippet={snippet}
-                timeLabel={relativeTime(conv.lastMessageAt)}
-                statusDot={attentionStyle?.dot ?? style.dot}
-                statusText={attentionStyle?.text ?? style.text}
-                statusLabel={attentionStyle?.label ?? (fyi ? "No reply needed" : STATUS_LABEL[displayStatus] ?? displayStatus)}
-                hasDraft={hasDraft}
-                initialReadAt={conv.readAt !== null}
-                initialStatus={conv.status}
-                attentionCategory={attention}
-                isPersonal={isPersonal}
-                isGmail={conv.channel.provider === "google"}
-              />
-            )
-          })
-        )}
-      </InboxScrollContainer>
-    </div>
+      }
+    />
   )
 }

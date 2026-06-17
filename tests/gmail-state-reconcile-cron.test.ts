@@ -2,17 +2,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const {
   mockConversationFindMany,
+  mockConversationUpdate,
+  mockMessageUpdateMany,
   mockAuditCreate,
   mockWritebackUpsert,
 } = vi.hoisted(() => ({
   mockConversationFindMany: vi.fn(),
+  mockConversationUpdate: vi.fn(),
+  mockMessageUpdateMany: vi.fn(),
   mockAuditCreate: vi.fn(),
   mockWritebackUpsert: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    conversation: { findMany: mockConversationFindMany },
+    conversation: { findMany: mockConversationFindMany, update: mockConversationUpdate },
+    message: { updateMany: mockMessageUpdateMany },
     auditLog: { create: mockAuditCreate },
     gmailWritebackQueue: { upsert: mockWritebackUpsert },
   },
@@ -51,6 +56,7 @@ describe("GET /api/cron/gmail-state-reconcile", () => {
         id: "conv-1",
         tenantId: "tenant-1",
         channelId: "channel-1",
+        userStateSource: "user",
         readAt: new Date("2026-06-16T00:00:00Z"),
         gmailUnread: true,
         messages: [{ providerMessageId: "gmail_msg-1" }],
@@ -58,14 +64,16 @@ describe("GET /api/cron/gmail-state-reconcile", () => {
     ])
     mockAuditCreate.mockResolvedValue({})
     mockWritebackUpsert.mockResolvedValue({})
+    mockConversationUpdate.mockResolvedValue({})
+    mockMessageUpdateMany.mockResolvedValue({})
   })
 
-  it("logs Gmail read-state drift and enqueues mark-read writeback", async () => {
+  it("protects explicit user reads by logging Gmail drift and enqueueing mark-read writeback", async () => {
     const res = await GET(request())
     const body = await res.json()
 
     expect(res.status).toBe(200)
-    expect(body).toEqual({ drifted: 1, queued: 1 })
+    expect(body).toEqual({ drifted: 1, queued: 1, reconciled: 0 })
     expect(mockAuditCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         tenantId: "tenant-1",
@@ -96,5 +104,50 @@ describe("GET /api/cron/gmail-state-reconcile", () => {
         status: "pending",
       }),
     })
+    expect(mockConversationUpdate).not.toHaveBeenCalled()
+    expect(mockMessageUpdateMany).not.toHaveBeenCalled()
+  })
+
+  it("auto-reconciles non-user local reads back to Gmail unread state", async () => {
+    mockConversationFindMany.mockResolvedValueOnce([
+      {
+        id: "conv-2",
+        tenantId: "tenant-1",
+        channelId: "channel-1",
+        userStateSource: "ai",
+        readAt: new Date("2026-06-16T00:00:00Z"),
+        gmailUnread: true,
+        messages: [{ providerMessageId: "gmail_msg-2" }],
+      },
+    ])
+
+    const res = await GET(request())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body).toEqual({ drifted: 1, queued: 0, reconciled: 1 })
+    expect(mockConversationUpdate).toHaveBeenCalledWith({
+      where: { id: "conv-2" },
+      data: {
+        readAt: null,
+        userStateSource: "gmail_reconcile",
+        userStateUpdatedAt: expect.any(Date),
+      },
+    })
+    expect(mockMessageUpdateMany).toHaveBeenCalledWith({
+      where: { conversationId: "conv-2" },
+      data: { isRead: false },
+    })
+    expect(mockAuditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tenantId: "tenant-1",
+        action: "conversation_state.auto_reconciled",
+        payloadJson: expect.objectContaining({
+          conversationId: "conv-2",
+          source: "ai",
+        }),
+      }),
+    })
+    expect(mockWritebackUpsert).not.toHaveBeenCalled()
   })
 })

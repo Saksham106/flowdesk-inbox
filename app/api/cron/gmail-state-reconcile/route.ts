@@ -24,6 +24,7 @@ export async function GET(request: Request) {
       id: true,
       tenantId: true,
       channelId: true,
+      userStateSource: true,
       readAt: true,
       gmailUnread: true,
       messages: { select: { providerMessageId: true } },
@@ -32,6 +33,7 @@ export async function GET(request: Request) {
   })
 
   let queued = 0
+  let reconciled = 0
 
   for (const conversation of driftedConversations) {
     const providerMessageIds = conversation.messages.map((message) => message.providerMessageId)
@@ -47,6 +49,37 @@ export async function GET(request: Request) {
         },
       },
     })
+
+    if (conversation.userStateSource !== "user") {
+      const reconciledAt = new Date()
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          readAt: null,
+          userStateSource: "gmail_reconcile",
+          userStateUpdatedAt: reconciledAt,
+        },
+      })
+      await prisma.message.updateMany({
+        where: { conversationId: conversation.id },
+        data: { isRead: false },
+      })
+      await prisma.auditLog.create({
+        data: {
+          tenantId: conversation.tenantId,
+          action: "conversation_state.auto_reconciled",
+          payloadJson: {
+            conversationId: conversation.id,
+            driftType: "local_read_gmail_unread",
+            source: conversation.userStateSource,
+            reconciledAt: reconciledAt.toISOString(),
+          },
+        },
+      })
+      reconciled++
+      continue
+    }
+
     await prisma.gmailWritebackQueue.upsert({
       where: {
         conversationId_action: {
@@ -75,5 +108,5 @@ export async function GET(request: Request) {
     queued++
   }
 
-  return NextResponse.json({ drifted: driftedConversations.length, queued })
+  return NextResponse.json({ drifted: driftedConversations.length, queued, reconciled })
 }

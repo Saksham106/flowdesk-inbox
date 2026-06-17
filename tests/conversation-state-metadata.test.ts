@@ -61,6 +61,31 @@ describe("home and conversation performance safeguards", () => {
     expect(source).not.toContain("<AutoRefresh intervalMs={8000} />")
   })
 
+  it("keeps inbox polling lightweight and avoids full page refresh polling", () => {
+    const inboxSource = readFileSync(join(process.cwd(), "app/inbox/page.tsx"), "utf8")
+    const autoRefreshSource = readFileSync(join(process.cwd(), "app/components/AutoRefresh.tsx"), "utf8")
+    const syncControlSource = readFileSync(join(process.cwd(), "app/components/GmailSyncControl.tsx"), "utf8")
+
+    expect(inboxSource).toContain("<AutoRefresh intervalMs={60000} />")
+    expect(inboxSource).not.toContain("<AutoRefresh intervalMs={10000} />")
+    expect(autoRefreshSource).not.toContain("useRouter")
+    expect(autoRefreshSource).not.toContain("router.refresh")
+    expect(autoRefreshSource).toContain("/api/inbox/summary")
+    expect(syncControlSource).not.toContain("router.refresh")
+  })
+
+  it("filters already loaded inbox rows immediately before deferred URL search", () => {
+    const searchSource = readFileSync(join(process.cwd(), "app/inbox/SearchInput.tsx"), "utf8")
+    const listSource = readFileSync(join(process.cwd(), "app/components/ClientFilteredInboxList.tsx"), "utf8")
+
+    expect(searchSource).toContain("onLocalQueryChange")
+    expect(searchSource).toContain("SEARCH_NAVIGATION_DEBOUNCE_MS = 1000")
+    expect(searchSource).toContain("setIsNavigating(trimmed !== currentQuery)")
+    expect(searchSource).toContain("aria-busy={isNavigating}")
+    expect(listSource).toContain("visibleItems")
+    expect(listSource).toContain("item.searchText.includes(normalizedQuery)")
+  })
+
   it("uses cached indexed list filters instead of JSON metadata path filters", () => {
     const source = readFileSync(join(process.cwd(), "app/components/AppListColumn.tsx"), "utf8")
 

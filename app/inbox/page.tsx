@@ -399,7 +399,7 @@ export default async function InboxPage({ searchParams }: Props) {
 
   return (
     <>
-      <AutoRefresh intervalMs={10000} />
+      <AutoRefresh intervalMs={60000} />
 
       {/* ── DESKTOP SHELL (lg+) ── */}
       <div className="hidden lg:flex h-screen overflow-hidden bg-slate-50">
