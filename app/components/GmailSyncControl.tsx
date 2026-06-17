@@ -16,7 +16,7 @@ type SyncStatus = {
   message: string;
 } | null;
 
-const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+const AUTO_SYNC_INTERVAL_MS = 15 * 60 * 1000;
 const AUTO_SYNC_COOLDOWN_MS = 60 * 1000;
 const PUSH_STALE_FALLBACK_MS = 30 * 60 * 1000;
 const WATCH_HEALTH_BUFFER_MS = 10 * 60 * 1000;
@@ -138,12 +138,10 @@ export default function GmailSyncControl({
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("focus", onVisibility);
     const interval = hasHealthyPush ? null : window.setInterval(() => runSync("auto"), AUTO_SYNC_INTERVAL_MS);
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("focus", onVisibility);
       if (interval) window.clearInterval(interval);
     };
   }, [hasChannels, hasHealthyPush, runSync]);

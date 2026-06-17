@@ -21,8 +21,8 @@ export default function SearchInput({ defaultValue = "" }: { defaultValue?: stri
         } else {
           params.delete("q");
         }
-        router.push(`${pathname}?${params.toString()}`);
-      }, 300);
+        router.replace(`${pathname}?${params.toString()}`);
+      }, 600);
     },
     [router, pathname, searchParams]
   );

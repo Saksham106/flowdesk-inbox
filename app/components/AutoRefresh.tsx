@@ -8,7 +8,9 @@ export default function AutoRefresh({ intervalMs = 10000 }: { intervalMs?: numbe
 
   useEffect(() => {
     const id = setInterval(() => {
-      router.refresh();
+      if (document.visibilityState === "visible") {
+        router.refresh();
+      }
     }, intervalMs);
 
     return () => clearInterval(id);

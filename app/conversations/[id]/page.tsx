@@ -15,7 +15,6 @@ import MarkReadButton from "@/app/conversations/[id]/MarkReadButton";
 import LabelSelect from "@/app/conversations/[id]/LabelSelect"
 import AttentionCorrectionSelect from "@/app/conversations/[id]/AttentionCorrectionSelect";
 import SaveContactForm from "@/app/conversations/[id]/SaveContactForm";
-import AutoDraftTrigger from "@/app/conversations/[id]/AutoDraftTrigger";
 import AutoRefresh from "@/app/components/AutoRefresh"
 import PersonMemoryEditShell from "./PersonMemoryEditShell";
 import CollapsibleCard from "@/app/components/CollapsibleCard";
@@ -62,7 +61,6 @@ export default async function ConversationPage({
     latestAgentJob,
     activeHold,
     pendingApprovals,
-    pendingFollowUpJob,
     needsReplyCount,
     gmailChannels,
   ] = await Promise.all([
@@ -100,11 +98,6 @@ export default async function ConversationPage({
       where: { conversationId: params.id, tenantId: session.user.tenantId, status: "pending" },
       orderBy: { createdAt: "desc" },
       take: 3,
-    }),
-    prisma.agentJob.findFirst({
-      where: { conversationId: params.id, tenantId: session.user.tenantId, trigger: "follow_up", status: "pending" },
-      orderBy: { createdAt: "desc" },
-      select: { id: true },
     }),
     prisma.conversation.count({
       where: { tenantId: session.user.tenantId, status: "needs_reply" },
@@ -279,11 +272,6 @@ export default async function ConversationPage({
       })
     : null
 
-  const shouldAutoFollowUp =
-    Boolean(pendingFollowUpJob) &&
-    !conversation.draft &&
-    conversation.channel.type === "email" &&
-    (isPersonal || Boolean(businessProfile));
   const canSuggestReply =
     conversation.channel.type === "email" && (isPersonal || Boolean(businessProfile));
 
@@ -523,7 +511,6 @@ export default async function ConversationPage({
   return (
     <>
       <AutoRefresh intervalMs={8000} />
-      {shouldAutoFollowUp && <AutoDraftTrigger conversationId={conversation.id} />}
 
       {/* ── DESKTOP SHELL (lg+) ── */}
       <div className="hidden lg:flex h-screen overflow-hidden bg-slate-50">
