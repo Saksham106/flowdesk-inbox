@@ -49,6 +49,9 @@ export default function ReplyComposer({
   const [showInstruction, setShowInstruction] = useState(false)
   const [isFocused, setIsFocused] = useState(false);
   const [isExpanded, setIsExpanded] = useState(initialDraft !== null)
+  const [snippets, setSnippets] = useState<Array<{id:string;title:string;content:string}>>([])
+  const [showSnippets, setShowSnippets] = useState(false)
+  const [snippetsLoaded, setSnippetsLoaded] = useState(false)
   const [ccOpen, setCcOpen] = useState(false)
   const [bccOpen, setBccOpen] = useState(false)
   const [cc, setCc] = useState("")
@@ -63,6 +66,24 @@ export default function ReplyComposer({
   const riskLevel = draft?.metadataJson?.riskLevel;
   const escalationReason = draft?.metadataJson?.escalationReason;
   const isRisky = hasDraftText && (riskLevel === "high" || Boolean(escalationReason));
+
+  async function loadSnippets() {
+    if (snippetsLoaded) return
+    const res = await fetch("/api/snippets")
+    const data = await res.json()
+    setSnippets((data.snippets ?? []).filter((s: {status:string}) => s.status === "active"))
+    setSnippetsLoaded(true)
+  }
+
+  function insertSnippet(content: string, id: string) {
+    setText((prev) => prev + (prev ? "\n\n" : "") + content)
+    setShowSnippets(false)
+    fetch(`/api/snippets/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ incrementUseCount: true }),
+    }).catch(() => {})
+  }
 
   async function assertOk(response: Response, fallback: string) {
     if (response.ok) return;
@@ -401,6 +422,30 @@ export default function ReplyComposer({
             {action === "suggesting" ? "Drafting…" : "Draft with AI"}
           </button>
         )}
+        {/* Snippet picker */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => { loadSnippets(); setShowSnippets((v) => !v) }}
+            className="text-xs text-slate-400 hover:text-slate-700 px-2 py-1 rounded border border-transparent hover:border-slate-200"
+          >
+            Snippets
+          </button>
+          {showSnippets && snippets.length > 0 && (
+            <div className="absolute bottom-8 left-0 z-10 w-64 rounded-lg border border-slate-200 bg-white shadow-lg max-h-48 overflow-y-auto">
+              {snippets.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => insertSnippet(s.content, s.id)}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 border-b border-slate-100 last:border-0"
+                >
+                  <span className="font-medium text-slate-700">{s.title}</span>
+                  <span className="block text-slate-400 truncate">{s.content}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <span className="flex-1" />
         <button
           type="button"

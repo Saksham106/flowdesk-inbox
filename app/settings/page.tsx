@@ -22,6 +22,7 @@ import SenderRulesPanel from "@/app/settings/SenderRulesPanel";
 import AiBudgetPanel from "@/app/settings/AiBudgetPanel";
 import { getAiBudgetStatus } from "@/lib/ai/budget";
 import TrainAgentPanel from "@/app/settings/TrainAgentPanel"
+import SnippetsPanel from "@/app/settings/SnippetsPanel"
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,7 @@ export default async function SettingsPage({ searchParams }: Props) {
     latestLearningUsage,
     vipContacts,
     agentRulesRaw,
+    snippets,
   ] = await Promise.all([
     prisma.channel.findMany({
       where: { tenantId: session.user.tenantId, type: "email" },
@@ -113,6 +115,11 @@ export default async function SettingsPage({ searchParams }: Props) {
     prisma.agentRule.findMany({
       where: { tenantId: session.user.tenantId, status: { not: "dismissed" } },
       orderBy: { createdAt: "desc" },
+    }),
+    prisma.snippet.findMany({
+      where: { tenantId: session.user.tenantId, status: { not: "dismissed" } },
+      orderBy: [{ status: "asc" }, { useCount: "desc" }],
+      take: 50,
     }),
   ]);
 
@@ -601,6 +608,19 @@ export default async function SettingsPage({ searchParams }: Props) {
           </div>
           <div className="px-6 py-5">
             <TrainAgentPanel initialRules={agentRules} />
+          </div>
+        </section>
+
+        {/* Snippets & Playbooks */}
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="mb-3 text-base font-semibold">Snippets &amp; Playbooks</h2>
+            <p className="mb-4 text-sm text-slate-500">
+              Reusable response templates. FlowDesk suggests these from your sent emails.
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <SnippetsPanel initialSnippets={snippets} />
           </div>
         </section>
 
