@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { isSafeUnsubscribeUrl } from "@/lib/agent/unsubscribe"
 
 export async function POST(
   _request: Request,
@@ -28,9 +29,14 @@ export async function POST(
       : {}
   const unsubscribeUrl = typeof meta.unsubscribeUrl === "string" ? meta.unsubscribeUrl : null
 
-  if (unsubscribeUrl) {
-    // Fire-and-forget GET request to unsubscribe URL
-    fetch(unsubscribeUrl, { method: "GET" }).catch(() => {/* ignore errors */})
+  if (unsubscribeUrl && isSafeUnsubscribeUrl(unsubscribeUrl)) {
+    fetch(unsubscribeUrl, {
+      method: "GET",
+      redirect: "manual",
+      signal: AbortSignal.timeout(5000),
+    }).catch(() => {
+      // Unsubscribe attempts are best-effort; never block closing the thread.
+    })
   }
 
   // Close the conversation and log

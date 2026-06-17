@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import type { ReactNode } from "react"
 
-import InboxRow from "@/app/components/InboxRow"
+import InboxRowWithSnooze from "@/app/components/InboxRowWithSnooze"
 import InboxScrollContainer from "@/app/components/InboxScrollContainer"
 import SearchInput from "@/app/inbox/SearchInput"
 
@@ -26,6 +26,9 @@ export type InboxListItem = {
   attentionCategory: string | null
   isPersonal: boolean
   isGmail: boolean
+  isVip?: boolean
+  vipLabel?: string | null
+  snoozeUntil?: string | null
   searchText: string
 }
 
@@ -68,7 +71,7 @@ export default function ClientFilteredInboxList({
           <p className="px-4 py-8 text-xs text-slate-400">{emptyMessage}</p>
         ) : (
           visibleItems.map((item) => (
-            <InboxRow
+            <InboxRowWithSnooze
               key={item.id}
               id={item.id}
               href={item.href}
@@ -88,6 +91,9 @@ export default function ClientFilteredInboxList({
               attentionCategory={item.attentionCategory}
               isPersonal={item.isPersonal}
               isGmail={item.isGmail}
+              isVip={item.isVip}
+              vipLabel={item.vipLabel}
+              snoozeUntil={item.snoozeUntil}
             />
           ))
         )}
