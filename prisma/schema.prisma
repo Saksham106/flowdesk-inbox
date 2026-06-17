@@ -103,6 +103,11 @@ model Tenant {
   snippets                  Snippet[]
   gmailPushEvents           GmailPushEvent[]
   gmailWritebackQueue       GmailWritebackQueue[]
+  schedulingSessions        SchedulingSession[]
+  automationRuns            AutomationRun[]
+  workflowTemplates         WorkflowTemplate[]
+  workflowRuns              WorkflowRun[]
+  googleDriveCredential     GoogleDriveCredential?
 }
 
 model User {
@@ -292,6 +297,9 @@ model Conversation {
   snoozeReminders  SnoozeReminder[]
   emailAttachments EmailAttachment[]
   gmailWritebacks  GmailWritebackQueue[]
+  schedulingSession         SchedulingSession?
+  automationRuns            AutomationRun[]
+  workflowRuns              WorkflowRun[]
 
   @@unique([tenantId, channelId, externalThreadId])
   @@index([tenantId, lastMessageAt])
@@ -756,4 +764,86 @@ model Snippet {
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, status])
+}
+
+model SchedulingSession {
+  id               String       @id @default(cuid())
+  tenantId         String
+  conversationId   String       @unique
+  status           String       @default("detecting")
+  proposedTimesJson Json?
+  confirmedTime    String?
+  calendarEmail    String?
+  eventId          String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  tenant           Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation     Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+}
+
+model AutomationRun {
+  id                String       @id @default(cuid())
+  tenantId          String
+  conversationId    String
+  trigger           String
+  stepsJson         Json         @default("[]")
+  status            String       @default("pending")
+  approvalRequired  Boolean      @default(true)
+  approvalRequestId String?
+  rolledBackAt      DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([conversationId])
+}
+
+model WorkflowTemplate {
+  id        String        @id @default(cuid())
+  tenantId  String
+  name      String
+  trigger   String
+  stepsJson Json          @default("[]")
+  enabled   Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  runs      WorkflowRun[]
+
+  @@index([tenantId])
+}
+
+model WorkflowRun {
+  id                 String           @id @default(cuid())
+  tenantId           String
+  workflowTemplateId String
+  conversationId     String
+  currentStep        Int              @default(0)
+  status             String           @default("running")
+  stateJson          Json?
+  nextRunAt          DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  template           WorkflowTemplate @relation(fields: [workflowTemplateId], references: [id], onDelete: Cascade)
+  conversation       Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([nextRunAt])
+  @@index([conversationId])
+}
+
+model GoogleDriveCredential {
+  id                    String    @id @default(cuid())
+  tenantId              String    @unique
+  email                 String
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String
+  tokenExpiry           DateTime?
+  createdAt             DateTime  @default(now())
+  tenant                Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
