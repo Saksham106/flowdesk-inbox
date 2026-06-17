@@ -18,6 +18,7 @@ import { detectAttachments, extractPdfText } from "@/lib/agent/attachment-extrac
 import { extractFacts, mergeFacts } from "@/lib/agent/second-brain"
 import { applyActiveRule } from "@/lib/agent/preference-learning"
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
+import { detectSchedulingRequest } from "@/lib/agent/scheduling"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
@@ -567,6 +568,32 @@ export async function syncConversationWorkItems(
           } as Prisma.InputJsonValue,
         },
       })
+    }
+  }
+
+  // Scheduling detection
+  const latestInbound = conversation.messages
+    .filter((m) => m.direction === "inbound")
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0]
+
+  if (latestInbound) {
+    const isSchedulingRequest = detectSchedulingRequest(
+      latestInbound.subject ?? "",
+      latestInbound.body
+    )
+    if (isSchedulingRequest) {
+      const existingSession = await prisma.schedulingSession.findUnique({
+        where: { conversationId: conversation.id },
+      })
+      if (!existingSession) {
+        await prisma.schedulingSession.create({
+          data: {
+            tenantId: input.tenantId,
+            conversationId: conversation.id,
+            status: "detecting",
+          },
+        })
+      }
     }
   }
 

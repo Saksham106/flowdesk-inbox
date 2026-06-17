@@ -1,0 +1,96 @@
+"use client"
+import { useState } from "react"
+
+type ProposedSlot = { start: string; end: string; label: string }
+type SchedulingSession = {
+  id: string
+  status: string
+  proposedTimesJson: ProposedSlot[] | null
+  confirmedTime: string | null
+  calendarEmail: string | null
+  eventId: string | null
+}
+
+export default function SchedulingPanel({
+  conversationId,
+  calendarEmails,
+  initialSession,
+}: {
+  conversationId: string
+  calendarEmails: string[]
+  initialSession: SchedulingSession | null
+}) {
+  const [session, setSession] = useState(initialSession)
+  const [selectedCalendar, setSelectedCalendar] = useState(calendarEmails[0] ?? "")
+  const [loading, setLoading] = useState(false)
+
+  async function proposeSlots() {
+    setLoading(true)
+    const res = await fetch(`/api/conversations/${conversationId}/scheduling`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ calendarEmail: selectedCalendar }),
+    })
+    const data = await res.json()
+    setSession(data.schedulingSession)
+    setLoading(false)
+  }
+
+  async function confirmSlot(slot: ProposedSlot) {
+    const res = await fetch(`/api/conversations/${conversationId}/scheduling`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmedTime: slot.start }),
+    })
+    const data = await res.json()
+    setSession(data.schedulingSession)
+  }
+
+  if (!session && calendarEmails.length === 0) return null
+
+  return (
+    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-3">
+      <p className="text-xs font-semibold text-blue-800">Scheduling Request Detected</p>
+
+      {!session || session.status === "detecting" ? (
+        <div className="space-y-2">
+          {calendarEmails.length > 1 && (
+            <select
+              value={selectedCalendar}
+              onChange={(e) => setSelectedCalendar(e.target.value)}
+              className="w-full rounded border border-blue-200 bg-white px-2 py-1 text-xs"
+            >
+              {calendarEmails.map((e) => <option key={e} value={e}>{e}</option>)}
+            </select>
+          )}
+          <button
+            onClick={proposeSlots}
+            disabled={loading || !selectedCalendar}
+            className="w-full rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-800 disabled:opacity-50"
+          >
+            {loading ? "Checking availability…" : "Propose time slots"}
+          </button>
+        </div>
+      ) : session.status === "proposing" && session.proposedTimesJson ? (
+        <div className="space-y-2">
+          <p className="text-xs text-blue-700">Proposed slots &mdash; click to confirm:</p>
+          {session.proposedTimesJson.map((slot, i) => (
+            <button
+              key={i}
+              onClick={() => confirmSlot(slot)}
+              className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-left text-xs hover:bg-blue-50"
+            >
+              {slot.label}
+            </button>
+          ))}
+        </div>
+      ) : session.status === "confirmed" ? (
+        <p className="text-xs text-blue-700">
+          Time confirmed: {session.confirmedTime ? new Date(session.confirmedTime).toLocaleString() : "—"}
+        </p>
+      ) : session.status === "booked" ? (
+        <p className="text-xs text-green-700 font-medium">Calendar event created.</p>
+      ) : null}
+    </div>
+  )
+}
