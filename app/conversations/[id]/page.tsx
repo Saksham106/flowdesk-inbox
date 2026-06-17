@@ -137,7 +137,7 @@ export default async function ConversationPage({
   }
 
   const [schedulingSession, automationRuns, calendarCredentials] = await Promise.all([
-    prisma.schedulingSession.findUnique({ where: { conversationId: conversation.id } }),
+    prisma.schedulingSession.findFirst({ where: { conversationId: conversation.id, tenantId: session.user.tenantId } }),
     prisma.automationRun.findMany({
       where: { conversationId: conversation.id, tenantId: session.user.tenantId },
       orderBy: { createdAt: "desc" },

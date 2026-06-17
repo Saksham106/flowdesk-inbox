@@ -32,7 +32,7 @@ Feature numbers reference the 45-feature index in `MASTER_PRODUCT_PLAN.md`.
 - [x] **Train My Agent with plain English** (#27) — AgentRule model, NL compiler, preview endpoint, conflict detection, settings UI.
 - [x] **Multi-step email workflows** (#31) — WorkflowTemplate + WorkflowRun models, workflow runner, cron job, seeded default workflows, settings panel.
 - [x] **Category-scoped autopilot policy builder** (#2) — per-attention-category policy table (auto-send / require approval / never) in autopilot settings.
-- [x] **Full scheduling back-and-forth** (#14) — SchedulingSession model, scheduling detector wired into sync, slot proposal via Calendar API, SchedulingPanel on conversation page.
+- [x] **Full scheduling back-and-forth** (#14) — first slice: scheduling detection + slot proposal; confirmation and calendar booking deferred.
 - [x] **Context from connected apps** (#35) — GoogleDriveCredential model, Drive OAuth connect/disconnect, context search lib, ConnectedApps settings section.
 - [x] **Auto-generated snippets and playbooks** (#37) — Snippet model, miner cron, snippets API, SnippetsPanel in settings, snippet picker in reply composer.
 - [x] **Auto-personalized outreach** (#39) — deferred; avoid spam positioning.
