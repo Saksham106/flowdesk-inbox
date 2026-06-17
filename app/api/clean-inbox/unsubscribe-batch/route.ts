@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     const meta = conv.stateRecord?.metadataJson as Record<string, unknown> | null
     const url = typeof meta?.unsubscribeUrl === "string" ? meta.unsubscribeUrl : null
     if (url && isSafeUnsubscribeUrl(url)) {
-      fetch(url, { method: "GET" }).catch(() => {})
+      fetch(url, { method: "GET", redirect: "manual" }).catch(() => {})
       unsubscribed++
     }
   }

@@ -48,7 +48,7 @@ export async function POST(
 
   if (unsubscribeUrl && isSafeUnsubscribeUrl(unsubscribeUrl)) {
     // Fire-and-forget GET request to unsubscribe URL
-    fetch(unsubscribeUrl, { method: "GET" }).catch(() => {/* ignore errors */})
+    fetch(unsubscribeUrl, { method: "GET", redirect: "manual" }).catch(() => {/* ignore errors */})
   }
 
   // Close the conversation and log
