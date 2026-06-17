@@ -8,6 +8,8 @@ const {
   mockDraftFindUnique,
   mockAuditCreate,
   mockAiUsageCreate,
+  mockAiBudgetFindUnique,
+  mockAiUsageAggregate,
   mockAgentJobFindFirst,
   mockGenerateDraftReply,
   mockGetFullBusinessContext,
@@ -21,6 +23,8 @@ const {
   mockDraftFindUnique: vi.fn(),
   mockAuditCreate: vi.fn(),
   mockAiUsageCreate: vi.fn(),
+  mockAiBudgetFindUnique: vi.fn(),
+  mockAiUsageAggregate: vi.fn(),
   mockAgentJobFindFirst: vi.fn(),
   mockGenerateDraftReply: vi.fn(),
   mockGetFullBusinessContext: vi.fn(),
@@ -47,6 +51,10 @@ vi.mock('@/lib/prisma', () => ({
     },
     aiUsageEvent: {
       create: mockAiUsageCreate,
+      aggregate: mockAiUsageAggregate,
+    },
+    aiBudget: {
+      findUnique: mockAiBudgetFindUnique,
     },
   },
 }))
@@ -123,6 +131,8 @@ describe('POST /api/conversations/[id]/draft/suggest', () => {
     vi.clearAllMocks()
     mockSession = { user: { id: 'user1', tenantId: 'tenant-A' } }
     mockAgentJobFindFirst.mockResolvedValue(null)
+    mockAiBudgetFindUnique.mockResolvedValue(null)
+    mockAiUsageAggregate.mockResolvedValue({ _sum: { estimatedCostUsd: 0 } })
     mockGetReplyGenerationContext.mockResolvedValue({
       accountType: 'business',
       businessProfile: { businessName: 'Glow Studio' },
@@ -252,6 +262,8 @@ describe('POST /api/conversations/[id]/draft/suggest', () => {
     vi.clearAllMocks()
     mockSession = { user: { id: 'user1', tenantId: 'tenant-A' } }
     mockAgentJobFindFirst.mockResolvedValue(null)
+    mockAiBudgetFindUnique.mockResolvedValue(null)
+    mockAiUsageAggregate.mockResolvedValue({ _sum: { estimatedCostUsd: 0 } })
     mockGetReplyGenerationContext.mockResolvedValue({
       accountType: 'business',
       businessProfile: { businessName: 'Glow Studio' },

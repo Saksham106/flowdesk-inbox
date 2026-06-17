@@ -181,6 +181,20 @@ const AUTOMATED_BODY_PATTERN =
   /\b(unsubscribe|you'?re receiving this|this is an automated (email|message|notification)|do not reply to this email)\b/i
 const MONEY_PATTERN = /\b(pricing|price|charge|cost|quote|budget|invoice|payment|paid|refund|setup fee|contract)\b/i
 const PROMISE_PATTERN = /\b(i promised|you promised|we promised|send|follow up|circle back|confirm|provide|share)\b/i
+const ACTION_DURATION_RE =
+  /(?:expires?|expired|valid|active|available)?(?:\s+(?:in|after|within|for))?\s*(\d{1,3})\s*(minutes?|mins?|hours?|hrs?|days?)\b/i
+const OTP_ACTION_TYPES = new Set(["otp_code", "verification_code", "login_approval"])
+const RESET_LINK_ACTION_TYPES = new Set([
+  "reset_password",
+  "create_password",
+  "magic_link",
+  "account_setup",
+  "verify_email",
+  "confirm_account",
+])
+const SECURITY_ACTION_TYPES = new Set(["security_alert"])
+const ONGOING_SECURITY_RE =
+  /\b(unrecognized|suspicious|not you|secure your account|change your password|revoke|compromised|ongoing|still active)\b/i
 
 function metadata(conversation: CommandCenterInputConversation): Record<string, unknown> {
   const value = conversation.draft?.metadataJson
@@ -194,6 +208,12 @@ function latestMessage(conversation: CommandCenterInputConversation) {
   return [...conversation.messages].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0]
 }
 
+function latestInboundMessage(conversation: CommandCenterInputConversation) {
+  return [...conversation.messages]
+    .filter((message) => message.direction === "inbound")
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0]
+}
+
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim();
 }
@@ -204,6 +224,12 @@ function plainBody(message: { body: string }): string {
 
 function bodyText(conversation: CommandCenterInputConversation): string {
   return conversation.messages.map((message) => plainBody(message)).join("\n")
+}
+
+function stateMetadata(conversation: CommandCenterInputConversation): Record<string, unknown> | null {
+  const state = conversation.conversationState
+  if (!state?.metadataJson || typeof state.metadataJson !== "object" || Array.isArray(state.metadataJson)) return null
+  return state.metadataJson as Record<string, unknown>
 }
 
 function displayName(conversation: CommandCenterInputConversation): string {
@@ -272,30 +298,29 @@ function isSafelyIgnorable(conversation: CommandCenterInputConversation): boolea
 }
 
 function getEmailType(conversation: CommandCenterInputConversation): string | null {
-  const state = conversation.conversationState
-  if (!state?.metadataJson || typeof state.metadataJson !== "object" || Array.isArray(state.metadataJson)) return null
-  const emailType = (state.metadataJson as Record<string, unknown>).emailType
+  const meta = stateMetadata(conversation)
+  if (!meta) return null
+  const emailType = meta.emailType
   return typeof emailType === "string" ? emailType : null
 }
 
 function getAttentionCategory(conversation: CommandCenterInputConversation): string | null {
-  const state = conversation.conversationState
-  if (!state?.metadataJson || typeof state.metadataJson !== "object" || Array.isArray(state.metadataJson)) return null
-  const attentionCategory = (state.metadataJson as Record<string, unknown>).attentionCategory
+  const meta = stateMetadata(conversation)
+  if (!meta) return null
+  const attentionCategory = meta.attentionCategory
   return typeof attentionCategory === "string" ? attentionCategory : null
 }
 
 function getAttentionReason(conversation: CommandCenterInputConversation): string | null {
-  const state = conversation.conversationState
-  if (!state?.metadataJson || typeof state.metadataJson !== "object" || Array.isArray(state.metadataJson)) return null
-  const reason = (state.metadataJson as Record<string, unknown>).attentionReason
+  const meta = stateMetadata(conversation)
+  if (!meta) return null
+  const reason = meta.attentionReason
   return typeof reason === "string" && reason.trim() ? reason.trim() : null
 }
 
-function getActionMetadata(conversation: CommandCenterInputConversation): CommandCenterConversation["action"] {
-  const state = conversation.conversationState
-  if (!state?.metadataJson || typeof state.metadataJson !== "object" || Array.isArray(state.metadataJson)) return null
-  const action = (state.metadataJson as Record<string, unknown>).action
+function actionFromMetadata(meta: Record<string, unknown> | null): CommandCenterConversation["action"] {
+  if (!meta) return null
+  const action = meta.action
   if (!action || typeof action !== "object" || Array.isArray(action)) return null
   const record = action as Record<string, unknown>
   const type = typeof record.type === "string" ? record.type : null
@@ -309,6 +334,63 @@ function getActionMetadata(conversation: CommandCenterInputConversation): Comman
     ...(typeof record.hasDetectedCode === "boolean" ? { hasDetectedCode: record.hasDetectedCode } : {}),
     ...(typeof record.detectedCode === "string" ? { detectedCode: record.detectedCode } : {}),
   }
+}
+
+function getActionMetadata(conversation: CommandCenterInputConversation): CommandCenterConversation["action"] {
+  return actionFromMetadata(stateMetadata(conversation))
+}
+
+function durationMsFromText(text: string | null | undefined): number | null {
+  if (!text) return null
+  const match = text.match(ACTION_DURATION_RE)
+  if (!match) return null
+  const amount = Number(match[1])
+  if (!Number.isFinite(amount) || amount <= 0) return null
+  const unit = match[2].toLowerCase()
+  if (unit.startsWith("min")) return amount * 60 * 1000
+  if (unit.startsWith("h") || unit.startsWith("hr")) return amount * 60 * 60 * 1000
+  if (unit.startsWith("day")) return amount * 24 * 60 * 60 * 1000
+  return null
+}
+
+function defaultActionTtlMs(type: string | null, text: string): number | null {
+  if (!type) return null
+  if (OTP_ACTION_TYPES.has(type)) return 60 * 60 * 1000
+  if (RESET_LINK_ACTION_TYPES.has(type)) return 24 * 60 * 60 * 1000
+  if (SECURITY_ACTION_TYPES.has(type)) {
+    return ONGOING_SECURITY_RE.test(text) ? null : 48 * 60 * 60 * 1000
+  }
+  return null
+}
+
+function isExpiredActionMetadata({
+  meta,
+  issuedAt,
+  now,
+  text,
+}: {
+  meta: Record<string, unknown> | null
+  issuedAt: Date
+  now: Date
+  text: string
+}): boolean {
+  const action = actionFromMetadata(meta)
+  const type = action?.type ?? null
+  const explicitDuration =
+    durationMsFromText(action?.expirationText) ??
+    durationMsFromText(typeof meta?.expiresIn === "string" ? meta.expiresIn : null) ??
+    durationMsFromText(text)
+  const ttlMs = explicitDuration ?? defaultActionTtlMs(type, text)
+  if (ttlMs === null) return false
+  return issuedAt.getTime() + ttlMs <= now.getTime()
+}
+
+function isExpiredActionConversation(conversation: CommandCenterInputConversation, now: Date): boolean {
+  const meta = stateMetadata(conversation)
+  const attentionCategory = typeof meta?.attentionCategory === "string" ? meta.attentionCategory : null
+  if (attentionCategory !== "needs_action" && attentionCategory !== "review_soon") return false
+  const issuedAt = latestInboundMessage(conversation)?.createdAt ?? conversation.lastMessageAt
+  return isExpiredActionMetadata({ meta, issuedAt, now, text: bodyText(conversation) })
 }
 
 function isAutoEmail(conversation: CommandCenterInputConversation): boolean {
@@ -364,6 +446,7 @@ export function analyzeConversationForCommandCenter(
   const autoEmail = isAutoEmail(conversation)
   const attentionCategory = getAttentionCategory(conversation)
   const attentionReason = getAttentionReason(conversation)
+  const expiredAction = isExpiredActionConversation(conversation, now)
   const safelyIgnored = isSafelyIgnorable(conversation)
   const support = isClassifiedSupport(conversation, accountMode)
   const churnRisk = isChurnRisk(conversation)
@@ -377,7 +460,12 @@ export function analyzeConversationForCommandCenter(
   let reason = "Safely ignored for now."
   let nextAction = "No action needed."
 
-  if (sensitive) {
+  if (expiredAction) {
+    state = "fyi_only"
+    priority = "none"
+    reason = "Action link or code has expired."
+    nextAction = "No action needed."
+  } else if (sensitive) {
     state = "risky_urgent"
     priority = attentionCategory === "review_soon" ? "high" : "urgent"
     reason = attentionReason ?? approvalReason(conversation) ?? "Sensitive conversation needs review."
@@ -475,9 +563,9 @@ export function analyzeConversationForCommandCenter(
     label: conversation.label,
     sensitive,
     approvalReason: approvalReason(conversation),
-    safelyIgnored: state === "done" || safelyIgnored,
-    needsReply: conversation.status === "needs_reply" && !safelyIgnored && (!attentionCategory || attentionCategory === "needs_reply"),
-    needsAction: attentionCategory === "needs_action",
+    safelyIgnored: state === "done" || expiredAction || safelyIgnored,
+    needsReply: conversation.status === "needs_reply" && !expiredAction && !safelyIgnored && (!attentionCategory || attentionCategory === "needs_reply"),
+    needsAction: attentionCategory === "needs_action" && !expiredAction,
     readLater: attentionCategory === "read_later",
     opportunity,
     leadScore: opportunity && conversation.lead ? conversation.lead.score : null,
@@ -492,14 +580,22 @@ export function analyzeConversationForCommandCenter(
 export function persistedStateToCommandCenterConversation(
   persisted: PersistedCommandCenterState,
   conversation: Pick<CommandCenterInputConversation, "id" | "externalThreadId" | "label" | "status" | "readAt" | "gmailUnread" | "lastMessageAt" | "contact" | "channel">,
-  lead?: { score: number; scoreExplanation: string | null; estimatedValue?: number | null } | null
+  lead?: { score: number; scoreExplanation: string | null; estimatedValue?: number | null } | null,
+  now = new Date()
 ): CommandCenterConversation {
   const meta = persisted.metadataJson as Record<string, unknown> | null
+  const expiredAction = isExpiredActionMetadata({
+    meta,
+    issuedAt: conversation.lastMessageAt,
+    now,
+    text: "",
+  })
   const sensitive =
-    meta?.attentionCategory === "review_soon" ||
-    meta?.riskLevel === "high" ||
-    typeof meta?.escalationReason === "string" ||
-    conversation.label === "Complaint"
+    !expiredAction &&
+    (meta?.attentionCategory === "review_soon" ||
+      meta?.riskLevel === "high" ||
+      typeof meta?.escalationReason === "string" ||
+      conversation.label === "Complaint")
   const opportunity = meta?.suggestedLabel === "Lead" || conversation.label === "Lead"
   const approvalReasonStr = typeof meta?.escalationReason === "string" && meta.escalationReason.trim()
     ? meta.escalationReason.trim()
@@ -514,10 +610,10 @@ export function persistedStateToCommandCenterConversation(
   return {
     id: conversation.id,
     displayName: conversation.contact?.name ?? conversation.externalThreadId,
-    state: persisted.state as CommandCenterState,
-    priority: persisted.priority as CommandCenterPriority,
-    reason: persisted.reason,
-    nextAction: persisted.nextAction,
+    state: expiredAction ? "fyi_only" : (persisted.state as CommandCenterState),
+    priority: expiredAction ? "none" : (persisted.priority as CommandCenterPriority),
+    reason: expiredAction ? "Action link or code has expired." : persisted.reason,
+    nextAction: expiredAction ? "No action needed." : persisted.nextAction,
     href: `/conversations/${conversation.id}`,
     lastMessageAt: conversation.lastMessageAt,
     label: conversation.label,
@@ -525,12 +621,14 @@ export function persistedStateToCommandCenterConversation(
     approvalReason: approvalReasonStr,
     safelyIgnored:
       persisted.state === "done" ||
+      expiredAction ||
       (persisted.state === "fyi_only" && meta?.attentionCategory !== "read_later"),
     needsReply:
       conversation.status === "needs_reply" &&
+      !expiredAction &&
       persisted.state !== "fyi_only" &&
       (!meta?.attentionCategory || meta.attentionCategory === "needs_reply"),
-    needsAction: meta?.attentionCategory === "needs_action",
+    needsAction: meta?.attentionCategory === "needs_action" && !expiredAction,
     readLater: meta?.attentionCategory === "read_later",
     opportunity,
     leadScore: opportunity && lead ? lead.score : null,
@@ -562,7 +660,7 @@ export function buildDailyCommandCenter(
     // Use persisted state if available and fresh
     const persisted = persistedStates?.get(conversation.id)
     if (persisted && isPersistedStateFresh(persisted, now)) {
-      return persistedStateToCommandCenterConversation(persisted, conversation, conversation.lead ?? null)
+      return persistedStateToCommandCenterConversation(persisted, conversation, conversation.lead ?? null, now)
     }
     return analyzeConversationForCommandCenter(conversation, now, accountMode)
   })
@@ -776,7 +874,7 @@ export function buildBillsSection(
       meta && typeof meta === "object" && !Array.isArray(meta)
         ? (meta as Record<string, unknown>).attentionCategory
         : null
-    if (category === "review_soon") {
+    if (category === "review_soon" && !isExpiredActionConversation(conv, now)) {
       const name = conv.contact?.name ?? conv.externalThreadId
       items.push({
         conversationId: conv.id,

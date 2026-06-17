@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { ConversationSendError, sendConversationMessage } from "@/lib/conversations/send-message";
+import { revalidateInboxViews } from "@/lib/cache-tags";
 
 export const runtime = "nodejs";
 
@@ -39,5 +40,6 @@ export async function POST(
     return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
   }
 
+  revalidateInboxViews(session.user.tenantId, params.id);
   return NextResponse.json({ ok: true });
 }

@@ -95,6 +95,32 @@ export function sanitizeEmailHtmlForIframe(html: string): string {
   return cleaned;
 }
 
+// Builds a Gmail-like preview line: "Subject — snippet" or just the snippet when
+// no subject is available. Deduplicates when the snippet text is already contained
+// in the subject (e.g. subject IS the first sentence of the body).
+export function buildPreviewText(
+  subject: string | null | undefined,
+  bodySnippet: string,
+  maxLength = 90
+): string {
+  const s = subject?.trim() ?? "";
+  const b = bodySnippet.trim();
+
+  if (!s && !b) return "";
+  if (!s) return b.length > maxLength ? b.slice(0, maxLength) + "…" : b;
+  // Skip snippet if it's redundant with the subject (snippet starts with the same text
+  // or the subject contains the snippet's first meaningful words).
+  const sLow = s.toLowerCase();
+  const bLow = b.toLowerCase();
+  const redundant = bLow.startsWith(sLow.slice(0, 20)) || sLow.startsWith(bLow.slice(0, 20));
+  if (!b || redundant) {
+    return s.length > maxLength ? s.slice(0, maxLength) + "…" : s;
+  }
+
+  const combined = `${s} — ${b}`;
+  return combined.length > maxLength ? combined.slice(0, maxLength) + "…" : combined;
+}
+
 const URL_RE = /https?:\/\/[^\s<>"]+/g;
 const BOLD_RE = /\*\*([^*\n]+)\*\*/g;
 const ITALIC_RE = /(?<![a-zA-Z0-9])_([^_\n]+)_(?![a-zA-Z0-9])/g;

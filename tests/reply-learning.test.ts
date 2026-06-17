@@ -8,6 +8,7 @@ const {
   mockSummarize,
   mockUsageCreate,
   mockFetchGmailSentSamples,
+  mockCheckAiBudgetForTokens,
 } = vi.hoisted(() => ({
   mockMessageFindMany: vi.fn(),
   mockProfileFindFirst: vi.fn(),
@@ -16,6 +17,7 @@ const {
   mockSummarize: vi.fn(),
   mockUsageCreate: vi.fn(),
   mockFetchGmailSentSamples: vi.fn(),
+  mockCheckAiBudgetForTokens: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -32,6 +34,11 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/lib/ai/provider', () => ({
   summarizeLearnedReplyProfile: mockSummarize,
+}))
+
+vi.mock('@/lib/ai/budget', () => ({
+  checkAiBudgetForTokens: mockCheckAiBudgetForTokens,
+  estimateCostUsd: () => 0.01,
 }))
 
 vi.mock('@/lib/google', () => ({
@@ -116,7 +123,10 @@ function makeBody(index: number) {
 }
 
 describe('trainLearnedReplyProfile', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCheckAiBudgetForTokens.mockResolvedValue({ allowed: true, reason: 'Within budget' })
+  })
 
   it('stores a compact learned profile instead of raw historical email bodies', async () => {
     mockMessageFindMany.mockResolvedValue(
@@ -146,7 +156,41 @@ describe('trainLearnedReplyProfile', () => {
           tenantId: 'tenant-A',
           feature: 'reply_learning.train',
           model: 'gpt-test',
-          status: 'completed',
+          status: 'succeeded',
+        }),
+      })
+    )
+  })
+
+  it('throws before summarizing when AI budget would be exceeded', async () => {
+    mockMessageFindMany.mockResolvedValue(
+      Array.from({ length: 5 }, (_, index) => ({
+        body: makeBody(index),
+        createdAt: new Date(`2026-06-0${index + 1}T12:00:00Z`),
+      }))
+    )
+    mockFetchGmailSentSamples.mockResolvedValue([])
+    mockCheckAiBudgetForTokens.mockResolvedValue({
+      allowed: false,
+      reason: 'Daily AI spend limit reached',
+    })
+    mockUsageCreate.mockResolvedValue({})
+
+    await expect(
+      trainLearnedReplyProfile({
+        tenantId: 'tenant-A',
+        channelId: 'channel-1',
+        profileType: 'business',
+      })
+    ).rejects.toThrow('Daily AI spend limit reached')
+
+    expect(mockSummarize).not.toHaveBeenCalled()
+    expect(mockUsageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tenantId: 'tenant-A',
+          feature: 'reply_learning.train',
+          status: 'blocked',
         }),
       })
     )

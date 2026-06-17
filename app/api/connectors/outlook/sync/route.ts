@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { syncOutlookChannel } from "@/lib/microsoft"
+import { revalidateInboxViews } from "@/lib/cache-tags"
 
 export const runtime = "nodejs"
 
@@ -26,6 +27,7 @@ export async function POST(request: Request) {
 
   try {
     const synced = await syncOutlookChannel(channelId, session.user.tenantId)
+    revalidateInboxViews(session.user.tenantId)
     return NextResponse.json({ ok: true, synced })
   } catch (err) {
     const message = err instanceof Error ? err.message : "Sync failed"

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { sanitizeEmailHtmlForIframe } from "@/lib/email-body";
-import { buildEmailIframeSrcDoc } from "@/lib/email-iframe";
+import { buildEmailIframeSrcDoc, EMAIL_IFRAME_SANDBOX } from "@/lib/email-iframe";
 
 describe("buildEmailIframeSrcDoc", () => {
   it("forces a light iframe color scheme and removes dark-mode-only email CSS", () => {
@@ -47,5 +47,13 @@ describe("buildEmailIframeSrcDoc", () => {
     expect(srcDoc).toContain(".brand { background: #ffcc00; color: #111111; }");
     expect(srcDoc).not.toContain("prefers-color-scheme");
     expect(srcDoc).toContain("Newsletter block");
+  });
+
+  it("uses a sandbox that allows email links to open outside the iframe sandbox", () => {
+    expect(EMAIL_IFRAME_SANDBOX.split(" ").sort()).toEqual(
+      ["allow-popups", "allow-popups-to-escape-sandbox", "allow-same-origin"].sort()
+    );
+    expect(EMAIL_IFRAME_SANDBOX).not.toContain("allow-scripts");
+    expect(EMAIL_IFRAME_SANDBOX).not.toContain("allow-top-navigation");
   });
 });

@@ -1,6 +1,6 @@
 # FlowDesk Inbox Master Product Plan
 
-Last updated: 2026-06-15
+Last updated: 2026-06-16
 
 This is the living master plan for FlowDesk Inbox. It exists so humans and AI agents can share the same product map, update it as reality changes, and avoid treating one feature request as the whole product.
 
@@ -61,12 +61,14 @@ Existing foundations in the codebase:
 - Rich email attention categories stored in `ConversationState.metadataJson.attentionCategory`: `needs_reply`, `needs_action`, `review_soon`, `read_later`, `waiting_on`, `fyi_done`, and `quiet`.
 - Account-action metadata for OTPs, verification links, password setup/reset, login approvals, account setup, and security alerts. OTP/security codes are persisted only for direct user display/copy and are not auto-used.
 - Local user/read state is separate from raw Gmail state: user overrides, done/closed status, local reads, Gmail unread labels, and Gmail raw metadata are stored independently.
+- Gmail read/archive/trash writeback exists for Gmail conversations and preserves local user overrides. Failed mark-read writebacks are queued and retried.
+- Preference learning exists for repeated manual attention corrections: suggested sender/domain rules can be applied, dismissed, disabled, and auto-applied during sync.
 - Cost-aware AI usage policy: deterministic rules handle low-value automated mail first; richer person-memory extraction is skipped for low-value mail, cached by content hash for eligible mail, and conversation opens avoid eager rich-AI regeneration.
 - `Tenant.accountType` personal/business mode, with personal-safe defaults and business-only gates for CRM, sales, support, lead, and revenue surfaces.
 - Business and personal reply/profile settings.
 - Daily command center first slice.
 - Inbox Gmail sync control with last-synced/error status and app-load/tab-return/periodic/manual sync triggers.
-- Gmail sync now has server-side per-channel locking, race-tolerant idempotent message upserts, and partial thread-failure logging.
+- Gmail sync now has server-side per-channel locking, race-tolerant idempotent message upserts, durable push-event tracking, watch renewal health, history fallback visibility, state drift reconciliation, and partial thread-failure logging.
 
 Recently shipped first slice:
 
@@ -286,13 +288,13 @@ Success criteria:
 | 18 | Business Inbox Shared Assistant | `Later` | Phase 5 | Needs team model and collaboration primitives. |
 | 19 | Customer Support Agent Mode | `Partial` | Phase 2 | Auto-detect via work-item-sync; churn-risk + escalation flags; KB-match draft suggestion; SupportPanel on conversations; support filter in inbox; command center count. |
 | 20 | Sales Agent Mode | `Partial` | Phase 2 | Business-mode sales signals, SalesPanel, Sales tab, and sales-qualified state shipped; needs richer sales workflows and settings. |
-| 21 | Personal Life Admin Mode | `Partial` | Phase 3 | First deterministic attention rules catch OTPs, password reset/setup, account verification, billing, delivery, and calendar RSVP; broader life-admin workflows remain. |
+| 21 | Personal Life Admin Mode | `Partial` | Phase 3 | Deterministic attention rules catch OTPs, password reset/setup, account verification, billing, delivery, and calendar RSVP; broader life-admin workflows remain. |
 | 22 | Email Risk Radar | `Shipped` | Phase 1 | `/risk-radar` ships a read-only deterministic scan for deadline-soon, final-notice, unanswered, and sensitive-content signals. Spec: `docs/archive/specs/2026-06-12-email-risk-radar-design.md`. Plan: `docs/archive/plans/2026-06-12-email-risk-radar.md`. |
 | 23 | Phishing, Scam, and Fraud Protection | `Discovery` | Phase 3 | Needs careful security heuristics and false-positive UX. |
-| 24 | Auto-Unsubscribe and Noise Killer | `Planned` | Phase 3/4 | Needs safe archive/unsubscribe permissions. |
-| 25 | What Can I Ignore Mode | `Partial` | Phase 1 | Collapsible safely-ignored section, attention reasons, action-email protection, and bulk close for quiet/FYI mail shipped; provider archive/unsubscribe remain later. |
+| 24 | Auto-Unsubscribe and Noise Killer | `Partial` | Phase 3/4 | Gmail archive/trash writeback exists; safe unsubscribe, bulk clean-inbox, and broader provider support remain. |
+| 25 | What Can I Ignore Mode | `Partial` | Phase 1 | Collapsible safely-ignored section, attention reasons, action-email protection, bulk close, and Gmail archive/trash shipped; unsubscribe and broader provider cleanup remain later. |
 | 26 | Outcome-Based Automation | `Discovery` | Phase 4 | Depends on trust, audit, and rule engine. |
-| 27 | Train My Agent With Plain English | `Discovery` | Phase 4 | Needs rule compiler and conflict resolution. |
+| 27 | Train My Agent With Plain English | `Partial` | Phase 4 | Deterministic sender/domain attention rules can be suggested from repeated corrections; plain-English rule compiler and conflict resolution remain. |
 | 28 | Approval Queue | `Partial` | Phase 1 | Inline approve/reject, collapsible draft preview, and batch approve/reject shipped; needs edit-before-send and teach-the-agent actions. |
 | 29 | Confidence Score Before Sending | `Partial` | Phase 1 | Draft confidence, attention confidence metadata, sensitive warnings, and per-category autopilot thresholds exist; needs clearer user-facing policy education. |
 | 30 | Auto-Draft Based on User Intent | `Shipped` | Phase 1 | AI draft panel accepts optional rough instructions and turns them into proposed drafts through the existing approval-gated flow. Spec: `docs/archive/specs/2026-06-12-intent-auto-draft-design.md`. Plan: `docs/archive/plans/2026-06-12-intent-auto-draft.md`. |
@@ -307,77 +309,32 @@ Success criteria:
 | 39 | Auto-Personalized Outreach | `Later` | Phase 4 | Valuable, but avoid spam positioning. |
 | 40 | Email Triage By Money Impact | `Shipped` | Phase 2 | Revenue-weighted score bonus (+up to 50) in command center; Revenue at Risk subsection (amber cards for stale high-value leads); `analyzeRevenueAtRisk` in `lib/agent/revenue-at-risk.ts`. |
 | 41 | One-Click Clean My Inbox Experience | `Planned` | Phase 4 | Great onboarding; needs safe bulk operations. |
-| 42 | Smart Email Labels That Matter | `Partial` | Phase 1 | Action-oriented attention taxonomy, inbox attention filters, correction dropdown, and bulk close shipped; possible schema promotion remains. |
+| 42 | Smart Email Labels That Matter | `Partial` | Phase 1 | Action-oriented attention taxonomy, inbox attention filters, correction dropdown, bulk close, and learned sender/domain rules shipped; deeper explainability remains. |
 | 43 | Ask My Inbox Chat | `Planned` | Phase 3 | Should answer with actions, not just summaries. |
 | 44 | Trust, Privacy, and Audit Log | `Partial` | Phase 1/All | Audit log, Why column, and undo route for reversible autopilot draft approvals exist; broader reversible-action coverage remains. |
 | 45 | Magic Paid Version Packaging | `Discovery` | All | Use as product packaging, not engineering feature. |
 
 ## Immediate Next Slice Recommendation
 
-Phase 1 is complete as of 2026-06-11. All "Never Drop the Ball" MVP features are shipped.
+Phase 1 is broadly shipped and Phase 2 has enough revenue-agent surface area to validate with users. The next work should make the current intelligence more understandable and controllable before adding another large surface.
 
-### Next Slice: Phase 2 — Business Revenue Inbox Agent
+### Next Slice: Classification Explainability And Rule Control
 
-Phase 1 delivers daily individual value. Phase 2 makes FlowDesk obviously worth paying for by connecting email to revenue.
+Goal: make every attention decision inspectable, correctable, and teachable.
+
+Recommended scope:
+
+- Show why a thread was classified the way it was: source, rule/AI/user, confidence, and key evidence.
+- Add history for manual attention corrections and learned sender/domain rules.
+- Let users manually create or edit sender/domain attention rules, not only accept suggestions.
+- Add conflict handling when email-level and domain-level rules disagree.
+- Preserve the current safety invariant: explicit user corrections always beat learned rules and AI.
 
 Why now:
 
-- Phase 1 foundation is solid: tasks, leads, approvals, follow-up brain, relationship memory, weekly report all exist.
-- The Lead model already exists but lacks full CRM pipeline, scoring refinement, and sales agent mode.
-- Meeting prep and post-meeting follow-up are the highest-leverage Phase 2 features — they use existing calendar, thread, and memory infrastructure.
-- ROI analytics (Phase 2) build directly on the weekly value report now shipping.
-
-Shipped first Phase 2 slice (2026-06-11):
-
-- Meeting prep brief: `/meetings` page with on-demand briefing from PersonMemory + email threads. Digest shows today's meetings with link to prep brief.
-- Post-meeting follow-up generator: notes field + AI draft queued in ApprovalRequest.
-
-Shipped Phase 2 slices (2026-06-11):
-
-- Meeting prep brief: `/meetings` page, digest card, on-demand brief from PersonMemory + email threads, post-meeting follow-up generator.
-- Lead intelligence: LLM-based scorer with `scoreExplanation` / `estimatedValue`, fire-and-forget sync integration, on-demand re-score API, funnel header + score badge on `/leads`, lead score badge on command center opportunity cards.
-
-Shipped Phase 2 slice v2.1 (2026-06-12):
-
-- Knowledge base source management + customer support mode: URL crawl endpoint, `sourceUrl`/`crawledAt` fields, `/knowledge-base` page, `classifySupportSignals` in work-item-sync, SupportPanel on conversations, support filter in inbox, support count in command center, `citedDocumentIds` in draft replies.
-
-Shipped Phase 2 slice v2.2 (2026-06-12):
-
-- Sales agent mode: `classifySalesSignals` pure regex classifier (budget/timeline/proposal/closing signals), wired into work-item-sync fire-and-forget, `SalesPanel` on conversation pages, `?sales=1` inbox filter tab, Sales Qualified count chip in command center, `sales_qualified` state with score boost 35.
-- Mini CRM pipeline reporting: score/stage filter form on `/leads`, week-over-week stats table, dynamic section titles, `allLeads`/`displayLeads` split.
-
-Shipped Phase 2 slice v2.3 (2026-06-13):
-
-- ROI analytics: `ValueSnapshot` Prisma model, weekly cron at `/api/cron/value-snapshot`, `buildValueSnapshot`/`getWeeklyTrend` in `value-report.ts`, 4-week CSS trend bars + pipeline value summary + revenue opportunities on `/reports`.
-- Email triage by money impact: `analyzeRevenueAtRisk` (stale high-value lead detection), revenue-weighted `score()` bonus in command center, Revenue at Risk amber subsection in `CommandCenterPanel`.
-
-Shipped MVP direction hardening slice (2026-06-13):
-
-- Email-only conversation detail: opened conversations now render as top-to-bottom email threads instead of chat-style bubbles, with sender/recipient/timestamp metadata and a reply composer below the thread.
-- Account-mode boundary: `Tenant.accountType` is the current source of truth. Personal accounts default to personal/work-email behavior and do not show CRM labels, lead/opportunity cards, sales/support widgets, Revenue at Risk, business-profile requirements, or business labels in personal draft prompts. Business accounts retain business profile, knowledge base, sales/support, lead scoring, and revenue features.
-- Draft prompt RAG/summarization: business draft prompts now summarize thread context, include only recent messages, and select the most relevant knowledge documents instead of sending a large fixed block of raw thread and KB text. Autopilot uses the same summarized prompt context.
-
-Shipped reliability and attention slice (2026-06-14):
-
-- Gmail sync controls: inbox shell exposes real Gmail sync with loading, last-synced time, inline success/error, app-load sync, tab-return sync, 5-minute periodic sync, manual sync, and duplicate in-flight protection.
-- Navigation polish: conversation links preserve inbox filter/search/sales context through a validated `returnTo=/inbox?...`; the `F` rail logo now links home; safely ignored preview no longer duplicates the full inbox list.
-- Richer attention classification: deterministic and LLM classification now distinguish `needs_reply`, `needs_action`, `review_soon`, `read_later`, `waiting_on`, `fyi_done`, and `quiet`.
-- No-reply transactional emails with OTPs, password reset/setup, verification, security/token, billing, delivery, or calendar invite language stay actionable instead of being auto-closed as FYI.
-- Verification codes and explicit expiry phrases can be extracted into metadata for future display/copy UX; FlowDesk does not auto-use codes.
-
-Shipped sync/state/action hardening slice (2026-06-15):
-
-- Gmail sync now uses `GmailCredential.syncLockExpiresAt` as a short database-backed lock. Concurrent syncs for the same channel skip cleanly instead of racing on first load.
-- Gmail message sync tolerates concurrent unique conflicts on provider message IDs and remains idempotent across manual, auto, push, and retry sync paths.
-- Raw Gmail state (`gmailUnread`, `gmailRawState`, `gmailLabelIds`) is separate from local state (`userState`, `readAt`, `isRead`). Sync imports provider read/unread but does not overwrite explicit local actions.
-- Mark Done/Closed writes a `user_override` conversation state so AI classification and future syncs cannot resurrect the card into Handle First.
-- Opening a Gmail conversation marks it read locally and attempts safe Gmail writeback by removing `UNREAD`; failures are logged but do not block the UI.
-- Account-action detection now emits structured, redacted action metadata for Home cards while keeping OTP codes out of persisted metadata and logs.
-- Home section selection is thread-level exclusive: Handle First, Needs Action, Waiting On, Read Later, and Quietly Handled no longer duplicate the same conversation.
-
-### Next Slice: v2.4 — Classification Correction And Inbox Filters
-
-Make the new attention taxonomy first-class: add filters/counts for Needs Action, Review Soon, Read Later, and Quiet; expose "why this was classified this way"; and add user correction/undo controls on top of the now-persisted user override path.
+- The attention taxonomy, correction endpoint, Gmail writeback, and preference-learning foundation now exist.
+- Users need to trust automated sorting before higher-risk automations or clean-inbox workflows.
+- This slice sets up Phase 3 personal chief-of-staff work and Phase 4 plain-English rule training.
 
 ## Data Model Roadmap
 
@@ -519,6 +476,9 @@ After an AI agent finishes work:
 | 2026-06-14 | Upgrade classification from broad no-reply buckets to attention categories in metadata. | Avoided a broad schema/status migration by keeping `Conversation.status` stable and storing `attentionCategory`, reason, confidence, and optional code/expiry in `ConversationState.metadataJson`. Only `quiet` and `fyi_done` are auto-close candidates; action/security/read-later emails remain visible. |
 | 2026-06-15 | Separate raw Gmail state, AI classification, and user override/read state. | The Mark Done resurrection bug showed that sync/provider state and local intent were sharing too much surface area. Added local state/read fields, raw Gmail label fields, a user override source, server-side sync locking, and redacted action metadata so sync is idempotent and explicit user actions win. |
 | 2026-06-15 | Add AI usage policy, caching, and lazy rich-AI behavior. | Low-value automated email now stays on deterministic paths; relationship-memory LLM extraction is skipped or cached by content hash; manual draft suggestions reuse cached drafts for unchanged prompts; conversation opens sync deterministic state without eager rich-AI regeneration. |
+| 2026-06-16 | Treat email links and stale action items as trust-critical UX. | Email hrefs must be preserved exactly through Gmail sync, sanitization, and iframe rendering; tracking redirects need normal top-level popup behavior. Needs Action should represent current work, so OTP/reset/security items now expire by explicit text/default TTLs and can be manually dismissed through persisted attention correction. |
+| 2026-06-16 | Make classification explainability and rule control the next slice. | Gmail archive/trash and deterministic preference learning are now in place. The next risk is trust: users need to inspect, correct, and intentionally manage learned attention behavior before broader clean-inbox or automation workflows. |
+| 2026-06-17 | Harden Gmail sync reliability before broader clean-inbox automation. | Pub/Sub push events now have durable idempotency and retry, watch renewal failures are auditable and surfaced, mark-read writeback has retry/queue semantics, and a reconciliation cron detects local-read/Gmail-unread drift. |
 
 ## Open Product Questions
 

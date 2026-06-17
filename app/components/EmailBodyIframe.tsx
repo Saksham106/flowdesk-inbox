@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { buildEmailIframeSrcDoc } from "@/lib/email-iframe";
+import { buildEmailIframeSrcDoc, EMAIL_IFRAME_SANDBOX } from "@/lib/email-iframe";
 
 interface Props {
   html: string;
@@ -15,34 +15,62 @@ export default function EmailBodyIframe({ html }: Props) {
     const iframe = iframeRef.current;
     if (!iframe) return;
 
+    let ro: ResizeObserver | null = null;
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+
     function measure() {
       try {
         const doc = iframe?.contentDocument ?? iframe?.contentWindow?.document;
-        if (doc?.body) {
-          const h = doc.documentElement.scrollHeight || doc.body.scrollHeight;
-          setHeight(Math.max(80, h + 4));
-        }
+        if (!doc?.body) return;
+        // Prefer body.scrollHeight: documentElement.scrollHeight returns the current viewport
+        // height (not content height) when `html { overflow: hidden }` is set in the injected CSS.
+        const h = doc.body.scrollHeight || doc.documentElement.scrollHeight;
+        // +16px buffer prevents hairline clips at the article's overflow:hidden rounded corners.
+        const next = Math.max(80, h + 16);
+        setHeight((prev) => (Math.abs(prev - next) < 8 ? prev : next));
       } catch {
         // cross-origin guard (shouldn't happen with srcdoc)
       }
     }
 
-    iframe.addEventListener("load", measure);
-    // Also observe resize (images loading late, etc.)
-    let ro: ResizeObserver | null = null;
-    iframe.addEventListener("load", () => {
+    function onLoad() {
+      measure();
       try {
-        const doc = iframe.contentDocument ?? iframe.contentWindow?.document;
-        if (doc?.body) {
-          ro = new ResizeObserver(measure);
-          ro.observe(doc.body);
+        const doc = iframe?.contentDocument ?? iframe?.contentWindow?.document;
+        if (!doc?.body) return;
+
+        // Re-measure after remote images load — newsletters can have many images that
+        // arrive after the initial load event, expanding the body well beyond the first measurement.
+        const pending = Array.from(doc.images).filter((img) => !img.complete);
+        if (pending.length > 0) {
+          void Promise.all(
+            pending.map(
+              (img) => new Promise<void>((res) => {
+                img.addEventListener("load", () => res(), { once: true });
+                img.addEventListener("error", () => res(), { once: true });
+              })
+            )
+          ).then(measure);
         }
+
+        // Re-measure when web fonts finish loading
+        void doc.fonts?.ready?.then(measure);
+
+        ro = new ResizeObserver(measure);
+        ro.observe(doc.body);
+        settleTimer = setTimeout(() => {
+          ro?.disconnect();
+          ro = null;
+        }, 3000);
       } catch { /* ignore */ }
-    });
+    }
+
+    iframe.addEventListener("load", onLoad);
 
     return () => {
-      iframe.removeEventListener("load", measure);
+      iframe.removeEventListener("load", onLoad);
       ro?.disconnect();
+      if (settleTimer !== null) clearTimeout(settleTimer);
     };
   }, [html]);
 
@@ -50,7 +78,7 @@ export default function EmailBodyIframe({ html }: Props) {
     <iframe
       ref={iframeRef}
       srcDoc={buildEmailIframeSrcDoc(html)}
-      sandbox="allow-popups allow-same-origin"
+      sandbox={EMAIL_IFRAME_SANDBOX}
       style={{ width: "100%", maxWidth: "100%", minWidth: 0, height: `${height}px`, border: "none", display: "block", overflow: "hidden" }}
       title="Email content"
       loading="lazy"

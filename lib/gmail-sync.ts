@@ -91,6 +91,7 @@ export async function runGmailSync({
   let storedMode = modeName(requestedMode, incremental)
   let synced = 0
   let historyId: string | null = null
+  let historyFallbackAt: Date | null = null
 
   try {
     if (incremental) {
@@ -108,6 +109,7 @@ export async function runGmailSync({
             message: err instanceof Error ? err.message : "Unknown Gmail history error",
           })
           storedMode = "history_fallback"
+          historyFallbackAt = new Date()
           synced = await syncGmailChannel(channelId, tenantId)
           historyId = await ensureLatestHistoryId(channelId)
         }
@@ -138,6 +140,7 @@ export async function runGmailSync({
       where: { channelId },
       data: {
         ...(historyId ? { historyId } : {}),
+        ...(historyFallbackAt ? { lastHistoryFallbackAt: historyFallbackAt } : {}),
         lastSyncedAt: new Date(),
         lastSyncMode: storedMode,
         lastSyncStatus: "success",
@@ -164,13 +167,15 @@ export async function runGmailSync({
   }
 }
 
-export async function processGmailPushNotification(payload: unknown): Promise<GmailSyncResult | { ok: true; skipped: string }> {
-  const envelope = payload as { message?: { data?: string } } | null
+export async function processGmailPushNotification(payload: unknown): Promise<GmailSyncResult | { ok: true; skipped: string; failed?: true; error?: string }> {
+  const envelope = payload as { message?: { data?: string; messageId?: string } } | null
   const encoded = envelope?.message?.data
   if (!encoded) throw new Error("Missing Pub/Sub message data")
+  const messageId = envelope?.message?.messageId ?? `legacy:${encoded}`
 
   const notification = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as {
     emailAddress?: string
+    historyId?: string
   }
   const emailAddress = notification.emailAddress?.toLowerCase()
   if (!emailAddress) throw new Error("Missing Gmail notification emailAddress")
@@ -184,11 +189,70 @@ export async function processGmailPushNotification(payload: unknown): Promise<Gm
     return { ok: true, skipped: "channel_not_found" }
   }
 
-  return runGmailSync({
-    channelId: channel.id,
-    tenantId: channel.tenantId,
-    requestedMode: "push",
-    incremental: Boolean(channel.gmailCredential?.historyId),
-    ensureWatch: Boolean(process.env.GMAIL_PUSH_TOPIC),
+  const existingEvent = await prisma.gmailPushEvent.findUnique({ where: { messageId } })
+  if (existingEvent?.status === "completed") {
+    return { ok: true, skipped: "push_already_completed" }
+  }
+
+  await prisma.gmailPushEvent.upsert({
+    where: { messageId },
+    create: {
+      tenantId: channel.tenantId,
+      channelId: channel.id,
+      historyId: notification.historyId ?? null,
+      messageId,
+      status: "processing",
+      error: null,
+    },
+    update: {
+      status: "processing",
+      error: null,
+    },
   })
+
+  try {
+    const result = await runGmailSync({
+      channelId: channel.id,
+      tenantId: channel.tenantId,
+      requestedMode: "push",
+      incremental: Boolean(channel.gmailCredential?.historyId),
+      ensureWatch: Boolean(process.env.GMAIL_PUSH_TOPIC),
+    })
+
+    if ("skipped" in result && result.skipped === "sync_in_progress") {
+      await prisma.gmailPushEvent.update({
+        where: { messageId },
+        data: {
+          status: "failed",
+          error: "sync_in_progress",
+          processedAt: new Date(),
+        },
+      })
+      return result
+    }
+
+    await prisma.gmailPushEvent.update({
+      where: { messageId },
+      data: {
+        status: "completed",
+        error: null,
+        processedAt: new Date(),
+      },
+    })
+
+    return result
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown Gmail push processing error"
+    await prisma.gmailPushEvent
+      .update({
+        where: { messageId },
+        data: {
+          status: "failed",
+          error: message,
+          processedAt: new Date(),
+        },
+      })
+      .catch(() => {})
+    return { ok: true, skipped: "push_processing_failed", failed: true, error: message }
+  }
 }

@@ -96,6 +96,11 @@ model Tenant {
   vipContacts               VipContact[]
   snoozeReminders           SnoozeReminder[]
   emailAttachments          EmailAttachment[]
+  aiBudget                  AiBudget?
+  classificationCorrections ClassificationCorrection[]
+  senderRules               SenderRule[]
+  gmailPushEvents           GmailPushEvent[]
+  gmailWritebackQueue       GmailWritebackQueue[]
 }
 
 model User {
@@ -121,6 +126,8 @@ model Channel {
   gmailCredential          GmailCredential?
   outlookCredential        OutlookCredential?
   learnedReplyProfiles     LearnedReplyProfile[]
+  gmailPushEvents          GmailPushEvent[]
+  gmailWritebackQueue      GmailWritebackQueue[]
 }
 
 model GmailCredential {
@@ -131,6 +138,9 @@ model GmailCredential {
   tokenExpiry           DateTime?
   historyId             String?
   watchExpiresAt        DateTime?
+  watchLastRenewalAttempt DateTime?
+  watchRenewalError     String?
+  lastHistoryFallbackAt DateTime?
   lastSyncedAt          DateTime?
   lastSyncMode          String?
   lastSyncStatus        String?
@@ -138,6 +148,44 @@ model GmailCredential {
   syncLockExpiresAt     DateTime?
   createdAt             DateTime  @default(now())
   channel               Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+}
+
+model GmailPushEvent {
+  id          String    @id @default(cuid())
+  tenantId    String
+  channelId   String
+  historyId   String?
+  messageId   String    @unique
+  status      String    @default("received")
+  error       String?
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channel     Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, channelId])
+  @@index([status])
+}
+
+model GmailWritebackQueue {
+  id                     String   @id @default(cuid())
+  tenantId               String
+  channelId              String
+  conversationId         String
+  action                 String
+  providerMessageIdsJson Json
+  attempts               Int      @default(0)
+  lastError              String?
+  status                 String   @default("pending")
+  nextAttemptAt          DateTime @default(now())
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  tenant                 Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channel                Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  conversation           Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, action])
+  @@index([tenantId, status, nextAttemptAt])
 }
 
 model OutlookCredential {
@@ -241,6 +289,7 @@ model Conversation {
   leads            Lead[]
   snoozeReminders  SnoozeReminder[]
   emailAttachments EmailAttachment[]
+  gmailWritebacks  GmailWritebackQueue[]
 
   @@unique([tenantId, channelId, externalThreadId])
   @@index([tenantId, lastMessageAt])
@@ -253,6 +302,7 @@ model Message {
   fromE164          String
   toE164            String
   body              String
+  subject           String?
   providerMessageId String
   isRead            Boolean          @default(false)
   gmailLabelIds     Json?
@@ -333,6 +383,10 @@ model ConversationState {
   confidence     Float    @default(0)
   source         String   @default("deterministic")
   metadataJson   Json?
+  attentionCategory String?
+  emailType      String?
+  isSalesLead    Boolean  @default(false)
+  isSupport      Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -340,6 +394,9 @@ model ConversationState {
 
   @@index([tenantId, state])
   @@index([tenantId, priority])
+  @@index([tenantId, attentionCategory])
+  @@index([tenantId, isSalesLead])
+  @@index([tenantId, isSupport])
 }
 
 model InboxTask {
@@ -544,12 +601,22 @@ model AiUsageEvent {
   model           String
   estimatedInputTokens  Int      @default(0)
   estimatedOutputTokens Int      @default(0)
+  estimatedCostUsd      Float    @default(0)
   status          String
   createdAt       DateTime @default(now())
   tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, createdAt])
   @@index([feature])
+}
+
+model AiBudget {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  dailyLimitUsd   Float    @default(5.0)
+  monthlyLimitUsd Float    @default(50.0)
+  updatedAt       DateTime @updatedAt
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model PersonalProfile {
@@ -617,4 +684,40 @@ model EmailAttachment {
 
   @@index([conversationId])
   @@index([messageId])
+}
+
+// Logs each manual attention correction so repeated patterns can be detected.
+model ClassificationCorrection {
+  id                String   @id @default(cuid())
+  tenantId          String
+  conversationId    String
+  fromEmail         String
+  fromDomain        String
+  previousAttention String?
+  newAttention      String
+  createdAt         DateTime @default(now())
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, fromEmail, newAttention])
+  @@index([tenantId, fromDomain, newAttention])
+  @@index([tenantId, createdAt])
+}
+
+// A rule learned from repeated user corrections or manually created.
+// status: "suggested" → awaiting user approval, "active" → applied automatically,
+// "dismissed" → user declined.
+model SenderRule {
+  id              String   @id @default(cuid())
+  tenantId        String
+  matchType       String   // "email" | "domain"
+  matchValue      String   // e.g. "tim@5by5.tv" or "beehiiv.com"
+  targetAttention String   // e.g. "quiet", "read_later"
+  status          String   @default("suggested")
+  triggerCount    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, matchType, matchValue, targetAttention])
+  @@index([tenantId, status])
 }

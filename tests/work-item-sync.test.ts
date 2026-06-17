@@ -40,6 +40,7 @@ vi.mock("@/lib/prisma", () => ({
     knowledgeDocument: { findMany: mockKbDocFindMany },
     tenant: { findUnique: mockTenantFindUnique },
     vipContact: { findFirst: mockVipContactFindFirst },
+    senderRule: { findFirst: vi.fn().mockResolvedValue(null) },
   },
 }))
 
@@ -403,6 +404,124 @@ describe("syncConversationWorkItems", () => {
       "contact-1",
       expect.objectContaining({ featureContext: "work_item_sync" })
     )
+  })
+
+  it("preserves user-corrected attentionCategory when the email classifier runs", async () => {
+    // The email classifier would normally classify an OTP as "needs_action", but the
+    // user has already manually set attention to "read_later" — that choice must survive.
+    mockConversationFindFirst.mockResolvedValue({
+      ...conversation,
+      messages: [
+        {
+          id: "msg-otp",
+          direction: "inbound",
+          body: "Your verification code is 847291. This code expires in 10 minutes.",
+          fromE164: "noreply@app.com",
+          createdAt: now,
+        },
+      ],
+    })
+    mockStateFindUnique.mockResolvedValue({
+      source: "user_override",
+      metadataJson: {
+        attentionCorrectedByUser: true,
+        userOverride: true,
+        attentionCategory: "read_later",
+      },
+    })
+
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    // The email classifier always writes an update with emailType; verify it keeps the user's value
+    const emailClassifierUpdate = mockStateUpdate.mock.calls.find(
+      (c: unknown[]) => {
+        const data = (c[0] as Record<string, { metadataJson?: Record<string, unknown> }>).data
+        return data?.metadataJson?.emailType !== undefined
+      }
+    )
+    expect(emailClassifierUpdate).toBeDefined()
+    const updatedMeta = (emailClassifierUpdate![0] as Record<string, { metadataJson: Record<string, unknown> }>).data.metadataJson
+    expect(updatedMeta.attentionCategory).toBe("read_later")   // user's choice preserved
+    expect(updatedMeta.emailType).toBe("notification")         // AI-derived type still written
+  })
+
+  it("preserves user-corrected attentionCategory when userOverride (from status route) is set", async () => {
+    // When a user clicks Done, the status route sets userOverride:true but NOT attentionCorrectedByUser.
+    // The classifier must still respect userOverride and not clobber the attention.
+    mockConversationFindFirst.mockResolvedValue({
+      ...conversation,
+      status: "closed",
+      messages: [
+        {
+          id: "msg-newsletter",
+          direction: "inbound",
+          body: "Unsubscribe from this newsletter. View in browser.",
+          fromE164: "newsletter@example.com",
+          createdAt: now,
+        },
+      ],
+    })
+    mockStateFindUnique.mockResolvedValue({
+      source: "user_override",
+      metadataJson: {
+        userOverride: true,
+        attentionCategory: "needs_reply",  // user set this before clicking Done
+      },
+    })
+
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    const emailClassifierUpdate = mockStateUpdate.mock.calls.find(
+      (c: unknown[]) => {
+        const data = (c[0] as Record<string, { metadataJson?: Record<string, unknown> }>).data
+        return data?.metadataJson?.emailType !== undefined
+      }
+    )
+    expect(emailClassifierUpdate).toBeDefined()
+    const updatedMeta = (emailClassifierUpdate![0] as Record<string, { metadataJson: Record<string, unknown> }>).data.metadataJson
+    // Should NOT have overwritten with "read_later" (newsletter classifier result)
+    expect(updatedMeta.attentionCategory).toBe("needs_reply")
+  })
+
+  it("writes AI-derived attentionCategory when no user override is present", async () => {
+    // No user override — the email classifier result should be written normally
+    mockConversationFindFirst.mockResolvedValue({
+      ...conversation,
+      messages: [
+        {
+          id: "msg-otp",
+          direction: "inbound",
+          body: "Your verification code is 847291. This code expires in 10 minutes.",
+          fromE164: "noreply@app.com",
+          createdAt: now,
+        },
+      ],
+    })
+    mockStateFindUnique.mockResolvedValue(null)  // no existing state
+
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    const emailClassifierUpdate = mockStateUpdate.mock.calls.find(
+      (c: unknown[]) => {
+        const data = (c[0] as Record<string, { metadataJson?: Record<string, unknown> }>).data
+        return data?.metadataJson?.emailType !== undefined
+      }
+    )
+    expect(emailClassifierUpdate).toBeDefined()
+    const updatedMeta = (emailClassifierUpdate![0] as Record<string, { metadataJson: Record<string, unknown> }>).data.metadataJson
+    expect(updatedMeta.attentionCategory).toBe("needs_action")
   })
 
   it("can skip rich AI relationship work while still syncing deterministic state", async () => {

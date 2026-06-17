@@ -148,6 +148,7 @@ function HandleFirstCard({ item }: CardProps) {
               handleDraftReply()
             }}
             disabled={draftLoading}
+            title="Draft reply"
             className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-blue-600 text-white disabled:opacity-60 hover:bg-blue-700 transition"
           >
             {draftLoading ? "Generating…" : "Draft Reply"}
@@ -159,6 +160,7 @@ function HandleFirstCard({ item }: CardProps) {
               event.stopPropagation()
               router.push(item.href)
             }}
+            title="Review draft"
             className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition"
           >
             Review Draft
@@ -170,6 +172,7 @@ function HandleFirstCard({ item }: CardProps) {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(event) => event.stopPropagation()}
+            title="Open link"
             className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-amber-500 text-white hover:bg-amber-600 transition"
           >
             Open link →
@@ -180,6 +183,7 @@ function HandleFirstCard({ item }: CardProps) {
             event.stopPropagation()
             handleMarkDone()
           }}
+          title="Mark done"
           className="text-[10px] font-medium px-2.5 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
         >
           Mark Done

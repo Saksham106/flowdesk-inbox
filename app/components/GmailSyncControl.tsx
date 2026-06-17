@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type GmailSyncChannel = {
@@ -9,6 +8,9 @@ type GmailSyncChannel = {
   lastSyncedAt: Date | string | null;
   lastSyncError: string | null;
   watchExpiresAt?: Date | string | null;
+  watchLastRenewalAttempt?: Date | string | null;
+  watchRenewalError?: string | null;
+  lastHistoryFallbackAt?: Date | string | null;
 };
 
 type SyncStatus = {
@@ -16,10 +18,11 @@ type SyncStatus = {
   message: string;
 } | null;
 
-const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+const AUTO_SYNC_INTERVAL_MS = 15 * 60 * 1000;
 const AUTO_SYNC_COOLDOWN_MS = 60 * 1000;
 const PUSH_STALE_FALLBACK_MS = 30 * 60 * 1000;
 const WATCH_HEALTH_BUFFER_MS = 10 * 60 * 1000;
+const WATCH_WARNING_BUFFER_MS = 24 * 60 * 60 * 1000;
 
 function relativeTime(date: Date): string {
   const diff = Date.now() - date.getTime();
@@ -39,7 +42,6 @@ export default function GmailSyncControl({
   channels: GmailSyncChannel[];
   compact?: boolean;
 }) {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<SyncStatus>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(() => {
@@ -56,11 +58,27 @@ export default function GmailSyncControl({
   const hasHealthyPush = useMemo(
     () =>
       channels.some((channel) => {
+        if (channel.watchRenewalError) return false;
         if (!channel.watchExpiresAt) return false;
         return new Date(channel.watchExpiresAt).getTime() > Date.now() + WATCH_HEALTH_BUFFER_MS;
       }),
     [channels]
   );
+  const pushHealthWarning = useMemo(() => {
+    const failed = channels.find((channel) => channel.watchRenewalError);
+    if (failed?.watchRenewalError) return `Push sync unhealthy: ${failed.watchRenewalError}`;
+
+    const expiring = channels.find((channel) => {
+      if (!channel.watchExpiresAt) return true;
+      return new Date(channel.watchExpiresAt).getTime() <= Date.now() + WATCH_WARNING_BUFFER_MS;
+    });
+    if (expiring) return "Push sync needs renewal; polling fallback is active";
+
+    const fallback = channels.find((channel) => channel.lastHistoryFallbackAt);
+    if (fallback?.lastHistoryFallbackAt) return "Incremental sync recovered with a recent-sync fallback";
+
+    return null;
+  }, [channels]);
   const shouldPollWithHealthyPush = useCallback(() => {
     if (!hasHealthyPush) return true;
     if (!lastSyncedAt) return true;
@@ -72,6 +90,12 @@ export default function GmailSyncControl({
   );
   const displayStatus =
     status ??
+    (pushHealthWarning
+      ? {
+          type: "error" as const,
+          message: pushHealthWarning,
+        }
+      : null) ??
     (initialError
       ? {
           type: "error" as const,
@@ -111,7 +135,6 @@ export default function GmailSyncControl({
           type: "success",
           message: totalSynced === 1 ? "Synced 1 update" : `Synced ${totalSynced} updates`,
         });
-        router.refresh();
       } catch (err) {
         setStatus({
           type: "error",
@@ -122,7 +145,7 @@ export default function GmailSyncControl({
         setLoading(false);
       }
     },
-    [channels, hasChannels, lastSyncedAt, router, shouldPollWithHealthyPush]
+    [channels, hasChannels, lastSyncedAt, shouldPollWithHealthyPush]
   );
 
   useEffect(() => {
@@ -138,12 +161,10 @@ export default function GmailSyncControl({
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("focus", onVisibility);
     const interval = hasHealthyPush ? null : window.setInterval(() => runSync("auto"), AUTO_SYNC_INTERVAL_MS);
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("focus", onVisibility);
       if (interval) window.clearInterval(interval);
     };
   }, [hasChannels, hasHealthyPush, runSync]);
@@ -160,6 +181,7 @@ export default function GmailSyncControl({
         disabled={loading}
         className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
         aria-label="Sync Gmail inbox"
+        title="Sync inbox"
       >
         {loading ? "Syncing..." : "Sync"}
       </button>

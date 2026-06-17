@@ -1,12 +1,12 @@
 import Link from "next/link"
-import { Suspense } from "react"
+import { unstable_cache } from "next/cache"
 import { prisma } from "@/lib/prisma"
-import { stripHtmlToText } from "@/lib/email-body"
-import SearchInput from "@/app/inbox/SearchInput"
+import { stripHtmlToText, buildPreviewText } from "@/lib/email-body"
 import GmailSyncControl from "@/app/components/GmailSyncControl"
-import InboxScrollContainer from "@/app/components/InboxScrollContainer"
 import { buildConversationHref } from "@/lib/client-navigation"
-import InboxRowWithSnooze from "@/app/components/InboxRowWithSnooze"
+import ClientFilteredInboxList, { type InboxListItem } from "@/app/components/ClientFilteredInboxList"
+import { resolveAccountMode } from "@/lib/account-mode"
+import { inboxTag } from "@/lib/cache-tags"
 
 interface Props {
   tenantId: string
@@ -21,6 +21,9 @@ interface Props {
     lastSyncedAt: Date | null
     lastSyncError: string | null
     watchExpiresAt?: Date | string | null
+    watchLastRenewalAttempt?: Date | string | null
+    watchRenewalError?: string | null
+    lastHistoryFallbackAt?: Date | string | null
   }[]
   className?: string
 }
@@ -33,12 +36,25 @@ type ConvRow = {
   readAt: Date | null
   gmailUnread: boolean | null
   contact: { name: string } | null
-  messages: { body: string }[]
+  messages: { body: string; subject: string | null }[]
   draft: { status: string } | null
-  stateRecord: { state: string; metadataJson: unknown } | null
+  stateRecord: {
+    state: string
+    metadataJson: unknown
+    attentionCategory: string | null
+    emailType: string | null
+  } | null
+  channel: { provider: string }
 }
 
 function isFyi(conv: ConvRow): boolean {
+  if (conv.stateRecord?.attentionCategory === "quiet" || conv.stateRecord?.attentionCategory === "fyi_done") {
+    return true
+  }
+  if (conv.stateRecord?.attentionCategory) return false
+  if (conv.stateRecord?.emailType === "notification" || conv.stateRecord?.emailType === "newsletter" || conv.stateRecord?.emailType === "marketing") {
+    return true
+  }
   const meta = conv.stateRecord?.metadataJson
   if (meta && typeof meta === "object" && !Array.isArray(meta)) {
     const attentionCategory = (meta as Record<string, unknown>).attentionCategory
@@ -52,6 +68,7 @@ function isFyi(conv: ConvRow): boolean {
 }
 
 function attentionCategory(conv: ConvRow): string | null {
+  if (conv.stateRecord?.attentionCategory) return conv.stateRecord.attentionCategory
   const meta = conv.stateRecord?.metadataJson
   if (!meta || typeof meta !== "object" || Array.isArray(meta)) return null
   const value = (meta as Record<string, unknown>).attentionCategory
@@ -95,6 +112,63 @@ const ATTENTION_STYLE: Record<string, { dot: string; text: string; label: string
   quiet: { dot: "bg-slate-300", text: "text-slate-500", label: "Quiet" },
 }
 
+function getCachedListData(input: {
+  tenantId: string
+  status?: string | null
+  q?: string
+  sales: boolean
+}) {
+  const key = [
+    "app-list-column",
+    input.tenantId,
+    input.status ?? "all",
+    input.q ?? "",
+    input.sales ? "sales" : "standard",
+  ]
+
+  return unstable_cache(
+    async () => {
+      const where: Record<string, unknown> = { tenantId: input.tenantId }
+      if (input.status) where.status = input.status
+      if (input.sales) {
+        where.stateRecord = {
+          is: {
+            isSalesLead: true,
+          },
+        }
+      }
+      if (input.q) {
+        where.OR = [
+          { externalThreadId: { contains: input.q, mode: "insensitive" } },
+          { contact: { name: { contains: input.q, mode: "insensitive" } } },
+        ]
+      }
+
+      return Promise.all([
+        prisma.conversation.findMany({
+          where,
+          orderBy: { lastMessageAt: "desc" },
+          take: 50,
+          include: {
+            messages: { orderBy: { createdAt: "desc" }, take: 1 },
+            contact: true,
+            draft: { select: { status: true } },
+            stateRecord: { select: { state: true, metadataJson: true, attentionCategory: true, emailType: true } },
+            channel: { select: { provider: true } },
+          },
+        }) as Promise<ConvRow[]>,
+        prisma.conversation.groupBy({
+          by: ["status"],
+          where: { tenantId: input.tenantId },
+          _count: { status: true },
+        }),
+      ])
+    },
+    key,
+    { revalidate: 60, tags: [inboxTag(input.tenantId)] }
+  )()
+}
+
 export default async function AppListColumn({
   tenantId,
   accountType,
@@ -106,44 +180,14 @@ export default async function AppListColumn({
   className = "w-[280px] shrink-0",
 }: Props) {
   const isBusiness = accountType === "business"
+  const isPersonal = resolveAccountMode(accountType) === "personal"
 
-  const where: Record<string, unknown> = { tenantId }
-  if (status) where.status = status
-  if (sales && isBusiness) {
-    where.stateRecord = {
-      is: {
-        metadataJson: {
-          path: ["isSalesLead"],
-          equals: true,
-        },
-      },
-    }
-  }
-  if (q) {
-    where.OR = [
-      { externalThreadId: { contains: q, mode: "insensitive" } },
-      { contact: { name: { contains: q, mode: "insensitive" } } },
-    ]
-  }
-
-  const [conversations, counts] = await Promise.all([
-    prisma.conversation.findMany({
-      where,
-      orderBy: { lastMessageAt: "desc" },
-      take: 50,
-      include: {
-        messages: { orderBy: { createdAt: "desc" }, take: 1 },
-        contact: true,
-        draft: { select: { status: true } },
-        stateRecord: { select: { state: true, metadataJson: true } },
-      },
-    }) as Promise<ConvRow[]>,
-    prisma.conversation.groupBy({
-      by: ["status"],
-      where: { tenantId },
-      _count: { status: true },
-    }),
-  ])
+  const [conversations, counts] = await getCachedListData({
+    tenantId,
+    status,
+    q,
+    sales: sales && isBusiness,
+  })
 
   const countMap = Object.fromEntries(counts.map((r) => [r.status, r._count.status]))
 
@@ -166,19 +210,59 @@ export default async function AppListColumn({
 
   const returnTo = currentInboxHref()
   const scrollKey = [status ?? "all", q ?? "", sales ? "s" : ""].join("_")
+  const emptyMessage = q || status || sales ? "No results." : "No conversations yet."
+  const listItems: InboxListItem[] = conversations.map((conv) => {
+    const fyi = isFyi(conv)
+    const attention = attentionCategory(conv)
+    const attentionStyle = attention ? ATTENTION_STYLE[attention] : null
+    const displayStatus = fyi ? "closed" : conv.status
+    const style = STATUS_STYLE[displayStatus] ?? { dot: "bg-slate-300", text: "text-slate-500" }
+    const name = conv.contact?.name ?? conv.externalThreadId
+    const msg0 = conv.messages[0]
+    const bodySnippet = msg0?.body ? stripHtmlToText(msg0.body, 75) : ""
+    const snippet = buildPreviewText(msg0?.subject, bodySnippet)
+    const hasDraft = conv.draft?.status === "proposed" || conv.draft?.status === "approved"
+    const isClosed = conv.status === "closed"
+    const meta = conv.stateRecord?.metadataJson as Record<string, unknown> | null ?? {}
+    const isVip = meta?.isVip === true
+    const vipLabel = typeof meta?.vipLabel === "string" ? meta.vipLabel : null
+    const snoozeUntil = typeof meta?.snoozeUntil === "string" ? meta.snoozeUntil : null
+
+    return {
+      id: conv.id,
+      href: buildConversationHref(conv.id, returnTo),
+      isSelected: conv.id === activeConversationId,
+      isUnread: !conv.readAt && conv.gmailUnread !== false && !fyi,
+      isFyi: fyi,
+      isClosed,
+      name,
+      snippet,
+      timeLabel: relativeTime(conv.lastMessageAt),
+      statusDot: attentionStyle?.dot ?? style.dot,
+      statusText: attentionStyle?.text ?? style.text,
+      statusLabel: attentionStyle?.label ?? (fyi ? "No reply needed" : STATUS_LABEL[displayStatus] ?? displayStatus),
+      hasDraft,
+      initialReadAt: conv.readAt !== null,
+      initialStatus: conv.status,
+      attentionCategory: attention,
+      isPersonal,
+      isGmail: conv.channel.provider === "google",
+      isVip,
+      vipLabel,
+      snoozeUntil,
+      searchText: `${name} ${conv.externalThreadId} ${snippet}`.toLowerCase(),
+    }
+  })
 
   return (
-    <div className={`flex h-full flex-col border-r border-slate-200 bg-white ${className}`}>
-      {/* Header */}
-      <div className="border-b border-slate-100 px-3 pb-2 pt-3">
-        <div className="mb-2 flex items-start justify-between gap-2">
-          <p className="pt-1 text-sm font-semibold text-slate-900">Inbox</p>
-          <GmailSyncControl channels={gmailChannels} compact />
-        </div>
-        <Suspense>
-          <SearchInput defaultValue={q} />
-        </Suspense>
-        {/* Filter pills */}
+    <ClientFilteredInboxList
+      items={listItems}
+      defaultQuery={q ?? ""}
+      emptyMessage={emptyMessage}
+      scrollKey={scrollKey}
+      className={className}
+      headerEnd={<GmailSyncControl channels={gmailChannels} compact />}
+      filters={
         <div className="mt-2 flex flex-wrap gap-1">
           {STATUS_FILTERS.map(({ label, value }) => {
             const isActive = status === value || (value === null && !status)
@@ -213,60 +297,7 @@ export default async function AppListColumn({
             </Link>
           )}
         </div>
-      </div>
-
-      {/* Conversation rows */}
-      <InboxScrollContainer scrollKey={scrollKey} className="flex-1 overflow-y-auto">
-        {conversations.length === 0 ? (
-          <p className="px-4 py-8 text-xs text-slate-400">
-            {q || status || sales ? "No results." : "No conversations yet."}
-          </p>
-        ) : (
-          conversations.map((conv) => {
-            const fyi = isFyi(conv)
-            const attention = attentionCategory(conv)
-            const attentionStyle = attention ? ATTENTION_STYLE[attention] : null
-            const displayStatus = fyi ? "closed" : conv.status
-            const style = STATUS_STYLE[displayStatus] ?? { dot: "bg-slate-300", text: "text-slate-500" }
-            const name = conv.contact?.name ?? conv.externalThreadId
-            const snippet = conv.messages[0]?.body
-              ? stripHtmlToText(conv.messages[0].body, 75)
-              : ""
-            const hasDraft =
-              conv.draft?.status === "proposed" || conv.draft?.status === "approved"
-            const isClosed = conv.status === "closed"
-
-            const meta = conv.stateRecord?.metadataJson as Record<string, unknown> | null ?? {}
-            const isVip = meta?.isVip === true
-            const vipLabel = typeof meta?.vipLabel === "string" ? meta.vipLabel : null
-            const snoozeUntil = typeof meta?.snoozeUntil === "string" ? meta.snoozeUntil : null
-
-            return (
-              <InboxRowWithSnooze
-                key={conv.id}
-                id={conv.id}
-                href={buildConversationHref(conv.id, returnTo)}
-                isSelected={conv.id === activeConversationId}
-                isUnread={!conv.readAt && conv.gmailUnread !== false && !fyi}
-                isFyi={fyi}
-                isClosed={isClosed}
-                name={name}
-                snippet={snippet}
-                timeLabel={relativeTime(conv.lastMessageAt)}
-                statusDot={attentionStyle?.dot ?? style.dot}
-                statusText={attentionStyle?.text ?? style.text}
-                statusLabel={attentionStyle?.label ?? (fyi ? "No reply needed" : STATUS_LABEL[displayStatus] ?? displayStatus)}
-                hasDraft={hasDraft}
-                initialReadAt={conv.readAt !== null}
-                initialStatus={conv.status}
-                isVip={isVip}
-                vipLabel={vipLabel}
-                snoozeUntil={snoozeUntil}
-              />
-            )
-          })
-        )}
-      </InboxScrollContainer>
-    </div>
+      }
+    />
   )
 }

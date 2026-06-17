@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import type { AttentionCategory } from "@/lib/agent/email-classifier"
+import { recordAttentionCorrection } from "@/lib/agent/preference-learning"
+import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
+import { revalidateInboxViews } from "@/lib/cache-tags"
 
 const VALID_CATEGORIES: AttentionCategory[] = [
   "needs_reply",
@@ -13,6 +16,84 @@ const VALID_CATEGORIES: AttentionCategory[] = [
   "fyi_done",
   "quiet",
 ]
+
+type DerivedAttentionState = {
+  status: "needs_reply" | "in_progress" | "closed"
+  userState: string
+  state: string
+  priority: string
+  reason: string
+  nextAction: string
+}
+
+function deriveAttentionState(attentionCategory: AttentionCategory): DerivedAttentionState {
+  switch (attentionCategory) {
+    case "needs_action":
+      return {
+        status: "needs_reply",
+        userState: "needs_action",
+        state: "waiting_on_you",
+        priority: "high",
+        reason: "User marked this conversation as needing action.",
+        nextAction: "Complete the requested action.",
+      }
+    case "review_soon":
+      return {
+        status: "needs_reply",
+        userState: "review_soon",
+        state: "risky_urgent",
+        priority: "high",
+        reason: "User marked this conversation for review soon.",
+        nextAction: "Review the alert and decide whether action is needed.",
+      }
+    case "read_later":
+      return {
+        status: "needs_reply",
+        userState: "read_later",
+        state: "fyi_only",
+        priority: "low",
+        reason: "User marked this conversation to read later.",
+        nextAction: "Read later if relevant.",
+      }
+    case "waiting_on":
+      return {
+        status: "in_progress",
+        userState: "waiting_on",
+        state: "waiting_on_them",
+        priority: "medium",
+        reason: "User marked this conversation as waiting on someone else.",
+        nextAction: "Check back later or send a follow-up.",
+      }
+    case "fyi_done":
+      return {
+        status: "closed",
+        userState: "fyi_done",
+        state: "fyi_only",
+        priority: "none",
+        reason: "User marked this conversation as FYI and done.",
+        nextAction: "No action needed.",
+      }
+    case "quiet":
+      return {
+        status: "closed",
+        userState: "quiet",
+        state: "fyi_only",
+        priority: "none",
+        reason: "User marked this conversation as quiet.",
+        nextAction: "No action needed.",
+      }
+    case "needs_reply":
+    default:
+      return {
+        status: "needs_reply",
+        userState: "needs_reply",
+        state: "needs_reply",
+        priority: "high",
+        reason: "User marked this conversation as needing a reply.",
+        nextAction: "Draft a reply.",
+      }
+  }
+}
 
 export async function PATCH(
   req: NextRequest,
@@ -41,26 +122,61 @@ export async function PATCH(
     select: { id: true, metadataJson: true },
   })
 
-  if (!existing) {
-    return NextResponse.json({ error: "No conversation state found" }, { status: 404 })
-  }
-
   const prevMeta =
-    existing.metadataJson && typeof existing.metadataJson === "object" && !Array.isArray(existing.metadataJson)
+    existing?.metadataJson && typeof existing.metadataJson === "object" && !Array.isArray(existing.metadataJson)
       ? (existing.metadataJson as Record<string, unknown>)
       : {}
 
-  await prisma.conversationState.update({
-    where: { conversationId },
+  const now = new Date()
+  const derived = deriveAttentionState(attentionCategory)
+  const metadataJson = {
+    ...prevMeta,
+    attentionCategory,
+    attentionCorrectedByUser: true,
+    attentionCorrectedAt: now.toISOString(),
+    userOverride: true,
+    userState: derived.userState,
+    updatedAt: now.toISOString(),
+  }
+
+  await prisma.conversation.update({
+    where: { id: conversationId },
     data: {
-      metadataJson: {
-        ...prevMeta,
-        attentionCategory,
-        attentionCorrectedByUser: true,
-        attentionCorrectedAt: new Date().toISOString(),
-      },
+      status: derived.status,
+      userState: derived.userState,
+      userStateSource: "user",
+      userStateUpdatedAt: now,
+      ...(derived.status === "closed" ? { readAt: now, gmailUnread: false } : {}),
     },
   })
+
+  await prisma.conversationState.upsert({
+    where: { conversationId },
+    create: {
+      tenantId,
+      conversationId,
+      state: derived.state,
+      priority: derived.priority,
+      reason: derived.reason,
+      nextAction: derived.nextAction,
+      confidence: 1,
+      source: "user_override",
+      metadataJson,
+      ...conversationStateMetadataData(metadataJson),
+    },
+    update: {
+      state: derived.state,
+      priority: derived.priority,
+      reason: derived.reason,
+      nextAction: derived.nextAction,
+      confidence: 1,
+      source: "user_override",
+      metadataJson,
+      ...conversationStateMetadataData(metadataJson),
+    },
+  })
+
+  const previousAttention = typeof prevMeta.attentionCategory === "string" ? prevMeta.attentionCategory : null
 
   await prisma.auditLog.create({
     data: {
@@ -69,11 +185,17 @@ export async function PATCH(
       payloadJson: {
         conversationId,
         attentionCategory,
-        previous: typeof prevMeta.attentionCategory === "string" ? prevMeta.attentionCategory : null,
+        previous: previousAttention,
         reason: "User manually corrected attention category",
       },
     },
   })
 
+  // Record the correction for preference learning (fire-and-forget; never blocks the response)
+  recordAttentionCorrection({ tenantId, conversationId, previousAttention, newAttention: attentionCategory }).catch((err) => {
+    console.warn("preference-learning: failed to record correction", { conversationId, err })
+  })
+
+  revalidateInboxViews(tenantId, conversationId)
   return NextResponse.json({ ok: true })
 }

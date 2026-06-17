@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { markGmailThreadRead } from "@/lib/google"
+import { revalidateInboxViews } from "@/lib/cache-tags"
 
 export async function PATCH(
   request: Request,
@@ -21,7 +23,12 @@ export async function PATCH(
 
   const conversation = await prisma.conversation.findFirst({
     where: { id: params.id, tenantId: session.user.tenantId },
-    select: { id: true },
+    select: {
+      id: true,
+      channelId: true,
+      channel: { select: { provider: true } },
+      messages: { select: { providerMessageId: true } },
+    },
   })
 
   if (!conversation) {
@@ -36,5 +43,23 @@ export async function PATCH(
     },
   })
 
+  if (read && conversation.channel.provider === "google") {
+    await prisma.message.updateMany({
+      where: { conversationId: params.id },
+      data: { isRead: true },
+    })
+    markGmailThreadRead(
+      conversation.channelId,
+      conversation.messages.map((message) => message.providerMessageId),
+      { tenantId: session.user.tenantId, conversationId: params.id }
+    ).catch((err) => {
+      console.warn("Failed to mark Gmail thread read after read toggle", {
+        conversationId: params.id,
+        message: err instanceof Error ? err.message : "Unknown error",
+      })
+    })
+  }
+
+  revalidateInboxViews(session.user.tenantId, params.id)
   return NextResponse.json({ ok: true })
 }

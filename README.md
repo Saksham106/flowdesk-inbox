@@ -9,10 +9,12 @@ FlowDesk is an email-first AI inbox agent for individuals and small businesses. 
 - **Gmail and Outlook sync** — connect an email account and import email threads into FlowDesk
 - **Manual and automatic Gmail refresh controls** — the inbox shell exposes real Gmail sync with last-synced/error status, app-load sync, tab-return sync, and periodic sync while open
 - **Idempotent Gmail sync with local overrides** — duplicate syncs are locked per account, Gmail read/unread is imported separately from local read/done state, and user actions win over AI classification
+- **Gmail read/archive/trash writeback** — read, archive, and trash actions update Gmail where supported while preserving local override metadata
 - **Conversation inbox** — view email threads with status, drafts, and assistant context
 - **Email-style thread view** — opened conversations read top-to-bottom like an email client, with sender/recipient/timestamp metadata and a reply composer below the thread
 - **Daily Command Center** — see the conversations that actually matter today, plus what can be safely ignored
 - **Richer attention classification** — distinguishes needs reply, needs action, review soon, read later, waiting on, FYI done, and quiet instead of treating all automated email as useless
+- **Deterministic preference learning** — repeated manual attention corrections can create sender/domain rules that users apply, dismiss, disable, and inspect in Settings
 - **Deterministic account-action detection** — OTPs, verification links, password setup/reset, login approvals, account setup, and security alerts surface as action metadata without rich AI work
 - **Cost-aware AI usage** — deterministic rules handle low-value automated mail first; richer AI is skipped, deferred, or cached for drafts and relationship memory when it does not add user value
 - **Handle This** — ask FlowDesk to draft the next step from a thread-level assistant panel
@@ -77,7 +79,7 @@ cp .env.example .env
 ```
 
 Required variables:
-- `DATABASE_URL`
+- `DATABASE_URL` — for the included Docker Compose database, use `postgresql://flowdesk:flowdesk@localhost:5433/flowdesk_inbox?schema=public`
 - `NEXTAUTH_URL` — base URL of the app (e.g. `http://localhost:3000`)
 - `NEXTAUTH_SECRET` — generate with `openssl rand -base64 32`
 - `ENCRYPTION_SECRET` — generate with `openssl rand -base64 32`
@@ -97,6 +99,8 @@ docker compose up -d
 npm run db:deploy
 npm run db:seed
 ```
+
+If a migration is described as applying "when the database is next reachable," the migration file has been committed but Postgres was not available when deploy was attempted. Start or restore the database, verify `DATABASE_URL`, then run `npm run db:deploy`; otherwise app code may reference tables or columns that do not exist yet.
 
 ### 5. Start the app
 
@@ -127,15 +131,24 @@ Optional real-time sync:
 - Create a Pub/Sub topic and subscription that pushes to `/api/connectors/gmail/push?secret=<GMAIL_PUSH_SECRET>`.
 - Set `GMAIL_PUSH_TOPIC` to the topic name and `GMAIL_PUSH_SECRET` to the same secret used in the push URL.
 - Schedule `GET /api/cron/gmail-watch` daily with `Authorization: Bearer <CRON_SECRET>` so Gmail watches renew before their 7-day expiration.
+- Schedule `GET /api/cron/gmail-push-retry`, `GET /api/cron/gmail-writeback`, and `GET /api/cron/gmail-state-reconcile` with the same bearer token to retry failed push syncs, retry Gmail writebacks, and detect local/Gmail read-state drift.
+
+Gmail cron monitoring:
+- Treat non-2xx responses from `GET /api/cron/gmail-watch` as alerts. The endpoint returns `500` and `X-Gmail-Watch-Errors: <count>` when any channel renewal fails.
+- With cron-job.org or a similar scheduler, configure the job to expect HTTP 200 and send failures to email, Slack, or a webhook.
+- With Railway, forward logs to Datadog or a similar provider and alert on `gmail_watch.renewal_failed`, `Failed to renew watch`, or `X-Gmail-Watch-Errors` above zero.
+- For PagerDuty, route those scheduler webhooks or log-drain alerts to the service that owns Gmail sync.
 
 Inbox sync behavior:
 - Gmail sync runs through the shared runner in `lib/gmail-sync.ts`; manual sync, OAuth initial sync, and Pub/Sub push notifications all use the same database-backed per-channel lock.
-- The inbox Gmail sync control prevents duplicate client requests. When Gmail push/watch is healthy it only auto-syncs as a stale fallback; when push is not configured or the watch is unhealthy it keeps the 5-minute polling fallback. Manual **Sync** always remains available.
+- The inbox Gmail sync control prevents duplicate client requests. When Gmail push/watch is healthy it only auto-syncs as a stale fallback; when push is not configured or the watch is unhealthy it uses a 15-minute polling fallback. Manual **Sync** always remains available and updates the sync badge without forcing a full page refresh.
 - Overlapping server requests return `202 { skipped: "sync_in_progress" }`.
 - Gmail raw state (`gmailUnread`, `gmailRawState`, `gmailLabelIds`) is stored separately from local user/read state (`userState`, `readAt`, `isRead`). Sync imports Gmail read/unread, but user actions such as Mark Done and local reads are not overwritten by AI classification.
-- Sync observability is stored on `GmailCredential.lastSyncMode`, `lastSyncStatus`, `lastSyncError`, `lastSyncedAt`, and `watchExpiresAt`.
-- Opening a Gmail conversation marks it read locally and attempts safe Gmail writeback by removing `UNREAD`; writeback failures are logged but do not block the UI.
-- If Gmail push is configured, Pub/Sub notifications trigger incremental sync server-side; the client controls are still useful as a visible manual fallback.
+- Sync observability is stored on `GmailCredential.lastSyncMode`, `lastSyncStatus`, `lastSyncError`, `lastSyncedAt`, `watchExpiresAt`, `watchRenewalError`, `watchLastRenewalAttempt`, and `lastHistoryFallbackAt`.
+- Opening or marking a Gmail conversation read updates local state immediately, retries Gmail `UNREAD` removal, and queues failed writeback for cron retry without blocking the UI.
+- If Gmail push is configured, Pub/Sub notifications trigger incremental sync server-side; push events are persisted by Pub/Sub `messageId` for idempotency and retry.
+- Inbox auto-refresh polls `GET /api/inbox/summary` once per minute for lightweight status data instead of calling `router.refresh()` on the whole page.
+- Inbox search filters currently loaded rows immediately, then updates the URL/server search after a 1-second pause or Enter.
 
 ### Google Calendar
 

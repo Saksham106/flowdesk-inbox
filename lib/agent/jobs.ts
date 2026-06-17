@@ -5,6 +5,7 @@ import { checkPolicy } from "@/lib/agent/policy"
 import { checkAvailability, formatSlots, type AvailableSlot } from "@/lib/agent/availability"
 import { attemptAutopilotSend } from "@/lib/agent/autopilot"
 import { buildClassifyPrompt } from "@/lib/ai/prompts/classify"
+import { checkAiBudgetForTokens } from "@/lib/ai/budget"
 import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import type { AgentJob, Prisma } from "@prisma/client"
 import type { ClassifyResult } from "@/lib/ai/prompts/classify"
@@ -155,7 +156,20 @@ async function _executeJob(
   }
   const classifyPrompt = buildClassifyPrompt(classifyInput)
   const classifyModel = process.env.OPENAI_MODEL || "gpt-4o-mini"
+  const classifyInputTokens = estimateTokenCount(classifyPrompt)
+  let classifyUsageStatus = "failed"
   try {
+    const budgetCheck = await checkAiBudgetForTokens({
+      tenantId: job.tenantId,
+      model: classifyModel,
+      estimatedInputTokens: classifyInputTokens,
+      estimatedOutputTokens: 800,
+    })
+    if (!budgetCheck.allowed) {
+      classifyUsageStatus = "blocked"
+      throw new Error(budgetCheck.reason)
+    }
+
     classification = await classifyConversation(classifyInput)
 
     await prisma.agentToolCall.update({
@@ -170,7 +184,7 @@ async function _executeJob(
       tenantId: job.tenantId,
       feature: "agent.classify",
       model: classifyModel,
-      estimatedInputTokens: estimateTokenCount(classifyPrompt),
+      estimatedInputTokens: classifyInputTokens,
       estimatedOutputTokens: estimateTokenCount(JSON.stringify(classification)),
       status: "succeeded",
     })
@@ -187,8 +201,8 @@ async function _executeJob(
       tenantId: job.tenantId,
       feature: "agent.classify",
       model: classifyModel,
-      estimatedInputTokens: estimateTokenCount(classifyPrompt),
-      status: "failed",
+      estimatedInputTokens: classifyInputTokens,
+      status: classifyUsageStatus,
     })
     throw err
   }

@@ -31,6 +31,7 @@ export default function StatusButton({
     <button
       onClick={onClick}
       disabled={loading}
+      title={loading ? undefined : isClosed ? "Reopen conversation" : "Mark done"}
       className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
     >
       {loading ? "..." : isClosed ? "Reopen" : "Close"}

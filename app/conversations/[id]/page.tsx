@@ -15,7 +15,6 @@ import MarkReadButton from "@/app/conversations/[id]/MarkReadButton";
 import LabelSelect from "@/app/conversations/[id]/LabelSelect"
 import AttentionCorrectionSelect from "@/app/conversations/[id]/AttentionCorrectionSelect";
 import SaveContactForm from "@/app/conversations/[id]/SaveContactForm";
-import AutoDraftTrigger from "@/app/conversations/[id]/AutoDraftTrigger";
 import AutoRefresh from "@/app/components/AutoRefresh"
 import PersonMemoryEditShell from "./PersonMemoryEditShell";
 import CollapsibleCard from "@/app/components/CollapsibleCard";
@@ -27,7 +26,6 @@ import {
   analyzeConversationForCommandCenter,
   buildRelationshipContext,
 } from "@/lib/agent/command-center";
-import { syncConversationWorkItems } from "@/lib/agent/work-item-sync";
 import SupportPanel from "@/app/conversations/[id]/SupportPanel";
 import SalesPanel from "@/app/conversations/[id]/SalesPanel";
 import { SALES_SUGGESTED_ACTIONS } from "@/lib/agent/sales-classifier";
@@ -41,9 +39,10 @@ import SnoozeButton from "@/app/conversations/[id]/SnoozeButton";
 import SecondBrainPanel from "@/app/conversations/[id]/SecondBrainPanel";
 import type { ExtractedFact } from "@/lib/agent/second-brain";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 const INBOX_STATUSES = ["needs_reply", "in_progress", "closed"] as const;
+const CONVERSATION_MESSAGE_LIMIT = 50
 
 export default async function ConversationPage({
   params,
@@ -67,7 +66,6 @@ export default async function ConversationPage({
     latestAgentJob,
     activeHold,
     pendingApprovals,
-    pendingFollowUpJob,
     needsReplyCount,
     gmailChannels,
   ] = await Promise.all([
@@ -83,6 +81,7 @@ export default async function ConversationPage({
       include: {
         messages: {
           orderBy: { createdAt: "asc" },
+          take: CONVERSATION_MESSAGE_LIMIT,
         },
         channel: true,
         contact: true,
@@ -106,11 +105,6 @@ export default async function ConversationPage({
       orderBy: { createdAt: "desc" },
       take: 3,
     }),
-    prisma.agentJob.findFirst({
-      where: { conversationId: params.id, tenantId: session.user.tenantId, trigger: "follow_up", status: "pending" },
-      orderBy: { createdAt: "desc" },
-      select: { id: true },
-    }),
     prisma.conversation.count({
       where: { tenantId: session.user.tenantId, status: "needs_reply" },
     }),
@@ -120,7 +114,14 @@ export default async function ConversationPage({
         id: true,
         emailAddress: true,
         gmailCredential: {
-          select: { lastSyncedAt: true, lastSyncError: true, watchExpiresAt: true },
+          select: {
+            lastSyncedAt: true,
+            lastSyncError: true,
+            watchExpiresAt: true,
+            watchLastRenewalAttempt: true,
+            watchRenewalError: true,
+            lastHistoryFallbackAt: true,
+          },
         },
       },
       orderBy: { createdAt: "asc" },
@@ -150,7 +151,8 @@ export default async function ConversationPage({
   if (conversation.channel.provider === "google") {
     markGmailThreadRead(
       conversation.channelId,
-      conversation.messages.map((message) => message.providerMessageId)
+      conversation.messages.map((message) => message.providerMessageId),
+      { tenantId: session.user.tenantId, conversationId: conversation.id }
     ).catch((err) => {
       console.warn("Failed to mark Gmail thread read on open", {
         conversationId: conversation.id,
@@ -178,13 +180,10 @@ export default async function ConversationPage({
       lastSyncedAt: channel.gmailCredential?.lastSyncedAt ?? null,
       lastSyncError: channel.gmailCredential?.lastSyncError ?? null,
       watchExpiresAt: channel.gmailCredential?.watchExpiresAt ?? null,
+      watchLastRenewalAttempt: channel.gmailCredential?.watchLastRenewalAttempt ?? null,
+      watchRenewalError: channel.gmailCredential?.watchRenewalError ?? null,
+      lastHistoryFallbackAt: channel.gmailCredential?.lastHistoryFallbackAt ?? null,
     }));
-
-  await syncConversationWorkItems({
-    tenantId: session.user.tenantId,
-    conversationId: conversation.id,
-    enableRichAi: false,
-  }).catch(() => null);
 
   const [stateRecord, inboxTasks, lead, personMemory, rawConciergeTemplates] = await Promise.all([
     prisma.conversationState.findUnique({
@@ -298,11 +297,6 @@ export default async function ConversationPage({
       })
     : null
 
-  const shouldAutoFollowUp =
-    Boolean(pendingFollowUpJob) &&
-    !conversation.draft &&
-    conversation.channel.type === "email" &&
-    (isPersonal || Boolean(businessProfile));
   const canSuggestReply =
     conversation.channel.type === "email" && (isPersonal || Boolean(businessProfile));
 
@@ -567,8 +561,7 @@ export default async function ConversationPage({
 
   return (
     <>
-      <AutoRefresh intervalMs={8000} />
-      {shouldAutoFollowUp && <AutoDraftTrigger conversationId={conversation.id} />}
+      <AutoRefresh intervalMs={60000} />
 
       {/* ── DESKTOP SHELL (lg+) ── */}
       <div className="hidden lg:flex h-screen overflow-hidden bg-slate-50">
@@ -600,6 +593,7 @@ export default async function ConversationPage({
                   isPersonal={isPersonal}
                   isAutoEmail={isAutoEmailConversation}
                   isRead={Boolean(conversation.readAt)}
+                  isGmail={conversation.channel.provider === "google"}
                 />
               </div>
 
@@ -687,7 +681,9 @@ export default async function ConversationPage({
             </div>
             <div className="flex shrink-0 flex-col items-end gap-2">
               <MarkReadButton conversationId={conversation.id} isRead={Boolean(conversation.readAt)} />
-              <StatusButton conversationId={conversation.id} currentStatus={conversation.status} />
+              {!isPersonal && (
+                <StatusButton conversationId={conversation.id} currentStatus={conversation.status} />
+              )}
             </div>
           </div>
         </header>

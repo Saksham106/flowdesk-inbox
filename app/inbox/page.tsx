@@ -21,7 +21,7 @@ import { AppNavigationItem, getInboxNavigation } from "@/lib/app-navigation";
 import { buildConversationHref } from "@/lib/client-navigation";
 import { stripHtmlToText } from "@/lib/email-body";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 type ConversationStatus = "needs_reply" | "in_progress" | "closed";
 
@@ -32,6 +32,8 @@ const STATUS_LABELS: Record<ConversationStatus, string> = {
 };
 
 const ALL_STATUSES = Object.keys(STATUS_LABELS) as ConversationStatus[];
+const HOME_CONVERSATION_LIMIT = 25
+const HOME_MESSAGE_LIMIT = 5
 
 const AUTOMATED_SENDER_RE = /\b(no-?reply|noreply|notifications?|alerts?|do-not-reply|automated)\b/i
 const AUTOMATED_BODY_RE =
@@ -40,10 +42,19 @@ const FYI_RE = /\b(fyi|newsletter|for your records|no action|all set|thanks, all
 
 function isFyiConversation(conversation: {
   status: string
-  stateRecord: { state: string; metadataJson: unknown } | null
+  stateRecord: { state: string; metadataJson: unknown; attentionCategory?: string | null; emailType?: string | null } | null
   contact: { phoneE164: string } | null
   messages: { direction: string; body: string }[]
 }): boolean {
+  if (conversation.stateRecord?.attentionCategory === "quiet" || conversation.stateRecord?.attentionCategory === "fyi_done") return true
+  if (conversation.stateRecord?.attentionCategory) return false
+  if (
+    conversation.stateRecord?.emailType === "notification" ||
+    conversation.stateRecord?.emailType === "newsletter" ||
+    conversation.stateRecord?.emailType === "marketing"
+  ) {
+    return true
+  }
   const meta = conversation.stateRecord?.metadataJson
   if (meta && typeof meta === "object" && !Array.isArray(meta)) {
     const attentionCategory = (meta as Record<string, unknown>).attentionCategory
@@ -98,7 +109,14 @@ export default async function InboxPage({ searchParams }: Props) {
         id: true,
         emailAddress: true,
         gmailCredential: {
-          select: { lastSyncedAt: true, lastSyncError: true, watchExpiresAt: true },
+          select: {
+            lastSyncedAt: true,
+            lastSyncError: true,
+            watchExpiresAt: true,
+            watchLastRenewalAttempt: true,
+            watchRenewalError: true,
+            lastHistoryFallbackAt: true,
+          },
         },
       },
       orderBy: { createdAt: "asc" },
@@ -120,6 +138,10 @@ export default async function InboxPage({ searchParams }: Props) {
         where: {
           tenantId,
           ...(activeStatus ? { status: activeStatus } : {}),
+          ...(salesFilter && isBusiness ? { stateRecord: { is: { isSalesLead: true } } } : {}),
+          ...(attentionFilter && attentionFilter !== "life_admin" && attentionFilter !== "snoozed"
+            ? { stateRecord: { is: { attentionCategory: attentionFilter } } }
+            : {}),
           ...(q
             ? {
                 OR: [
@@ -134,21 +156,21 @@ export default async function InboxPage({ searchParams }: Props) {
           messages: { orderBy: { createdAt: "desc" }, take: 1 },
           channel: true,
           contact: true,
-          stateRecord: { select: { metadataJson: true, state: true } },
+          stateRecord: { select: { metadataJson: true, state: true, attentionCategory: true, emailType: true } },
         },
       })
     : [];
 
   // Home view data for command center
-  const [commandCenterConversations, revenueAtRisk, persistedStates] =
+  const [commandCenterConversations, revenueAtRisk] =
     isHomeView
       ? await Promise.all([
           prisma.conversation.findMany({
             where: { tenantId },
             orderBy: { lastMessageAt: "desc" },
-            take: 75,
+            take: HOME_CONVERSATION_LIMIT,
             include: {
-              messages: { orderBy: { createdAt: "asc" }, take: 20 },
+              messages: { orderBy: { createdAt: "asc" }, take: HOME_MESSAGE_LIMIT },
               channel: true,
               contact: true,
               draft: true,
@@ -167,39 +189,27 @@ export default async function InboxPage({ searchParams }: Props) {
                 select: { score: true, scoreExplanation: true, estimatedValue: true },
                 take: 1,
               },
-              stateRecord: { select: { metadataJson: true } },
+              stateRecord: {
+                select: {
+                  state: true,
+                  priority: true,
+                  reason: true,
+                  nextAction: true,
+                  confidence: true,
+                  source: true,
+                  metadataJson: true,
+                  attentionCategory: true,
+                  emailType: true,
+                  isSalesLead: true,
+                  isSupport: true,
+                  updatedAt: true,
+                },
+              },
             },
           }),
           isBusiness ? analyzeRevenueAtRisk(tenantId) : Promise.resolve([]),
-          // Fetch persisted command center states for the 75 conversations
-          prisma.conversationState.findMany({
-            where: {
-              tenantId,
-              conversationId: {
-                in: (
-                  await prisma.conversation.findMany({
-                    where: { tenantId },
-                    orderBy: { lastMessageAt: "desc" },
-                    take: 75,
-                    select: { id: true },
-                  })
-                ).map((c) => c.id),
-              },
-            },
-            select: {
-              conversationId: true,
-              state: true,
-              priority: true,
-              reason: true,
-              nextAction: true,
-              confidence: true,
-              source: true,
-              metadataJson: true,
-              updatedAt: true,
-            },
-          }),
         ])
-      : [[], [] as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>, [] as PersistedCommandCenterState[]];
+      : [[], [] as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>];
 
   const upcomingTasks = isHomeView
     ? await prisma.inboxTask.findMany({
@@ -219,7 +229,16 @@ export default async function InboxPage({ searchParams }: Props) {
     : []
 
   type ConversationForBrief = CommandCenterInputConversation & {
-    stateRecord: { metadataJson: unknown } | null;
+        stateRecord: ({
+          metadataJson: unknown
+          state?: string | null
+          priority?: string | null
+          reason?: string | null
+          nextAction?: string | null
+          confidence?: number | null
+          source?: string | null
+          updatedAt?: Date | null
+        }) | null;
     leads: { score: number; scoreExplanation: string | null; estimatedValue: number | null }[];
   };
 
@@ -235,18 +254,21 @@ export default async function InboxPage({ searchParams }: Props) {
 
   // Build a Map of persisted states for quick lookup
   const persistedStatesMap = new Map<string, PersistedCommandCenterState>(
-    persistedStates.map((s) => [
+    (commandCenterConversations as ConversationForBrief[])
+      .map((conversation) => conversation.stateRecord ? { conversationId: conversation.id, ...conversation.stateRecord } : null)
+      .filter((s): s is { conversationId: string; metadataJson: unknown; state?: string | null; priority?: string | null; reason?: string | null; nextAction?: string | null; confidence?: number | null; source?: string | null; updatedAt?: Date | null } => s !== null)
+      .map((s) => [
       s.conversationId,
       {
         conversationId: s.conversationId,
         state: s.state as CommandCenterState,
         priority: s.priority as CommandCenterPriority,
-        reason: s.reason,
-        nextAction: s.nextAction,
-        confidence: s.confidence,
-        source: s.source,
+        reason: s.reason ?? "",
+        nextAction: s.nextAction ?? "",
+        confidence: s.confidence ?? 0,
+        source: s.source ?? "deterministic",
         metadataJson: s.metadataJson,
-        updatedAt: s.updatedAt,
+        updatedAt: s.updatedAt ?? new Date(0),
       } as PersistedCommandCenterState,
     ])
   );
@@ -350,6 +372,9 @@ export default async function InboxPage({ searchParams }: Props) {
       lastSyncedAt: channel.gmailCredential?.lastSyncedAt ?? null,
       lastSyncError: channel.gmailCredential?.lastSyncError ?? null,
       watchExpiresAt: channel.gmailCredential?.watchExpiresAt ?? null,
+      watchLastRenewalAttempt: channel.gmailCredential?.watchLastRenewalAttempt ?? null,
+      watchRenewalError: channel.gmailCredential?.watchRenewalError ?? null,
+      lastHistoryFallbackAt: channel.gmailCredential?.lastHistoryFallbackAt ?? null,
     }));
 
   const listTabs = [
@@ -395,7 +420,7 @@ export default async function InboxPage({ searchParams }: Props) {
 
   return (
     <>
-      <AutoRefresh intervalMs={10000} />
+      <AutoRefresh intervalMs={60000} />
 
       {/* ── DESKTOP SHELL (lg+) ── */}
       <div className="hidden lg:flex h-screen overflow-hidden bg-slate-50">

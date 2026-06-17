@@ -7,6 +7,7 @@ const {
   mockAuditCreate,
   mockAiUsageCreate,
   mockOpenAiCreate,
+  mockCheckAiBudgetForTokens,
 } = vi.hoisted(() => ({
   mockContactFindFirst: vi.fn(),
   mockPersonMemoryFindUnique: vi.fn(),
@@ -14,6 +15,7 @@ const {
   mockAuditCreate: vi.fn(),
   mockAiUsageCreate: vi.fn(),
   mockOpenAiCreate: vi.fn(),
+  mockCheckAiBudgetForTokens: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -29,6 +31,11 @@ vi.mock("openai", () => ({
   default: vi.fn().mockImplementation(() => ({
     responses: { create: mockOpenAiCreate },
   })),
+}))
+
+vi.mock("@/lib/ai/budget", () => ({
+  checkAiBudgetForTokens: mockCheckAiBudgetForTokens,
+  estimateCostUsd: () => 0.01,
 }))
 
 import {
@@ -72,6 +79,7 @@ describe("person memory AI cache", () => {
         promisedActions: "Send the proposal.",
       }),
     })
+    mockCheckAiBudgetForTokens.mockResolvedValue({ allowed: true, reason: "Within budget" })
   })
 
   it("builds a stable hash from cleaned message content", () => {
@@ -128,6 +136,29 @@ describe("person memory AI cache", () => {
           contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
           model: "gpt-test",
           llmSyncedAt: expect.any(Date),
+        }),
+      })
+    )
+  })
+
+  it("returns llm_failed without calling OpenAI when AI budget would be exceeded", async () => {
+    mockCheckAiBudgetForTokens.mockResolvedValue({
+      allowed: false,
+      reason: "Daily AI spend limit reached",
+    })
+
+    const result = await syncPersonMemoryWithLLM("tenant-1", "contact-1")
+
+    expect(result.status).toBe("llm_failed")
+    if (result.status === "llm_failed") {
+      expect(result.reason).toBe("Daily AI spend limit reached")
+    }
+    expect(mockOpenAiCreate).not.toHaveBeenCalled()
+    expect(mockAiUsageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          feature: "person_memory.llm",
+          status: "blocked",
         }),
       })
     )

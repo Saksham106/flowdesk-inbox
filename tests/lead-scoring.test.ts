@@ -7,23 +7,33 @@ const {
   mockLeadFindFirst,
   mockLeadUpdateMany,
   mockAuditCreate,
+  mockAiUsageCreate,
   mockScoreLead,
+  mockCheckAiBudgetForTokens,
 } = vi.hoisted(() => ({
-  mockLeadFindFirst:  vi.fn(),
-  mockLeadUpdateMany: vi.fn(),
-  mockAuditCreate:    vi.fn(),
-  mockScoreLead:      vi.fn(),
+  mockLeadFindFirst:          vi.fn(),
+  mockLeadUpdateMany:         vi.fn(),
+  mockAuditCreate:            vi.fn(),
+  mockAiUsageCreate:          vi.fn(),
+  mockScoreLead:              vi.fn(),
+  mockCheckAiBudgetForTokens: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    lead:     { findFirst: mockLeadFindFirst, updateMany: mockLeadUpdateMany },
-    auditLog: { create: mockAuditCreate },
+    lead:         { findFirst: mockLeadFindFirst, updateMany: mockLeadUpdateMany },
+    auditLog:     { create: mockAuditCreate },
+    aiUsageEvent: { create: mockAiUsageCreate },
   },
 }))
 
 vi.mock('@/lib/ai/provider', () => ({
   scoreLead: mockScoreLead,
+}))
+
+vi.mock('@/lib/ai/budget', () => ({
+  checkAiBudgetForTokens: mockCheckAiBudgetForTokens,
+  estimateCostUsd: () => 0.01,
 }))
 
 import {
@@ -266,6 +276,8 @@ describe('scoreLeadForConversation', () => {
     mockScoreLead.mockResolvedValue(MOCK_RESULT)
     mockLeadUpdateMany.mockResolvedValue({ count: 1 })
     mockAuditCreate.mockResolvedValue({})
+    mockAiUsageCreate.mockResolvedValue({})
+    mockCheckAiBudgetForTokens.mockResolvedValue({ allowed: true, reason: "Within budget" })
   })
 
   it('calls scoreLead and updates the lead when scoredAt is null', async () => {
@@ -306,6 +318,27 @@ describe('scoreLeadForConversation', () => {
     mockScoreLead.mockRejectedValue(new Error('OpenAI error'))
     await scoreLeadForConversation(TENANT, LEAD_ID)
     expect(mockLeadUpdateMany).not.toHaveBeenCalled()
+  })
+
+  it('does not call scoreLead when AI budget would be exceeded', async () => {
+    mockCheckAiBudgetForTokens.mockResolvedValue({
+      allowed: false,
+      reason: 'Daily AI spend limit reached',
+    })
+
+    await scoreLeadForConversation(TENANT, LEAD_ID)
+
+    expect(mockScoreLead).not.toHaveBeenCalled()
+    expect(mockLeadUpdateMany).not.toHaveBeenCalled()
+    expect(mockAiUsageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tenantId: TENANT,
+          feature: 'lead.score',
+          status: 'blocked',
+        }),
+      })
+    )
   })
 
   it('returns immediately when the lead is not found', async () => {

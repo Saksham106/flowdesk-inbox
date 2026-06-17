@@ -10,7 +10,9 @@ import { generateDraftReply } from "@/lib/ai/provider"
 import { buildDraftReplyPrompt, buildPersonalDraftReplyPrompt, draftReplyJsonSchema, normalizeDraftReplyOutput } from "@/lib/ai/prompts/draft-reply"
 import { summarizeConversation } from "@/lib/ai/summarize"
 import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
+import { checkAiBudget, estimateCostUsd } from "@/lib/ai/budget"
 import { prisma } from "@/lib/prisma"
+import { revalidateInboxViews } from "@/lib/cache-tags"
 
 export const runtime = "nodejs"
 
@@ -100,6 +102,13 @@ export async function POST(
     }
 
     const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
+    const budgetCheck = await checkAiBudget(
+      session.user.tenantId,
+      estimateCostUsd(model, estimatedPromptTokens, 500)
+    )
+    if (!budgetCheck.allowed) {
+      return NextResponse.json({ error: budgetCheck.reason }, { status: 429 })
+    }
     const client = new OpenAI({ apiKey })
 
     let rawResponse: OpenAI.Responses.Response
@@ -165,6 +174,15 @@ export async function POST(
       draftCacheKey,
     })
     if (cached) return cached
+
+    const businessModel = process.env.OPENAI_MODEL || "gpt-5.4-mini"
+    const budgetCheck = await checkAiBudget(
+      session.user.tenantId,
+      estimateCostUsd(businessModel, estimatedPromptTokens, 500)
+    )
+    if (!budgetCheck.allowed) {
+      return NextResponse.json({ error: budgetCheck.reason }, { status: 429 })
+    }
 
     try {
       result = await generateDraftReply(draftInput)
@@ -251,6 +269,7 @@ export async function POST(
     status: "succeeded",
   })
 
+  revalidateInboxViews(session.user.tenantId, conversation.id)
   return NextResponse.json({ draft, meta: metadataJson })
 }
 

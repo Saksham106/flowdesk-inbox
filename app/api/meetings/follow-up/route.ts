@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { generateMeetingFollowUp } from "@/lib/ai/provider"
 import { buildMeetingFollowUpPrompt } from "@/lib/ai/prompts/meeting-follow-up"
+import { checkAiBudgetForTokens } from "@/lib/ai/budget"
 import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import type { MeetingFollowUpAttendee } from "@/lib/ai/prompts/meeting-follow-up"
 
@@ -87,6 +88,25 @@ export async function POST(request: Request) {
     userNotes: userNotes || "",
     attendees,
   }
+  const prompt = buildMeetingFollowUpPrompt(input)
+  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
+  const estimatedInputTokens = estimateTokenCount(prompt)
+  const budgetCheck = await checkAiBudgetForTokens({
+    tenantId,
+    model,
+    estimatedInputTokens,
+    estimatedOutputTokens: 600,
+  })
+  if (!budgetCheck.allowed) {
+    await recordAiUsageEvent({
+      tenantId,
+      feature: "meeting_follow_up",
+      model,
+      estimatedInputTokens,
+      status: "blocked",
+    })
+    return NextResponse.json({ error: budgetCheck.reason }, { status: 429 })
+  }
 
   let result: Awaited<ReturnType<typeof generateMeetingFollowUp>>
   try {
@@ -97,7 +117,8 @@ export async function POST(request: Request) {
     await recordAiUsageEvent({
       tenantId,
       feature: "meeting_follow_up",
-      model: process.env.OPENAI_MODEL || "gpt-5.4-mini",
+      model,
+      estimatedInputTokens,
       status: "failed",
     })
     return NextResponse.json({ error: message }, { status })
@@ -107,7 +128,7 @@ export async function POST(request: Request) {
     tenantId,
     feature: "meeting_follow_up",
     model: result.model,
-    estimatedInputTokens: estimateTokenCount(buildMeetingFollowUpPrompt(input)),
+    estimatedInputTokens,
     estimatedOutputTokens: estimateTokenCount(JSON.stringify(result)),
     status: "succeeded",
   })

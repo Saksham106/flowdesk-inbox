@@ -4,6 +4,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { markGmailThreadRead } from "@/lib/google";
+import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata";
+import { revalidateInboxViews } from "@/lib/cache-tags";
 
 const VALID_STATUSES = ["needs_reply", "in_progress", "closed"] as const;
 type Status = (typeof VALID_STATUSES)[number];
@@ -34,6 +36,26 @@ export async function PATCH(
   }
 
   const now = new Date();
+
+  // Merge with existing metadata to preserve attentionCategory, emailType, action, etc.
+  const existingState = await prisma.conversationState.findUnique({
+    where: { conversationId: params.id },
+    select: { metadataJson: true },
+  });
+  const prevMeta =
+    existingState?.metadataJson &&
+    typeof existingState.metadataJson === "object" &&
+    !Array.isArray(existingState.metadataJson)
+      ? (existingState.metadataJson as Record<string, unknown>)
+      : {};
+
+  const mergedMeta = {
+    ...prevMeta,
+    userOverride: true,
+    userState: status === "closed" ? "done" : status,
+    updatedAt: now.toISOString(),
+  };
+
   await prisma.conversation.update({
     where: { id: params.id },
     data: {
@@ -56,11 +78,8 @@ export async function PATCH(
       nextAction: status === "closed" ? "No action needed." : "Review the conversation.",
       confidence: 1,
       source: "user_override",
-      metadataJson: {
-        userOverride: true,
-        userState: status === "closed" ? "done" : status,
-        updatedAt: now.toISOString(),
-      },
+      metadataJson: mergedMeta,
+      ...conversationStateMetadataData(mergedMeta),
     },
     update: {
       state: status === "closed" ? "done" : status === "in_progress" ? "waiting_on_them" : "needs_reply",
@@ -69,11 +88,8 @@ export async function PATCH(
       nextAction: status === "closed" ? "No action needed." : "Review the conversation.",
       confidence: 1,
       source: "user_override",
-      metadataJson: {
-        userOverride: true,
-        userState: status === "closed" ? "done" : status,
-        updatedAt: now.toISOString(),
-      },
+      metadataJson: mergedMeta,
+      ...conversationStateMetadataData(mergedMeta),
     },
   });
 
@@ -86,7 +102,10 @@ export async function PATCH(
       where: { conversationId: params.id },
       data: { isRead: true },
     });
-    markGmailThreadRead(conversation.channelId, messages.map((message) => message.providerMessageId)).catch((err) => {
+    markGmailThreadRead(conversation.channelId, messages.map((message) => message.providerMessageId), {
+      tenantId: session.user.tenantId,
+      conversationId: params.id,
+    }).catch((err) => {
       console.warn("Failed to mark Gmail thread read after status update", {
         conversationId: params.id,
         message: err instanceof Error ? err.message : "Unknown error",
@@ -94,5 +113,6 @@ export async function PATCH(
     });
   }
 
+  revalidateInboxViews(session.user.tenantId, params.id);
   return NextResponse.json({ ok: true });
 }

@@ -16,6 +16,8 @@ import { detectPhishing } from "@/lib/agent/phishing-detector"
 import { parseUnsubscribeInfo } from "@/lib/agent/unsubscribe"
 import { detectAttachments, extractPdfText } from "@/lib/agent/attachment-extractor"
 import { extractFacts, mergeFacts } from "@/lib/agent/second-brain"
+import { applyActiveRule } from "@/lib/agent/preference-learning"
+import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
@@ -93,6 +95,7 @@ export async function syncConversationWorkItems(
     conversation.status === "closed"
 
   if (!hasUserOverride) {
+    const metadataJson = summary.state.metadata as Prisma.InputJsonValue
     await prisma.conversationState.upsert({
       where: { conversationId: conversation.id },
       create: {
@@ -104,7 +107,8 @@ export async function syncConversationWorkItems(
         nextAction: summary.state.nextAction,
         confidence: summary.state.confidence,
         source: summary.state.source,
-        metadataJson: summary.state.metadata as Prisma.InputJsonValue,
+        metadataJson,
+        ...conversationStateMetadataData(metadataJson),
       },
       update: {
         state: summary.state.state,
@@ -113,7 +117,8 @@ export async function syncConversationWorkItems(
         nextAction: summary.state.nextAction,
         confidence: summary.state.confidence,
         source: summary.state.source,
-        metadataJson: summary.state.metadata as Prisma.InputJsonValue,
+        metadataJson,
+        ...conversationStateMetadataData(metadataJson),
       },
     })
   }
@@ -306,6 +311,7 @@ export async function syncConversationWorkItems(
       where: { conversationId: conversation.id },
       data: {
         metadataJson: updatedSupportMeta as Prisma.InputJsonValue,
+        ...conversationStateMetadataData(updatedSupportMeta),
       },
     })
     postSupportMeta = updatedSupportMeta
@@ -330,17 +336,19 @@ export async function syncConversationWorkItems(
     })
 
     if (salesSignals.isSalesLead) {
+      const updatedSalesMeta = {
+        ...postSupportMeta,
+        isSalesLead: true,
+        extractedBudget: salesSignals.extractedBudget,
+        extractedTimeline: salesSignals.extractedTimeline,
+        closingStage: salesSignals.closingStage,
+        suggestedAction: salesSignals.suggestedAction,
+      }
       await prisma.conversationState.update({
         where: { conversationId: conversation.id },
         data: {
-          metadataJson: {
-            ...postSupportMeta,
-            isSalesLead: true,
-            extractedBudget: salesSignals.extractedBudget,
-            extractedTimeline: salesSignals.extractedTimeline,
-            closingStage: salesSignals.closingStage,
-            suggestedAction: salesSignals.suggestedAction,
-          } as Prisma.InputJsonValue,
+          metadataJson: updatedSalesMeta as Prisma.InputJsonValue,
+          ...conversationStateMetadataData(updatedSalesMeta),
         },
       })
       salesClassified = true
@@ -365,7 +373,7 @@ export async function syncConversationWorkItems(
     })
     const {
       emailType,
-      attentionCategory,
+      attentionCategory: classifiedAttention,
       reason,
       confidence,
       extractedCode,
@@ -373,7 +381,6 @@ export async function syncConversationWorkItems(
       action,
     } = emailClassification
     detectedEmailType = emailType
-    detectedAttentionCategory = attentionCategory
 
     const currentState = await prisma.conversationState.findUnique({
       where: { conversationId: conversation.id },
@@ -386,6 +393,23 @@ export async function syncConversationWorkItems(
         ? (currentState.metadataJson as Record<string, unknown>)
         : {}
 
+    // Explicit user correction always wins — no rule or AI can override it.
+    const isUserAttentionCorrected =
+      currentMeta.attentionCorrectedByUser === true || currentMeta.userOverride === true
+
+    // If user hasn't explicitly corrected, check whether an active SenderRule applies.
+    // Rule wins over AI classification; explicit user correction (above) still wins over rule.
+    let attentionCategory = classifiedAttention
+    let attentionSource: "ai" | "rule" | "user" = "ai"
+    if (!isUserAttentionCorrected) {
+      const ruleAttention = await applyActiveRule({ tenantId: conversation.tenantId, fromEmail })
+      if (ruleAttention) {
+        attentionCategory = ruleAttention
+        attentionSource = "rule"
+      }
+    }
+    detectedAttentionCategory = attentionCategory
+
     const persistedAction = action
       ? {
           type: action.type,
@@ -397,18 +421,21 @@ export async function syncConversationWorkItems(
         }
       : null
 
+    const updatedEmailMeta = {
+      ...currentMeta,
+      emailType,
+      ...(isUserAttentionCorrected
+        ? {}
+        : { attentionCategory, attentionReason: attentionSource === "rule" ? "Applied from your learned preference rule." : reason, attentionConfidence: attentionSource === "rule" ? 1 : confidence, attentionSource }),
+      ...(persistedAction ? { action: persistedAction } : {}),
+      ...(expiresIn ? { expiresIn } : {}),
+    }
+
     await prisma.conversationState.update({
       where: { conversationId: conversation.id },
       data: {
-        metadataJson: {
-          ...currentMeta,
-          emailType,
-          attentionCategory,
-          attentionReason: reason,
-          attentionConfidence: confidence,
-          ...(persistedAction ? { action: persistedAction } : {}),
-          ...(expiresIn ? { expiresIn } : {}),
-        } as Prisma.InputJsonValue,
+        metadataJson: updatedEmailMeta as Prisma.InputJsonValue,
+        ...conversationStateMetadataData(updatedEmailMeta),
       },
     })
 
