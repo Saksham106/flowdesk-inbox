@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { Suspense } from "react";
+import WarmingUp from "@/app/components/WarmingUp";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -75,6 +76,18 @@ interface Props {
   searchParams: { status?: string; q?: string; sales?: string; attention?: string };
 }
 
+function isDbStartingError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message;
+  return (
+    msg.includes("database system is starting up") ||
+    msg.includes("database system is not yet accepting connections") ||
+    msg.includes("Can't reach database server") ||
+    msg.includes("ECONNREFUSED") ||
+    (err.constructor.name === "PrismaClientInitializationError" && msg.includes("FATAL"))
+  );
+}
+
 export default async function InboxPage({ searchParams }: Props) {
   const session = await getServerSession(authOptions);
 
@@ -82,7 +95,18 @@ export default async function InboxPage({ searchParams }: Props) {
     redirect("/login");
   }
 
-  const tenantId = session.user.tenantId;
+  try {
+    return await renderInboxPage(session.user.tenantId, searchParams);
+  } catch (err) {
+    if (isDbStartingError(err)) return <WarmingUp />;
+    throw err;
+  }
+}
+
+async function renderInboxPage(
+  tenantId: string,
+  searchParams: Props["searchParams"]
+) {
   const activeStatus = ALL_STATUSES.includes(searchParams.status as ConversationStatus)
     ? (searchParams.status as ConversationStatus)
     : null;
