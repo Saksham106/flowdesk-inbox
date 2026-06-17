@@ -1,6 +1,8 @@
 import type { Prisma } from "@prisma/client"
 
-import { recordAiUsageEvent } from "@/lib/ai/usage"
+import { checkAiBudgetForTokens } from "@/lib/ai/budget"
+import { buildLearnedReplyProfilePrompt } from "@/lib/ai/prompts/learned-reply-profile"
+import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import { summarizeLearnedReplyProfile } from "@/lib/ai/provider"
 import { prisma } from "@/lib/prisma"
 import { fetchGmailSentSamples } from "@/lib/google"
@@ -111,6 +113,25 @@ export async function trainLearnedReplyProfile(input: {
   }
 
   let result: Awaited<ReturnType<typeof summarizeLearnedReplyProfile>>
+  const model = process.env.OPENAI_LEARNING_MODEL || process.env.OPENAI_MODEL || "gpt-5.4-mini"
+  const estimatedInputTokens = estimateTokenCount(buildLearnedReplyProfilePrompt(samples))
+  const budgetCheck = await checkAiBudgetForTokens({
+    tenantId: input.tenantId,
+    model,
+    estimatedInputTokens,
+    estimatedOutputTokens: 800,
+  })
+  if (!budgetCheck.allowed) {
+    await recordAiUsageEvent({
+      tenantId: input.tenantId,
+      feature: "reply_learning.train",
+      model,
+      estimatedInputTokens,
+      status: "blocked",
+    })
+    throw new Error(budgetCheck.reason)
+  }
+
   try {
     result = await summarizeLearnedReplyProfile(samples)
     await recordAiUsageEvent({
@@ -119,13 +140,14 @@ export async function trainLearnedReplyProfile(input: {
       model: result.model,
       estimatedInputTokens: result.estimatedInputTokens,
       estimatedOutputTokens: result.estimatedOutputTokens,
-      status: "completed",
+      status: "succeeded",
     })
   } catch (err) {
     await recordAiUsageEvent({
       tenantId: input.tenantId,
       feature: "reply_learning.train",
-      model: process.env.OPENAI_LEARNING_MODEL || process.env.OPENAI_MODEL || "unknown",
+      model,
+      estimatedInputTokens,
       status: "failed",
     })
     throw err

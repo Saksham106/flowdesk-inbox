@@ -12,9 +12,11 @@ const {
   mockDraftUpdate,
   mockAuditCreate,
   mockAuditCount,
+  mockAiUsageCreate,
   mockGetFullBusinessContext,
   mockGetReplyGenerationContext,
   mockGenerateDraftReply,
+  mockCheckAiBudgetForTokens,
   mockSendConversationMessage,
 } = vi.hoisted(() => ({
   mockAutopilotSettingFindUnique: vi.fn(),
@@ -25,9 +27,11 @@ const {
   mockDraftUpdate:                vi.fn(),
   mockAuditCreate:                vi.fn(),
   mockAuditCount:                 vi.fn(),
+  mockAiUsageCreate:              vi.fn(),
   mockGetFullBusinessContext:     vi.fn(),
   mockGetReplyGenerationContext:  vi.fn(),
   mockGenerateDraftReply:         vi.fn(),
+  mockCheckAiBudgetForTokens:     vi.fn(),
   mockSendConversationMessage:    vi.fn(),
 }))
 
@@ -41,6 +45,7 @@ vi.mock('@/lib/prisma', () => ({
     agentJob: { findUnique: mockJobFindUnique },
     draft:    { upsert: mockDraftUpsert, update: mockDraftUpdate },
     auditLog: { create: mockAuditCreate, count: mockAuditCount },
+    aiUsageEvent: { create: mockAiUsageCreate },
   },
 }))
 
@@ -54,6 +59,11 @@ vi.mock('@/lib/agent/reply-context', () => ({
 
 vi.mock('@/lib/ai/provider', () => ({
   generateDraftReply: mockGenerateDraftReply,
+}))
+
+vi.mock('@/lib/ai/budget', () => ({
+  checkAiBudgetForTokens: mockCheckAiBudgetForTokens,
+  estimateCostUsd: () => 0.01,
 }))
 
 vi.mock('@/lib/conversations/send-message', () => ({
@@ -311,6 +321,8 @@ describe('attemptAutopilotSend', () => {
     mockSendConversationMessage.mockResolvedValue({ ok: true, providerMessageId: 'gmail_msg-1' })
     mockAuditCreate.mockResolvedValue({})
     mockAutopilotSettingUpdateMany.mockResolvedValue({})
+    mockAiUsageCreate.mockResolvedValue({})
+    mockCheckAiBudgetForTokens.mockResolvedValue({ allowed: true, reason: 'Within budget' })
   })
 
   it('sends draft and returns sent: true on success', async () => {
@@ -369,6 +381,28 @@ describe('attemptAutopilotSend', () => {
     })
     const result = await attemptAutopilotSend(JOB_ID, classification, policyOk)
     expect(result.sent).toBe(false)
+  })
+
+  it('returns sent: false without generating a draft when AI budget would be exceeded', async () => {
+    mockCheckAiBudgetForTokens.mockResolvedValue({
+      allowed: false,
+      reason: 'Daily AI spend limit reached',
+    })
+
+    const result = await attemptAutopilotSend(JOB_ID, classification, policyOk)
+
+    expect(result.sent).toBe(false)
+    if (!result.sent) expect(result.reason).toBe('Daily AI spend limit reached')
+    expect(mockGenerateDraftReply).not.toHaveBeenCalled()
+    expect(mockAiUsageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tenantId: TENANT,
+          feature: 'autopilot.draft',
+          status: 'blocked',
+        }),
+      })
+    )
   })
 
   it('returns sent: false and logs a hold when learned profile is missing', async () => {

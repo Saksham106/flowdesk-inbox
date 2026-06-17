@@ -79,7 +79,7 @@ cp .env.example .env
 ```
 
 Required variables:
-- `DATABASE_URL`
+- `DATABASE_URL` — for the included Docker Compose database, use `postgresql://flowdesk:flowdesk@localhost:5433/flowdesk_inbox?schema=public`
 - `NEXTAUTH_URL` — base URL of the app (e.g. `http://localhost:3000`)
 - `NEXTAUTH_SECRET` — generate with `openssl rand -base64 32`
 - `ENCRYPTION_SECRET` — generate with `openssl rand -base64 32`
@@ -99,6 +99,8 @@ docker compose up -d
 npm run db:deploy
 npm run db:seed
 ```
+
+If a migration is described as applying "when the database is next reachable," the migration file has been committed but Postgres was not available when deploy was attempted. Start or restore the database, verify `DATABASE_URL`, then run `npm run db:deploy`; otherwise app code may reference tables or columns that do not exist yet.
 
 ### 5. Start the app
 

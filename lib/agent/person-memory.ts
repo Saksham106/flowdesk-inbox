@@ -3,6 +3,7 @@ import { createHash } from "crypto"
 import OpenAI from "openai"
 import { prisma } from "@/lib/prisma"
 import { stripHtmlToText } from "@/lib/email-body"
+import { checkAiBudgetForTokens } from "@/lib/ai/budget"
 import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 
 import {
@@ -256,6 +257,25 @@ export async function syncPersonMemoryWithLLM(
 
   let extracted: ReturnType<typeof normalizePersonMemoryExtractResult> = null
   const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
+  const estimatedInputTokens = estimateTokenCount(prompt)
+  const budgetCheck = await checkAiBudgetForTokens({
+    tenantId,
+    model,
+    estimatedInputTokens,
+    estimatedOutputTokens: 500,
+  })
+  if (!budgetCheck.allowed) {
+    await syncPersonMemory(tenantId, contactId)
+    await recordAiUsageEvent({
+      tenantId,
+      feature: options.featureContext ? `person_memory.${options.featureContext}` : "person_memory.llm",
+      model,
+      estimatedInputTokens,
+      status: "blocked",
+    })
+    return { status: "llm_failed", reason: budgetCheck.reason }
+  }
+
   try {
     const response = await client.responses.create({
       model,
@@ -279,7 +299,7 @@ export async function syncPersonMemoryWithLLM(
       tenantId,
       feature: "person_memory.llm",
       model,
-      estimatedInputTokens: estimateTokenCount(prompt),
+      estimatedInputTokens,
       status: "failed",
     })
     return {
@@ -294,7 +314,7 @@ export async function syncPersonMemoryWithLLM(
       tenantId,
       feature: "person_memory.llm",
       model,
-      estimatedInputTokens: estimateTokenCount(prompt),
+      estimatedInputTokens,
       status: "failed",
     })
     return { status: "llm_failed", reason: "AI response did not include usable memory" }
@@ -334,7 +354,7 @@ export async function syncPersonMemoryWithLLM(
     tenantId,
     feature: options.featureContext ? `person_memory.${options.featureContext}` : "person_memory.llm",
     model,
-    estimatedInputTokens: estimateTokenCount(prompt),
+    estimatedInputTokens,
     estimatedOutputTokens: estimateTokenCount(JSON.stringify(extracted)),
     status: "succeeded",
   })

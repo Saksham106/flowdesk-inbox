@@ -77,3 +77,18 @@ export async function checkAiBudget(
 
   return { allowed: true, reason: "Within budget" }
 }
+
+export async function checkAiBudgetForTokens(input: {
+  tenantId: string
+  model: string
+  estimatedInputTokens?: number
+  estimatedOutputTokens?: number
+}): Promise<{ allowed: boolean; reason: string; estimatedCostUsd: number }> {
+  const estimatedCostUsd = estimateCostUsd(
+    input.model,
+    input.estimatedInputTokens ?? 0,
+    input.estimatedOutputTokens ?? 0
+  )
+  const result = await checkAiBudget(input.tenantId, estimatedCostUsd)
+  return { ...result, estimatedCostUsd }
+}

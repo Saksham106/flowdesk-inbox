@@ -84,6 +84,8 @@ The core promise is: show what matters, explain why, safely handle routine work,
 - Knowledge-base-backed drafts support citations from imported documents/webpages.
 - Reply learning can use DB outbound samples and Gmail SENT samples.
 - Cost-aware policy skips or caches richer AI work when deterministic handling is enough.
+- AI budget guardrails track estimated cost per successful usage event, enforce tenant daily/monthly limits before rich AI calls, and record blocked attempts without counting them as spend.
+- Budget-gated AI paths include draft generation, thread explanation, lead scoring, agent classification, autopilot draft generation, meeting prep/follow-up, reply-learning profile training, and LLM relationship-memory extraction.
 - Sensitive/risky categories include legal, immigration, tax, medical, HR, emotional, financial/dispute, security, and angry-customer signals.
 - Audit logs record key agent, human, and send actions. Some actions have undo support, especially autopilot draft approval.
 

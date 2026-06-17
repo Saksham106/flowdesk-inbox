@@ -14,6 +14,7 @@ const {
   mockAiUsageCreate,
   mockGetFullBusinessContext,
   mockClassify,
+  mockCheckAiBudgetForTokens,
   mockCheckAvailability,
   mockTenantFindUnique,
 } = vi.hoisted(() => ({
@@ -27,6 +28,7 @@ const {
   mockAiUsageCreate:          vi.fn(),
   mockGetFullBusinessContext: vi.fn(),
   mockClassify:               vi.fn(),
+  mockCheckAiBudgetForTokens: vi.fn(),
   mockCheckAvailability:      vi.fn(),
   mockTenantFindUnique:       vi.fn(),
 }))
@@ -48,6 +50,11 @@ vi.mock('@/lib/agent/context', () => ({
 
 vi.mock('@/lib/agent/classify', () => ({
   classifyConversation: mockClassify,
+}))
+
+vi.mock('@/lib/ai/budget', () => ({
+  checkAiBudgetForTokens: mockCheckAiBudgetForTokens,
+  estimateCostUsd: () => 0.01,
 }))
 
 vi.mock('@/lib/agent/availability', () => ({
@@ -227,6 +234,7 @@ describe('runAgentJob', () => {
     mockToolCallUpdate.mockResolvedValue({})
     mockAuditCreate.mockResolvedValue({})
     mockAiUsageCreate.mockResolvedValue({})
+    mockCheckAiBudgetForTokens.mockResolvedValue({ allowed: true, reason: "Within budget" })
   })
 
   it('marks job completed and writes an audit log on success', async () => {
@@ -280,6 +288,30 @@ describe('runAgentJob', () => {
     )
     expect(mockAuditCreate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ action: 'agent_job.failed' }) })
+    )
+  })
+
+  it('blocks classification before calling OpenAI when AI budget would be exceeded', async () => {
+    mockCheckAiBudgetForTokens.mockResolvedValue({
+      allowed: false,
+      reason: 'Daily AI spend limit reached',
+    })
+
+    const result = await runAgentJob(JOB_ID)
+
+    expect(result.status).toBe('failed')
+    if (result.status === 'failed') {
+      expect(result.error).toContain('Daily AI spend limit reached')
+    }
+    expect(mockClassify).not.toHaveBeenCalled()
+    expect(mockAiUsageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tenantId: TENANT,
+          feature: 'agent.classify',
+          status: 'blocked',
+        }),
+      })
     )
   })
 
