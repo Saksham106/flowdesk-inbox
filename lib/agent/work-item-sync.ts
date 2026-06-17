@@ -13,6 +13,7 @@ import { extractEmail } from "@/lib/google"
 import { detectLifeAdminType } from "@/lib/agent/life-admin"
 import { detectVip } from "@/lib/agent/vip-detector"
 import { detectPhishing } from "@/lib/agent/phishing-detector"
+import { parseUnsubscribeInfo } from "@/lib/agent/unsubscribe"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
@@ -574,6 +575,33 @@ export async function syncConversationWorkItems(
           },
         })
       }
+    }
+  }
+
+  // Unsubscribe detection
+  if (firstInbound) {
+    const unsubInfo = parseUnsubscribeInfo(null, firstInbound.body)
+    if (unsubInfo.hasUnsubscribeLink) {
+      const currentState = await prisma.conversationState.findUnique({
+        where: { conversationId: conversation.id },
+        select: { metadataJson: true },
+      })
+      const currentMeta =
+        currentState?.metadataJson &&
+        typeof currentState.metadataJson === "object" &&
+        !Array.isArray(currentState.metadataJson)
+          ? (currentState.metadataJson as Record<string, unknown>)
+          : {}
+      await prisma.conversationState.update({
+        where: { conversationId: conversation.id },
+        data: {
+          metadataJson: {
+            ...currentMeta,
+            hasUnsubscribeLink: true,
+            unsubscribeUrl: unsubInfo.unsubscribeUrl,
+          } as Prisma.InputJsonValue,
+        },
+      })
     }
   }
 

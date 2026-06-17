@@ -36,6 +36,7 @@ import { resolveAccountMode } from "@/lib/account-mode";
 import { getSafeInboxReturnPath } from "@/lib/client-navigation";
 import { markGmailThreadRead } from "@/lib/google"
 import PhishingWarningBanner from "@/app/conversations/[id]/PhishingWarningBanner";
+import UnsubscribeButton from "@/app/conversations/[id]/UnsubscribeButton";
 
 export const dynamic = "force-dynamic";
 
@@ -268,6 +269,8 @@ export default async function ConversationPage({
   const phishingVerdict = typeof convMeta.phishingVerdict === "string" ? convMeta.phishingVerdict : null
   const phishingMarkedSafe = convMeta.phishingMarkedSafe === true
 
+  const hasUnsubscribeLink = convMeta.hasUnsubscribeLink === true
+
   const isSalesLead = convMeta.isSalesLead === true
   const closingStage =
     typeof convMeta.closingStage === "string" ? convMeta.closingStage : "prospect"
@@ -347,6 +350,10 @@ export default async function ConversationPage({
       conversationId={conversation.id}
       verdict={phishingVerdict as "suspicious" | "likely_phishing"}
     />
+  ) : null
+
+  const unsubscribeButton = hasUnsubscribeLink ? (
+    <UnsubscribeButton conversationId={conversation.id} />
   ) : null
 
   // Reusable sidebar panels shared between desktop and mobile layouts
@@ -631,6 +638,7 @@ export default async function ConversationPage({
             <div className="space-y-2.5">
               {vipBanner}
               {phishingBanner}
+              {unsubscribeButton}
               {contactCard}
               {assistantCard}
               {businessPanels}
@@ -725,6 +733,7 @@ export default async function ConversationPage({
           <aside className="min-w-0 space-y-3">
             {vipBanner}
             {phishingBanner}
+            {unsubscribeButton}
             {contactCard}
             {assistantCard}
             {businessPanels}
