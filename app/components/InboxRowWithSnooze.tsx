@@ -20,6 +20,9 @@ type InboxRowWithSnoozeProps = {
   hasDraft: boolean
   initialReadAt: boolean
   initialStatus: string
+  attentionCategory: string | null
+  isPersonal: boolean
+  isGmail: boolean
   isVip?: boolean
   vipLabel?: string | null
   snoozeUntil?: string | null

@@ -26,6 +26,9 @@ export type InboxListItem = {
   attentionCategory: string | null
   isPersonal: boolean
   isGmail: boolean
+  isVip?: boolean
+  vipLabel?: string | null
+  snoozeUntil?: string | null
   searchText: string
 }
 
@@ -88,6 +91,9 @@ export default function ClientFilteredInboxList({
               attentionCategory={item.attentionCategory}
               isPersonal={item.isPersonal}
               isGmail={item.isGmail}
+              isVip={item.isVip}
+              vipLabel={item.vipLabel}
+              snoozeUntil={item.snoozeUntil}
             />
           ))
         )}
