@@ -9,12 +9,14 @@ const {
   mockCorrectionCount,
   mockRuleUpsert,
   mockRuleFindFirst,
+  mockAgentRuleFindMany,
 } = vi.hoisted(() => ({
   mockMessageFindFirst: vi.fn(),
   mockCorrectionCreate: vi.fn(),
   mockCorrectionCount: vi.fn(),
   mockRuleUpsert: vi.fn(),
   mockRuleFindFirst: vi.fn(),
+  mockAgentRuleFindMany: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -27,6 +29,9 @@ vi.mock("@/lib/prisma", () => ({
     senderRule: {
       upsert: mockRuleUpsert,
       findFirst: mockRuleFindFirst,
+    },
+    agentRule: {
+      findMany: mockAgentRuleFindMany,
     },
   },
 }))
@@ -42,6 +47,7 @@ import {
   extractDomainFromEmail,
   recordAttentionCorrection,
   applyActiveRule,
+  applyActiveAgentRule,
 } from "@/lib/agent/preference-learning"
 
 // ---------------------------------------------------------------------------
@@ -55,6 +61,7 @@ beforeEach(() => {
   mockCorrectionCreate.mockResolvedValue({})
   mockRuleUpsert.mockResolvedValue({})
   mockRuleFindFirst.mockResolvedValue(null)
+  mockAgentRuleFindMany.mockResolvedValue([])
 })
 
 // ---------------------------------------------------------------------------

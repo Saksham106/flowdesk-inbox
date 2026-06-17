@@ -73,8 +73,38 @@ export async function recordAttentionCorrection({
   }
 }
 
+// Checks AgentRule table in addition to SenderRule.
+// AgentRule takes precedence over SenderRule for the same target.
+export async function applyActiveAgentRule({
+  tenantId,
+  fromEmail,
+}: {
+  tenantId: string
+  fromEmail: string
+}): Promise<AttentionCategory | null> {
+  const fromDomain = extractDomainFromEmail(fromEmail)
+  const emailLower = fromEmail.toLowerCase()
+
+  const rules = await prisma.agentRule.findMany({
+    where: { tenantId, status: "active", ruleType: "attention" },
+  })
+
+  for (const rule of rules) {
+    const cond = rule.conditionsJson as unknown as Record<string, string>
+    const action = rule.actionJson as unknown as Record<string, string>
+    if (!action.targetAttention) continue
+    if (cond.matchType === "email" && cond.matchValue?.toLowerCase() === emailLower) {
+      return action.targetAttention as AttentionCategory
+    }
+    if (cond.matchType === "domain" && fromDomain && cond.matchValue === fromDomain) {
+      return action.targetAttention as AttentionCategory
+    }
+  }
+  return null
+}
+
 // Applies active SenderRules to a candidate attention category.
-// Exact email match takes priority over domain match.
+// AgentRule takes precedence over SenderRule. Exact email match takes priority over domain match.
 // Returns the rule-determined category, or null if no active rule matches.
 // This result can ONLY be overridden by a subsequent explicit user correction.
 export async function applyActiveRule({
@@ -84,9 +114,12 @@ export async function applyActiveRule({
   tenantId: string
   fromEmail: string
 }): Promise<AttentionCategory | null> {
+  // AgentRule takes precedence over SenderRule
+  const agentResult = await applyActiveAgentRule({ tenantId, fromEmail })
+  if (agentResult) return agentResult
+
   const fromDomain = extractDomainFromEmail(fromEmail)
 
-  // Prefer exact email match
   const emailRule = await prisma.senderRule.findFirst({
     where: { tenantId, matchType: "email", matchValue: fromEmail.toLowerCase(), status: "active" },
   })

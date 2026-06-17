@@ -41,6 +41,7 @@ vi.mock("@/lib/prisma", () => ({
     tenant: { findUnique: mockTenantFindUnique },
     vipContact: { findFirst: mockVipContactFindFirst },
     senderRule: { findFirst: vi.fn().mockResolvedValue(null) },
+    agentRule: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }))
 
