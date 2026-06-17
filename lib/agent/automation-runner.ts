@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { Prisma, ConversationStatus } from "@prisma/client"
 
 export type AutomationStep = {
   type: "create_task" | "update_attention" | "create_draft" | "archive"
@@ -15,10 +16,10 @@ export type StepResult = {
   error?: string
 }
 
-export async function executeAutomationStep(step: AutomationStep): Promise<StepResult> {
+export async function executeAutomationStep(step: AutomationStep, tenantId: string): Promise<StepResult> {
   try {
     if (step.type === "create_task") {
-      const { tenantId, conversationId, title, deterministicKey } = step.payload as {
+      const { conversationId, title, deterministicKey } = step.payload as {
         tenantId: string; conversationId: string; title: string; deterministicKey: string
       }
       const task = await prisma.inboxTask.create({
@@ -27,31 +28,54 @@ export async function executeAutomationStep(step: AutomationStep): Promise<StepR
           status: "open", source: "automation",
         },
       })
+      await prisma.auditLog.create({
+        data: {
+          tenantId,
+          action: "automation.create_task",
+          payloadJson: { conversationId, title } as Prisma.InputJsonValue,
+        },
+      })
       return { status: "completed", output: { taskId: task.id }, rollbackData: { taskId: task.id } }
     }
 
     if (step.type === "update_attention") {
-      const { conversationId, attentionCategory } = step.payload as {
-        conversationId: string; attentionCategory: string; previousAttention?: string
+      const { conversationId, attentionCategory, previousAttention } = step.payload as {
+        conversationId: string; attentionCategory: string; previousAttention: string
       }
       await prisma.conversationState.update({
         where: { conversationId },
         data: { attentionCategory, source: "automation" },
       })
+      await prisma.auditLog.create({
+        data: {
+          tenantId,
+          action: "automation.update_attention",
+          payloadJson: { conversationId, attentionCategory } as Prisma.InputJsonValue,
+        },
+      })
       return {
         status: "completed",
         output: { attentionCategory },
-        rollbackData: { conversationId, previousAttention: step.payload.previousAttention ?? null },
+        rollbackData: { conversationId, previousAttention },
       }
     }
 
     if (step.type === "archive") {
       const { conversationId } = step.payload as { conversationId: string }
+      const conv = await prisma.conversation.findUnique({ where: { id: conversationId }, select: { status: true } })
+      const previousStatus = conv?.status ?? ConversationStatus.needs_reply
       await prisma.conversation.update({
         where: { id: conversationId },
         data: { status: "closed" },
       })
-      return { status: "completed", output: {}, rollbackData: { conversationId } }
+      await prisma.auditLog.create({
+        data: {
+          tenantId,
+          action: "automation.archive",
+          payloadJson: { conversationId } as Prisma.InputJsonValue,
+        },
+      })
+      return { status: "completed", output: {}, rollbackData: { conversationId, previousStatus } }
     }
 
     return { status: "failed", error: `Unknown step type: ${step.type}`, rollbackData: {} }
@@ -71,16 +95,22 @@ export async function rollbackAutomationStep(
   if (step.type === "create_task" && step.rollbackData.taskId) {
     await prisma.inboxTask.deleteMany({ where: { id: step.rollbackData.taskId as string, tenantId } })
   }
-  if (step.type === "update_attention" && step.rollbackData.previousAttention) {
-    await prisma.conversationState.update({
-      where: { conversationId: step.rollbackData.conversationId as string },
-      data: { attentionCategory: step.rollbackData.previousAttention as string },
-    })
+  if (step.type === "update_attention") {
+    if (step.rollbackData.previousAttention) {
+      await prisma.conversationState.update({
+        where: { conversationId: step.rollbackData.conversationId as string },
+        data: { attentionCategory: step.rollbackData.previousAttention as string },
+      })
+    } else {
+      console.warn("[automation-runner] rollback skipped for update_attention: previousAttention not present", {
+        conversationId: step.rollbackData.conversationId,
+      })
+    }
   }
   if (step.type === "archive" && step.rollbackData.conversationId) {
     await prisma.conversation.update({
       where: { id: step.rollbackData.conversationId as string },
-      data: { status: "needs_reply" },
+      data: { status: (step.rollbackData.previousStatus as ConversationStatus) ?? ConversationStatus.needs_reply },
     })
   }
 }

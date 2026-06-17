@@ -21,7 +21,7 @@ describe("executeAutomationStep", () => {
       type: "create_task",
       payload: { tenantId: "t1", conversationId: "c1", title: "Follow up", deterministicKey: "auto-c1-follow" },
     }
-    const result = await executeAutomationStep(step)
+    const result = await executeAutomationStep(step, "t1")
     expect(result.status).toBe("completed")
     expect(result.rollbackData).toEqual({ taskId: "task1" })
   })
@@ -32,7 +32,7 @@ describe("executeAutomationStep", () => {
       type: "update_attention",
       payload: { conversationId: "c1", attentionCategory: "review_soon", previousAttention: "needs_reply" },
     }
-    const result = await executeAutomationStep(step)
+    const result = await executeAutomationStep(step, "t1")
     expect(result.status).toBe("completed")
     expect(result.rollbackData.previousAttention).toBe("needs_reply")
   })
