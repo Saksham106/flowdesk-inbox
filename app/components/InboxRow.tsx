@@ -30,6 +30,10 @@ type InboxRowProps = {
   hasDraft: boolean
   initialReadAt: boolean
   initialStatus: string
+  isVip?: boolean
+  vipLabel?: string | null
+  onSnooze?: () => void
+  snoozeUntil?: string | null
   attentionCategory: string | null
   isPersonal: boolean
   isGmail: boolean
@@ -49,6 +53,10 @@ export default function InboxRow({
   hasDraft,
   initialReadAt,
   initialStatus,
+  isVip,
+  vipLabel,
+  onSnooze,
+  snoozeUntil,
   attentionCategory: initialAttention,
   isPersonal,
   isGmail,
@@ -179,6 +187,11 @@ export default function InboxRow({
             >
               {name}
             </p>
+            {isVip && (
+              <span className="ml-1 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700">
+                ⭐ {vipLabel ?? "VIP"}
+              </span>
+            )}
           </div>
           <span className="shrink-0 text-[10px] text-slate-400">{timeLabel}</span>
         </div>
@@ -194,6 +207,11 @@ export default function InboxRow({
           </span>
           {hasDraft && !isFyi && (
             <span className="text-[10px] font-semibold text-blue-600">✦ draft</span>
+          )}
+          {snoozeUntil && (
+            <span className="text-xs text-indigo-500">
+              💤 {new Date(snoozeUntil).toLocaleDateString()}
+            </span>
           )}
         </div>
       </Link>
@@ -235,6 +253,16 @@ export default function InboxRow({
             <circle cx="3.5" cy="3.5" r="0.75" fill="currentColor" stroke="none" />
           </svg>
         </button>
+        {onSnooze && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onSnooze() }}
+            className="rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-100"
+            title="Snooze"
+          >
+            💤
+          </button>
+        )}
 
         {/* Archive — Gmail only */}
         {isGmail && (

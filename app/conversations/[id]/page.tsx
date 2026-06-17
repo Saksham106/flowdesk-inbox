@@ -32,7 +32,12 @@ import { SALES_SUGGESTED_ACTIONS } from "@/lib/agent/sales-classifier";
 import EmailBody from "@/app/components/EmailBody";
 import { resolveAccountMode } from "@/lib/account-mode";
 import { getSafeInboxReturnPath } from "@/lib/client-navigation";
-import { markGmailThreadRead } from "@/lib/google";
+import { markGmailThreadRead } from "@/lib/google"
+import PhishingWarningBanner from "@/app/conversations/[id]/PhishingWarningBanner";
+import UnsubscribeButton from "@/app/conversations/[id]/UnsubscribeButton";
+import SnoozeButton from "@/app/conversations/[id]/SnoozeButton";
+import SecondBrainPanel from "@/app/conversations/[id]/SecondBrainPanel";
+import type { ExtractedFact } from "@/lib/agent/second-brain";
 
 export const revalidate = 60;
 
@@ -227,6 +232,7 @@ export default async function ConversationPage({
             promisedActions: true,
             lastContactAt: true,
             messageCount: true,
+            factsJson: true,
           },
         })
       : null,
@@ -254,11 +260,24 @@ export default async function ConversationPage({
       ? (stateRecord.metadataJson as Record<string, unknown>)
       : {}
 
+  const secondBrainFacts: ExtractedFact[] = Array.isArray(personMemory?.factsJson)
+    ? (personMemory.factsJson as ExtractedFact[])
+    : []
+
   const isSupport = convMeta.isSupport === true
   const churnRisk = convMeta.churnRisk === true
   const needsEscalation = convMeta.needsEscalation === true
   const suggestedKbDocId =
     typeof convMeta.suggestedKbDocId === "string" ? convMeta.suggestedKbDocId : null
+
+  const isVip = convMeta.isVip === true
+  const vipLabel = typeof convMeta.vipLabel === "string" ? convMeta.vipLabel : null
+
+  const phishingVerdict = typeof convMeta.phishingVerdict === "string" ? convMeta.phishingVerdict : null
+  const phishingMarkedSafe = convMeta.phishingMarkedSafe === true
+
+  const hasUnsubscribeLink = convMeta.hasUnsubscribeLink === true
+  const resurfacedFromSnooze = convMeta.resurfacedFromSnooze === true
 
   const isSalesLead = convMeta.isSalesLead === true
   const closingStage =
@@ -322,6 +341,31 @@ export default async function ConversationPage({
       } | null;
     } | null
   )?.metadataJson;
+
+  const vipBanner = isVip ? (
+    <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800">
+      ⭐ VIP{vipLabel ? ` — ${vipLabel}` : ""}
+    </div>
+  ) : null
+
+  const phishingBanner = phishingVerdict && phishingVerdict !== "safe" && !phishingMarkedSafe ? (
+    <PhishingWarningBanner
+      conversationId={conversation.id}
+      verdict={phishingVerdict as "suspicious" | "likely_phishing"}
+    />
+  ) : null
+
+  const unsubscribeButton = hasUnsubscribeLink ? (
+    <UnsubscribeButton conversationId={conversation.id} />
+  ) : null
+
+  const snoozeButton = <SnoozeButton conversationId={conversation.id} />
+
+  const resurfacedBanner = resurfacedFromSnooze ? (
+    <div className="flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm text-indigo-800">
+      💤 This conversation was snoozed and has just resurfaced.
+    </div>
+  ) : null
 
   // Reusable sidebar panels shared between desktop and mobile layouts
   const contactCard = (
@@ -437,6 +481,7 @@ export default async function ConversationPage({
   const extraCards = isAutoEmailConversation ? null : (
     <>
       {summaryCard}
+      <SecondBrainPanel facts={secondBrainFacts} />
       <ExplainThreadPanel conversationId={conversation.id} />
       <CollapsibleCard title="Work items">
         <WorkItemsPanel
@@ -603,6 +648,11 @@ export default async function ConversationPage({
           }
           right={
             <div className="space-y-2.5">
+              {vipBanner}
+              {phishingBanner}
+              {resurfacedBanner}
+              {unsubscribeButton}
+              {snoozeButton}
               {contactCard}
               {assistantCard}
               {businessPanels}
@@ -697,6 +747,11 @@ export default async function ConversationPage({
           </section>
 
           <aside className="min-w-0 space-y-3">
+            {vipBanner}
+            {phishingBanner}
+            {resurfacedBanner}
+            {unsubscribeButton}
+            {snoozeButton}
             {contactCard}
             {assistantCard}
             {businessPanels}

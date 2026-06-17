@@ -10,6 +10,12 @@ import { classifyEmailType } from "@/lib/agent/email-classifier"
 import { evaluatePersonMemoryPolicy } from "@/lib/ai/usage-policy"
 import { recordAiUsageEvent } from "@/lib/ai/usage"
 import { extractEmail } from "@/lib/google"
+import { detectLifeAdminType } from "@/lib/agent/life-admin"
+import { detectVip } from "@/lib/agent/vip-detector"
+import { detectPhishing } from "@/lib/agent/phishing-detector"
+import { extractListUnsubscribeHeader, parseUnsubscribeInfo } from "@/lib/agent/unsubscribe"
+import { detectAttachments, extractPdfText } from "@/lib/agent/attachment-extractor"
+import { extractFacts, mergeFacts } from "@/lib/agent/second-brain"
 import { applyActiveRule } from "@/lib/agent/preference-learning"
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
 
@@ -473,6 +479,232 @@ export async function syncConversationWorkItems(
       })
     }
   }
+
+  // Life admin detection — runs for all accounts
+  if (firstInbound) {
+    const fromEmail = extractEmail(firstInbound.fromE164 ?? "")
+    const lifeAdminResult = detectLifeAdminType(
+      fromEmail,
+      firstInbound.body.slice(0, 200),
+      firstInbound.body
+    )
+    if (lifeAdminResult.type) {
+      const currentState = await prisma.conversationState.findUnique({
+        where: { conversationId: conversation.id },
+        select: { metadataJson: true },
+      })
+      const currentMeta =
+        currentState?.metadataJson &&
+        typeof currentState.metadataJson === "object" &&
+        !Array.isArray(currentState.metadataJson)
+          ? (currentState.metadataJson as Record<string, unknown>)
+          : {}
+      await prisma.conversationState.update({
+        where: { conversationId: conversation.id },
+        data: {
+          metadataJson: {
+            ...currentMeta,
+            lifeAdminType: lifeAdminResult.type,
+            lifeAdminAmount: lifeAdminResult.amount ?? null,
+            lifeAdminCurrency: lifeAdminResult.currency ?? null,
+          } as Prisma.InputJsonValue,
+        },
+      })
+      // Create InboxTask for actionable life-admin types
+      if (["bill_due", "medical_appointment", "subscription_renewal"].includes(lifeAdminResult.type)) {
+        const taskTitle =
+          lifeAdminResult.type === "bill_due"
+            ? `Pay bill${lifeAdminResult.amount ? ` — $${lifeAdminResult.amount}` : ""}`
+            : lifeAdminResult.type === "medical_appointment"
+            ? "Medical appointment"
+            : `Subscription renewal${lifeAdminResult.amount ? ` — $${lifeAdminResult.amount}` : ""}`
+        const deterministicKey = `life_admin:${conversation.id}:${lifeAdminResult.type}`
+        await prisma.inboxTask.upsert({
+          where: {
+            tenantId_deterministicKey: {
+              tenantId: conversation.tenantId,
+              deterministicKey,
+            },
+          },
+          create: {
+            tenantId: conversation.tenantId,
+            conversationId: conversation.id,
+            title: taskTitle,
+            status: "open",
+            source: "deterministic",
+            deterministicKey,
+            metadataJson: { lifeAdminType: lifeAdminResult.type } as Prisma.InputJsonValue,
+          },
+          update: { title: taskTitle },
+        })
+      }
+    }
+  }
+
+  // VIP detection
+  if (firstInbound) {
+    const fromEmail = extractEmail(firstInbound.fromE164 ?? "")
+    const vipResult = await detectVip(fromEmail, conversation.tenantId)
+    if (vipResult.isVip) {
+      const currentState = await prisma.conversationState.findUnique({
+        where: { conversationId: conversation.id },
+        select: { metadataJson: true },
+      })
+      const currentMeta =
+        currentState?.metadataJson &&
+        typeof currentState.metadataJson === "object" &&
+        !Array.isArray(currentState.metadataJson)
+          ? (currentState.metadataJson as Record<string, unknown>)
+          : {}
+      await prisma.conversationState.update({
+        where: { conversationId: conversation.id },
+        data: {
+          priority: "urgent",
+          metadataJson: {
+            ...currentMeta,
+            isVip: true,
+            vipLabel: vipResult.label ?? null,
+          } as Prisma.InputJsonValue,
+        },
+      })
+    }
+  }
+
+  // Phishing detection
+  if (firstInbound) {
+    const fromHeader = firstInbound.fromE164 ?? ""
+    const fromEmail = extractEmail(fromHeader)
+    const phishingResult = detectPhishing(
+      fromHeader,
+      fromEmail,
+      firstInbound.body.slice(0, 200),
+      firstInbound.body
+    )
+    if (phishingResult.verdict !== "safe") {
+      const currentState = await prisma.conversationState.findUnique({
+        where: { conversationId: conversation.id },
+        select: { metadataJson: true },
+      })
+      const currentMeta =
+        currentState?.metadataJson &&
+        typeof currentState.metadataJson === "object" &&
+        !Array.isArray(currentState.metadataJson)
+          ? (currentState.metadataJson as Record<string, unknown>)
+          : {}
+      if (!currentMeta.phishingMarkedSafe) {
+        await prisma.conversationState.update({
+          where: { conversationId: conversation.id },
+          data: {
+            metadataJson: {
+              ...currentMeta,
+              phishingVerdict: phishingResult.verdict,
+              phishingScore: phishingResult.score,
+              phishingSignals: phishingResult.signals,
+            } as Prisma.InputJsonValue,
+          },
+        })
+      }
+    }
+  }
+
+  // Unsubscribe detection
+  if (firstInbound) {
+    const listUnsubscribeHeader = extractListUnsubscribeHeader(firstInbound.body)
+    const unsubInfo = parseUnsubscribeInfo(listUnsubscribeHeader, firstInbound.body)
+    if (unsubInfo.hasUnsubscribeLink) {
+      const currentState = await prisma.conversationState.findUnique({
+        where: { conversationId: conversation.id },
+        select: { metadataJson: true },
+      })
+      const currentMeta =
+        currentState?.metadataJson &&
+        typeof currentState.metadataJson === "object" &&
+        !Array.isArray(currentState.metadataJson)
+          ? (currentState.metadataJson as Record<string, unknown>)
+          : {}
+      await prisma.conversationState.update({
+        where: { conversationId: conversation.id },
+        data: {
+          metadataJson: {
+            ...currentMeta,
+            hasUnsubscribeLink: true,
+            unsubscribeUrl: unsubInfo.unsubscribeUrl,
+          } as Prisma.InputJsonValue,
+        },
+      })
+    }
+  }
+
+  // Attachment detection (fire-and-forget — doesn't block sync)
+  void (async () => {
+    for (const message of conversation.messages) {
+      const rawBody = message.body
+      if (!rawBody) continue
+      const detected = detectAttachments(rawBody)
+      for (const att of detected) {
+        const existing = await prisma.emailAttachment.findFirst({
+          where: { messageId: message.id, filename: att.filename },
+          select: { id: true },
+        })
+        if (existing) continue
+
+        let extractedText: string | undefined
+        if (att.mimeType === "application/pdf" && att.base64Data) {
+          try {
+            extractedText = await extractPdfText(att.base64Data)
+          } catch {
+            // PDF extraction is best-effort
+          }
+        }
+
+        await prisma.emailAttachment.create({
+          data: {
+            tenantId: conversation.tenantId,
+            messageId: message.id,
+            conversationId: conversation.id,
+            filename: att.filename,
+            mimeType: att.mimeType,
+            extractedText: extractedText ?? null,
+          },
+        })
+      }
+    }
+  })()
+
+  // Second Brain — extract facts from first inbound and store in PersonMemory
+  void (async () => {
+    if (!firstInbound || !conversation.contactId) return
+    const fromEmail = extractEmail(firstInbound.fromE164 ?? "")
+    if (!fromEmail) return
+
+    const subject = firstInbound.body.slice(0, 200)
+    const newFacts = extractFacts(fromEmail, subject, firstInbound.body)
+    if (newFacts.length === 0) return
+
+    const existingMemory = await prisma.personMemory.findUnique({
+      where: { contactId: conversation.contactId },
+      select: { id: true, factsJson: true },
+    })
+
+    if (existingMemory) {
+      const existingFacts = Array.isArray(existingMemory.factsJson)
+        ? (existingMemory.factsJson as import("@/lib/agent/second-brain").ExtractedFact[])
+        : []
+      const merged = mergeFacts(existingFacts, newFacts)
+      await prisma.personMemory.update({
+        where: { id: existingMemory.id },
+        data: { factsJson: merged as Prisma.InputJsonValue },
+      })
+    } else {
+      await prisma.personMemory.create({
+        data: {
+          tenantId: conversation.tenantId,
+          contactId: conversation.contactId,
+          factsJson: newFacts as Prisma.InputJsonValue,
+        },
+      })
+    }
+  })()
 
   // Second-pass auto-close: classifyEmailType runs after summarizeWorkItems, so emails classified
   // as FYI by the email classifier (but not caught by pattern matching) need a second chance here.

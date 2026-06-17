@@ -13,6 +13,7 @@ const {
   mockTenantFindUnique,
   mockConversationUpdate,
   mockSyncPersonMemoryWithLLM,
+  mockVipContactFindFirst,
 } = vi.hoisted(() => ({
   mockConversationFindFirst: vi.fn(),
   mockStateUpsert: vi.fn(),
@@ -26,6 +27,7 @@ const {
   mockTenantFindUnique: vi.fn(),
   mockConversationUpdate: vi.fn(),
   mockSyncPersonMemoryWithLLM: vi.fn(),
+  mockVipContactFindFirst: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -37,6 +39,7 @@ vi.mock("@/lib/prisma", () => ({
     auditLog: { create: mockAuditCreate },
     knowledgeDocument: { findMany: mockKbDocFindMany },
     tenant: { findUnique: mockTenantFindUnique },
+    vipContact: { findFirst: mockVipContactFindFirst },
     senderRule: { findFirst: vi.fn().mockResolvedValue(null) },
   },
 }))
@@ -87,6 +90,7 @@ describe("syncConversationWorkItems", () => {
     mockTenantFindUnique.mockResolvedValue({ accountType: "business" })
     mockConversationUpdate.mockResolvedValue({})
     mockSyncPersonMemoryWithLLM.mockResolvedValue({ status: "llm_completed" })
+    mockVipContactFindFirst.mockResolvedValue(null)
   })
 
   it("loads the conversation scoped to the tenant", async () => {

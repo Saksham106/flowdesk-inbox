@@ -139,7 +139,9 @@ export default async function InboxPage({ searchParams }: Props) {
           tenantId,
           ...(activeStatus ? { status: activeStatus } : {}),
           ...(salesFilter && isBusiness ? { stateRecord: { is: { isSalesLead: true } } } : {}),
-          ...(attentionFilter ? { stateRecord: { is: { attentionCategory: attentionFilter } } } : {}),
+          ...(attentionFilter && attentionFilter !== "life_admin" && attentionFilter !== "snoozed"
+            ? { stateRecord: { is: { attentionCategory: attentionFilter } } }
+            : {}),
           ...(q
             ? {
                 OR: [
@@ -318,7 +320,26 @@ export default async function InboxPage({ searchParams }: Props) {
 
 
 
-  const displayConversations = mobileConversations;
+  const displayConversations = salesFilter
+    ? mobileConversations.filter((c) => {
+        const meta = c.stateRecord?.metadataJson;
+        return (
+          meta !== null &&
+          typeof meta === "object" &&
+          !Array.isArray(meta) &&
+          (meta as Record<string, unknown>).isSalesLead === true
+        );
+      })
+    : attentionFilter
+    ? mobileConversations.filter((c) => {
+        const meta = c.stateRecord?.metadataJson;
+        if (!meta || typeof meta !== "object" || Array.isArray(meta)) return false;
+        const m = meta as Record<string, unknown>;
+        if (attentionFilter === "life_admin") return !!m.lifeAdminType;
+        if (attentionFilter === "snoozed") return typeof m.snoozeReminderId === "string";
+        return m.attentionCategory === attentionFilter;
+      })
+    : mobileConversations;
 
   function tabHref(status: ConversationStatus | "all" | null, sales = false) {
     const params = new URLSearchParams();
@@ -534,8 +555,14 @@ export default async function InboxPage({ searchParams }: Props) {
                   Sales
                 </Link>
               )}
-              {(["needs_reply", "review_soon", "read_later"] as const).map((cat) => {
-                const labels: Record<string, string> = { needs_reply: "Reply", review_soon: "Review", read_later: "Later" }
+              {(["needs_reply", "review_soon", "read_later", "life_admin", "snoozed"] as const).map((cat) => {
+                const labels: Record<string, string> = {
+                  needs_reply: "Reply",
+                  review_soon: "Review",
+                  read_later: "Later",
+                  life_admin: "Life Admin",
+                  snoozed: "Snoozed",
+                }
                 const isActive = attentionFilter === cat && !salesFilter && !activeStatus
                 return (
                   <Link

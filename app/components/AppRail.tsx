@@ -26,6 +26,8 @@ export default function AppRail({ needsReplyCount, accountType }: Props) {
   const isEmailSection =
     pathname === "/inbox" || pathname.startsWith("/conversations/")
   const isTasks = pathname === "/tasks"
+  const isSearch = pathname === "/search"
+  const isChat = pathname === "/chat"
   const isSettings = pathname === "/settings"
   const isBusiness = accountType === "business"
 
@@ -54,6 +56,16 @@ export default function AppRail({ needsReplyCount, accountType }: Props) {
       {/* Tasks */}
       <RailLink href="/tasks" active={isTasks} label="Tasks">
         <TasksIcon />
+      </RailLink>
+
+      {/* Search */}
+      <RailLink href="/search" active={isSearch} label="Search">
+        <SearchIcon />
+      </RailLink>
+
+      {/* Chat */}
+      <RailLink href="/chat" active={isChat} label="Chat">
+        <ChatIcon />
       </RailLink>
 
       <div className="flex-1" />
@@ -144,6 +156,23 @@ function TasksIcon() {
     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <polyline strokeLinecap="round" strokeLinejoin="round" points="9 11 12 14 22 4" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+    </svg>
+  )
+}
+
+function SearchIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function ChatIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
     </svg>
   )
 }

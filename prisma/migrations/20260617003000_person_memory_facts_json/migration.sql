@@ -1,0 +1,1 @@
+ALTER TABLE "PersonMemory" ADD COLUMN IF NOT EXISTS "factsJson" JSONB;

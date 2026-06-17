@@ -223,6 +223,10 @@ export default async function AppListColumn({
     const snippet = buildPreviewText(msg0?.subject, bodySnippet)
     const hasDraft = conv.draft?.status === "proposed" || conv.draft?.status === "approved"
     const isClosed = conv.status === "closed"
+    const meta = conv.stateRecord?.metadataJson as Record<string, unknown> | null ?? {}
+    const isVip = meta?.isVip === true
+    const vipLabel = typeof meta?.vipLabel === "string" ? meta.vipLabel : null
+    const snoozeUntil = typeof meta?.snoozeUntil === "string" ? meta.snoozeUntil : null
 
     return {
       id: conv.id,
@@ -243,6 +247,9 @@ export default async function AppListColumn({
       attentionCategory: attention,
       isPersonal,
       isGmail: conv.channel.provider === "google",
+      isVip,
+      vipLabel,
+      snoozeUntil,
       searchText: `${name} ${conv.externalThreadId} ${snippet}`.toLowerCase(),
     }
   })

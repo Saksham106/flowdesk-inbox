@@ -93,6 +93,9 @@ model Tenant {
   personMemories            PersonMemory[]
   followUpSetting           FollowUpSetting?
   autopilotSetting          AutopilotSetting?
+  vipContacts               VipContact[]
+  snoozeReminders           SnoozeReminder[]
+  emailAttachments          EmailAttachment[]
   aiBudget                  AiBudget?
   classificationCorrections ClassificationCorrection[]
   senderRules               SenderRule[]
@@ -247,6 +250,7 @@ model PersonMemory {
   contentHash     String?
   model           String?
   llmSyncedAt     DateTime?
+  factsJson       Json?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -283,6 +287,8 @@ model Conversation {
   stateRecord      ConversationState?
   inboxTasks       InboxTask[]
   leads            Lead[]
+  snoozeReminders  SnoozeReminder[]
+  emailAttachments EmailAttachment[]
   gmailWritebacks  GmailWritebackQueue[]
 
   @@unique([tenantId, channelId, externalThreadId])
@@ -300,8 +306,10 @@ model Message {
   providerMessageId String
   isRead            Boolean          @default(false)
   gmailLabelIds     Json?
+  searchVector      Unsupported("tsvector")?
   createdAt         DateTime         @default(now())
   conversation      Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  emailAttachments  EmailAttachment[]
 
   @@unique([providerMessageId])
   @@index([conversationId, createdAt])
@@ -627,6 +635,55 @@ model PersonalProfile {
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
   tenant                  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model VipContact {
+  id        String   @id @default(cuid())
+  tenantId  String
+  email     String
+  domain    String?
+  label     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+model SnoozeReminder {
+  id             String       @id @default(cuid())
+  tenantId       String
+  conversationId String
+  userId         String
+  snoozeUntil    DateTime
+  reason         String?
+  status         String       @default("pending")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status, snoozeUntil])
+  @@index([conversationId])
+}
+
+model EmailAttachment {
+  id            String      @id @default(cuid())
+  tenantId      String
+  messageId     String
+  conversationId String
+  filename      String
+  mimeType      String
+  sizeBytes     Int?
+  extractedText String?
+  createdAt     DateTime    @default(now())
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  message       Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  conversation  Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([messageId])
 }
 
 // Logs each manual attention correction so repeated patterns can be detected.

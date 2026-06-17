@@ -1,6 +1,6 @@
 # FlowDesk Remaining Work
 
-Last updated: 2026-06-17
+Last updated: 2026-06-17 (Phase 3 shipped in PR #61)
 
 This is the actionable checklist of work that is still unfinished. Shipped history belongs in `CURRENT_STATE.md`, `MASTER_PRODUCT_PLAN.md`, or `docs/archive/`, not here.
 
@@ -14,17 +14,17 @@ Feature numbers reference the 45-feature index in `MASTER_PRODUCT_PLAN.md`.
 - [ ] **Gmail archive follow-through** (#24/#25/#41) — add bulk archive/clean-inbox workflows and decide whether Outlook needs equivalent provider writeback.
 - [ ] **Reply composer CC/BCC send support** (#3/#30) — UI captures CC/BCC, but send APIs still need to forward those fields.
 
-## Phase 3: Personal Chief Of Staff
+## Phase 3: Personal Chief Of Staff ✅ Shipped (PR #61, 2026-06-17)
 
-- [ ] **Personal life admin mode** (#21) — broaden beyond OTP/security/billing/delivery/calendar signals into travel, school, medical, insurance, subscriptions, and privacy-first review UX.
-- [ ] **VIP protection** (#33) — model VIP contacts and escalation rules.
-- [ ] **Reply later / smart snooze intelligence** (#34) — reminder model, inbox surfacing, and safe follow-up timing.
-- [ ] **Smart attachment intelligence** (#16) — ingest PDFs/images/attachments, extract deadlines/facts, and store auditable insights.
-- [ ] **Natural-language search** (#17) — index conversations and return permission-scoped answers with citations.
-- [ ] **Ask My Inbox chat** (#43) — action-oriented inbox Q&A, not just summaries.
-- [ ] **Second-brain retrieval** (#38) — retrieval over memory, commitments, and historical threads.
-- [ ] **Phishing/scam/fraud protection** (#23) — discovery first; needs conservative false-positive UX.
-- [ ] **Auto-unsubscribe and noise killer** (#24) — safe unsubscribe/archive flows and undo.
+- [x] **Personal life admin mode** (#21) — classifier detects bills, travel, medical, subscriptions, school; "Life Admin" inbox tab; InboxTask creation for actionable types.
+- [x] **VIP protection** (#33) — VipContact model, CRUD API, detector sets urgent priority, ⭐ badge in inbox + banner on conversation page, settings form.
+- [x] **Reply later / smart snooze intelligence** (#34) — SnoozeReminder model, POST/DELETE API, hourly cron, SnoozeModal with presets, "Snoozed" inbox tab, resurfaced-from-snooze banner.
+- [x] **Smart attachment intelligence** (#16) — EmailAttachment model, MIME parser, PDF text extraction via pdf-parse, fire-and-forget sync pipeline.
+- [x] **Natural-language search** (#17) — Message.searchVector tsvector + GIN index + trigger; /search page; /api/search route; AppRail icon.
+- [x] **Ask My Inbox chat** (#43) — OpenAI streaming RAG pipeline; /chat page; /api/chat SSE route; AppRail icon.
+- [x] **Second-brain retrieval** (#38) — PersonMemory.factsJson, fact extractor (birthday/dietary/role/phone), SecondBrainPanel on conversation page.
+- [x] **Phishing/scam/fraud protection** (#23) — signal-scored classifier; 🛡 warning banner; mark-safe flow; /api/conversations/[id]/phishing-safe.
+- [x] **Auto-unsubscribe and noise killer** (#24) — detects List-Unsubscribe headers + body links; "Unsubscribe & Archive" button; fires HTTP GET, closes conversation, audit log.
 
 ## Phase 4: Automations And Integrations
 
