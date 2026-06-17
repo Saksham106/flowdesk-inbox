@@ -99,6 +99,8 @@ model Tenant {
   aiBudget                  AiBudget?
   classificationCorrections ClassificationCorrection[]
   senderRules               SenderRule[]
+  agentRules                AgentRule[]
+  snippets                  Snippet[]
   gmailPushEvents           GmailPushEvent[]
   gmailWritebackQueue       GmailWritebackQueue[]
 }
@@ -719,5 +721,39 @@ model SenderRule {
   tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, matchType, matchValue, targetAttention])
+  @@index([tenantId, status])
+}
+
+model AgentRule {
+  id            String   @id @default(cuid())
+  tenantId      String
+  plainText     String
+  ruleType      String
+  conditionsJson Json
+  actionJson    Json
+  status        String   @default("active")
+  source        String   @default("plain_english")
+  previewCount  Int?
+  conflictsWith String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+}
+
+model Snippet {
+  id            String   @id @default(cuid())
+  tenantId      String
+  title         String
+  content       String
+  useCount      Int      @default(0)
+  status        String   @default("suggested")
+  source        String   @default("mined")
+  minedFromJson Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   @@index([tenantId, status])
 }
