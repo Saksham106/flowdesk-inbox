@@ -15,6 +15,7 @@ import { detectVip } from "@/lib/agent/vip-detector"
 import { detectPhishing } from "@/lib/agent/phishing-detector"
 import { parseUnsubscribeInfo } from "@/lib/agent/unsubscribe"
 import { detectAttachments, extractPdfText } from "@/lib/agent/attachment-extractor"
+import { extractFacts, mergeFacts } from "@/lib/agent/second-brain"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
@@ -639,6 +640,41 @@ export async function syncConversationWorkItems(
           },
         })
       }
+    }
+  })()
+
+  // Second Brain — extract facts from first inbound and store in PersonMemory
+  void (async () => {
+    if (!firstInbound || !conversation.contactId) return
+    const fromEmail = extractEmail(firstInbound.fromE164 ?? "")
+    if (!fromEmail) return
+
+    const subject = firstInbound.body.slice(0, 200)
+    const newFacts = extractFacts(fromEmail, subject, firstInbound.body)
+    if (newFacts.length === 0) return
+
+    const existingMemory = await prisma.personMemory.findUnique({
+      where: { contactId: conversation.contactId },
+      select: { id: true, factsJson: true },
+    })
+
+    if (existingMemory) {
+      const existingFacts = Array.isArray(existingMemory.factsJson)
+        ? (existingMemory.factsJson as import("@/lib/agent/second-brain").ExtractedFact[])
+        : []
+      const merged = mergeFacts(existingFacts, newFacts)
+      await prisma.personMemory.update({
+        where: { id: existingMemory.id },
+        data: { factsJson: merged as Prisma.InputJsonValue },
+      })
+    } else {
+      await prisma.personMemory.create({
+        data: {
+          tenantId: conversation.tenantId,
+          contactId: conversation.contactId,
+          factsJson: newFacts as Prisma.InputJsonValue,
+        },
+      })
     }
   })()
 

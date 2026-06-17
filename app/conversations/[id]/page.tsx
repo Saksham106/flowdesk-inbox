@@ -38,6 +38,8 @@ import { markGmailThreadRead } from "@/lib/google"
 import PhishingWarningBanner from "@/app/conversations/[id]/PhishingWarningBanner";
 import UnsubscribeButton from "@/app/conversations/[id]/UnsubscribeButton";
 import SnoozeButton from "@/app/conversations/[id]/SnoozeButton";
+import SecondBrainPanel from "@/app/conversations/[id]/SecondBrainPanel";
+import type { ExtractedFact } from "@/lib/agent/second-brain";
 
 export const dynamic = "force-dynamic";
 
@@ -231,6 +233,7 @@ export default async function ConversationPage({
             promisedActions: true,
             lastContactAt: true,
             messageCount: true,
+            factsJson: true,
           },
         })
       : null,
@@ -257,6 +260,10 @@ export default async function ConversationPage({
     !Array.isArray(stateRecord.metadataJson)
       ? (stateRecord.metadataJson as Record<string, unknown>)
       : {}
+
+  const secondBrainFacts: ExtractedFact[] = Array.isArray(personMemory?.factsJson)
+    ? (personMemory.factsJson as ExtractedFact[])
+    : []
 
   const isSupport = convMeta.isSupport === true
   const churnRisk = convMeta.churnRisk === true
@@ -480,6 +487,7 @@ export default async function ConversationPage({
   const extraCards = isAutoEmailConversation ? null : (
     <>
       {summaryCard}
+      <SecondBrainPanel facts={secondBrainFacts} />
       <ExplainThreadPanel conversationId={conversation.id} />
       <CollapsibleCard title="Work items">
         <WorkItemsPanel
