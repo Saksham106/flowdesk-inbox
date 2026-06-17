@@ -24,6 +24,7 @@ import { getAiBudgetStatus } from "@/lib/ai/budget";
 import TrainAgentPanel from "@/app/settings/TrainAgentPanel"
 import SnippetsPanel from "@/app/settings/SnippetsPanel"
 import WorkflowsPanel from "@/app/settings/WorkflowsPanel"
+import ConnectedAppsPanel from "@/app/settings/ConnectedAppsPanel"
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,8 @@ interface Props {
     error?: string;
     cal_connected?: string;
     cal_error?: string;
+    drive_connected?: string;
+    drive_error?: string;
   };
 }
 
@@ -65,6 +68,7 @@ export default async function SettingsPage({ searchParams }: Props) {
     vipContacts,
     agentRulesRaw,
     snippets,
+    googleDriveCredential,
   ] = await Promise.all([
     prisma.channel.findMany({
       where: { tenantId: session.user.tenantId, type: "email" },
@@ -121,6 +125,9 @@ export default async function SettingsPage({ searchParams }: Props) {
       where: { tenantId: session.user.tenantId, status: { not: "dismissed" } },
       orderBy: [{ status: "asc" }, { useCount: "desc" }],
       take: 50,
+    }),
+    prisma.googleDriveCredential.findUnique({
+      where: { tenantId: session.user.tenantId },
     }),
   ]);
 
@@ -212,6 +219,10 @@ export default async function SettingsPage({ searchParams }: Props) {
     ? (ERROR_MESSAGES[searchParams.cal_error] ?? "An error occurred. Please try again.")
     : null;
 
+  const driveError = searchParams.drive_error
+    ? (ERROR_MESSAGES[searchParams.drive_error] ?? "An error occurred connecting Google Drive. Please try again.")
+    : null;
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
@@ -247,6 +258,17 @@ export default async function SettingsPage({ searchParams }: Props) {
           <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
             <span className="font-medium">{decodeURIComponent(searchParams.cal_connected)}</span> calendar
             connected successfully.
+          </div>
+        )}
+        {driveError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            Google Drive: {driveError}
+          </div>
+        )}
+        {searchParams.drive_connected && (
+          <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+            Google Drive connected as{" "}
+            <span className="font-medium">{decodeURIComponent(searchParams.drive_connected)}</span>.
           </div>
         )}
 
@@ -509,6 +531,22 @@ export default async function SettingsPage({ searchParams }: Props) {
               )}
             </div>
           )}
+        </section>
+
+        {/* Connected Apps */}
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="font-semibold">Connected Apps</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Choose integrations that help your workflows, not just logo counts.
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <ConnectedAppsPanel
+              driveConnected={!!googleDriveCredential}
+              driveEmail={googleDriveCredential?.email}
+            />
+          </div>
         </section>
 
         {/* Business Profile — business only */}
