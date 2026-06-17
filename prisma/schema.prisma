@@ -93,6 +93,7 @@ model Tenant {
   personMemories            PersonMemory[]
   followUpSetting           FollowUpSetting?
   autopilotSetting          AutopilotSetting?
+  vipContacts               VipContact[]
 }
 
 model User {
@@ -560,4 +561,18 @@ model PersonalProfile {
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
   tenant                  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model VipContact {
+  id        String   @id @default(cuid())
+  tenantId  String
+  email     String
+  domain    String?
+  label     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
 }
