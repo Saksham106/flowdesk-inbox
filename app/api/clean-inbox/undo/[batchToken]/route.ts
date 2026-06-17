@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Prisma } from "@prisma/client"
-import { parseBatchToken } from "@/app/api/clean-inbox/archive-batch/route"
+import { parseBatchToken } from "@/lib/clean-inbox-token"
 
 export async function POST(
   _request: Request,

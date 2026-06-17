@@ -10,7 +10,7 @@ vi.mock("next-auth", () => ({ getServerSession: vi.fn() }))
 vi.mock("@/lib/auth", () => ({ authOptions: {} }))
 vi.mock("@/lib/google", () => ({ archiveGmailThread: vi.fn() }))
 
-import { buildBatchToken, parseBatchToken } from "@/app/api/clean-inbox/archive-batch/route"
+import { buildBatchToken, parseBatchToken } from "@/lib/clean-inbox-token"
 
 describe("batchToken", () => {
   it("encodes and decodes conversation IDs", () => {

@@ -3,18 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Prisma } from "@prisma/client"
-
-export function buildBatchToken(ids: string[]): string {
-  return Buffer.from(JSON.stringify(ids)).toString("base64url")
-}
-
-export function parseBatchToken(token: string): string[] {
-  try {
-    return JSON.parse(Buffer.from(token, "base64url").toString())
-  } catch {
-    return []
-  }
-}
+import { buildBatchToken } from "@/lib/clean-inbox-token"
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions)
