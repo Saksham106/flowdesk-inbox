@@ -7,6 +7,7 @@ import { buildConversationHref } from "@/lib/client-navigation"
 import ClientFilteredInboxList, { type InboxListItem } from "@/app/components/ClientFilteredInboxList"
 import { resolveAccountMode } from "@/lib/account-mode"
 import { inboxTag } from "@/lib/cache-tags"
+import { isFyiConversation } from "@/lib/inbox-fyi"
 
 interface Props {
   tenantId: string
@@ -45,36 +46,6 @@ type ConvRow = {
     emailType: string | null
   } | null
   channel: { provider: string }
-}
-
-const AUTOMATED_SENDER_RE = /\b(no-?reply|noreply|notifications?|alerts?|do-not-reply|automated)\b/i
-const AUTOMATED_BODY_RE =
-  /\b(unsubscribe|you'?re receiving this|this is an automated (email|message|notification)|do not reply to this email)\b/i
-const FYI_RE = /\b(fyi|newsletter|for your records|no action|all set|thanks, all set)\b/i
-
-function isFyi(conv: ConvRow): boolean {
-  if (conv.stateRecord?.attentionCategory === "quiet" || conv.stateRecord?.attentionCategory === "fyi_done") {
-    return true
-  }
-  if (conv.stateRecord?.attentionCategory) return false
-  if (conv.stateRecord?.emailType === "notification" || conv.stateRecord?.emailType === "newsletter" || conv.stateRecord?.emailType === "marketing") {
-    return true
-  }
-  const meta = conv.stateRecord?.metadataJson
-  if (meta && typeof meta === "object" && !Array.isArray(meta)) {
-    const attentionCategory = (meta as Record<string, unknown>).attentionCategory
-    if (attentionCategory === "quiet" || attentionCategory === "fyi_done") return true
-    if (typeof attentionCategory === "string") return false
-    const t = (meta as Record<string, unknown>).emailType
-    if (t === "notification" || t === "newsletter" || t === "marketing") return true
-  }
-  if (conv.stateRecord?.state === "fyi_only") return true
-  // Fallback: pattern-match unclassified inbound emails (same logic as command-center)
-  if (conv.status !== "needs_reply") return false
-  const msg = conv.messages[0]
-  if (!msg || msg.direction !== "inbound") return false
-  const senderEmail = conv.contact?.phoneE164 ?? ""
-  return AUTOMATED_SENDER_RE.test(senderEmail) || AUTOMATED_BODY_RE.test(msg.body) || FYI_RE.test(msg.body)
 }
 
 function attentionCategory(conv: ConvRow): string | null {
@@ -172,6 +143,18 @@ function getCachedListData(input: {
           where: { tenantId: input.tenantId },
           _count: { status: true },
         }),
+        prisma.conversation.findMany({
+          where: { tenantId: input.tenantId, status: "needs_reply" },
+          orderBy: { lastMessageAt: "desc" },
+          take: 500,
+          include: {
+            messages: { orderBy: { createdAt: "desc" }, take: 1 },
+            contact: true,
+            draft: { select: { status: true } },
+            stateRecord: { select: { state: true, metadataJson: true, attentionCategory: true, emailType: true } },
+            channel: { select: { provider: true } },
+          },
+        }) as Promise<ConvRow[]>,
       ])
     },
     key,
@@ -192,7 +175,7 @@ export default async function AppListColumn({
   const isBusiness = accountType === "business"
   const isPersonal = resolveAccountMode(accountType) === "personal"
 
-  const [conversations, counts] = await getCachedListData({
+  const [conversations, counts, needsReplyCandidates] = await getCachedListData({
     tenantId,
     status,
     q,
@@ -200,6 +183,7 @@ export default async function AppListColumn({
   })
 
   const countMap = Object.fromEntries(counts.map((r) => [r.status, r._count.status]))
+  countMap.needs_reply = needsReplyCandidates.filter((conv) => !isFyiConversation(conv)).length
 
   function filterPillHref(s: string | null): string {
     const p = new URLSearchParams()
@@ -221,8 +205,11 @@ export default async function AppListColumn({
   const returnTo = currentInboxHref()
   const scrollKey = [status ?? "all", q ?? "", sales ? "s" : ""].join("_")
   const emptyMessage = q || status || sales ? "No results." : "No conversations yet."
-  const listItems: InboxListItem[] = conversations.map((conv) => {
-    const fyi = isFyi(conv)
+  const displayConversations =
+    status === "needs_reply" ? conversations.filter((conv) => !isFyiConversation(conv)) : conversations
+
+  const listItems: InboxListItem[] = displayConversations.map((conv) => {
+    const fyi = isFyiConversation(conv)
     const attention = attentionCategory(conv)
     const attentionStyle = attention ? ATTENTION_STYLE[attention] : null
     const displayStatus = fyi ? "closed" : conv.status

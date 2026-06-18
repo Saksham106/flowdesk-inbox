@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { Suspense } from "react";
+import WarmingUp from "@/app/components/WarmingUp";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -20,6 +21,7 @@ import { analyzeRevenueAtRisk } from "@/lib/agent/revenue-at-risk";
 import { AppNavigationItem, getInboxNavigation } from "@/lib/app-navigation";
 import { buildConversationHref } from "@/lib/client-navigation";
 import { stripHtmlToText } from "@/lib/email-body";
+import { isFyiConversation } from "@/lib/inbox-fyi";
 
 export const revalidate = 60;
 
@@ -35,44 +37,20 @@ const ALL_STATUSES = Object.keys(STATUS_LABELS) as ConversationStatus[];
 const HOME_CONVERSATION_LIMIT = 25
 const HOME_MESSAGE_LIMIT = 5
 
-const AUTOMATED_SENDER_RE = /\b(no-?reply|noreply|notifications?|alerts?|do-not-reply|automated)\b/i
-const AUTOMATED_BODY_RE =
-  /\b(unsubscribe|you'?re receiving this|this is an automated (email|message|notification)|do not reply to this email)\b/i
-const FYI_RE = /\b(fyi|newsletter|for your records|no action|all set|thanks, all set)\b/i
-
-function isFyiConversation(conversation: {
-  status: string
-  stateRecord: { state: string; metadataJson: unknown; attentionCategory?: string | null; emailType?: string | null } | null
-  contact: { phoneE164: string } | null
-  messages: { direction: string; body: string }[]
-}): boolean {
-  if (conversation.stateRecord?.attentionCategory === "quiet" || conversation.stateRecord?.attentionCategory === "fyi_done") return true
-  if (conversation.stateRecord?.attentionCategory) return false
-  if (
-    conversation.stateRecord?.emailType === "notification" ||
-    conversation.stateRecord?.emailType === "newsletter" ||
-    conversation.stateRecord?.emailType === "marketing"
-  ) {
-    return true
-  }
-  const meta = conversation.stateRecord?.metadataJson
-  if (meta && typeof meta === "object" && !Array.isArray(meta)) {
-    const attentionCategory = (meta as Record<string, unknown>).attentionCategory
-    if (attentionCategory === "quiet" || attentionCategory === "fyi_done") return true
-    if (typeof attentionCategory === "string") return false
-    const emailType = (meta as Record<string, unknown>).emailType
-    if (emailType === "notification" || emailType === "newsletter" || emailType === "marketing") return true
-  }
-  if (conversation.stateRecord?.state === "fyi_only") return true
-  if (conversation.status !== "needs_reply") return false
-  const msg = conversation.messages[0]
-  if (!msg || msg.direction !== "inbound") return false
-  const email = conversation.contact?.phoneE164 ?? ""
-  return AUTOMATED_SENDER_RE.test(email) || AUTOMATED_BODY_RE.test(msg.body) || FYI_RE.test(msg.body)
-}
-
 interface Props {
   searchParams: { status?: string; q?: string; sales?: string; attention?: string };
+}
+
+function isDbStartingError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message;
+  return (
+    msg.includes("database system is starting up") ||
+    msg.includes("database system is not yet accepting connections") ||
+    msg.includes("Can't reach database server") ||
+    msg.includes("ECONNREFUSED") ||
+    (err.constructor.name === "PrismaClientInitializationError" && msg.includes("FATAL"))
+  );
 }
 
 export default async function InboxPage({ searchParams }: Props) {
@@ -82,7 +60,18 @@ export default async function InboxPage({ searchParams }: Props) {
     redirect("/login");
   }
 
-  const tenantId = session.user.tenantId;
+  try {
+    return await renderInboxPage(session.user.tenantId, searchParams);
+  } catch (err) {
+    if (isDbStartingError(err)) return <WarmingUp />;
+    throw err;
+  }
+}
+
+async function renderInboxPage(
+  tenantId: string,
+  searchParams: Props["searchParams"]
+) {
   const activeStatus = ALL_STATUSES.includes(searchParams.status as ConversationStatus)
     ? (searchParams.status as ConversationStatus)
     : null;
@@ -339,6 +328,8 @@ export default async function InboxPage({ searchParams }: Props) {
         if (attentionFilter === "snoozed") return typeof m.snoozeReminderId === "string";
         return m.attentionCategory === attentionFilter;
       })
+    : activeStatus === "needs_reply"
+    ? mobileConversations.filter((c) => !isFyiConversation(c))
     : mobileConversations;
 
   function tabHref(status: ConversationStatus | "all" | null, sales = false) {

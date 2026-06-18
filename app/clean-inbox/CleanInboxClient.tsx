@@ -106,7 +106,7 @@ export default function CleanInboxClient({
       body: JSON.stringify({ conversationIds: ids }),
     })
     const data = await res.json()
-    setDone((p) => ({ ...p, [key]: true }))
+    setDone((p) => ({ ...p, [key]: res.ok }))
     setLoading((p) => ({ ...p, [key]: false }))
     setTokens((p) => ({ ...p, [key]: data.batchToken ?? null }))
     return data.batchToken ?? null
@@ -120,7 +120,7 @@ export default function CleanInboxClient({
       body: JSON.stringify({ conversationIds: ids }),
     })
     const data = await res.json()
-    setDone((p) => ({ ...p, [key]: true }))
+    setDone((p) => ({ ...p, [key]: res.ok }))
     setLoading((p) => ({ ...p, [key]: false }))
     setTokens((p) => ({ ...p, [key]: data.batchToken ?? null }))
     return data.batchToken ?? null

@@ -16,11 +16,22 @@ export type StepResult = {
   error?: string
 }
 
+async function ensureTenantConversation(tenantId: string, conversationId: string) {
+  return prisma.conversation.findFirst({
+    where: { id: conversationId, tenantId },
+    select: { id: true, status: true },
+  })
+}
+
 export async function executeAutomationStep(step: AutomationStep, tenantId: string): Promise<StepResult> {
   try {
     if (step.type === "create_task") {
       const { conversationId, title, deterministicKey } = step.payload as {
         tenantId: string; conversationId: string; title: string; deterministicKey: string
+      }
+      const conversation = await ensureTenantConversation(tenantId, conversationId)
+      if (!conversation) {
+        return { status: "failed", error: "Conversation not found for tenant", rollbackData: {} }
       }
       const task = await prisma.inboxTask.create({
         data: {
@@ -42,10 +53,15 @@ export async function executeAutomationStep(step: AutomationStep, tenantId: stri
       const { conversationId, attentionCategory, previousAttention } = step.payload as {
         conversationId: string; attentionCategory: string; previousAttention: string
       }
-      await prisma.conversationState.update({
-        where: { conversationId },
+      const conversation = await ensureTenantConversation(tenantId, conversationId)
+      if (!conversation) {
+        return { status: "failed", error: "Conversation not found for tenant", rollbackData: {} }
+      }
+      const updated = await prisma.conversationState.updateMany({
+        where: { conversationId, tenantId },
         data: { attentionCategory, source: "automation" },
       })
+      if (updated.count === 0) return { status: "failed", error: "Conversation state not found", rollbackData: {} }
       await prisma.auditLog.create({
         data: {
           tenantId,
@@ -62,10 +78,13 @@ export async function executeAutomationStep(step: AutomationStep, tenantId: stri
 
     if (step.type === "archive") {
       const { conversationId } = step.payload as { conversationId: string }
-      const conv = await prisma.conversation.findUnique({ where: { id: conversationId }, select: { status: true } })
+      const conv = await ensureTenantConversation(tenantId, conversationId)
+      if (!conv) {
+        return { status: "failed", error: "Conversation not found for tenant", rollbackData: {} }
+      }
       const previousStatus = conv?.status ?? ConversationStatus.needs_reply
-      await prisma.conversation.update({
-        where: { id: conversationId },
+      await prisma.conversation.updateMany({
+        where: { id: conversationId, tenantId },
         data: { status: "closed" },
       })
       await prisma.auditLog.create({
@@ -97,8 +116,8 @@ export async function rollbackAutomationStep(
   }
   if (step.type === "update_attention") {
     if (step.rollbackData.previousAttention) {
-      await prisma.conversationState.update({
-        where: { conversationId: step.rollbackData.conversationId as string },
+      await prisma.conversationState.updateMany({
+        where: { conversationId: step.rollbackData.conversationId as string, tenantId },
         data: { attentionCategory: step.rollbackData.previousAttention as string },
       })
     } else {
@@ -108,8 +127,8 @@ export async function rollbackAutomationStep(
     }
   }
   if (step.type === "archive" && step.rollbackData.conversationId) {
-    await prisma.conversation.update({
-      where: { id: step.rollbackData.conversationId as string },
+    await prisma.conversation.updateMany({
+      where: { id: step.rollbackData.conversationId as string, tenantId },
       data: { status: (step.rollbackData.previousStatus as ConversationStatus) ?? ConversationStatus.needs_reply },
     })
   }

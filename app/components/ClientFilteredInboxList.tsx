@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import type { ReactNode } from "react"
 
-import InboxRow from "@/app/components/InboxRow"
+import InboxRowWithSnooze from "@/app/components/InboxRowWithSnooze"
 import InboxScrollContainer from "@/app/components/InboxScrollContainer"
 import SearchInput from "@/app/inbox/SearchInput"
 
@@ -71,7 +71,7 @@ export default function ClientFilteredInboxList({
           <p className="px-4 py-8 text-xs text-slate-400">{emptyMessage}</p>
         ) : (
           visibleItems.map((item) => (
-            <InboxRow
+            <InboxRowWithSnooze
               key={item.id}
               id={item.id}
               href={item.href}

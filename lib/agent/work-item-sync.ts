@@ -13,7 +13,7 @@ import { extractEmail } from "@/lib/google"
 import { detectLifeAdminType } from "@/lib/agent/life-admin"
 import { detectVip } from "@/lib/agent/vip-detector"
 import { detectPhishing } from "@/lib/agent/phishing-detector"
-import { parseUnsubscribeInfo } from "@/lib/agent/unsubscribe"
+import { extractListUnsubscribeHeader, parseUnsubscribeInfo } from "@/lib/agent/unsubscribe"
 import { detectAttachments, extractPdfText } from "@/lib/agent/attachment-extractor"
 import { extractFacts, mergeFacts } from "@/lib/agent/second-brain"
 import { applyActiveRule } from "@/lib/agent/preference-learning"
@@ -636,7 +636,8 @@ export async function syncConversationWorkItems(
 
   // Unsubscribe detection
   if (firstInbound) {
-    const unsubInfo = parseUnsubscribeInfo(null, firstInbound.body)
+    const listUnsubscribeHeader = extractListUnsubscribeHeader(firstInbound.body)
+    const unsubInfo = parseUnsubscribeInfo(listUnsubscribeHeader, firstInbound.body)
     if (unsubInfo.hasUnsubscribeLink) {
       const currentState = await prisma.conversationState.findUnique({
         where: { conversationId: conversation.id },

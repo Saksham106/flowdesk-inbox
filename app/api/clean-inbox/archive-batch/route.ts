@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Prisma } from "@prisma/client"
 import { buildBatchToken } from "@/lib/clean-inbox-token"
+import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
+import { revalidateInboxViews } from "@/lib/cache-tags"
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions)
@@ -14,17 +16,75 @@ export async function POST(request: Request) {
   }
   const tenantId = session.user.tenantId
 
-  // Verify all belong to tenant
   const convs = await prisma.conversation.findMany({
     where: { id: { in: conversationIds }, tenantId },
-    select: { id: true },
+    select: {
+      id: true,
+      status: true,
+      stateRecord: { select: { metadataJson: true } },
+    },
   })
   const validIds = convs.map((c) => c.id)
+  const now = new Date()
 
-  await prisma.conversation.updateMany({
-    where: { id: { in: validIds }, tenantId },
-    data: { status: "closed" },
-  })
+  await prisma.$transaction([
+    prisma.conversation.updateMany({
+      where: { id: { in: validIds }, tenantId },
+      data: {
+        status: "closed",
+        readAt: now,
+        gmailUnread: false,
+        userState: "done",
+        userStateSource: "user",
+        userStateUpdatedAt: now,
+      },
+    }),
+    prisma.message.updateMany({
+      where: { conversationId: { in: validIds } },
+      data: { isRead: true },
+    }),
+    ...convs.map((conv) => {
+      const prevMeta =
+        conv.stateRecord?.metadataJson &&
+        typeof conv.stateRecord.metadataJson === "object" &&
+        !Array.isArray(conv.stateRecord.metadataJson)
+          ? (conv.stateRecord.metadataJson as Record<string, unknown>)
+          : {}
+      const metadataJson = {
+        ...prevMeta,
+        cleanInboxArchived: true,
+        cleanInboxArchivedAt: now.toISOString(),
+        userOverride: true,
+        userState: "done",
+        updatedAt: now.toISOString(),
+      }
+      return prisma.conversationState.upsert({
+        where: { conversationId: conv.id },
+        create: {
+          tenantId,
+          conversationId: conv.id,
+          state: "done",
+          priority: "none",
+          reason: "Archived from Clean Inbox.",
+          nextAction: "No action needed.",
+          confidence: 1,
+          source: "user_override",
+          metadataJson,
+          ...conversationStateMetadataData(metadataJson),
+        },
+        update: {
+          state: "done",
+          priority: "none",
+          reason: "Archived from Clean Inbox.",
+          nextAction: "No action needed.",
+          confidence: 1,
+          source: "user_override",
+          metadataJson,
+          ...conversationStateMetadataData(metadataJson),
+        },
+      })
+    }),
+  ])
 
   const batchToken = buildBatchToken(validIds)
 
@@ -32,9 +92,15 @@ export async function POST(request: Request) {
     data: {
       tenantId,
       action: "clean_inbox.archive_batch",
-      payloadJson: { batchToken, conversationIds: validIds, count: validIds.length } as Prisma.InputJsonValue,
+      payloadJson: {
+        batchToken,
+        conversationIds: validIds,
+        previousStatuses: Object.fromEntries(convs.map((c) => [c.id, c.status])),
+        count: validIds.length,
+      } as Prisma.InputJsonValue,
     },
   })
 
+  revalidateInboxViews(tenantId)
   return NextResponse.json({ ok: true, archived: validIds.length, batchToken })
 }

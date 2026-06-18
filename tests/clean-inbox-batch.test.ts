@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { describe, it, expect, vi } from "vitest"
 
 vi.mock("@/lib/prisma", () => ({
@@ -27,5 +29,25 @@ describe("batchToken", () => {
     const ids: string[] = []
     const token = buildBatchToken(ids)
     expect(parseBatchToken(token)).toEqual([])
+  })
+})
+
+describe("Clean Inbox batch routes", () => {
+  it("records previous statuses for undo and revalidates inbox caches", () => {
+    const archiveSource = readFileSync(
+      join(process.cwd(), "app/api/clean-inbox/archive-batch/route.ts"),
+      "utf8"
+    )
+    const undoSource = readFileSync(
+      join(process.cwd(), "app/api/clean-inbox/undo/[batchToken]/route.ts"),
+      "utf8"
+    )
+
+    expect(archiveSource).toContain("previousStatuses")
+    expect(archiveSource).toContain("conversationState.upsert")
+    expect(archiveSource).toContain("revalidateInboxViews")
+    expect(undoSource).toContain("previousStatuses")
+    expect(undoSource).toContain("Restored from Clean Inbox undo")
+    expect(undoSource).toContain("revalidateInboxViews")
   })
 })

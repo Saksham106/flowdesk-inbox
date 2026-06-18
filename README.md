@@ -141,7 +141,7 @@ Gmail cron monitoring:
 
 Inbox sync behavior:
 - Gmail sync runs through the shared runner in `lib/gmail-sync.ts`; manual sync, OAuth initial sync, and Pub/Sub push notifications all use the same database-backed per-channel lock.
-- The inbox Gmail sync control prevents duplicate client requests. When Gmail push/watch is healthy it only auto-syncs as a stale fallback; when push is not configured or the watch is unhealthy it uses a 15-minute polling fallback. Manual **Sync** always remains available and updates the sync badge without forcing a full page refresh.
+- The inbox Gmail sync control prevents duplicate client requests. When Gmail push/watch is healthy it only auto-syncs as a stale fallback; when push is not configured it silently uses 15-minute polling (no warning shown); when push was previously configured but the watch is expiring within 24 hours or has a renewal error, a warning banner appears. Manual **Sync** always remains available and updates the sync badge without forcing a full page refresh.
 - Overlapping server requests return `202 { skipped: "sync_in_progress" }`.
 - Gmail raw state (`gmailUnread`, `gmailRawState`, `gmailLabelIds`) is stored separately from local user/read state (`userState`, `readAt`, `isRead`). Sync imports Gmail read/unread, but user actions such as Mark Done and local reads are not overwritten by AI classification.
 - Sync observability is stored on `GmailCredential.lastSyncMode`, `lastSyncStatus`, `lastSyncError`, `lastSyncedAt`, `watchExpiresAt`, `watchRenewalError`, `watchLastRenewalAttempt`, and `lastHistoryFallbackAt`.
