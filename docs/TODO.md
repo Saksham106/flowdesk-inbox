@@ -8,6 +8,7 @@ Feature numbers reference the 45-feature index in `MASTER_PRODUCT_PLAN.md`.
 
 ## Near-Term Product Hardening
 
+- [ ] **Extract shared auto-email classifier constants** — `AUTOMATED_SENDER_RE`, `AUTOMATED_BODY_RE`, `FYI_RE` are duplicated in `AppListColumn.tsx`, `app/inbox/page.tsx`, and `lib/agent/command-center.ts`; extract into `lib/email-classification.ts` so pattern updates propagate everywhere.
 - [ ] **Persist command-center snapshots** (#1/#6) — reduce recomputation, preserve explainability, and make daily state auditable over time.
 - [ ] **Classification explainability** (#42/#44) — expose why a thread received its attention category, including rule/AI/user source and correction history.
 - [ ] **Preference-learning controls** (#27/#42) — add manual rule creation/editing and conflict handling for sender/domain rules.

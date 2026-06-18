@@ -35,8 +35,8 @@ type ConvRow = {
   externalThreadId: string
   readAt: Date | null
   gmailUnread: boolean | null
-  contact: { name: string } | null
-  messages: { body: string; subject: string | null }[]
+  contact: { name: string; phoneE164: string | null } | null
+  messages: { body: string; subject: string | null; direction: string }[]
   draft: { status: string } | null
   stateRecord: {
     state: string
@@ -46,6 +46,11 @@ type ConvRow = {
   } | null
   channel: { provider: string }
 }
+
+const AUTOMATED_SENDER_RE = /\b(no-?reply|noreply|notifications?|alerts?|do-not-reply|automated)\b/i
+const AUTOMATED_BODY_RE =
+  /\b(unsubscribe|you'?re receiving this|this is an automated (email|message|notification)|do not reply to this email)\b/i
+const FYI_RE = /\b(fyi|newsletter|for your records|no action|all set|thanks, all set)\b/i
 
 function isFyi(conv: ConvRow): boolean {
   if (conv.stateRecord?.attentionCategory === "quiet" || conv.stateRecord?.attentionCategory === "fyi_done") {
@@ -64,7 +69,12 @@ function isFyi(conv: ConvRow): boolean {
     if (t === "notification" || t === "newsletter" || t === "marketing") return true
   }
   if (conv.stateRecord?.state === "fyi_only") return true
-  return false
+  // Fallback: pattern-match unclassified inbound emails (same logic as command-center)
+  if (conv.status !== "needs_reply") return false
+  const msg = conv.messages[0]
+  if (!msg || msg.direction !== "inbound") return false
+  const senderEmail = conv.contact?.phoneE164 ?? ""
+  return AUTOMATED_SENDER_RE.test(senderEmail) || AUTOMATED_BODY_RE.test(msg.body) || FYI_RE.test(msg.body)
 }
 
 function attentionCategory(conv: ConvRow): string | null {
@@ -75,8 +85,8 @@ function attentionCategory(conv: ConvRow): string | null {
   return typeof value === "string" ? value : null
 }
 
-function relativeTime(date: Date): string {
-  const diff = Date.now() - date.getTime()
+function relativeTime(date: Date | string): string {
+  const diff = Date.now() - new Date(date).getTime()
   const mins = Math.floor(diff / 60000)
   if (mins < 60) return `${Math.max(1, mins)}m`
   const hours = Math.floor(diff / 3600000)
