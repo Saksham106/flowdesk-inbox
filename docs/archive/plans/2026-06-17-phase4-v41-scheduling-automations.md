@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, Prisma (PostgreSQL), Next.js App Router, OpenAI, Google Calendar API, Google Drive API, Vitest
 
-**Spec:** `docs/superpowers/specs/2026-06-17-phase-4-automations-integrations-design.md`
+**Spec:** `docs/archive/specs/2026-06-17-phase-4-automations-integrations-design.md`
 
 ## Global Constraints
 

@@ -1,6 +1,6 @@
 # FlowDesk Inbox Master Product Plan
 
-Last updated: 2026-06-16
+Last updated: 2026-06-18
 
 This is the living master plan for FlowDesk Inbox. It exists so humans and AI agents can share the same product map, update it as reality changes, and avoid treating one feature request as the whole product.
 
@@ -69,6 +69,8 @@ Existing foundations in the codebase:
 - Daily command center first slice.
 - Inbox Gmail sync control with last-synced/error status and app-load/tab-return/periodic/manual sync triggers.
 - Gmail sync now has server-side per-channel locking, race-tolerant idempotent message upserts, durable push-event tracking, watch renewal health, history fallback visibility, state drift reconciliation, and partial thread-failure logging.
+- Phase 3 personal chief-of-staff surfaces are implemented: life admin detection, VIP protection, snooze, attachment extraction, search, inbox chat, second-brain facts, phishing warnings, and safe unsubscribe.
+- Phase 4 automation/integration foundations are implemented: plain-English agent rules, category-scoped autopilot policies, snippets, Clean Inbox, scheduling sessions, automation runs, workflow templates/runs, and Google Drive OAuth.
 
 Recently shipped first slice:
 
@@ -283,16 +285,16 @@ Success criteria:
 | 13 | Email-to-Task Extraction | `Partial` | Phase 1 | Task model, extraction, list page, close action, background sync, inline due-date editing, and manual task creation exist; assignment remains later. |
 | 14 | Smart Scheduling Agent | `Partial` | Phase 4 | First slice: SchedulingSession model, scheduling detector wired into sync, slot proposal via Calendar API, SchedulingPanel on conversation page. Confirmation detection and event booking not yet wired. |
 | 15 | Explain This Thread Like I’m Busy | `Partial` | Phase 1 | On-demand LLM explanation panel shipped on conversation pages; needs persistence, inbox-level surfacing, and draft hand-off. |
-| 16 | Smart Attachment Intelligence | `Planned` | Phase 3 | Needs attachment ingestion, extraction, storage, safety. |
-| 17 | Find Anything Natural Language Search | `Planned` | Phase 3 | Needs indexing, embeddings or search schema, permissions. |
+| 16 | Smart Attachment Intelligence | `Partial` | Phase 3 | EmailAttachment model, MIME detection, and PDF text extraction shipped; richer attachment previews/actions remain. |
+| 17 | Find Anything Natural Language Search | `Partial` | Phase 3 | Message tsvector search, /search page, and /api/search shipped; semantic/embedding search remains. |
 | 18 | Business Inbox Shared Assistant | `Later` | Phase 5 | Needs team model and collaboration primitives. |
 | 19 | Customer Support Agent Mode | `Partial` | Phase 2 | Auto-detect via work-item-sync; churn-risk + escalation flags; KB-match draft suggestion; SupportPanel on conversations; support filter in inbox; command center count. |
 | 20 | Sales Agent Mode | `Partial` | Phase 2 | Business-mode sales signals, SalesPanel, Sales tab, and sales-qualified state shipped; needs richer sales workflows and settings. |
-| 21 | Personal Life Admin Mode | `Partial` | Phase 3 | Deterministic attention rules catch OTPs, password reset/setup, account verification, billing, delivery, and calendar RSVP; broader life-admin workflows remain. |
+| 21 | Personal Life Admin Mode | `Partial` | Phase 3 | Classifier detects bills, travel, medical appointments, subscriptions, and school notices; InboxTask creation exists for actionable types. Broader life-admin workflows remain. |
 | 22 | Email Risk Radar | `Shipped` | Phase 1 | `/risk-radar` ships a read-only deterministic scan for deadline-soon, final-notice, unanswered, and sensitive-content signals. Spec: `docs/archive/specs/2026-06-12-email-risk-radar-design.md`. Plan: `docs/archive/plans/2026-06-12-email-risk-radar.md`. |
-| 23 | Phishing, Scam, and Fraud Protection | `Discovery` | Phase 3 | Needs careful security heuristics and false-positive UX. |
-| 24 | Auto-Unsubscribe and Noise Killer | `Partial` | Phase 3/4 | Gmail archive/trash writeback exists; safe unsubscribe, bulk clean-inbox, and broader provider support remain. |
-| 25 | What Can I Ignore Mode | `Partial` | Phase 1 | Collapsible safely-ignored section, attention reasons, action-email protection, bulk close, and Gmail archive/trash shipped; unsubscribe and broader provider cleanup remain later. |
+| 23 | Phishing, Scam, and Fraud Protection | `Partial` | Phase 3 | Signal-scored classifier, warning banner, and mark-safe route shipped; ongoing tuning and false-positive UX remain. |
+| 24 | Auto-Unsubscribe and Noise Killer | `Partial` | Phase 3/4 | Safe unsubscribe, Gmail archive/trash writeback, and Clean Inbox bulk cleanup shipped; broader provider cleanup remains. |
+| 25 | What Can I Ignore Mode | `Partial` | Phase 1 | Collapsible safely-ignored section, attention reasons, action-email protection, bulk close, Clean Inbox, and Gmail archive/trash shipped; broader provider cleanup remains later. |
 | 26 | Outcome-Based Automation | `Partial` | Phase 4 | First slice: AutomationRun trace model, step executor (create_task, update_attention, archive), rollback API, conversation history panel. Trigger conditions not yet user-configurable. |
 | 27 | Train My Agent With Plain English | `Shipped` | Phase 4 | AgentRule model, NL compiler, preview endpoint, conflict detection, and settings UI shipped. |
 | 28 | Approval Queue | `Partial` | Phase 1 | Inline approve/reject, collapsible draft preview, and batch approve/reject shipped; needs edit-before-send and teach-the-agent actions. |
@@ -300,17 +302,17 @@ Success criteria:
 | 30 | Auto-Draft Based on User Intent | `Shipped` | Phase 1 | AI draft panel accepts optional rough instructions and turns them into proposed drafts through the existing approval-gated flow. Spec: `docs/archive/specs/2026-06-12-intent-auto-draft-design.md`. Plan: `docs/archive/plans/2026-06-12-intent-auto-draft.md`. |
 | 31 | Multi-Step Email Workflows | `Partial` | Phase 4 | First slice: WorkflowTemplate + WorkflowRun models, workflow runner, cron-driven step advancement, 3 seeded default workflows, settings panel. Builder UI not yet implemented. |
 | 32 | Email Analytics That Show ROI | `Shipped` | Phase 2 | 4-week trend bars, pipeline value summary, revenue opportunities on `/reports`; `ValueSnapshot` model with weekly cron; `buildValueSnapshot`/`getWeeklyTrend` in `value-report.ts`. |
-| 33 | VIP Protection | `Planned` | Phase 3 | Needs VIP/contact model and notification policy. |
-| 34 | Reply Later, But Don’t Forget Intelligence | `Planned` | Phase 3 | Needs smart reminder model. |
+| 33 | VIP Protection | `Shipped` | Phase 3 | VipContact model, CRUD API, detector, urgent priority, inbox badge, conversation banner, and settings form shipped. |
+| 34 | Reply Later, But Don’t Forget Intelligence | `Partial` | Phase 3 | SnoozeReminder model, API, hourly cron, SnoozeModal, Snoozed tab, and resurfaced banner shipped; smarter reminder suggestions remain. |
 | 35 | Context From Connected Apps | `Partial` | Phase 4 | First slice: GoogleDriveCredential model, Drive OAuth connect/disconnect, searchDriveForContext lib, ConnectedApps settings section. Not yet injected into draft generation. |
 | 36 | AI Email Concierge For Local Businesses | `Partial` | Phase 2 | Local-business concierge templates, business-only seed route, and reply-composer picker shipped; deeper vertical workflows remain. |
 | 37 | Auto-Generated Snippets and Playbooks | `Shipped` | Phase 4 | Snippet model, weekly miner cron, snippets API, SnippetsPanel in settings, snippet picker in reply composer. |
-| 38 | Second Brain Inbox | `Planned` | Phase 3 | Depends on memory extraction and natural-language retrieval. |
+| 38 | Second Brain Inbox | `Partial` | Phase 3 | PersonMemory facts JSON, deterministic fact extractor, and SecondBrainPanel shipped; natural-language retrieval remains. |
 | 39 | Auto-Personalized Outreach | `Later` | Phase 4 | Valuable, but avoid spam positioning. |
 | 40 | Email Triage By Money Impact | `Shipped` | Phase 2 | Revenue-weighted score bonus (+up to 50) in command center; Revenue at Risk subsection (amber cards for stale high-value leads); `analyzeRevenueAtRisk` in `lib/agent/revenue-at-risk.ts`. |
-| 41 | One-Click Clean My Inbox Experience | `Shipped` | Phase 4 | /clean-inbox page, batch archive/unsubscribe routes, 1-hour undo via AuditLog, AppRail icon. |
+| 41 | One-Click Clean My Inbox Experience | `Shipped` | Phase 4 | /clean-inbox page, batch archive/unsubscribe routes, persisted state/read updates, 1-hour undo via AuditLog, AppRail icon. |
 | 42 | Smart Email Labels That Matter | `Partial` | Phase 1 | Action-oriented attention taxonomy, inbox attention filters, correction dropdown, bulk close, and learned sender/domain rules shipped; deeper explainability remains. |
-| 43 | Ask My Inbox Chat | `Planned` | Phase 3 | Should answer with actions, not just summaries. |
+| 43 | Ask My Inbox Chat | `Partial` | Phase 3 | Streaming RAG pipeline, /chat page, /api/chat SSE route, and AppRail icon shipped; action-taking answers remain later. |
 | 44 | Trust, Privacy, and Audit Log | `Partial` | Phase 1/All | Audit log, Why column, and undo route for reversible autopilot draft approvals exist; broader reversible-action coverage remains. |
 | 45 | Magic Paid Version Packaging | `Discovery` | All | Use as product packaging, not engineering feature. |
 
@@ -480,6 +482,7 @@ After an AI agent finishes work:
 | 2026-06-16 | Make classification explainability and rule control the next slice. | Gmail archive/trash and deterministic preference learning are now in place. The next risk is trust: users need to inspect, correct, and intentionally manage learned attention behavior before broader clean-inbox or automation workflows. |
 | 2026-06-17 | Harden Gmail sync reliability before broader clean-inbox automation. | Pub/Sub push events now have durable idempotency and retry, watch renewal failures are auditable and surfaced, mark-read writeback has retry/queue semantics, and a reconciliation cron detects local-read/Gmail-unread drift. |
 | 2026-06-18 | Ship Phase 4 Automations & Integrations as first-slice implementations for #14, #26, #31, #35. | Discovery features need foundations before full product-complete behavior; first slices establish models, APIs, and trust patterns. Full scheduling back-and-forth and workflow builder deferred to Phase 4 hardening. |
+| 2026-06-18 | Harden Phase 4 before branch cleanup. | PR #62 was reconciled with `main`, Clean Inbox now persists state/read metadata with undo, inbox FYI filtering was centralized for list views, automation mutations are tenant-guarded, and the stale `feature/phase-4` branch was deleted after its tip reached `main`. |
 
 ## Open Product Questions
 

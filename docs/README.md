@@ -1,6 +1,6 @@
 # FlowDesk Documentation Index
 
-Last updated: 2026-06-16
+Last updated: 2026-06-18
 
 Use this directory as the source of truth for product direction, current implementation state, and feature-level plans.
 

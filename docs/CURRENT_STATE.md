@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-17
+Last updated: 2026-06-18
 
 This file is the factual snapshot of what the codebase can do today. Strategic roadmap details live in `MASTER_PRODUCT_PLAN.md`; unfinished work lives in `TODO.md`; historical specs and implementation plans live in `docs/archive/`.
 
@@ -36,6 +36,7 @@ The core promise is: show what matters, explain why, safely handle routine work,
 - `/inbox` Home keeps its initial command-center query bounded and reuses included conversation state instead of issuing a duplicate state lookup.
 - Inbox list tabs support status, sales, and attention-oriented filtering.
 - Inbox list data uses a short tenant-scoped cache tag and indexed `ConversationState` filter columns for common sales/attention filters.
+- Inbox list and mobile Reply filters use shared FYI/quiet heuristics so unclassified automated mail is not merely relabeled while still appearing in Needs Reply.
 - Inbox auto-refresh polls lightweight summary data once per minute instead of forcing full route re-renders; search filters loaded rows immediately and defers URL/server search until pause or Enter.
 - Conversation detail pages at `/conversations/[id]` render chronological email-style thread blocks with sender/recipient/timestamp metadata.
 - Conversation detail pages cap initial message fetches and avoid running work-item sync on every page open; sync is driven by provider sync/new message paths and explicit actions.
@@ -109,9 +110,10 @@ The core promise is: show what matters, explain why, safely handle routine work,
 - Plain-English rule creation via `AgentRule` model and NL compiler; preview shows affected emails and conflicts.
 - Category-scoped autopilot policies (auto-send / require approval / never) per attention category.
 - `Snippet` model with weekly miner, settings panel, and reply composer picker.
-- `/clean-inbox` page with batch archive, batch unsubscribe, and 1-hour undo.
+- `/clean-inbox` page with batch archive, batch unsubscribe, read-state updates, persisted user/state metadata, cache invalidation, and 1-hour undo that restores prior statuses.
 - `SchedulingSession` model; scheduling requests detected during sync; Calendar-backed slot proposal.
 - `AutomationRun` trace model; step executor (create_task, update_attention, archive); rollback within 24h.
+- Automation step writes and rollback paths are tenant-guarded before mutating conversation, task, or conversation-state records.
 - `WorkflowTemplate`/`WorkflowRun` models; 3 seeded default workflows; cron-driven step advancement.
 - Google Drive OAuth connect/disconnect; `searchDriveForContext` for draft context enrichment.
 
@@ -136,6 +138,7 @@ The core promise is: show what matters, explain why, safely handle routine work,
 
 - CC/BCC fields in the composer are not yet sent by backend APIs.
 - Command-center state is still mostly computed rather than snapshotted for history/explainability.
+- Command-center auto-email heuristics still overlap with the shared inbox FYI helper and should be fully unified.
 - Sender/domain rules cannot yet be manually created or edited beyond apply/dismiss/disable.
 - Outlook has sync support but not equivalent archive/trash provider writeback.
 - Inline Gmail `cid:` images are not resolved from attachment parts.

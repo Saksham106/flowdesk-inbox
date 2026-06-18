@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, Prisma (PostgreSQL tsvector + GIN index), Next.js App Router (streaming via ReadableStream), Vitest
 
-**Spec:** `docs/superpowers/specs/2026-06-17-phase3-design.md` (v3.2 section)
+**Spec:** `docs/archive/specs/2026-06-17-phase3-design.md` (v3.2 section)
 
 **Prerequisite:** v3.1 Intelligence Layer plan must be complete (second-brain retrieval and attachment data are RAG sources for chat).
 

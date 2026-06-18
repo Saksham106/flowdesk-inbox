@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, Prisma (PostgreSQL), Next.js App Router, Vitest, `pdf-parse` npm package
 
-**Spec:** `docs/superpowers/specs/2026-06-17-phase3-design.md` (v3.1 section)
+**Spec:** `docs/archive/specs/2026-06-17-phase3-design.md` (v3.1 section)
 
 **Prerequisite:** v3.0 Protection Layer plan must be complete.
 
