@@ -189,7 +189,7 @@ export default function Hero() {
                   <div className="flex justify-start">
                     <div className="max-w-[70%] rounded-2xl rounded-tl-sm bg-white/[0.08] px-3.5 py-2.5">
                       <p className="text-[11px] text-white/75 leading-relaxed">
-                        Hi! I saw your product demo and I'm really interested in learning more about the enterprise features.
+                        Hi! I saw your product demo and I&apos;m really interested in learning more about the enterprise features.
                       </p>
                       <p className="text-[9px] text-white/25 mt-1.5">10:24 AM</p>
                     </div>
@@ -200,7 +200,7 @@ export default function Hero() {
                       style={{ background: "linear-gradient(135deg, #6366f1, #7c3aed)" }}
                     >
                       <p className="text-[11px] text-white/90 leading-relaxed">
-                        Hi Sarah! Thanks for reaching out. I'd be happy to walk you through our enterprise features.
+                        Hi Sarah! Thanks for reaching out. I&apos;d be happy to walk you through our enterprise features.
                       </p>
                       <p className="text-[9px] text-white/50 mt-1.5">10:31 AM</p>
                     </div>
@@ -208,7 +208,7 @@ export default function Hero() {
                   <div className="flex justify-start">
                     <div className="max-w-[70%] rounded-2xl rounded-tl-sm bg-white/[0.08] px-3.5 py-2.5">
                       <p className="text-[11px] text-white/75 leading-relaxed">
-                        That would be great! What's the best time for a call?
+                        That would be great! What&apos;s the best time for a call?
                       </p>
                       <p className="text-[9px] text-white/25 mt-1.5">10:33 AM</p>
                     </div>
@@ -253,7 +253,7 @@ export default function Hero() {
                       </span>
                     </div>
                     <p className="text-[10px] text-white/65 leading-relaxed">
-                      "I'd be happy to schedule a call! How does Thursday at 3 PM PST work? I'll send a calendar invite with all the details."
+                      &ldquo;I&apos;d be happy to schedule a call! How does Thursday at 3 PM PST work? I&apos;ll send a calendar invite with all the details.&rdquo;
                     </p>
                     <div className="flex gap-1.5 mt-3">
                       <button
