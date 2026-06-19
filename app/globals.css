@@ -26,6 +26,25 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
+/* ── Scroll reveal animations ──────────────────────────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
 /* ── Email body rendering ──────────────────────────────────── */
 .email-body {
   overflow-wrap: anywhere;

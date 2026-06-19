@@ -717,7 +717,7 @@ function LoginForm() {
             textAlign: "center",
           }}
         >
-          <p style={{ fontSize: "12px", color: "#d1d5db", margin: 0 }}>
+          <p style={{ fontSize: "12px", color: "#6b7280", margin: 0 }}>
             {mode === "signin"
               ? "Don't have an account? "
               : "Already have an account? "}

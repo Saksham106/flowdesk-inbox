@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ScrollReveal from "@/app/components/ScrollReveal";
 
 const faqs = [
   {
@@ -13,7 +14,7 @@ const faqs = [
   },
   {
     q: "Which channels does FlowDesk support?",
-    a: "At launch, FlowDesk supports email and SMS/text (via a dedicated phone number). More channels are on the roadmap.",
+    a: "At launch, FlowDesk supports email and SMS/text via a dedicated phone number. More channels are on the roadmap.",
   },
   {
     q: "Can my whole team use it?",
@@ -27,51 +28,70 @@ const faqs = [
 
 function FAQItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
+
   return (
-    <div className="border-b border-neutral-100 last:border-b-0">
+    <div className="border-b border-neutral-100 last:border-0">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-4 py-5 text-left"
+        className="w-full flex items-center justify-between gap-4 py-5 text-left group"
         aria-expanded={open}
       >
-        <span className="text-sm font-medium text-neutral-900">{q}</span>
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-          className={`shrink-0 text-neutral-400 transition-transform ${open ? "rotate-180" : ""}`}
+        <span className="text-sm font-medium text-neutral-900 group-hover:text-indigo-600 transition-colors">
+          {q}
+        </span>
+        <div
+          className={`shrink-0 h-6 w-6 rounded-full border flex items-center justify-center transition-all duration-200 ${
+            open
+              ? "bg-indigo-50 border-indigo-200 rotate-180"
+              : "bg-white border-neutral-200"
+          }`}
         >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className={`transition-colors ${open ? "text-indigo-500" : "text-neutral-400"}`}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </div>
       </button>
-      {open && (
-        <p className="pb-5 text-sm text-neutral-500 leading-relaxed">{a}</p>
-      )}
+      <div
+        className={`overflow-hidden transition-all duration-300 ease-in-out ${
+          open ? "max-h-48 pb-5" : "max-h-0"
+        }`}
+      >
+        <p className="text-sm text-neutral-500 leading-relaxed">{a}</p>
+      </div>
     </div>
   );
 }
 
 export default function FAQ() {
   return (
-    <section id="faq" className="py-16 px-4 sm:px-6 bg-neutral-50 border-y border-neutral-100">
+    <section id="faq" className="py-20 px-4 sm:px-6 bg-white border-t border-neutral-100">
       <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-10">
-          <h2 className="font-serif text-3xl sm:text-4xl text-neutral-900">
-            Common questions.
-          </h2>
-        </div>
-        <div className="max-w-2xl mx-auto divide-y divide-neutral-100 rounded-2xl border border-neutral-200 bg-white px-4 sm:px-6">
-          {faqs.map((item) => (
-            <FAQItem key={item.q} q={item.q} a={item.a} />
-          ))}
-        </div>
+        <ScrollReveal>
+          <div className="text-center mb-12">
+            <p className="text-[11px] font-mono uppercase tracking-widest text-neutral-400 mb-3">FAQ</p>
+            <h2 className="font-serif text-3xl sm:text-4xl text-neutral-900">Common questions.</h2>
+          </div>
+        </ScrollReveal>
+
+        <ScrollReveal delay={100} className="max-w-2xl mx-auto">
+          <div className="rounded-2xl border border-neutral-100 bg-white px-5 sm:px-8 shadow-sm shadow-neutral-900/[0.04]">
+            {faqs.map((item) => (
+              <FAQItem key={item.q} q={item.q} a={item.a} />
+            ))}
+          </div>
+        </ScrollReveal>
       </div>
     </section>
   );

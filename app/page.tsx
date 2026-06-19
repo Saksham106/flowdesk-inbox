@@ -21,16 +21,16 @@ export default function Home() {
         <FAQ />
         <FinalCTA />
       </main>
-      <footer className="border-t border-neutral-100 py-6 px-4 sm:px-6">
+      <footer id="page-footer" className="bg-[#09090b] border-t border-white/[0.06] py-6 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-xs text-neutral-400">
+          <p className="text-xs text-white/45">
             © {new Date().getFullYear()} FlowDesk. All rights reserved.
           </p>
           <div className="flex items-center gap-5">
-            <Link href="/login" className="text-xs text-neutral-400 hover:text-neutral-700 transition-colors">
+            <Link href="/login" className="text-xs text-white/45 hover:text-white/70 transition-colors">
               Sign in
             </Link>
-            <Link href="/login?signup=1" className="text-xs text-neutral-400 hover:text-neutral-700 transition-colors">
+            <Link href="/login?signup=1" className="text-xs text-white/45 hover:text-white/70 transition-colors">
               Sign up
             </Link>
           </div>
