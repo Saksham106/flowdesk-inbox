@@ -159,26 +159,26 @@ function LoginForm() {
         /* Fragment drift directions */
         @keyframes fd-ne {
           0%   { opacity: 0; transform: translate(0, 0) rotate(-5deg); }
-          12%  { opacity: 0.65; }
-          88%  { opacity: 0.65; }
+          12%  { opacity: 0.85; }
+          88%  { opacity: 0.85; }
           100% { opacity: 0; transform: translate(26px, -30px) rotate(-1deg); }
         }
         @keyframes fd-nw {
           0%   { opacity: 0; transform: translate(0, 0) rotate(7deg); }
-          12%  { opacity: 0.65; }
-          88%  { opacity: 0.65; }
+          12%  { opacity: 0.85; }
+          88%  { opacity: 0.85; }
           100% { opacity: 0; transform: translate(-22px, -26px) rotate(11deg); }
         }
         @keyframes fd-se {
           0%   { opacity: 0; transform: translate(0, 0) rotate(4deg); }
-          12%  { opacity: 0.65; }
-          88%  { opacity: 0.65; }
+          12%  { opacity: 0.85; }
+          88%  { opacity: 0.85; }
           100% { opacity: 0; transform: translate(20px, 28px) rotate(0deg); }
         }
         @keyframes fd-sw {
           0%   { opacity: 0; transform: translate(0, 0) rotate(-11deg); }
-          12%  { opacity: 0.65; }
-          88%  { opacity: 0.65; }
+          12%  { opacity: 0.85; }
+          88%  { opacity: 0.85; }
           100% { opacity: 0; transform: translate(-24px, 22px) rotate(-7deg); }
         }
         /* Card entrance */
@@ -330,9 +330,10 @@ function LoginForm() {
             top: `${f.y}%`,
             width: `${f.w}px`,
             height: `${f.h}px`,
-            border: "1px solid rgba(99,102,241,0.12)",
+            border: "1px solid rgba(255,255,255,0.1)",
             borderRadius: "9px",
-            background: "rgba(99,102,241,0.04)",
+            background: "rgba(255,255,255,0.05)",
+            boxShadow: "0 2px 12px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)",
             animation: `${f.anim} ${f.dur}s ${f.delay}s ease-in-out infinite`,
             pointerEvents: "none",
           }}
@@ -346,7 +347,7 @@ function LoginForm() {
               width: "18px",
               height: "18px",
               borderRadius: "50%",
-              background: "rgba(99,102,241,0.15)",
+              background: "rgba(255,255,255,0.2)",
             }}
           />
           {/* Subject line */}
@@ -357,7 +358,7 @@ function LoginForm() {
               top: "11px",
               right: "10px",
               height: "6px",
-              background: "rgba(99,102,241,0.12)",
+              background: "rgba(255,255,255,0.18)",
               borderRadius: "3px",
             }}
           />
@@ -369,7 +370,7 @@ function LoginForm() {
               top: "22px",
               width: "52%",
               height: "4px",
-              background: "rgba(99,102,241,0.08)",
+              background: "rgba(255,255,255,0.12)",
               borderRadius: "2px",
             }}
           />
@@ -383,7 +384,7 @@ function LoginForm() {
                   top: "40px",
                   right: "10px",
                   height: "4px",
-                  background: "rgba(99,102,241,0.06)",
+                  background: "rgba(255,255,255,0.09)",
                   borderRadius: "2px",
                 }}
               />
@@ -394,7 +395,7 @@ function LoginForm() {
                   top: "50px",
                   width: "68%",
                   height: "4px",
-                  background: "rgba(99,102,241,0.05)",
+                  background: "rgba(255,255,255,0.07)",
                   borderRadius: "2px",
                 }}
               />
