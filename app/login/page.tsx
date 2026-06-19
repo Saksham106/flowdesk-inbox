@@ -27,7 +27,7 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div style={{ minHeight: "100vh", background: "#f1f4fb", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ minHeight: "100vh", background: "#09090b", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ color: "#94a3b8", fontSize: "13px" }}>Loading…</div>
         </div>
       }
@@ -36,6 +36,7 @@ export default function LoginPage() {
     </Suspense>
   );
 }
+
 
 function LoginForm() {
   const router = useRouter();
@@ -144,7 +145,7 @@ function LoginForm() {
     <div
       style={{
         minHeight: "100vh",
-        background: "#f1f4fb",
+        background: "#09090b",
         position: "relative",
         overflow: "hidden",
         display: "flex",
@@ -190,6 +191,17 @@ function LoginForm() {
           from { transform: translateX(-100%); }
           to   { transform: translateX(300%); }
         }
+        /* Orb drift animations */
+        @keyframes orb-1 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          33%       { transform: translate(60px, -40px) scale(1.06); }
+          66%       { transform: translate(-30px, 30px) scale(0.97); }
+        }
+        @keyframes orb-2 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          40%       { transform: translate(-70px, 40px) scale(1.04); }
+          75%       { transform: translate(40px, -25px) scale(0.96); }
+        }
         /* Shared input styles */
         .fd-input {
           width: 100%;
@@ -206,8 +218,8 @@ function LoginForm() {
         }
         .fd-input:focus {
           background: #ffffff;
-          border-color: #111827;
-          box-shadow: 0 0 0 3px rgba(17,24,39,0.07);
+          border-color: #6366f1;
+          box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
         }
         .fd-input::placeholder { color: #b8bec8; }
         /* Submit button */
@@ -217,20 +229,20 @@ function LoginForm() {
           border-radius: 10px;
           font-size: 14px;
           font-weight: 600;
-          background: #111827;
+          background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
           color: #ffffff;
           border: none;
           cursor: pointer;
           margin-top: 6px;
-          transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s;
+          transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s;
           letter-spacing: 0.025em;
-          box-shadow: 0 2px 8px rgba(17,24,39,0.18);
+          box-shadow: 0 2px 12px rgba(99,102,241,0.35);
           font-family: inherit;
         }
         .fd-submit:not(:disabled):hover {
-          background: #1f2937;
+          opacity: 0.9;
           transform: translateY(-1.5px);
-          box-shadow: 0 8px 22px rgba(17,24,39,0.22);
+          box-shadow: 0 8px 24px rgba(99,102,241,0.4);
         }
         .fd-submit:not(:disabled):active { transform: translateY(0); }
         .fd-submit:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -242,41 +254,69 @@ function LoginForm() {
         }
         /* Account type card */
         .fd-acct:not([data-active="true"]):hover {
-          border-color: rgba(17,24,39,0.22) !important;
+          border-color: rgba(99,102,241,0.3) !important;
           background: #f9fafb !important;
         }
         /* Footer link */
-        .fd-link:hover { color: #374151 !important; }
+        .fd-link:hover { color: #4f46e5 !important; }
       `}</style>
 
-      {/* ── Layer 1: dot grid ── */}
+      {/* ── Layer 1: dot grid (white, like hero) ── */}
       <div
         style={{
           position: "absolute",
           inset: 0,
           backgroundImage:
-            "radial-gradient(circle, rgba(17,24,39,0.07) 1.5px, transparent 1.5px)",
-          backgroundSize: "34px 34px",
+            "radial-gradient(circle, rgba(255,255,255,0.055) 1px, transparent 1px)",
+          backgroundSize: "28px 28px",
         }}
       />
 
-      {/* ── Layer 2: oval spotlight — bright white center, fades to background ── */}
+      {/* ── Layer 2: indigo center glow ── */}
       <div
         style={{
           position: "absolute",
           inset: 0,
           background:
-            "radial-gradient(ellipse 54% 60% at 50% 50%, #ffffff 0%, rgba(241,244,251,0.9) 40%, transparent 70%)",
+            "radial-gradient(ellipse 60% 55% at 50% 50%, rgba(99,102,241,0.1) 0%, transparent 70%)",
         }}
       />
 
-      {/* ── Layer 3: soft edge vignette ── */}
+      {/* ── Layer 3: dark edge vignette ── */}
       <div
         style={{
           position: "absolute",
           inset: 0,
           background:
-            "radial-gradient(ellipse 100% 100% at 50% 50%, transparent 48%, rgba(185,200,240,0.2) 100%)",
+            "radial-gradient(ellipse 100% 100% at 50% 50%, transparent 40%, rgba(9,9,11,0.7) 100%)",
+        }}
+      />
+
+      {/* ── Animated orbs ── */}
+      <div
+        style={{
+          position: "absolute",
+          top: "15%",
+          left: "10%",
+          width: "420px",
+          height: "420px",
+          borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(99,102,241,0.13) 0%, transparent 70%)",
+          animation: "orb-1 28s ease-in-out infinite",
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          bottom: "12%",
+          right: "8%",
+          width: "320px",
+          height: "320px",
+          borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(124,58,237,0.11) 0%, transparent 70%)",
+          animation: "orb-2 34s ease-in-out infinite",
+          pointerEvents: "none",
         }}
       />
 
@@ -290,9 +330,9 @@ function LoginForm() {
             top: `${f.y}%`,
             width: `${f.w}px`,
             height: `${f.h}px`,
-            border: "1px solid rgba(17,24,39,0.11)",
+            border: "1px solid rgba(99,102,241,0.12)",
             borderRadius: "9px",
-            background: "rgba(255,255,255,0.45)",
+            background: "rgba(99,102,241,0.04)",
             animation: `${f.anim} ${f.dur}s ${f.delay}s ease-in-out infinite`,
             pointerEvents: "none",
           }}
@@ -306,7 +346,7 @@ function LoginForm() {
               width: "18px",
               height: "18px",
               borderRadius: "50%",
-              background: "rgba(17,24,39,0.09)",
+              background: "rgba(99,102,241,0.15)",
             }}
           />
           {/* Subject line */}
@@ -317,7 +357,7 @@ function LoginForm() {
               top: "11px",
               right: "10px",
               height: "6px",
-              background: "rgba(17,24,39,0.1)",
+              background: "rgba(99,102,241,0.12)",
               borderRadius: "3px",
             }}
           />
@@ -329,7 +369,7 @@ function LoginForm() {
               top: "22px",
               width: "52%",
               height: "4px",
-              background: "rgba(17,24,39,0.06)",
+              background: "rgba(99,102,241,0.08)",
               borderRadius: "2px",
             }}
           />
@@ -343,7 +383,7 @@ function LoginForm() {
                   top: "40px",
                   right: "10px",
                   height: "4px",
-                  background: "rgba(17,24,39,0.05)",
+                  background: "rgba(99,102,241,0.06)",
                   borderRadius: "2px",
                 }}
               />
@@ -354,7 +394,7 @@ function LoginForm() {
                   top: "50px",
                   width: "68%",
                   height: "4px",
-                  background: "rgba(17,24,39,0.04)",
+                  background: "rgba(99,102,241,0.05)",
                   borderRadius: "2px",
                 }}
               />
@@ -370,7 +410,7 @@ function LoginForm() {
           inset: 0,
           width: "100%",
           height: "100%",
-          opacity: 0.045,
+          opacity: 0.12,
           pointerEvents: "none",
         }}
         viewBox="0 0 1440 900"
@@ -378,19 +418,19 @@ function LoginForm() {
       >
         <path
           d="M60 180 Q350 60 720 450 Q1040 820 1380 280"
-          stroke="#111827"
+          stroke="#6366f1"
           strokeWidth="1.5"
           fill="none"
         />
         <path
           d="M0 630 Q280 210 720 450 Q1120 710 1440 185"
-          stroke="#111827"
+          stroke="#6366f1"
           strokeWidth="1"
           fill="none"
         />
         <path
           d="M185 900 Q475 490 720 450 Q965 415 1255 40"
-          stroke="#111827"
+          stroke="#6366f1"
           strokeWidth="1"
           fill="none"
         />
@@ -404,11 +444,11 @@ function LoginForm() {
           width: "100%",
           maxWidth: "390px",
           background: "#ffffff",
-          border: "1px solid rgba(17,24,39,0.07)",
+          border: "1px solid rgba(255,255,255,0.08)",
           borderRadius: "20px",
           padding: "38px 36px",
           boxShadow:
-            "0 16px 48px rgba(17,24,39,0.08), 0 4px 12px rgba(17,24,39,0.04)",
+            "0 0 0 1px rgba(99,102,241,0.08), 0 24px 64px rgba(0,0,0,0.5), 0 0 48px rgba(99,102,241,0.07)",
           animation: "fd-enter 0.48s cubic-bezier(0.22,1,0.36,1) both",
           overflow: "hidden",
         }}
@@ -514,7 +554,7 @@ function LoginForm() {
                 borderRadius: "9px",
                 fontSize: "13px",
                 fontWeight: "500",
-                background: mode === m ? "#111827" : "transparent",
+                background: mode === m ? "#6366f1" : "transparent",
                 color: mode === m ? "#ffffff" : "#9ca3af",
                 border: "none",
                 cursor: "pointer",
@@ -649,7 +689,7 @@ function LoginForm() {
                       textAlign: "left",
                       border:
                         accountType === opt.value
-                          ? "1px solid #111827"
+                          ? "1px solid #6366f1"
                           : "1px solid #e5e7eb",
                       background:
                         accountType === opt.value ? "#f9fafb" : "#ffffff",
