@@ -61,7 +61,8 @@ describe("extractInboxTaskDrafts", () => {
             createdAt: now,
           },
         ],
-      })
+      }),
+      now
     )
 
     expect(tasks).toHaveLength(1)
