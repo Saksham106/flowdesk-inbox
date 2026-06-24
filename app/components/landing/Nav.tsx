@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { scrollToLandingSection } from "@/lib/client-navigation";
+import Logo from "@/app/components/landing/Logo";
 
 const navLinks = [
   { label: "Features", href: "#features" },
@@ -24,13 +25,7 @@ export default function Nav() {
     <header className="sticky top-0 z-50 bg-white border-b border-black/[0.08]">
       <div className="max-w-6xl mx-auto px-5 sm:px-8 h-[72px] flex items-center justify-between">
         {/* Logo */}
-        <a href="/" className="flex items-center gap-2 shrink-0">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-            <rect width="28" height="28" rx="6" fill="#111" />
-            <path d="M8 14h12M14 8l6 6-6 6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <span className="text-[15px] font-semibold text-black tracking-tight">Flowdesk</span>
-        </a>
+        <Logo />
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-7" aria-label="Main navigation">

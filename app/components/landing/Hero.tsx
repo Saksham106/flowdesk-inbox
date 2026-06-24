@@ -19,10 +19,7 @@ export default function Hero() {
       <div className="relative max-w-6xl mx-auto px-5 sm:px-8 flex flex-col items-center">
         {/* Headline block */}
         <div className="pt-16 pb-10 flex flex-col items-center gap-8 w-full max-w-2xl mx-auto text-center">
-          <h1
-            className="text-[56px] leading-[60px] font-normal text-black w-full"
-            style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}
-          >
+          <h1 className="text-[56px] leading-[60px] font-normal text-black w-full">
             Your inbox, on autopilot
           </h1>
 

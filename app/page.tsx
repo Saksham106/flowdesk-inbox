@@ -7,6 +7,7 @@ import SocialProof from "@/app/components/landing/SocialProof";
 import Pricing from "@/app/components/landing/Pricing";
 import FAQ from "@/app/components/landing/FAQ";
 import FinalCTA from "@/app/components/landing/FinalCTA";
+import Logo from "@/app/components/landing/Logo";
 
 export default function Home() {
   return (
@@ -25,12 +26,8 @@ export default function Home() {
       <footer id="page-footer" className="bg-white border-t border-black/[0.08] px-5 sm:px-8 py-8">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-start justify-between gap-8">
           {/* Logo */}
-          <div className="flex items-center gap-2 px-3">
-            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-              <rect width="28" height="28" rx="6" fill="#111" />
-              <path d="M8 14h12M14 8l6 6-6 6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="text-[15px] font-semibold text-black tracking-tight">Flowdesk</span>
+          <div className="px-3">
+            <Logo size="sm" />
           </div>
 
           {/* Footer nav columns */}
