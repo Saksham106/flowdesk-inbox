@@ -6,6 +6,7 @@ type GmailSyncChannel = {
   id: string;
   emailAddress: string | null;
   lastSyncedAt: Date | string | null;
+  lastSyncStatus?: string | null;
   lastSyncError: string | null;
   watchExpiresAt?: Date | string | null;
   watchLastRenewalAttempt?: Date | string | null;
@@ -44,6 +45,9 @@ export default function GmailSyncControl({
 }) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<SyncStatus>(null);
+  const [needsReauth, setNeedsReauth] = useState(() =>
+    channels.some((c) => c.lastSyncStatus === "needs_reauth")
+  );
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(() => {
     const dates = channels
       .map((channel) => (channel.lastSyncedAt ? new Date(channel.lastSyncedAt) : null))
@@ -84,10 +88,11 @@ export default function GmailSyncControl({
     return null;
   }, [channels]);
   const shouldPollWithHealthyPush = useCallback(() => {
+    if (needsReauth) return false;
     if (!hasHealthyPush) return true;
     if (!lastSyncedAt) return true;
     return Date.now() - lastSyncedAt.getTime() > PUSH_STALE_FALLBACK_MS;
-  }, [hasHealthyPush, lastSyncedAt]);
+  }, [needsReauth, hasHealthyPush, lastSyncedAt]);
   const initialError = useMemo(
     () => channels.find((channel) => channel.lastSyncError)?.lastSyncError ?? null,
     [channels]
@@ -110,6 +115,7 @@ export default function GmailSyncControl({
   const runSync = useCallback(
     async (source: "manual" | "auto") => {
       if (!hasChannels || inFlightRef.current) return;
+      if (needsReauth) return;
       const now = Date.now();
       if (source === "auto" && now - lastStartedAtRef.current < AUTO_SYNC_COOLDOWN_MS) return;
       if (source === "auto" && !shouldPollWithHealthyPush()) return;
@@ -127,8 +133,12 @@ export default function GmailSyncControl({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ channelId: channel.id, incremental: Boolean(lastSyncedAt) }),
           });
-          const data = (await res.json().catch(() => ({}))) as { error?: string; synced?: number };
+          const data = (await res.json().catch(() => ({}))) as { error?: string; synced?: number; needsReauth?: boolean };
           if (!res.ok) {
+            if (data.needsReauth) {
+              setNeedsReauth(true);
+              return;
+            }
             throw new Error(data.error ?? "Sync failed");
           }
           totalSynced += typeof data.synced === "number" ? data.synced : 0;
@@ -149,7 +159,7 @@ export default function GmailSyncControl({
         setLoading(false);
       }
     },
-    [channels, hasChannels, lastSyncedAt, shouldPollWithHealthyPush]
+    [channels, hasChannels, lastSyncedAt, needsReauth, shouldPollWithHealthyPush]
   );
 
   useEffect(() => {
@@ -175,6 +185,26 @@ export default function GmailSyncControl({
 
   if (!hasChannels) {
     return null;
+  }
+
+  if (needsReauth) {
+    return (
+      <div className={`flex ${compact ? "items-start gap-2" : "flex-col gap-1"}`}>
+        <a
+          href="/api/connectors/gmail/connect"
+          className="inline-flex items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100"
+          aria-label="Reconnect Gmail"
+          title="Gmail authorization expired — reconnect to resume syncing"
+        >
+          Reconnect Gmail
+        </a>
+        <div className={compact ? "min-w-0" : ""}>
+          <p className="max-w-[220px] truncate text-[11px] leading-4 text-amber-700">
+            Authorization expired
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (

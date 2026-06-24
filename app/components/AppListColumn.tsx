@@ -20,6 +20,7 @@ interface Props {
     id: string
     emailAddress: string | null
     lastSyncedAt: Date | null
+    lastSyncStatus?: string | null
     lastSyncError: string | null
     watchExpiresAt?: Date | string | null
     watchLastRenewalAttempt?: Date | string | null

@@ -31,6 +31,7 @@ export default function SyncGmailButton({
   const [loading, setLoading] = useState(false);
   const [freshError, setFreshError] = useState<string | null>(null);
   const [freshSyncedAt, setFreshSyncedAt] = useState<Date | null>(null);
+  const [needsReauth, setNeedsReauth] = useState(lastSyncStatus === "needs_reauth");
 
   const displayError = freshError ?? lastSyncError;
   const displaySyncedAt = freshSyncedAt ?? lastSyncedAt;
@@ -51,9 +52,25 @@ export default function SyncGmailButton({
     if (res.ok) {
       setFreshSyncedAt(new Date());
       router.refresh();
+    } else if (data.needsReauth) {
+      setNeedsReauth(true);
     } else {
       setFreshError(data.error ?? "Sync failed");
     }
+  }
+
+  if (needsReauth) {
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <a
+          href="/api/connectors/gmail/connect"
+          className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-100"
+        >
+          Reconnect Gmail
+        </a>
+        <p className="text-xs text-amber-700">Authorization expired — reconnect to resume syncing</p>
+      </div>
+    );
   }
 
   return (

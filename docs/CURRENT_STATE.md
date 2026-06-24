@@ -29,6 +29,7 @@ The core promise is: show what matters, explain why, safely handle routine work,
 - MindBody has an optional business-mode connector foundation.
 - Gmail sync uses per-channel locking, idempotent message upserts, durable push-event tracking, partial thread-failure logging, push/watch health, app-load/tab-return/stale fallback sync, and a manual sync control that updates status without full page refresh.
 - Gmail watch renewal records per-channel health, audit-log entries, and monitor-visible cron failures. History cursor fallback is timestamped for UI visibility.
+- `invalid_grant` (expired or revoked refresh token) is detected at sync time, stored as `lastSyncStatus: "needs_reauth"`, and surfaces a prominent "Reconnect Gmail" button in both the inbox sync control and the settings page. Auto-polling stops when reauth is required. Re-running OAuth clears the state and resumes sync normally.
 
 ### Inbox And Thread Experience
 

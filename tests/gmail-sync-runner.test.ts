@@ -49,7 +49,7 @@ vi.mock("@/lib/google", () => ({
   watchGmailChannel: mockWatchGmailChannel,
 }))
 
-import { processGmailPushNotification, runGmailSync } from "@/lib/gmail-sync"
+import { GmailAuthError, processGmailPushNotification, runGmailSync } from "@/lib/gmail-sync"
 
 const channel = {
   id: "channel-1",
@@ -191,6 +191,73 @@ describe("Gmail sync runner", () => {
           lastSyncMode: "history_fallback",
           lastHistoryFallbackAt: expect.any(Date),
         }),
+      })
+    )
+  })
+
+  it("marks credential as needs_reauth and throws GmailAuthError on invalid_grant", async () => {
+    const authError = new Error("invalid_grant")
+    mockSyncGmailChannel.mockRejectedValue(authError)
+    mockCredFindUnique.mockResolvedValue({ channelId: "channel-1", historyId: null })
+
+    await expect(
+      runGmailSync({
+        channelId: "channel-1",
+        tenantId: "tenant-1",
+        requestedMode: "manual",
+        incremental: false,
+      })
+    ).rejects.toBeInstanceOf(GmailAuthError)
+
+    expect(mockCredUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { channelId: "channel-1" },
+        data: expect.objectContaining({
+          lastSyncStatus: "needs_reauth",
+          lastSyncError: expect.stringContaining("reconnect"),
+          syncLockExpiresAt: null,
+        }),
+      })
+    )
+  })
+
+  it("marks needs_reauth for token-expired Google error variants", async () => {
+    const revokedError = new Error("Token has been expired or revoked.")
+    mockSyncGmailChannelIncremental.mockRejectedValue(revokedError)
+
+    await expect(
+      runGmailSync({
+        channelId: "channel-1",
+        tenantId: "tenant-1",
+        requestedMode: "manual",
+        incremental: true,
+      })
+    ).rejects.toBeInstanceOf(GmailAuthError)
+
+    expect(mockCredUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ lastSyncStatus: "needs_reauth" }),
+      })
+    )
+  })
+
+  it("does not mark needs_reauth for non-auth errors", async () => {
+    const networkError = new Error("ECONNRESET")
+    mockSyncGmailChannel.mockRejectedValue(networkError)
+    mockCredFindUnique.mockResolvedValue({ channelId: "channel-1", historyId: null })
+
+    await expect(
+      runGmailSync({
+        channelId: "channel-1",
+        tenantId: "tenant-1",
+        requestedMode: "manual",
+        incremental: false,
+      })
+    ).rejects.toThrow("ECONNRESET")
+
+    expect(mockCredUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ lastSyncStatus: "error" }),
       })
     )
   })

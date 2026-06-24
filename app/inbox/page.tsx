@@ -100,6 +100,7 @@ async function renderInboxPage(
         gmailCredential: {
           select: {
             lastSyncedAt: true,
+            lastSyncStatus: true,
             lastSyncError: true,
             watchExpiresAt: true,
             watchLastRenewalAttempt: true,
@@ -361,6 +362,7 @@ async function renderInboxPage(
       id: channel.id,
       emailAddress: channel.emailAddress,
       lastSyncedAt: channel.gmailCredential?.lastSyncedAt ?? null,
+      lastSyncStatus: channel.gmailCredential?.lastSyncStatus ?? null,
       lastSyncError: channel.gmailCredential?.lastSyncError ?? null,
       watchExpiresAt: channel.gmailCredential?.watchExpiresAt ?? null,
       watchLastRenewalAttempt: channel.gmailCredential?.watchLastRenewalAttempt ?? null,

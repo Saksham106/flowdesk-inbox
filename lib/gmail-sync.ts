@@ -7,6 +7,31 @@ import {
 } from "@/lib/google"
 
 type RequestedSyncMode = "manual" | "auto" | "push" | "oauth_callback"
+
+export class GmailAuthError extends Error {
+  readonly isAuthError = true as const
+  constructor(message: string) {
+    super(message)
+    this.name = "GmailAuthError"
+  }
+}
+
+function isInvalidGrantError(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false
+  const candidate = err as {
+    message?: unknown
+    response?: { data?: unknown; status?: unknown }
+  }
+  const message = typeof candidate.message === "string" ? candidate.message.toLowerCase() : ""
+  if (message.includes("invalid_grant")) return true
+  if (message.includes("token has been expired") || message.includes("token has been revoked")) return true
+  const data = candidate.response?.data
+  if (typeof data === "object" && data !== null) {
+    const errorField = (data as { error?: unknown }).error
+    if (errorField === "invalid_grant") return true
+  }
+  return false
+}
 type StoredSyncMode =
   | "manual_full"
   | "manual_incremental"
@@ -151,19 +176,22 @@ export async function runGmailSync({
 
     return { ok: true, channelId, synced, historyId, mode: storedMode }
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown sync error"
+    const isAuthError = isInvalidGrantError(err)
+    const message = isAuthError
+      ? "Gmail authorization expired — please reconnect your Gmail account"
+      : err instanceof Error ? err.message : "Unknown sync error"
     await prisma.gmailCredential
       .update({
         where: { channelId },
         data: {
           lastSyncMode: storedMode,
-          lastSyncStatus: "error",
+          lastSyncStatus: isAuthError ? "needs_reauth" : "error",
           lastSyncError: message,
           syncLockExpiresAt: null,
         },
       })
       .catch(() => {})
-    throw err
+    throw isAuthError ? new GmailAuthError(message) : err
   }
 }
 
