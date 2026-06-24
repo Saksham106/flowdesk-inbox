@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DM_Mono, Space_Grotesk, Playfair_Display } from "next/font/google";
+import { DM_Mono, Space_Grotesk, Playfair_Display, Lora } from "next/font/google";
 import "./globals.css";
 import Providers from "@/app/providers";
 
@@ -20,6 +20,12 @@ const playfair = Playfair_Display({
   display: "swap",
 });
 
+const lora = Lora({
+  variable: "--font-lora",
+  subsets: ["latin"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Flowdesk Inbox",
   description: "AI inbox for small business support",
@@ -33,7 +39,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${spaceGrotesk.variable} ${dmMono.variable} ${playfair.variable} antialiased bg-slate-50 text-slate-900`}
+        className={`${spaceGrotesk.variable} ${dmMono.variable} ${playfair.variable} ${lora.variable} antialiased bg-slate-50 text-slate-900`}
       >
         <Providers>{children}</Providers>
       </body>
