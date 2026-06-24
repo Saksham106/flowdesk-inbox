@@ -103,6 +103,7 @@ model Tenant {
   snippets                  Snippet[]
   gmailPushEvents           GmailPushEvent[]
   gmailWritebackQueue       GmailWritebackQueue[]
+  outlookSyncEvents         OutlookSyncEvent[]
   schedulingSessions        SchedulingSession[]
   automationRuns            AutomationRun[]
   workflowTemplates         WorkflowTemplate[]
@@ -135,6 +136,7 @@ model Channel {
   learnedReplyProfiles     LearnedReplyProfile[]
   gmailPushEvents          GmailPushEvent[]
   gmailWritebackQueue      GmailWritebackQueue[]
+  outlookSyncEvents        OutlookSyncEvent[]
 }
 
 model GmailCredential {
@@ -196,15 +198,46 @@ model GmailWritebackQueue {
 }
 
 model OutlookCredential {
-  id                    String    @id @default(cuid())
-  channelId             String    @unique
-  accessTokenEncrypted  String
-  refreshTokenEncrypted String
-  tokenExpiry           DateTime?
-  lastSyncedAt          DateTime?
-  lastSyncError         String?
-  createdAt             DateTime  @default(now())
-  channel               Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  id                               String    @id @default(cuid())
+  channelId                        String    @unique
+  accessTokenEncrypted             String
+  refreshTokenEncrypted            String
+  tokenExpiry                      DateTime?
+  deltaLinkEncrypted               String?
+  subscriptionId                   String?   @unique
+  subscriptionExpiresAt            DateTime?
+  subscriptionClientStateEncrypted String?
+  subscriptionLastRenewalAttempt   DateTime?
+  subscriptionError                String?
+  lastSyncedAt                     DateTime?
+  lastSyncMode                     String?
+  lastSyncStatus                   String?
+  lastSyncError                    String?
+  syncLeaseId                      String?
+  syncLockExpiresAt                DateTime?
+  createdAt                        DateTime  @default(now())
+  channel                          Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+}
+
+model OutlookSyncEvent {
+  id             String    @id @default(cuid())
+  tenantId       String
+  channelId      String
+  notificationId String    @unique
+  subscriptionId String
+  resource       String
+  changeType     String
+  status         String    @default("pending")
+  attempts       Int       @default(0)
+  lastError      String?
+  nextAttemptAt  DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  processedAt    DateTime?
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channel        Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([tenantId, channelId])
 }
 
 model MindBodyCredential {
