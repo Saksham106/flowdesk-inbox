@@ -5,8 +5,9 @@ import {
   verifyOutlookState,
   exchangeOutlookCode,
   getOutlookUserEmail,
-  syncOutlookChannel,
 } from "@/lib/microsoft"
+import { runOutlookDeltaSync } from "@/lib/outlook-sync"
+import { ensureOutlookSubscription } from "@/lib/outlook-subscriptions"
 
 export const runtime = "nodejs"
 
@@ -73,9 +74,14 @@ export async function GET(request: Request) {
   }
 
   try {
-    await syncOutlookChannel(channelId, tenantId)
-  } catch (err) {
-    console.error("[outlook/callback] initial sync failed:", err)
+    await runOutlookDeltaSync({ channelId, tenantId, requestedMode: "oauth_callback" })
+  } catch {
+    console.error("[outlook/callback] initial delta sync failed", { channelId })
+  }
+  try {
+    await ensureOutlookSubscription(channelId)
+  } catch {
+    console.error("[outlook/callback] subscription setup failed", { channelId })
   }
 
   return NextResponse.redirect(`${redirectBase}?connected=${encodeURIComponent(outlookEmail)}`)

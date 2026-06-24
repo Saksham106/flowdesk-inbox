@@ -1,9 +1,9 @@
 import { createHmac } from "crypto"
 import { encryptString, decryptString } from "@/lib/crypto"
 import { prisma } from "@/lib/prisma"
-import { syncConversationWorkItems } from "@/lib/agent/work-item-sync"
 
-const GRAPH_BASE = "https://graph.microsoft.com/v1.0/me"
+export const MICROSOFT_GRAPH_ROOT = "https://graph.microsoft.com/v1.0"
+const GRAPH_BASE = `${MICROSOFT_GRAPH_ROOT}/me`
 const TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
 
 const SCOPES = [
@@ -144,19 +144,56 @@ export function verifyOutlookState(state: string): string | null {
 
 // ── Graph API helpers ────────────────────────────────────────────────────────
 
-async function graphGet<T>(path: string, token: string): Promise<T> {
+export class MicrosoftGraphError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly code?: string
+  ) {
+    super(`Microsoft Graph request failed (${status}${code ? `, ${code}` : ""})`)
+    this.name = "MicrosoftGraphError"
+  }
+}
+
+export async function graphGet<T>(
+  path: string,
+  token: string,
+  headers: Record<string, string> = {}
+): Promise<T> {
   const url = path.startsWith("https://") ? path : `${GRAPH_BASE}${path}`
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}`, ...headers },
   })
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as {
-      error?: { message?: string }
+      error?: { code?: string }
     }
-    throw new Error(
-      err.error?.message ?? `Graph GET ${path} failed (${res.status})`
-    )
+    throw new MicrosoftGraphError(res.status, err.error?.code)
   }
+  return res.json() as Promise<T>
+}
+
+export async function graphRequest<T>(
+  path: string,
+  token: string,
+  options: { method: "POST" | "PATCH" | "DELETE"; body?: unknown }
+): Promise<T> {
+  const url = path.startsWith("https://") ? path : `${MICROSOFT_GRAPH_ROOT}${path}`
+  const hasBody = options.body !== undefined
+  const res = await fetch(url, {
+    method: options.method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(hasBody ? { "Content-Type": "application/json" } : {}),
+    },
+    body: hasBody ? JSON.stringify(options.body) : undefined,
+  })
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as {
+      error?: { code?: string }
+    }
+    throw new MicrosoftGraphError(res.status, err.error?.code)
+  }
+  if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
 }
 
@@ -170,7 +207,7 @@ export async function getOutlookUserEmail(accessToken: string): Promise<string> 
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type GraphMessage = {
+export type GraphMessage = {
   id: string
   conversationId: string
   subject: string
@@ -179,161 +216,20 @@ type GraphMessage = {
   body: { content: string; contentType: string }
   receivedDateTime: string
   internetMessageId?: string
+  isRead?: boolean
 }
 
 type GraphMessageList = { value: GraphMessage[]; "@odata.nextLink"?: string }
 
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
-}
-
-// ── Sync ─────────────────────────────────────────────────────────────────────
-
-export async function syncOutlookChannel(
-  channelId: string,
-  tenantId: string
-): Promise<number> {
-  const channel = await prisma.channel.findUnique({ where: { id: channelId } })
-  if (!channel?.emailAddress) throw new Error("Not an email channel")
-
-  const token = await getOutlookAccessToken(channelId)
-  const myEmail = channel.emailAddress.toLowerCase()
-
-  // Fetch 50 most recent inbox messages to discover unique conversation IDs
-  const params = new URLSearchParams({
-    $top: "50",
-    $select:
-      "id,conversationId,subject,from,toRecipients,body,receivedDateTime,internetMessageId",
-    $orderby: "receivedDateTime desc",
-    $filter: "isDraft eq false",
+// Compatibility wrapper while all callers migrate to the shared delta runner.
+export async function syncOutlookChannel(channelId: string, tenantId: string): Promise<number> {
+  const { runOutlookDeltaSync } = await import("@/lib/outlook-sync")
+  const result = await runOutlookDeltaSync({
+    channelId,
+    tenantId,
+    requestedMode: "manual",
   })
-
-  const inbox = await graphGet<GraphMessageList>(
-    `/mailFolders/inbox/messages?${params}`,
-    token
-  )
-
-  // Collect up to 25 unique conversation IDs
-  const seenConvIds = new Set<string>()
-  const conversationIds: string[] = []
-  for (const msg of inbox.value) {
-    if (msg.conversationId && !seenConvIds.has(msg.conversationId)) {
-      seenConvIds.add(msg.conversationId)
-      conversationIds.push(msg.conversationId)
-      if (conversationIds.length >= 25) break
-    }
-  }
-
-  let synced = 0
-
-  for (const convId of conversationIds) {
-    // Fetch all messages in this conversation thread (inbox + sent)
-    const convParams = new URLSearchParams({
-      $select:
-        "id,conversationId,subject,from,toRecipients,body,receivedDateTime,internetMessageId",
-      $orderby: "receivedDateTime asc",
-      $filter: `conversationId eq '${convId}' and isDraft eq false`,
-      $top: "50",
-    })
-
-    let threadMessages: GraphMessage[] = []
-    try {
-      const convMsgs = await graphGet<GraphMessageList>(
-        `/messages?${convParams}`,
-        token
-      )
-      threadMessages = convMsgs.value
-    } catch {
-      // Some messages may be in Sent or other folders — fall back to inbox messages for this convId
-      threadMessages = inbox.value.filter((m) => m.conversationId === convId)
-    }
-
-    if (threadMessages.length === 0) continue
-
-    const firstMsg = threadMessages[0]
-    const lastMsg = threadMessages[threadMessages.length - 1]
-
-    // Determine external participant (the one that isn't ours)
-    const fromEmail = firstMsg.from.emailAddress.address.toLowerCase()
-    const isFirstOutbound = fromEmail === myEmail
-    const externalAddress = isFirstOutbound
-      ? firstMsg.toRecipients[0]?.emailAddress
-      : firstMsg.from.emailAddress
-    const externalEmail = (externalAddress?.address ?? "").toLowerCase()
-    const externalName = externalAddress?.name || externalEmail
-
-    if (!externalEmail) continue
-
-    // Auto-create or find contact (email stored in phoneE164, matching Gmail pattern)
-    let contact = await prisma.contact.findUnique({
-      where: { tenantId_phoneE164: { tenantId, phoneE164: externalEmail } },
-    })
-    if (!contact) {
-      contact = await prisma.contact.create({
-        data: {
-          tenantId,
-          name: externalName || externalEmail,
-          phoneE164: externalEmail,
-        },
-      })
-    }
-
-    // externalThreadId = Microsoft conversationId
-    const conversation = await prisma.conversation.upsert({
-      where: {
-        tenantId_channelId_externalThreadId: {
-          tenantId,
-          channelId,
-          externalThreadId: convId,
-        },
-      },
-      create: {
-        tenantId,
-        channelId,
-        externalThreadId: convId,
-        contactId: contact.id,
-        status: "needs_reply",
-        lastMessageAt: new Date(lastMsg.receivedDateTime),
-      },
-      update: {
-        lastMessageAt: new Date(lastMsg.receivedDateTime),
-        contactId: contact.id,
-      },
-    })
-
-    for (const msg of threadMessages) {
-      const msgFrom = msg.from.emailAddress.address.toLowerCase()
-      const isOutbound = msgFrom === myEmail
-      const bodyText =
-        msg.body.contentType === "html"
-          ? stripHtml(msg.body.content)
-          : msg.body.content
-
-      await prisma.message.upsert({
-        where: { providerMessageId: `outlook_${msg.id}` },
-        create: {
-          conversationId: conversation.id,
-          direction: isOutbound ? "outbound" : "inbound",
-          fromE164: msg.from.emailAddress.address,
-          toE164: msg.toRecipients.map((r) => r.emailAddress.address).join(", "),
-          body: bodyText || `[${msg.subject}]`,
-          providerMessageId: `outlook_${msg.id}`,
-          createdAt: new Date(msg.receivedDateTime),
-        },
-        update: {},
-      })
-    }
-
-    syncConversationWorkItems({ tenantId, conversationId: conversation.id }).catch(() => null)
-    synced++
-  }
-
-  await prisma.outlookCredential.update({
-    where: { channelId },
-    data: { lastSyncedAt: new Date(), lastSyncError: null },
-  })
-
-  return synced
+  return "synced" in result ? result.synced : 0
 }
 
 // ── Send ─────────────────────────────────────────────────────────────────────

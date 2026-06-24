@@ -150,6 +150,25 @@ Inbox sync behavior:
 - Inbox auto-refresh polls `GET /api/inbox/summary` once per minute for lightweight status data instead of calling `router.refresh()` on the whole page.
 - Inbox search filters currently loaded rows immediately, then updates the URL/server search after a 1-second pause or Enter.
 
+### Outlook
+
+1. Register a web application in Microsoft Entra ID and add the delegated permissions `openid`, `email`, `profile`, `offline_access`, `User.Read`, `Mail.Read`, `Mail.ReadWrite`, and `Mail.Send`.
+2. Add `{NEXTAUTH_URL}/api/connectors/outlook/callback` as a Web redirect URI.
+3. Set `MICROSOFT_CLIENT_ID` and `MICROSOFT_CLIENT_SECRET`.
+4. In production, set `NEXTAUTH_URL` to the public HTTPS origin. Microsoft Graph sends validation and change notifications to `{NEXTAUTH_URL}/api/connectors/outlook/webhook`.
+5. Schedule `GET /api/cron/outlook-sync` every five minutes with `Authorization: Bearer <CRON_SECRET>`.
+
+Outlook uses one shared Microsoft Graph Inbox delta engine for initial, manual, webhook-triggered, and fallback sync. A database lease prevents overlapping work per credential. Delta pages are capped per invocation, the encrypted continuation cursor is saved after every page, and the worker resumes partial rounds. Creates and updates use idempotent provider-message upserts; Graph tombstones remove the corresponding local message and close an emptied conversation.
+
+Webhook requests only validate and enqueue routing metadata in `OutlookSyncEvent`; they never perform Graph work inline. `clientState` is random and encrypted at rest. The bounded cron worker processes at most 25 notification events, 25 subscription renewals, and 25 stale-mailbox fallbacks per invocation. Missed notifications are covered by a 15-minute stale delta fallback. Failed or lease-busy notification work is durably rescheduled, and abandoned event claims become eligible again after five minutes.
+
+Operational checks:
+
+- Apply migrations before enabling the cron or webhook. Treat non-2xx cron responses and `X-Outlook-Sync-Errors` above zero as alerts.
+- Confirm the production callback and webhook URLs are reachable over valid public HTTPS. Microsoft Graph cannot deliver notifications to localhost or plain HTTP; local development therefore uses manual/fallback delta sync and skips subscription creation.
+- After connecting a production mailbox, confirm `OutlookCredential.subscriptionId`, `subscriptionExpiresAt`, `lastSyncStatus`, and `lastSyncedAt` populate; then send, update, and delete a test Inbox message and confirm the next cron run converges.
+- Never log access tokens, refresh tokens, encrypted delta links, notification `clientState`, message bodies, or Graph continuation URLs.
+
 ### Google Calendar
 
 Google Calendar is currently exposed for business accounts.
@@ -185,11 +204,13 @@ Credentials are verified live against MindBody's API before being saved. Use Sit
 | `ENCRYPTION_SECRET` | Yes (prod) | AES-256 key for encrypting OAuth tokens — `openssl rand -base64 32` |
 | `GOOGLE_CLIENT_ID` | Yes | Google OAuth client ID (Gmail + Calendar) |
 | `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth client secret |
+| `MICROSOFT_CLIENT_ID` | For Outlook | Microsoft Entra application (client) ID |
+| `MICROSOFT_CLIENT_SECRET` | For Outlook | Microsoft Entra application client secret |
 | `OPENAI_API_KEY` | Yes | OpenAI API key for AI draft suggestions |
 | `OPENAI_MODEL` | Yes | OpenAI model used for draft suggestions |
 | `GMAIL_PUSH_TOPIC` | Optional | Google Pub/Sub topic name for Gmail watch notifications, e.g. `projects/<project>/topics/<topic>` |
 | `GMAIL_PUSH_SECRET` | Optional | Shared secret for the Pub/Sub push endpoint at `/api/connectors/gmail/push?secret=...` |
-| `CRON_SECRET` | Optional | Bearer token for scheduled endpoints, including Gmail watch renewal |
+| `CRON_SECRET` | Required for cron | Bearer token for scheduled endpoints, including Gmail and Outlook renewal/sync |
 | `MINDBODY_API_KEY` | Optional | MindBody source password from developer portal |
 | `SEED_EMAIL` | No | Override default login email |
 | `SEED_PASSWORD` | No | Override default login password |

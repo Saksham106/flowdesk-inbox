@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { deleteOutlookSubscription } from "@/lib/outlook-subscriptions"
 
 export const runtime = "nodejs"
 
@@ -21,6 +22,12 @@ export async function POST(request: Request) {
   })
   if (!channel) {
     return NextResponse.json({ error: "Channel not found" }, { status: 404 })
+  }
+
+  try {
+    await deleteOutlookSubscription(channelId)
+  } catch {
+    console.warn("Failed to remove Outlook subscription before disconnect", { channelId })
   }
 
   await prisma.channel.delete({ where: { id: channelId } })
