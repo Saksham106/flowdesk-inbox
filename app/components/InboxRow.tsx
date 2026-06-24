@@ -18,6 +18,7 @@ type InboxRowProps = {
   id: string
   href: string
   isSelected: boolean
+  /** Initial unread state — computed from readAt + gmailUnread in AppListColumn. Drives local optimistic state. */
   isUnread: boolean
   isFyi: boolean
   isClosed: boolean
@@ -28,7 +29,6 @@ type InboxRowProps = {
   statusText: string
   statusLabel: string
   hasDraft: boolean
-  initialReadAt: boolean
   initialStatus: string
   isVip?: boolean
   vipLabel?: string | null
@@ -44,6 +44,7 @@ export default function InboxRow({
   href,
   isSelected,
   isFyi,
+  isUnread: initialIsUnread,
   name,
   snippet,
   timeLabel,
@@ -51,7 +52,6 @@ export default function InboxRow({
   statusText,
   statusLabel,
   hasDraft,
-  initialReadAt,
   initialStatus,
   isVip,
   vipLabel,
@@ -62,7 +62,9 @@ export default function InboxRow({
   isGmail,
 }: InboxRowProps) {
   const router = useRouter()
-  const [isRead, setIsRead]         = useState(initialReadAt)
+  // Derive isRead from the pre-computed isUnread prop (considers readAt + gmailUnread).
+  // FYI classification does not affect read state — an unread FYI is still visually unread.
+  const [isRead, setIsRead]         = useState(!initialIsUnread)
   const [status, setStatus]         = useState(initialStatus)
   const [attention, setAttention]   = useState(initialAttention)
   const [showAttention, setShowAtt] = useState(false)
@@ -71,7 +73,7 @@ export default function InboxRow({
   const portalRef                   = useRef<HTMLDivElement>(null)
 
   const [archiveError, setArchiveError] = useState<string | null>(null)
-  const isUnread = !isRead && !isFyi
+  const isUnread = !isRead
   const isClosed = status === "closed"
 
   // Close attention dropdown on outside click or any scroll (covers inbox list scroll)
@@ -193,7 +195,7 @@ export default function InboxRow({
               </span>
             )}
           </div>
-          <span className="shrink-0 text-[10px] text-slate-400">{timeLabel}</span>
+          <span className={`shrink-0 text-[10px] ${isUnread ? "font-medium text-slate-600" : "text-slate-400"}`}>{timeLabel}</span>
         </div>
         {snippet && (
           <p className={`mt-0.5 truncate text-[11px] ${

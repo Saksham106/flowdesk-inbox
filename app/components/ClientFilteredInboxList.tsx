@@ -11,6 +11,7 @@ export type InboxListItem = {
   id: string
   href: string
   isSelected: boolean
+  /** True when the conversation has not been read (considers both readAt and gmailUnread). Used as initial state for the row. */
   isUnread: boolean
   isFyi: boolean
   isClosed: boolean
@@ -21,7 +22,6 @@ export type InboxListItem = {
   statusText: string
   statusLabel: string
   hasDraft: boolean
-  initialReadAt: boolean
   initialStatus: string
   attentionCategory: string | null
   isPersonal: boolean
@@ -86,7 +86,6 @@ export default function ClientFilteredInboxList({
               statusText={item.statusText}
               statusLabel={item.statusLabel}
               hasDraft={item.hasDraft}
-              initialReadAt={item.initialReadAt}
               initialStatus={item.initialStatus}
               attentionCategory={item.attentionCategory}
               isPersonal={item.isPersonal}

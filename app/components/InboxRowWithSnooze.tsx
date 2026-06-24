@@ -18,7 +18,6 @@ type InboxRowWithSnoozeProps = {
   statusText: string
   statusLabel: string
   hasDraft: boolean
-  initialReadAt: boolean
   initialStatus: string
   attentionCategory: string | null
   isPersonal: boolean
