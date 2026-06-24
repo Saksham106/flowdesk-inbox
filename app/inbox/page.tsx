@@ -36,9 +36,10 @@ const STATUS_LABELS: Record<ConversationStatus, string> = {
 const ALL_STATUSES = Object.keys(STATUS_LABELS) as ConversationStatus[];
 const HOME_CONVERSATION_LIMIT = 25
 const HOME_MESSAGE_LIMIT = 5
+const MOBILE_LIST_LIMIT = 50
 
 interface Props {
-  searchParams: { status?: string; q?: string; sales?: string; attention?: string };
+  searchParams: { status?: string; q?: string; sales?: string; attention?: string; page?: string };
 }
 
 function isDbStartingError(err: unknown): boolean {
@@ -78,6 +79,7 @@ async function renderInboxPage(
   const q = searchParams.q?.trim() ?? "";
   const salesFilter = searchParams.sales === "1";
   const attentionFilter = searchParams.attention ?? "";
+  const mobilePage = Math.max(0, parseInt(searchParams.page ?? "0", 10) || 0)
 
   // Home view = no status param and no sales filter and no attention filter (default landing)
   const isHomeView = !searchParams.status && !salesFilter && !q && !attentionFilter;
@@ -142,6 +144,8 @@ async function renderInboxPage(
             : {}),
         },
         orderBy: { lastMessageAt: "desc" },
+        skip: mobilePage * MOBILE_LIST_LIMIT,
+        take: MOBILE_LIST_LIMIT + 1,
         include: {
           messages: { orderBy: { createdAt: "desc" }, take: 1 },
           channel: true,
@@ -150,6 +154,8 @@ async function renderInboxPage(
         },
       })
     : [];
+  const hasMoreMobile = mobileConversations.length > MOBILE_LIST_LIMIT
+  const mobileConversationsPage = mobileConversations.slice(0, MOBILE_LIST_LIMIT)
 
   // Home view data for command center
   const [commandCenterConversations, revenueAtRisk] =
@@ -311,7 +317,7 @@ async function renderInboxPage(
 
 
   const displayConversations = salesFilter
-    ? mobileConversations.filter((c) => {
+    ? mobileConversationsPage.filter((c) => {
         const meta = c.stateRecord?.metadataJson;
         return (
           meta !== null &&
@@ -321,7 +327,7 @@ async function renderInboxPage(
         );
       })
     : attentionFilter
-    ? mobileConversations.filter((c) => {
+    ? mobileConversationsPage.filter((c) => {
         const meta = c.stateRecord?.metadataJson;
         if (!meta || typeof meta !== "object" || Array.isArray(meta)) return false;
         const m = meta as Record<string, unknown>;
@@ -330,8 +336,8 @@ async function renderInboxPage(
         return m.attentionCategory === attentionFilter;
       })
     : activeStatus === "needs_reply"
-    ? mobileConversations.filter((c) => !isFyiConversation(c))
-    : mobileConversations;
+    ? mobileConversationsPage.filter((c) => !isFyiConversation(c))
+    : mobileConversationsPage;
 
   function tabHref(status: ConversationStatus | "all" | null, sales = false) {
     const params = new URLSearchParams();
@@ -410,6 +416,16 @@ async function renderInboxPage(
       </details>
     );
   }
+
+  const loadMoreHref = (() => {
+    const p = new URLSearchParams()
+    if (activeStatus) p.set("status", activeStatus)
+    if (q) p.set("q", q)
+    if (salesFilter) p.set("sales", "1")
+    if (attentionFilter) p.set("attention", attentionFilter)
+    p.set("page", String(mobilePage + 1))
+    return `/inbox?${p.toString()}`
+  })()
 
   return (
     <>
@@ -639,6 +655,16 @@ async function renderInboxPage(
                   })
                 )}
               </div>
+              {hasMoreMobile && (
+                <div className="mt-4 text-center">
+                  <Link
+                    href={loadMoreHref}
+                    className="text-sm font-medium text-slate-600 hover:text-slate-900"
+                  >
+                    Load more
+                  </Link>
+                </div>
+              )}
             </>
           )}
         </main>
