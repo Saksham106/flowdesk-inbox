@@ -74,6 +74,17 @@ export default function EmailBodyIframe({ html, remoteHtml }: Props) {
 
     iframe.addEventListener("load", onLoad);
 
+    // srcdoc iframes load inline during browser parse and can fire `load` before
+    // React hydrates and this effect runs. On hard refresh the listener above would
+    // be attached too late and the height would stay at the 300px initial value.
+    // Check readyState immediately and measure now if the iframe already completed.
+    try {
+      const earlyDoc = iframe.contentDocument ?? iframe.contentWindow?.document;
+      if (earlyDoc && (earlyDoc.readyState === "complete" || earlyDoc.readyState === "interactive")) {
+        onLoad();
+      }
+    } catch { /* cross-origin guard */ }
+
     return () => {
       iframe.removeEventListener("load", onLoad);
       ro?.disconnect();
@@ -104,7 +115,6 @@ export default function EmailBodyIframe({ html, remoteHtml }: Props) {
         referrerPolicy="no-referrer"
         style={{ width: "100%", maxWidth: "100%", minWidth: 0, height: `${height}px`, border: "none", display: "block", overflow: "hidden" }}
         title="Email content"
-        loading="lazy"
       />
     </div>
   );
