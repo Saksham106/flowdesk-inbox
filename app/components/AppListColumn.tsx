@@ -154,7 +154,10 @@ function getCachedListData(input: {
           },
         }) as Promise<ConvRow[]>,
         // Count non-FYI needs_reply conversations using deterministic stateRecord columns.
-        // Omits body/sender regex heuristics (fallback for unclassified convs — rare in practice).
+        // Omits body/sender regex heuristics from isFyiConversation (AUTOMATED_SENDER_RE etc.),
+        // which can't be expressed in SQL. Conversations with stateRecord=null (not yet
+        // classified) are counted as needs_reply even if they'd match the regex — badge
+        // may be slightly inflated for new inboxes with unprocessed messages.
         prisma.conversation.count({
           where: {
             tenantId: input.tenantId,
