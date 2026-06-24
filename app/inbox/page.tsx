@@ -427,6 +427,7 @@ async function renderInboxPage(
               status={activeStatus}
               q={q || undefined}
               sales={salesFilter}
+              statusCounts={statusCounts}
               gmailChannels={gmailSyncChannels}
               className="w-full shrink-0"
             />
