@@ -1,4 +1,4 @@
-const ELLIPSE_BG = "https://www.figma.com/api/mcp/asset/3cb24a63-de70-4de6-aee4-1b7f685c55ab";
+const ELLIPSE_BG = "/images/landing/outcome-icon-bg.svg";
 
 const outcomes = [
   {

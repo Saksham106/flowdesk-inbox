@@ -49,7 +49,7 @@ const plans = [
     period: "",
     description: "For teams that need dedicated support, custom deployment, and advanced security.",
     cta: "Contact sales",
-    ctaHref: "/login",
+    ctaHref: "mailto:hello@useflowdesk.com",
     features: [
       "Everything in Pro",
       "Custom integrations",

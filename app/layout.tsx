@@ -14,6 +14,18 @@ const lora = Lora({
 export const metadata: Metadata = {
   title: "Flowdesk Inbox",
   description: "AI inbox for small business support",
+  openGraph: {
+    title: "Flowdesk Inbox",
+    description: "AI inbox for small business support",
+    type: "website",
+    images: [{ url: "/images/landing/product-screenshot.png", width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Flowdesk Inbox",
+    description: "AI inbox for small business support",
+    images: ["/images/landing/product-screenshot.png"],
+  },
 };
 
 export default function RootLayout({

@@ -1,8 +1,5 @@
 import Link from "next/link";
 
-const PRODUCT_IMAGE = "https://www.figma.com/api/mcp/asset/2274d296-37b8-4539-8e27-ea24cae017c3";
-const APP_SCREENSHOT = "https://www.figma.com/api/mcp/asset/8d88d50a-31f6-48ff-9335-8d78e4561fe6";
-
 const features = [
   {
     title: "Automatic follow-up",
@@ -31,14 +28,18 @@ function ProductImageCard() {
   return (
     <div className="flex-1 min-w-0 relative rounded-xl overflow-hidden bg-[#e0e1ec]" style={{ minHeight: 340 }}>
       <img
-        src={PRODUCT_IMAGE}
+        src="/images/landing/feature-image.png"
         alt=""
         aria-hidden="true"
+        width={256}
+        height={256}
         className="absolute inset-0 w-full h-full object-cover rounded-xl"
       />
       <img
-        src={APP_SCREENSHOT}
+        src="/images/landing/product-screenshot.png"
         alt="Flowdesk product screenshot"
+        width={3832}
+        height={2396}
         className="absolute inset-0 w-full h-full object-cover object-top"
       />
     </div>

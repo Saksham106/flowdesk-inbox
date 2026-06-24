@@ -35,8 +35,12 @@ export default function Home() {
             <div className="flex flex-col gap-2.5">
               <p className="text-[13px] font-semibold text-[#141a3d]">Social</p>
               <div className="h-1.5" />
-              {["GitHub", "X (formerly Twitter)", "LinkedIn"].map((item) => (
-                <p key={item} className="text-[13px] text-[#595961] cursor-pointer hover:text-black transition-colors">{item}</p>
+              {[
+                { label: "GitHub", href: "#" },
+                { label: "X (formerly Twitter)", href: "#" },
+                { label: "LinkedIn", href: "#" },
+              ].map((item) => (
+                <a key={item.label} href={item.href} className="text-[13px] text-[#595961] hover:text-black transition-colors">{item.label}</a>
               ))}
             </div>
 
@@ -58,8 +62,11 @@ export default function Home() {
             <div className="flex flex-col gap-2.5">
               <p className="text-[13px] font-semibold text-[#141a3d]">Tools</p>
               <div className="h-1.5" />
-              {["Gmail", "Google Calendar"].map((item) => (
-                <p key={item} className="text-[13px] text-[#595961] cursor-pointer hover:text-black transition-colors">{item}</p>
+              {[
+                { label: "Gmail", href: "#" },
+                { label: "Google Calendar", href: "#" },
+              ].map((item) => (
+                <a key={item.label} href={item.href} className="text-[13px] text-[#595961] hover:text-black transition-colors">{item.label}</a>
               ))}
             </div>
           </div>

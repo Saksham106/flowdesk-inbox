@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-const CTA_BG = "https://www.figma.com/api/mcp/asset/0d108b93-e6f5-42aa-95ba-52e893709942";
+const CTA_BG = "/images/landing/cta-bg.png";
 
 export default function FinalCTA() {
   return (
