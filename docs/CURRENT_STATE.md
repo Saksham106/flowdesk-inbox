@@ -24,12 +24,13 @@ The core promise is: show what matters, explain why, safely handle routine work,
 ### Connectors
 
 - Gmail connect/callback/sync/push/watch/disconnect routes exist.
-- Outlook connect/callback/sync/disconnect routes exist.
+- Outlook connect/callback/sync/webhook/disconnect routes exist.
 - Google Calendar connect/callback/disconnect and calendar hold support exist.
 - MindBody has an optional business-mode connector foundation.
 - Gmail sync uses per-channel locking, idempotent message upserts, durable push-event tracking, partial thread-failure logging, push/watch health, app-load/tab-return/stale fallback sync, and a manual sync control that updates status without full page refresh.
 - Gmail watch renewal records per-channel health, audit-log entries, and monitor-visible cron failures. History cursor fallback is timestamped for UI visibility.
 - `invalid_grant` (expired or revoked refresh token) is detected at sync time, stored as `lastSyncStatus: "needs_reauth"`, and surfaces a prominent "Reconnect Gmail" button in both the inbox sync control and the settings page. Auto-polling stops when reauth is required. Re-running OAuth clears the state and resumes sync normally.
+- Outlook initial, manual, webhook-triggered, and fallback sync share a paginated Microsoft Graph Inbox delta engine. Encrypted delta cursors, atomic expiring credential leases, renewable Graph subscriptions, encrypted notification client state, durable idempotent notification hints, bounded cron processing, and sync health are persisted. Local HTTP development skips Graph subscription creation because Microsoft requires a public HTTPS notification URL.
 
 ### Inbox And Thread Experience
 
@@ -132,6 +133,7 @@ The core promise is: show what matters, explain why, safely handle routine work,
 - `AutopilotSetting`, `FollowUpSetting`
 - `GmailCredential`
 - `GmailPushEvent`, `GmailWritebackQueue`
+- `OutlookCredential`, `OutlookSyncEvent`
 - `SchedulingSession`, `AutomationRun`, `WorkflowTemplate`, `WorkflowRun`
 - `AgentRule`, `Snippet`, `GoogleDriveCredential`
 
@@ -178,6 +180,13 @@ Recently relevant focused tests:
 - `tests/gmail-watch-cron.test.ts`
 - `tests/gmail-read-writeback.test.ts`
 - `tests/gmail-state-reconcile-cron.test.ts`
+- `tests/outlook-schema.test.ts`
+- `tests/outlook-sync.test.ts`
+- `tests/outlook-subscriptions.test.ts`
+- `tests/outlook-webhook.test.ts`
+- `tests/outlook-worker.test.ts`
+- `tests/outlook-manual-sync.test.ts`
+- `tests/outlook-cron.test.ts`
 
 ## Documentation Rules
 
