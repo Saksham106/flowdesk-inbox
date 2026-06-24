@@ -16,6 +16,7 @@ interface Props {
   status?: string | null
   q?: string
   sales?: boolean
+  statusCounts?: { status: string; _count: { status: number } }[]
   gmailChannels?: {
     id: string
     emailAddress: string | null
@@ -94,6 +95,19 @@ const ATTENTION_STYLE: Record<string, { dot: string; text: string; label: string
   quiet: { dot: "bg-slate-300", text: "text-slate-500", label: "Quiet" },
 }
 
+async function getCachedStatusCounts(tenantId: string) {
+  return unstable_cache(
+    () =>
+      prisma.conversation.groupBy({
+        by: ["status"],
+        where: { tenantId },
+        _count: { status: true },
+      }),
+    ["app-list-counts", tenantId],
+    { revalidate: 60, tags: [inboxTag(tenantId)] }
+  )()
+}
+
 function getCachedListData(input: {
   tenantId: string
   status?: string | null
@@ -139,23 +153,21 @@ function getCachedListData(input: {
             channel: { select: { provider: true } },
           },
         }) as Promise<ConvRow[]>,
-        prisma.conversation.groupBy({
-          by: ["status"],
-          where: { tenantId: input.tenantId },
-          _count: { status: true },
-        }),
-        prisma.conversation.findMany({
-          where: { tenantId: input.tenantId, status: "needs_reply" },
-          orderBy: { lastMessageAt: "desc" },
-          take: 500,
-          include: {
-            messages: { orderBy: { createdAt: "desc" }, take: 1 },
-            contact: true,
-            draft: { select: { status: true } },
-            stateRecord: { select: { state: true, metadataJson: true, attentionCategory: true, emailType: true } },
-            channel: { select: { provider: true } },
+        // Count non-FYI needs_reply conversations using deterministic stateRecord columns.
+        // Omits body/sender regex heuristics (fallback for unclassified convs — rare in practice).
+        prisma.conversation.count({
+          where: {
+            tenantId: input.tenantId,
+            status: "needs_reply",
+            NOT: {
+              OR: [
+                { stateRecord: { attentionCategory: { in: ["quiet", "fyi_done"] } } },
+                { stateRecord: { emailType: { in: ["notification", "newsletter", "marketing"] } } },
+                { stateRecord: { state: "fyi_only" } },
+              ],
+            },
           },
-        }) as Promise<ConvRow[]>,
+        }),
       ])
     },
     key,
@@ -170,21 +182,23 @@ export default async function AppListColumn({
   status,
   q,
   sales = false,
+  statusCounts,
   gmailChannels = [],
   className = "w-[280px] shrink-0",
 }: Props) {
   const isBusiness = accountType === "business"
   const isPersonal = resolveAccountMode(accountType) === "personal"
 
-  const [conversations, counts, needsReplyCandidates] = await getCachedListData({
+  const [conversations, needsReplyCount] = await getCachedListData({
     tenantId,
     status,
     q,
     sales: sales && isBusiness,
   })
 
-  const countMap = Object.fromEntries(counts.map((r) => [r.status, r._count.status]))
-  countMap.needs_reply = needsReplyCandidates.filter((conv) => !isFyiConversation(conv)).length
+  const rawCounts = (statusCounts ?? await getCachedStatusCounts(tenantId)) as { status: string; _count: { status: number } }[]
+  const countMap = Object.fromEntries(rawCounts.map((r) => [r.status, r._count.status]))
+  countMap.needs_reply = needsReplyCount
 
   function filterPillHref(s: string | null): string {
     const p = new URLSearchParams()
