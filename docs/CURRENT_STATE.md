@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-06-24 (landing-page-redesign + inbox query perf)
+Last updated: 2026-06-24 (landing-page-redesign + inbox query perf + dashboard UX fixes)
 
 FlowDesk is an email-first AI inbox assistant for individuals and small businesses. It prioritizes important messages, extracts work, drafts responses, and keeps risky actions approval-gated.
 
@@ -50,6 +50,14 @@ FlowDesk is an email-first AI inbox assistant for individuals and small business
 - AI drafts with knowledge-document citations, learned reply style, per-feature budget limits, and human approval gates.
 - Search, inbox chat, person memory, attachment extraction, phishing warnings, VIPs, snooze, and Clean Inbox bulk actions.
 
+### Dashboard (home command center)
+
+- Home view sections: Handle First (top-priority conversations with Draft Reply / Mark Done actions), Needs Action, Bills & Deadlines, Read Later, Waiting On, Agent Activity, and Quietly Handled banner.
+- **Bills & Deadlines**: items sourced from `inboxTask` records with due dates ≤ 7 days out, plus conversations with `review_soon` attention. Per-item dismiss button: tasks close via `PATCH /api/tasks/:id/status`; billing alerts reclassify to `fyi_done` via `PATCH /api/conversations/:id/attention`.
+- **Read Later**: per-card ✓ (mark FYI/Done) and ✕ (mark Quiet) buttons, both persisted via `PATCH /api/conversations/:id/attention`. Dismissals are optimistic; page refreshes on success.
+- **Quietly Handled**: "Review all" links to `/inbox?attention=fyi_done` so users see the actual quietly-handled emails, not an unfiltered inbox.
+- Stat pills (Needs Reply, Needs Action, Waiting On, Read Later, Quietly Handled) pull counts from the `DailyCommandCenter` built by `lib/agent/command-center.ts`.
+
 ### Work items and classification persistence
 
 - `lib/agent/work-items.ts` extracts task and lead candidates from conversation analysis. `lib/agent/work-item-sync.ts` persists them with tenant-scoped upserts and audit logs.
@@ -83,6 +91,8 @@ FlowDesk is an email-first AI inbox assistant for individuals and small business
 - Outlook does not yet have archive/trash writeback (Gmail equivalent exists).
 - Gmail `cid:` inline images are not resolved from related MIME attachments.
 - CC/BCC fields are displayed in the compose UI but not forwarded by send APIs.
+- Bills & Deadlines items dismiss optimistically client-side but reappear on hard refresh until the server cache invalidates (60 s TTL).
+- Read Later section shows a fixed 3-item preview; dismissed items vanish optimistically but the overflow count only updates after a page refresh.
 - Classification heuristics still have edge-case overlap between command-center FYI logic and inbox list filtering.
 - Sender/domain attention rules cannot be created or edited manually — only accepted from auto-generated suggestions.
 - Knowledge-base matching is keyword-based; crawling is single-page only.
