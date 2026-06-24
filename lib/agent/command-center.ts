@@ -831,6 +831,7 @@ export type BillSignal = {
   title: string
   dueAt: Date | null
   type: "task" | "billing_alert"
+  taskId?: string
 }
 
 export type BillsSection = {
@@ -863,6 +864,7 @@ export function buildBillsSection(
         title: task.title,
         dueAt: task.dueAt,
         type: "task",
+        taskId: task.id,
       })
     }
   }

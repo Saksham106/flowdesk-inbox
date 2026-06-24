@@ -8,6 +8,7 @@ import ReadLaterSection from "@/app/components/ReadLaterSection"
 import WaitingOnSection from "@/app/components/WaitingOnSection"
 import AgentActivitySection from "@/app/components/AgentActivitySection"
 import QuietlyHandledBanner from "@/app/components/QuietlyHandledBanner"
+import BillsDeadlinesList from "@/app/components/BillsDeadlinesList"
 
 interface Props {
   commandCenter: DailyCommandCenter
@@ -71,23 +72,7 @@ export default function HomeCommandCenter({
                     {billsSection.count}
                   </span>
                 </h3>
-                <ul className="mt-3 space-y-2">
-                  {billsSection.items.map((item) => (
-                    <li key={`${item.conversationId}-${item.title}`}>
-                      <a href={item.href} className="flex items-start justify-between gap-2 text-sm hover:underline">
-                        <span className="min-w-0">
-                          <span className="font-medium text-slate-800">{item.displayName}</span>
-                          <span className="ml-1.5 text-slate-500">{item.title}</span>
-                        </span>
-                        {item.dueAt && (
-                          <span className="shrink-0 whitespace-nowrap text-xs text-amber-600">
-                            Due {item.dueAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                          </span>
-                        )}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
+                <BillsDeadlinesList items={billsSection.items} />
               </section>
             )}
           </div>

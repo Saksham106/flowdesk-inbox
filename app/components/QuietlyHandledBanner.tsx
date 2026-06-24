@@ -33,7 +33,7 @@ export default function QuietlyHandledBanner({ count, breakdown }: Props) {
         </div>
       </div>
       <Link
-        href="/inbox?status=all"
+        href="/inbox?attention=fyi_done"
         className="text-[10px] font-semibold text-slate-500 border border-slate-200 bg-slate-50 rounded-lg px-3 py-1.5 hover:bg-slate-100 transition flex-shrink-0"
       >
         Review all →
