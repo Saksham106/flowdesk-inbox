@@ -7,6 +7,7 @@ FlowDesk is a Next.js, Prisma, PostgreSQL, and OpenAI app for an email-first AI 
 - Read `docs/README.md` for documentation structure.
 - Read `docs/CURRENT_STATE.md` before assuming what is implemented.
 - Read `docs/MASTER_PRODUCT_PLAN.md` before starting roadmap work.
+- Read a matching document under `docs/reference/` when changing a covered core subsystem.
 - For substantial feature work, create a temporary focused spec/plan only when it materially reduces ambiguity; remove completed process documents after their durable facts are reflected in living docs.
 
 ## Documentation Freshness Rules

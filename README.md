@@ -35,6 +35,7 @@ Start here:
 - `docs/CURRENT_STATE.md` — current implemented/partial/deferred state
 - `docs/MASTER_PRODUCT_PLAN.md` — concise product direction and priorities
 - `docs/TODO.md` — actionable remaining work
+- `docs/reference/` — curated design rationale for core subsystems
 
 ## Deferred: SMS
 

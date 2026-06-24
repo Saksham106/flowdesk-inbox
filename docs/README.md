@@ -9,4 +9,14 @@ FlowDesk keeps four living documents:
 
 Completed specs and implementation plans live in Git history, not the working tree. Update an existing living document when its source of truth changes; do not add handoff files or retain completed checklists.
 
-Before broad work, read `CURRENT_STATE.md`, `TODO.md`, and the relevant source code. Update only the documents affected by the change.
+## Design references
+
+`reference/` preserves the few designs that explain important system boundaries:
+
+- command center and work-item foundations
+- classification and email rendering
+- remote-image privacy and Outlook delta sync
+
+These are point-in-time design records, not current-status checklists. Code and `CURRENT_STATE.md` win if implementation details have changed.
+
+Before broad work, read `CURRENT_STATE.md`, `TODO.md`, the relevant reference when one exists, and the source code. Update only the documents affected by the change.
