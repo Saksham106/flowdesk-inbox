@@ -211,7 +211,7 @@ Commit: `feat: process Outlook delta sync notifications (#42)`
 
 Document Microsoft OAuth variables, delegated permissions, redirect URL, public HTTPS webhook URL, five-minute cron schedule and bearer auth, subscription renewal, delta continuation/retry behavior, alert signals, production checklist, and local HTTP limitations.
 
-- [ ] **Step 2: Run migration and complete verification**
+- [x] **Step 2: Run migration and complete verification**
 
 Run sequentially:
 
@@ -228,7 +228,7 @@ git diff --check
 
 Apply the migration to the local development database with `npm run db:deploy`, verify `prisma migrate status`, and rerun focused Outlook tests.
 
-- [ ] **Step 3: Commit documentation**
+- [x] **Step 3: Commit documentation**
 
 Commit: `docs: document Outlook delta sync operations (#42)`
 
