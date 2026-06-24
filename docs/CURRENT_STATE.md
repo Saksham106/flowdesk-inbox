@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-06-24 (inbox query perf)
+Last updated: 2026-06-24 (landing-page-redesign + inbox query perf)
 
 FlowDesk is an email-first AI inbox assistant for individuals and small businesses. It prioritizes important messages, extracts work, drafts responses, and keeps risky actions approval-gated.
 
@@ -60,6 +60,15 @@ FlowDesk is an email-first AI inbox assistant for individuals and small business
 
 - Plain-English agent rules (`AgentRule` model, NL compiler, conflict detection), category-scoped autopilot settings, snippets miner cron, scheduling sessions, automation run traces with rollback, and cron-driven workflow templates.
 - Google Calendar (events, free/busy, calendar holds), Google Drive OAuth foundation (not yet injected into drafts), and optional MindBody connector.
+
+### Landing page
+
+- Full visual redesign: white/light theme replacing dark/indigo. Sections: Nav, Hero, SocialProof, Features, HowItWorks (Outcomes grid), Pricing (Free/Pro/Enterprise), FAQ, FinalCTA, Footer.
+- All static assets (hero bg, product screenshot, logo, CTA bg, outcome icon bg) committed to `public/images/landing/`.
+- Lora serif font added via `next/font/google` for the CTA heading; Geist Sans + Geist Mono replace Space Grotesk + DM Mono app-wide.
+- Enterprise "Contact sales" CTA routes to `mailto:admin@flowdeskinbox.com`.
+- OG and Twitter card metadata added to `app/layout.tsx`.
+- SocialProof section is text-only (no customer logos yet).
 
 ## Query and performance constraints
 

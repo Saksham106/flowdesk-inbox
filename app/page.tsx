@@ -7,6 +7,7 @@ import SocialProof from "@/app/components/landing/SocialProof";
 import Pricing from "@/app/components/landing/Pricing";
 import FAQ from "@/app/components/landing/FAQ";
 import FinalCTA from "@/app/components/landing/FinalCTA";
+import Logo from "@/app/components/landing/Logo";
 
 export default function Home() {
   return (
@@ -21,19 +22,60 @@ export default function Home() {
         <FAQ />
         <FinalCTA />
       </main>
-      <footer id="page-footer" className="bg-[#09090b] border-t border-white/[0.06] py-6 px-4 sm:px-6">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-xs text-white/45">
-            © {new Date().getFullYear()} FlowDesk. All rights reserved.
-          </p>
-          <div className="flex items-center gap-5">
-            <Link href="/login" className="text-xs text-white/45 hover:text-white/70 transition-colors">
-              Sign in
-            </Link>
-            <Link href="/login?signup=1" className="text-xs text-white/45 hover:text-white/70 transition-colors">
-              Sign up
-            </Link>
+
+      <footer id="page-footer" className="bg-white border-t border-black/[0.08] px-5 sm:px-8 py-8">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-start justify-between gap-8">
+          {/* Logo */}
+          <div className="px-3">
+            <Logo size="sm" />
           </div>
+
+          {/* Footer nav columns */}
+          <div className="flex gap-14">
+            <div className="flex flex-col gap-2.5">
+              <p className="text-[13px] font-semibold text-[#141a3d]">Social</p>
+              <div className="h-1.5" />
+              {[
+                { label: "GitHub", href: "#" },
+                { label: "X (formerly Twitter)", href: "#" },
+                { label: "LinkedIn", href: "#" },
+              ].map((item) => (
+                <a key={item.label} href={item.href} className="text-[13px] text-[#595961] hover:text-black transition-colors">{item.label}</a>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <p className="text-[13px] font-semibold text-[#141a3d]">Company</p>
+              <div className="h-1.5" />
+              {[
+                { label: "Blog", href: "#" },
+                { label: "Contact Us", href: "#" },
+                { label: "Terms of Service", href: "#" },
+                { label: "Privacy Policy", href: "#" },
+              ].map((item) => (
+                <Link key={item.label} href={item.href} className="text-[13px] text-[#595961] hover:text-black transition-colors">
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <p className="text-[13px] font-semibold text-[#141a3d]">Tools</p>
+              <div className="h-1.5" />
+              {[
+                { label: "Gmail", href: "#" },
+                { label: "Google Calendar", href: "#" },
+              ].map((item) => (
+                <a key={item.label} href={item.href} className="text-[13px] text-[#595961] hover:text-black transition-colors">{item.label}</a>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-6xl mx-auto mt-8 pt-6 border-t border-black/[0.06]">
+          <p className="text-xs text-[#595961]">
+            © {new Date().getFullYear()} Flowdesk. All rights reserved.
+          </p>
         </div>
       </footer>
     </div>

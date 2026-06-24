@@ -1,21 +1,12 @@
 import type { Metadata } from "next";
-import { DM_Mono, Space_Grotesk, Playfair_Display } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
+import { Lora } from "next/font/google";
 import "./globals.css";
 import Providers from "@/app/providers";
 
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const dmMono = DM_Mono({
-  variable: "--font-geist-mono",
-  weight: ["400", "500"],
-  subsets: ["latin"],
-});
-
-const playfair = Playfair_Display({
-  variable: "--font-playfair",
+const lora = Lora({
+  variable: "--font-lora",
   subsets: ["latin"],
   display: "swap",
 });
@@ -23,6 +14,18 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   title: "Flowdesk Inbox",
   description: "AI inbox for small business support",
+  openGraph: {
+    title: "Flowdesk Inbox",
+    description: "AI inbox for small business support",
+    type: "website",
+    images: [{ url: "/images/landing/product-screenshot.png", width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Flowdesk Inbox",
+    description: "AI inbox for small business support",
+    images: ["/images/landing/product-screenshot.png"],
+  },
 };
 
 export default function RootLayout({
@@ -33,7 +36,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${spaceGrotesk.variable} ${dmMono.variable} ${playfair.variable} antialiased bg-slate-50 text-slate-900`}
+        className={`${GeistSans.variable} ${GeistMono.variable} ${lora.variable} antialiased bg-slate-50 text-slate-900`}
       >
         <Providers>{children}</Providers>
       </body>

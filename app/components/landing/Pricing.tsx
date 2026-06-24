@@ -1,165 +1,124 @@
 import Link from "next/link";
-import ScrollReveal from "@/app/components/ScrollReveal";
+
+function CheckIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-black" aria-hidden="true">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
 
 const plans = [
   {
-    name: "Starter",
-    tagline: "For small teams getting started.",
+    name: "Free",
+    price: "$0",
+    period: "/month",
+    description: "Perfect for trying Flowdesk. All core features included, forever.",
+    cta: "Get Started",
+    ctaHref: "/login?signup=1",
     features: [
       "1 shared inbox",
       "Up to 3 members",
-      "Email + 1 phone number",
+      "Email integration",
       "Copilot draft mode",
+      "Basic follow-up rules",
+      "7-day message history",
+      "Community support",
     ],
-    highlighted: false,
   },
   {
     name: "Pro",
-    tagline: "For growing teams that need more.",
+    price: "$20",
+    period: "/month",
+    description: "For growing teams that need more power and automation.",
+    cta: "Get Started",
+    ctaHref: "/login?signup=1",
     features: [
       "Unlimited inboxes & members",
       "Multiple phone numbers",
       "Copilot + Autopilot mode",
+      "Advanced follow-up sequences",
       "Audit logs & overrides",
+      "Unlimited message history",
+      "Priority support",
     ],
-    highlighted: true,
+  },
+  {
+    name: "Enterprise",
+    price: "Custom",
+    period: "",
+    description: "For teams that need dedicated support, custom deployment, and advanced security.",
+    cta: "Contact sales",
+    ctaHref: "mailto:admin@flowdeskinbox.com",
+    features: [
+      "Everything in Pro",
+      "Custom integrations",
+      "SSO & advanced permissions",
+      "Dedicated account manager",
+      "SLA guarantees",
+      "Custom deployment",
+      "Security review",
+    ],
   },
 ];
 
-function CheckIcon({ dark }: { dark: boolean }) {
-  return (
-    <div
-      className={`shrink-0 mt-0.5 h-[18px] w-[18px] rounded-full flex items-center justify-center ${
-        dark ? "bg-indigo-500/25" : "bg-indigo-50 border border-indigo-100"
-      }`}
-    >
-      <svg
-        width="9"
-        height="9"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={dark ? "text-indigo-400" : "text-indigo-500"}
-        aria-hidden="true"
-      >
-        <polyline points="20 6 9 17 4 12" />
-      </svg>
-    </div>
-  );
-}
-
 export default function Pricing() {
   return (
-    <section id="pricing" className="py-20 px-4 sm:px-6 bg-white border-t border-neutral-100">
-      <div className="max-w-6xl mx-auto">
-        <ScrollReveal>
-          <div className="text-center mb-12">
-            <p className="text-[11px] font-mono uppercase tracking-widest text-neutral-400 mb-3">
-              Pricing
-            </p>
-            <h2 className="font-serif text-3xl sm:text-4xl text-neutral-900 mb-2">
-              Simple, flexible plans.
-            </h2>
-            <p className="text-sm text-neutral-400">
-              Pricing finalised at launch — sign up to be first to know.
-            </p>
-          </div>
-        </ScrollReveal>
+    <section id="pricing" className="py-10 px-5 sm:px-8">
+      <div className="max-w-6xl mx-auto flex flex-col gap-4">
+        {/* Section heading */}
+        <div className="flex flex-col gap-1">
+          <p className="text-sm text-black font-normal">{"// Pricing"}</p>
+          <h2 className="text-[40px] leading-[1] font-normal text-black">
+            Start with conversations you already have
+          </h2>
+        </div>
 
-        <div className="grid sm:grid-cols-2 gap-5 max-w-xl mx-auto">
-
-          {/* Starter */}
-          <ScrollReveal delay={100}>
-            <div className="h-full rounded-2xl border border-neutral-200 bg-white p-8 flex flex-col gap-6 hover:shadow-md hover:shadow-neutral-900/5 transition-shadow">
-              <div>
-                <p className="text-xs font-mono font-semibold uppercase tracking-widest text-neutral-400 mb-2">
-                  Starter
+        {/* Pricing cards */}
+        <div className="flex flex-col lg:flex-row gap-4">
+          {plans.map((plan) => (
+            <div
+              key={plan.name}
+              className="flex-1 min-w-0 bg-[#f5f5f4] rounded-lg p-8 flex flex-col gap-2"
+            >
+              {/* Plan info */}
+              <div className="flex flex-col gap-1 mb-2">
+                <p className="text-lg font-semibold text-black">{plan.name}</p>
+                <p className="text-[32px] font-semibold text-black leading-none">
+                  {plan.price}
+                  {plan.period && (
+                    <span className="text-base font-normal text-black">{plan.period}</span>
+                  )}
                 </p>
-                <p className="text-sm text-neutral-500 leading-relaxed">{plans[0].tagline}</p>
+                <p className="text-sm text-black">{plan.description}</p>
               </div>
 
-              <ul className="flex-1 space-y-3">
-                {plans[0].features.map((f) => (
-                  <li key={f} className="flex items-start gap-2.5">
-                    <CheckIcon dark={false} />
-                    <span className="text-sm text-neutral-600">{f}</span>
+              {/* CTA */}
+              <Link
+                href={plan.ctaHref}
+                className="inline-flex items-center justify-center w-full rounded-lg bg-black text-white text-sm font-medium py-2.5 hover:opacity-85 transition-opacity mb-2"
+              >
+                {plan.cta}
+              </Link>
+
+              {/* Divider with label */}
+              <div className="flex items-center gap-3 my-2">
+                <div className="flex-1 h-px bg-black/10" />
+                <p className="text-xs font-medium text-[#6b6f76]">Features</p>
+                <div className="flex-1 h-px bg-black/10" />
+              </div>
+
+              {/* Feature list */}
+              <ul className="flex flex-col gap-2">
+                {plan.features.map((feature) => (
+                  <li key={feature} className="flex items-start gap-2">
+                    <CheckIcon />
+                    <span className="text-xs text-black">{feature}</span>
                   </li>
                 ))}
               </ul>
-
-              <Link
-                href="/login?signup=1"
-                className="inline-flex items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
-              >
-                Get started
-              </Link>
             </div>
-          </ScrollReveal>
-
-          {/* Pro — gradient border + ambient glow */}
-          <ScrollReveal delay={200}>
-            <div className="relative h-full">
-              {/* Ambient glow behind card */}
-              <div
-                className="absolute -inset-3 rounded-3xl pointer-events-none"
-                style={{
-                  background:
-                    "radial-gradient(ellipse at 50% 50%, rgba(99,102,241,0.18) 0%, transparent 70%)",
-                }}
-              />
-
-              {/* Gradient border wrapper */}
-              <div
-                className="relative h-full rounded-2xl p-[1.5px] shadow-xl shadow-indigo-500/25"
-                style={{
-                  background:
-                    "linear-gradient(160deg, #6366f1 0%, #8b5cf6 50%, #7c3aed 100%)",
-                }}
-              >
-                {/* Most popular badge — centered, floating above card top edge */}
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10">
-                  <span
-                    className="inline-block rounded-full px-3 py-1 text-[11px] font-semibold text-white whitespace-nowrap"
-                    style={{ background: "linear-gradient(135deg, #6366f1 0%, #7c3aed 100%)" }}
-                  >
-                    Most popular
-                  </span>
-                </div>
-
-                <div className="h-full rounded-[calc(1rem-1px)] bg-[#0d0d14] p-8 flex flex-col gap-6">
-                  {/* Header */}
-                  <div>
-                    <p className="text-xs font-mono font-semibold uppercase tracking-widest text-indigo-400 mb-2">
-                      Pro
-                    </p>
-                    <p className="text-sm text-white/50 leading-relaxed">{plans[1].tagline}</p>
-                  </div>
-
-                  <ul className="flex-1 space-y-3">
-                    {plans[1].features.map((f) => (
-                      <li key={f} className="flex items-start gap-2.5">
-                        <CheckIcon dark />
-                        <span className="text-sm text-white/75">{f}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <Link
-                    href="/login?signup=1"
-                    className="inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-opacity"
-                    style={{
-                      background: "linear-gradient(135deg, #6366f1 0%, #7c3aed 100%)",
-                    }}
-                  >
-                    Get started with Pro
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </ScrollReveal>
+          ))}
         </div>
       </div>
     </section>
