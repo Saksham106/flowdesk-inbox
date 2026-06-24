@@ -4,15 +4,37 @@ Last updated: 2026-06-24
 
 ## Product thesis
 
-FlowDesk is an AI chief of staff for the inbox: it identifies what matters, explains why, tracks the next action, and safely handles routine work. Trust comes from visible reasoning, user correction, approval gates, audit history, and undo—not from replying to everything automatically.
+FlowDesk is the AI chief of staff for the inbox. Every morning it tells you what matters, what can be ignored, who needs follow-up, where money or deadlines are at risk, and safely handles the boring work. Trust comes from visible reasoning, user correction, approval gates, audit history, and undo — not from replying to everything automatically.
+
+The product should consistently do five things:
+
+1. Know what matters.
+2. Know what can be ignored.
+3. Know the relationship history.
+4. Know the next action.
+5. Do the boring work safely.
 
 ## Product principles
 
 1. Prioritize obligations, relationships, risk, and revenue over inbox volume.
 2. Preserve explicit user intent across provider synchronization and classification.
-3. Prefer deterministic handling for routine mail and use richer AI where it adds value.
+3. Prefer deterministic handling for routine mail; use richer AI where it adds measurable value.
 4. Draft and explain before automating; gate sensitive actions by confidence and risk.
 5. Keep connector work incremental, idempotent, bounded, observable, and recoverable.
+
+## North star experience
+
+### Morning brief
+
+The first screen should say: "Here are the N things that actually matter today." It shows needs-reply, waiting-on-others, meetings that need prep, bills and deadlines, opportunities and leads, potential problems, and things safely ignored.
+
+### Thread view
+
+Every thread should answer: who sent this and when, what happened, what do they want, what do I need to do, what is risky, what can FlowDesk handle, and what should never be sent without approval.
+
+### Trust model
+
+Users do not trust an AI that replies to everything. They trust an assistant with visible rules, confidence scores, approval gates, audit history, and undo.
 
 ## Phases
 
@@ -36,10 +58,60 @@ Plain-English rules, autopilot policies, snippets, Clean Inbox, scheduling sessi
 
 Shared inboxes, assignments, comments, collision detection, roles, permissions, SLAs, and team analytics require a dedicated collaboration model and should not be layered onto the single-user foundation piecemeal.
 
+## Feature index
+
+| # | Feature | Status | Notes |
+|---|---|---|---|
+| 1 | Daily Command Center | `Partial` | First slice shipped; needs persistence and richer source signals. |
+| 2 | Autopilot Modes | `Shipped` | Per-attention-category policy table (auto-send / require approval / never) in settings. |
+| 3 | Handle This Button | `Partial` | Button exists and triggers draft suggestion; needs task/lead/calendar side effects. |
+| 4 | AI Follow-Up Brain | `Partial` | Follow-up tracker and lead sequences shipped; sequence settings UI and sent-output visibility remain. |
+| 5 | Relationship Memory | `Partial` | Persisted `PersonMemory`, relationship panel, user editing, gated LLM extraction; richer history and retrieval remain. |
+| 6 | Never Drop the Ball | `Partial` | Attention taxonomy, inbox filters, and corrections exist; clearer alerts and filter coverage remain. |
+| 7 | Business Lead Capture | `Partial` | LLM scoring, score explanation, estimated value, CRM funnel header shipped. CRM search and value forecasting remain. |
+| 8 | Knowledge Base Replies | `Partial` | URL import, citations in drafts shipped. Re-crawl and semantic search remain. |
+| 9 | Personal Voice Clone | `Partial` | Learned profile exists; clearer controls and style feedback remain. |
+| 10 | Sensitive Email Detection | `Partial` | Security/billing/legal/medical/emotional detection and draft warnings shipped; broader coverage ongoing. |
+| 11 | Meeting Prep | `Partial` | On-demand brief from PersonMemory + threads; `/meetings` page + digest card. Briefs not persisted. |
+| 12 | Post-Meeting Follow-Up | `Partial` | Notes + prior threads → follow-up draft → ApprovalRequest shipped. |
+| 13 | Email-to-Task Extraction | `Partial` | Task model, extraction, list page, due-date editing, manual creation; assignment remains later. |
+| 14 | Smart Scheduling Agent | `Partial` | SchedulingSession model, detector, slot proposal via Calendar API, SchedulingPanel. Confirmation and booking not yet wired. |
+| 15 | Explain This Thread | `Partial` | On-demand LLM explanation panel on conversation pages; persistence and inbox surfacing remain. |
+| 16 | Attachment Intelligence | `Partial` | EmailAttachment model, MIME detection, PDF extraction; richer previews and actions remain. |
+| 17 | Natural Language Search | `Partial` | Message tsvector search, /search page; semantic/embedding search remains. |
+| 18 | Team Shared Inbox | `Later` | Needs team model and collaboration primitives. |
+| 19 | Customer Support Mode | `Partial` | Auto-detect, churn-risk flags, KB-match drafts, SupportPanel; richer workflows remain. |
+| 20 | Sales Agent Mode | `Partial` | Sales signals, SalesPanel, sales-qualified state; richer workflows and settings remain. |
+| 21 | Personal Life Admin | `Partial` | Bills, travel, medical, subscriptions, school detected; broader workflows remain. |
+| 22 | Email Risk Radar | `Shipped` | Deterministic scan for deadline-soon, final-notice, unanswered, sensitive-content on `/risk-radar`. |
+| 23 | Phishing Protection | `Partial` | Signal-scored classifier, warning banner, mark-safe; ongoing tuning and false-positive UX remain. |
+| 24 | Auto-Unsubscribe | `Partial` | Safe unsubscribe, Gmail archive/trash, Clean Inbox shipped; broader provider cleanup remains. |
+| 25 | What Can I Ignore | `Partial` | Safely-ignored section, attention reasons, bulk close, archive/trash shipped; broader cleanup later. |
+| 26 | Outcome-Based Automation | `Partial` | AutomationRun trace, step executor (create_task, update_attention, archive), rollback. Trigger conditions not user-configurable yet. |
+| 27 | Train My Agent | `Shipped` | AgentRule model, NL compiler, preview endpoint, conflict detection, settings UI. |
+| 28 | Approval Queue | `Partial` | Inline approve/reject, batch actions, draft preview; edit-before-send and teach-the-agent remain. |
+| 29 | Confidence Before Sending | `Partial` | Draft confidence, sensitive warnings, per-category autopilot thresholds; clearer user-facing policy education remains. |
+| 30 | Auto-Draft on Intent | `Shipped` | AI draft panel accepts rough instructions and produces approval-gated drafts. |
+| 31 | Multi-Step Workflows | `Partial` | WorkflowTemplate + WorkflowRun, runner, cron, 3 seeded templates, settings panel. Builder UI not yet implemented. |
+| 32 | Email Analytics / ROI | `Shipped` | 4-week trend bars, pipeline value, revenue opportunities on `/reports`; `ValueSnapshot` with weekly cron. |
+| 33 | VIP Protection | `Shipped` | VipContact model, detector, urgent priority, inbox badge, conversation banner, settings form. |
+| 34 | Reply Later / Snooze | `Partial` | SnoozeReminder model, API, cron, modal, Snoozed tab, resurfaced banner; smarter suggestions remain. |
+| 35 | Context From Connected Apps | `Partial` | Google Drive OAuth, searchDriveForContext; not yet injected into draft generation. |
+| 36 | AI Concierge Templates | `Partial` | Local-business templates, seed route, reply-composer picker; deeper vertical workflows remain. |
+| 37 | Snippets and Playbooks | `Shipped` | Snippet model, weekly miner, API, settings panel, picker in reply composer. |
+| 38 | Second Brain / Inbox Memory | `Partial` | PersonMemory facts, fact extractor, SecondBrainPanel; natural-language retrieval remains. |
+| 39 | Auto-Personalized Outreach | `Later` | Valuable, but avoid spam positioning. |
+| 40 | Email Triage by Money Impact | `Shipped` | Revenue-weighted score bonus in command center; Revenue at Risk subsection for stale high-value leads. |
+| 41 | Clean My Inbox | `Shipped` | /clean-inbox page, batch archive/unsubscribe, 1-hour undo via AuditLog. |
+| 42 | Smart Labels | `Partial` | Action-oriented attention taxonomy, corrections, bulk close, learned rules; deeper explainability remains. |
+| 43 | Ask My Inbox Chat | `Partial` | Streaming RAG pipeline, /chat page, SSE route; action-taking answers remain later. |
+| 44 | Trust, Privacy, and Audit Log | `Partial` | Audit log and undo for reversible autopilot approvals; broader coverage remains. |
+| 45 | Paid Packaging | `Discovery` | Use as product packaging decision, not an engineering feature. |
+
 ## Current priorities
 
-1. Make classification decisions inspectable and consolidate duplicated heuristics.
-2. Add intentional sender/domain rule management while preserving user precedence.
+1. Make classification decisions inspectable — show why a thread was classified the way it was, with source, rule/AI/user, confidence, and key evidence.
+2. Add intentional sender/domain rule management while preserving user correction precedence.
 3. Finish provider parity and reliability gaps, including Outlook writeback and Gmail CID images.
 4. Complete scheduling, workflow-builder, and connected-context loops already started.
 5. Define paid packaging and a primary business persona before building team features.
@@ -48,7 +120,41 @@ Shared inboxes, assignments, comments, collision detection, roles, permissions, 
 
 - Legal, financial, health, HR, immigration, security, dispute, and emotionally sensitive messages require human review by default.
 - Autopilot remains category-scoped, confidence-gated, auditable, and reversible where possible.
-- Agent actions should expose what changed, why, their source, and how to correct them.
+- Every agent action should expose what changed, why, its source, and how to correct it.
 - No paid feature may bypass safety policy.
+- Prefer "draft and explain" before "send automatically."
 
-Detailed current capabilities are in [`CURRENT_STATE.md`](CURRENT_STATE.md); concrete remaining work is in [`TODO.md`](TODO.md).
+## Decision log
+
+| Date | Decision | Reason |
+|---|---|---|
+| 2026-06-11 | Treat the 45-feature brief as a phased roadmap, not one implementation batch. | The feature set spans multiple subsystems: tasks, CRM, memory, search, automations, teams, trust, and pricing. |
+| 2026-06-11 | Ship Daily Command Center as the first slice. | Creates the first wow moment and reuses existing conversations, drafts, approvals, jobs, calendar holds, and labels. |
+| 2026-06-11 | `command-center.ts` is a pure analysis module — accepts plain objects, no Prisma calls. | Keeps the analyzer independently unit-testable; pages own data fetching and can evolve separately. |
+| 2026-06-11 | Store lead sequence state in `Lead.metadataJson` instead of a new model. | Avoids a schema migration; state is two fields. Promote to a dedicated model if sequences grow. |
+| 2026-06-11 | Compute the weekly value report live from existing records; no `ValueMetric` model yet. | All eight metrics are cheap tenant-scoped counts; persisted snapshots only become necessary for trends. |
+| 2026-06-12 | Add a deterministic `email-classifier.ts` before LLM classification. | Notifications, newsletters, and no-reply senders should never reach `needs_reply` status; deterministic rules are faster, cheaper, and independently testable. |
+| 2026-06-12 | Gate lead scoring and sales classification behind `accountType !== "personal"`. | Personal account users were receiving irrelevant business/sales AI behavior and prompt framing. |
+| 2026-06-12 | Store all classification metadata in `ConversationState.metadataJson` as a free-form JSON blob. | Avoids schema churn for evolving classification fields; existing rows without a field fall through to current defaults. |
+| 2026-06-12 | Reply-style learning falls back to Gmail SENT history when DB outbound sample count < 5. | Freshly-connected accounts had zero outbound DB rows; immediate failure was confusing. |
+| 2026-06-14 | Walk the full MIME tree for email body extraction; keep `text/html` for rendering, `text/plain` for AI. | Single-part HTML messages were stored as escaped text; newsletter CSS junk was appearing in previews and AI prompts. |
+| 2026-06-14 | Force light-mode color scheme in the sandboxed iframe. | Dark-mode email templates were rendering black when Gmail shows them light. |
+| 2026-06-15 | Store local user intent separately from raw Gmail state. | The Mark Done resurrection bug showed that sync/provider state and local intent were sharing too much surface. Explicit user actions now always win. |
+| 2026-06-15 | Add AI usage policy: deterministic rules handle low-value mail first; LLM extraction is skipped or cached. | Reduces AI cost for notification/newsletter mail and prevents eager rich-AI regeneration on every conversation open. |
+| 2026-06-16 | OTP/security/reset action items expire by explicit text patterns and default TTLs; can be manually dismissed. | Needs Action was showing stale security codes long after they expired. |
+| 2026-06-17 | Gmail push events are persisted with Pub/Sub message ID idempotency before any sync work begins. | Duplicate push deliveries were triggering duplicate syncs. |
+| 2026-06-18 | Outlook delta cursor URL is encrypted at rest as `deltaLinkEncrypted`. | The cursor URL is an opaque Microsoft-issued token that may contain routing information. |
+| 2026-06-18 | Outlook sync lease uses a random owner ID (`syncLeaseId`); release requires the same ID. | Prevents a stale worker from clearing a newer worker's lock — the gap that was possible with the simpler boolean lease used by earlier designs. |
+| 2026-06-18 | Outlook webhook only queues `OutlookSyncEvent` hints; Graph sync happens in cron, not inline. | Webhook response time must be < 5 s or Microsoft retries. Delta sync can take much longer for large mailboxes. |
+| 2026-06-24 | Block remote images by default; allow per-message explicit load without persisting the choice. | Remote image loads expose the user's IP and confirm email opens to senders. Per-message explicit load keeps the UX practical without making the choice permanent. |
+| 2026-06-24 | `invalid_grant` sets `lastSyncStatus: "needs_reauth"` and stops auto-polling. | Silent retry loop was burning background requests every 15 minutes while showing a stale "synced 5 days ago" timestamp. |
+
+## Open product questions
+
+- Which first paid persona matters most: personal chief of staff, local business revenue inbox, or team support desk?
+- Should `Lead` be generic or opinionated toward a first niche (tutors, clinics, agencies, salons)?
+- What actions should be allowed in free accounts versus paid accounts?
+- How much user-visible explanation is enough before automation feels noisy?
+- Which integrations are required for the first paid wedge: calendar, Stripe, Calendly, Drive, Notion, or CRM?
+- How much relationship-memory automation should run proactively versus lazily for privacy and cost reasons?
+- How should users correct the agent when classification or memory is wrong?

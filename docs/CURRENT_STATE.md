@@ -8,41 +8,68 @@ FlowDesk is an email-first AI inbox assistant for individuals and small business
 
 ### Platform
 
-- NextAuth credentials authentication with tenant-scoped data.
-- Personal and business account modes via `Tenant.accountType`.
-- Audit logs, approval requests, automation traces, and undo for selected reversible actions.
+- NextAuth credentials authentication with tenant-scoped data isolation.
+- Personal and business account modes via `Tenant.accountType`. Personal accounts suppress all CRM, sales, lead-scoring, and business-framing AI behavior at the prompt and sync layers.
+- Audit logs, approval requests, automation run traces, and undo for selected reversible actions.
 
-### Email connectors
+### Gmail
 
-- Gmail OAuth, incremental history sync, Pub/Sub notifications, renewable watches, durable retries, state reconciliation, and per-channel locks.
-- Gmail read, archive, trash, and unsubscribe writeback. Local user intent is stored separately from raw Gmail state.
-- Expired/revoked Gmail credentials surface a reconnect flow and stop automatic polling.
-- Outlook OAuth plus leased Microsoft Graph Inbox delta sync shared by initial, manual, webhook, and fallback runs.
-- Outlook stores encrypted cursors and webhook client state, renews subscriptions, queues notification hints durably, and processes bounded fallback cron work.
-- Email HTML is sanitized and sandboxed. Remote images are blocked by default and may be explicitly loaded per message.
+- OAuth connect/callback with encrypted token storage. Access token is auto-refreshed by the googleapis client; the `"tokens"` event handler persists refreshed tokens back to the DB.
+- Expired or revoked credentials (`invalid_grant`) set `lastSyncStatus: "needs_reauth"`, surface a "Reconnect Gmail" CTA in both the inbox control and settings, and stop all automatic polling until reconnected.
+- Incremental history sync via the Gmail History API with `labelId: INBOX` filter. Falls back to a recent-message scan when the history cursor is stale (cursor resets are timestamped in `lastHistoryFallbackAt` for UI visibility).
+- Pub/Sub push notifications via renewable watches. Each notification is persisted in `GmailPushEvent` with idempotency on the Pub/Sub message ID; duplicate deliveries are no-ops.
+- Per-channel sync lock via `updateMany` on `syncLockExpiresAt`. Parallel sync attempts skip and return 202 without duplicating work. Lock owner is implicit (row-level); lock expires after 2 minutes.
+- Local read/archive/trash/unsubscribe writeback to Gmail. Failed mark-read writes queue into `GmailWritebackQueue` and are retried by cron with exponential backoff.
+- Local user intent (read state, conversation status, attention category) is stored separately from raw Gmail state (`gmailUnread`, `gmailLabelIds`, `gmailRawState`) so provider syncs cannot overwrite explicit user choices.
+- `GmailStateReconcile` cron detects local-read/Gmail-unread drift; auto-reconciles non-user reads and queues writeback for user-initiated reads.
+
+### Outlook
+
+- OAuth connect/callback with encrypted token and cursor storage.
+- Leased incremental delta sync via Microsoft Graph `/me/mailFolders('inbox')/messages/delta`. The encrypted `deltaLinkEncrypted` cursor is persisted after each page so bounded cron runs can continue large initial imports across invocations without restarting.
+- Lease uses a random owner ID (`syncLeaseId`); the completion update requires the same ID so a stale worker cannot release a newer worker's lock. HTTP 410 / invalid-cursor clears the saved cursor and schedules a fresh start.
+- Webhook endpoint queues authenticated `OutlookSyncEvent` hints only (constant-time client-state comparison; message content and tokens are never stored). Graph delta sync happens in cron, not inline with the webhook response.
+- Bounded cron: at most 25 queued events, 25 fallback credentials, and 25 subscription renewals per run.
+- Outlook does not yet have archive/trash writeback.
+
+### Email rendering
+
+- Gmail MIME tree walker collects `text/html` and `text/plain` parts at up to 12 levels of nesting. HTML is preferred for rendering; plain text is used for AI prompts and snippet generation.
+- HTML is sanitized with a strict allow-list and rendered in a sandboxed iframe. Remote images and other external network fetches are blocked by default. Users can explicitly load HTTPS images per message; the choice is not persisted (privacy-preserving by design).
+- A forced light-mode color scheme prevents dark-mode email templates from rendering black in the iframe.
+- Plain-text bodies are auto-linked; `cid:` inline images are not yet resolved from MIME attachments.
 
 ### Inbox intelligence
 
-- Command center, attention categories, deterministic email-type classification, sensitive-content detection, and manual corrections.
-- Learned sender/domain rules from repeated corrections; explicit user choices override rules and AI.
+- **Command center** (`lib/agent/command-center.ts`): pure analysis module — accepts pre-fetched plain objects, never calls Prisma directly. Pages own data fetching. This boundary keeps the analyzer independently unit-testable and lets page data shapes evolve without touching the scoring logic.
+- **Email classifier** (`lib/agent/email-classifier.ts`): fully deterministic, no DB or AI calls. Evaluates no-reply sender addresses, known notification domains (GitHub, Google Docs, Jira, Linear, Supabase, etc.), subject patterns, and body patterns (unsubscribe links, marketing language) in priority order. Result stored in `ConversationState.metadataJson.emailType`; no schema migration needed.
+- **Account-mode separation**: personal accounts receive a different classify prompt with no sales/lead/business framing. Lead scoring (`scoreLeadForConversation`) and sales signal classification are skipped entirely for personal accounts.
+- **Reply-style learning**: reads FlowDesk outbound DB rows first; falls back to `fetchGmailSentSamples` (Gmail SENT label) when DB sample count < 5. Source counts stored in `sourceStatsJson` for transparency in the settings UI.
+- Attention categories (`needs_reply`, `needs_action`, `review_soon`, `read_later`, `waiting_on`, `fyi_done`, `quiet`), manual corrections, and learned sender/domain rules. Explicit user corrections always take precedence over learned rules and AI classification.
 - Tasks, leads, follow-ups, risk radar, meeting prep/follow-up, weekly value reports, and revenue-at-risk reporting.
-- AI drafts with knowledge-document citations, learned reply style, budget limits, and human approval gates.
+- AI drafts with knowledge-document citations, learned reply style, per-feature budget limits, and human approval gates.
 - Search, inbox chat, person memory, attachment extraction, phishing warnings, VIPs, snooze, and Clean Inbox bulk actions.
+
+### Work items and classification persistence
+
+- `lib/agent/work-items.ts` extracts task and lead candidates from conversation analysis. `lib/agent/work-item-sync.ts` persists them with tenant-scoped upserts and audit logs.
+- Persistence never overwrites records with source `"user"`; only `"deterministic"` source records are updated by sync. This preserves explicit user edits across provider syncs.
+- `ConversationState.metadataJson` is a free-form JSON blob — all classification metadata (attention category, reason, confidence, email type, action code, expiry) lives here without dedicated schema columns. Existing rows without a field fall through to current default behavior.
 
 ### Automations and integrations
 
-- Plain-English agent rules, category-scoped autopilot settings, snippets, scheduling sessions, automation rollback, and cron-driven workflow templates.
-- Google Calendar, Google Drive, and optional MindBody connector foundations.
+- Plain-English agent rules (`AgentRule` model, NL compiler, conflict detection), category-scoped autopilot settings, snippets miner cron, scheduling sessions, automation run traces with rollback, and cron-driven workflow templates.
+- Google Calendar (events, free/busy, calendar holds), Google Drive OAuth foundation (not yet injected into drafts), and optional MindBody connector.
 
 ## Important limitations
 
-- Outlook does not yet have Gmail-equivalent archive/trash writeback.
-- Gmail `cid:` images are not resolved from related MIME attachments.
-- CC/BCC fields are displayed but not forwarded by send APIs.
-- Classification heuristics still overlap between command-center and inbox filtering.
-- Sender/domain rules cannot be created or edited manually.
-- Knowledge-base matching is keyword-based; crawling is single-page.
-- Scheduling confirmation/booking and the workflow builder UI are incomplete.
+- Outlook does not yet have archive/trash writeback (Gmail equivalent exists).
+- Gmail `cid:` inline images are not resolved from related MIME attachments.
+- CC/BCC fields are displayed in the compose UI but not forwarded by send APIs.
+- Classification heuristics still have edge-case overlap between command-center FYI logic and inbox list filtering.
+- Sender/domain attention rules cannot be created or edited manually — only accepted from auto-generated suggestions.
+- Knowledge-base matching is keyword-based; crawling is single-page only.
+- Scheduling confirmation detection and calendar event booking are not yet wired end-to-end.
 - Google Drive context is not yet injected into draft generation.
 - Team inboxes, roles, paid-plan enforcement, and additional integrations are not implemented.
 
