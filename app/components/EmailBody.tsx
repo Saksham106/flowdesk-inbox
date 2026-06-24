@@ -1,4 +1,9 @@
-import { isHtmlBody, sanitizeEmailHtmlForIframe, linkifyText } from "@/lib/email-body";
+import {
+  hasRemoteEmailImages,
+  isHtmlBody,
+  sanitizeEmailHtmlForIframe,
+  linkifyText,
+} from "@/lib/email-body";
 import EmailBodyIframe from "@/app/components/EmailBodyIframe";
 
 interface Props {
@@ -7,8 +12,12 @@ interface Props {
 
 export default function EmailBody({ body }: Props) {
   if (isHtmlBody(body)) {
-    const sanitized = sanitizeEmailHtmlForIframe(body);
-    return <EmailBodyIframe html={sanitized} />;
+    const hasRemoteImages = hasRemoteEmailImages(body);
+    const blockedHtml = sanitizeEmailHtmlForIframe(body);
+    const remoteHtml = hasRemoteImages
+      ? sanitizeEmailHtmlForIframe(body, { allowRemoteImages: true })
+      : undefined;
+    return <EmailBodyIframe html={blockedHtml} remoteHtml={remoteHtml} />;
   }
 
   // Plain text: linkify URLs and convert newlines to <br>

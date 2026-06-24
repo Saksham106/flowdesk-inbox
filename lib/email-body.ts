@@ -37,9 +37,26 @@ export function sanitizeEmailHtml(html: string): string {
   });
 }
 
-// Permissive sanitizer for rendering inside a sandboxed iframe
-// Keeps CSS (style tags + inline styles) for visual fidelity; removes only dangerous elements
-export function sanitizeEmailHtmlForIframe(html: string): string {
+export type EmailIframeSanitizeOptions = {
+  allowRemoteImages?: boolean;
+};
+
+export function hasRemoteEmailImages(html: string): boolean {
+  const imageOnly = sanitizeHtml(html, {
+    allowedTags: ["img"],
+    allowedAttributes: { img: ["src"] },
+    allowedSchemesByTag: { img: ["https"] },
+  });
+  return /<img\b[^>]*\bsrc=["']https:\/\//i.test(imageOnly);
+}
+
+// Permissive sanitizer for rendering inside a sandboxed iframe.
+// Keeps CSS (style tags + inline styles) for visual fidelity, but remote images
+// remain blocked until the user explicitly opts in for the displayed message.
+export function sanitizeEmailHtmlForIframe(
+  html: string,
+  options: EmailIframeSanitizeOptions = {}
+): string {
   const cleaned = sanitizeHtml(html, {
     allowedTags: [
       // Structure
@@ -88,6 +105,20 @@ export function sanitizeEmailHtmlForIframe(html: string): string {
           rel: "noopener noreferrer",
         },
       }),
+      img: (_tagName, attribs) => {
+        const nextAttribs = { ...attribs };
+        const src = nextAttribs.src?.trim();
+        const isRemote = /^https?:\/\//i.test(src ?? "");
+        const isAllowedRemote = options.allowRemoteImages && /^https:\/\//i.test(src ?? "");
+
+        if (isRemote && !isAllowedRemote) {
+          delete nextAttribs.src;
+        } else if (src) {
+          nextAttribs.src = src;
+        }
+
+        return { tagName: "img", attribs: nextAttribs };
+      },
     },
     disallowedTagsMode: "discard",
     allowVulnerableTags: true,

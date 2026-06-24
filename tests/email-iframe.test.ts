@@ -4,6 +4,33 @@ import { sanitizeEmailHtmlForIframe } from "@/lib/email-body";
 import { buildEmailIframeSrcDoc, EMAIL_IFRAME_SANDBOX } from "@/lib/email-iframe";
 
 describe("buildEmailIframeSrcDoc", () => {
+  it("denies remote network loads by default", () => {
+    const srcDoc = buildEmailIframeSrcDoc("<p>Private email</p>");
+
+    expect(srcDoc).toContain("default-src 'none'");
+    expect(srcDoc).toContain("img-src data: cid:");
+    expect(srcDoc).not.toContain("img-src https:");
+    expect(srcDoc).toContain("connect-src 'none'");
+    expect(srcDoc).toContain("font-src 'none'");
+    expect(srcDoc).toContain("frame-src 'none'");
+    expect(srcDoc).toContain("form-action 'none'");
+    expect(srcDoc).toContain("base-uri 'none'");
+  });
+
+  it("allows only HTTPS images after explicit opt-in", () => {
+    const srcDoc = buildEmailIframeSrcDoc("<p>Newsletter</p>", {
+      allowRemoteImages: true,
+    });
+
+    expect(srcDoc).toContain("img-src https: data: cid:");
+    expect(srcDoc).not.toContain("img-src http:");
+    expect(srcDoc).toContain("connect-src 'none'");
+    expect(srcDoc).toContain("font-src 'none'");
+    expect(srcDoc).toContain("frame-src 'none'");
+    expect(srcDoc).toContain("form-action 'none'");
+    expect(srcDoc).toContain("base-uri 'none'");
+  });
+
   it("forces a light iframe color scheme and removes dark-mode-only email CSS", () => {
     const sanitized = sanitizeEmailHtmlForIframe(`
       <html>

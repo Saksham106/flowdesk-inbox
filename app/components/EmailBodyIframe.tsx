@@ -5,11 +5,18 @@ import { buildEmailIframeSrcDoc, EMAIL_IFRAME_SANDBOX } from "@/lib/email-iframe
 
 interface Props {
   html: string;
+  remoteHtml?: string;
 }
 
-export default function EmailBodyIframe({ html }: Props) {
+export default function EmailBodyIframe({ html, remoteHtml }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(300);
+  const [remoteImagesLoaded, setRemoteImagesLoaded] = useState(false);
+  const displayedHtml = remoteImagesLoaded && remoteHtml ? remoteHtml : html;
+
+  useEffect(() => {
+    setRemoteImagesLoaded(false);
+  }, [html, remoteHtml]);
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -72,16 +79,33 @@ export default function EmailBodyIframe({ html }: Props) {
       ro?.disconnect();
       if (settleTimer !== null) clearTimeout(settleTimer);
     };
-  }, [html]);
+  }, [displayedHtml]);
 
   return (
-    <iframe
-      ref={iframeRef}
-      srcDoc={buildEmailIframeSrcDoc(html)}
-      sandbox={EMAIL_IFRAME_SANDBOX}
-      style={{ width: "100%", maxWidth: "100%", minWidth: 0, height: `${height}px`, border: "none", display: "block", overflow: "hidden" }}
-      title="Email content"
-      loading="lazy"
-    />
+    <div>
+      {remoteHtml && !remoteImagesLoaded ? (
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          <span>Remote images blocked for privacy</span>
+          <button
+            type="button"
+            className="shrink-0 font-medium text-blue-600 hover:text-blue-700"
+            onClick={() => setRemoteImagesLoaded(true)}
+          >
+            Load images
+          </button>
+        </div>
+      ) : null}
+      <iframe
+        ref={iframeRef}
+        srcDoc={buildEmailIframeSrcDoc(displayedHtml, {
+          allowRemoteImages: remoteImagesLoaded,
+        })}
+        sandbox={EMAIL_IFRAME_SANDBOX}
+        referrerPolicy="no-referrer"
+        style={{ width: "100%", maxWidth: "100%", minWidth: 0, height: `${height}px`, border: "none", display: "block", overflow: "hidden" }}
+        title="Email content"
+        loading="lazy"
+      />
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 # FlowDesk Current State
 
-Last updated: 2026-06-18
+Last updated: 2026-06-24
 
 This file is the factual snapshot of what the codebase can do today. Strategic roadmap details live in `MASTER_PRODUCT_PLAN.md`; unfinished work lives in `TODO.md`; historical specs and implementation plans live in `docs/archive/`.
 
@@ -41,7 +41,7 @@ The core promise is: show what matters, explain why, safely handle routine work,
 - Conversation detail pages at `/conversations/[id]` render chronological email-style thread blocks with sender/recipient/timestamp metadata.
 - Conversation detail pages cap initial message fetches and avoid running work-item sync on every page open; sync is driven by provider sync/new message paths and explicit actions.
 - Reply composer supports manual send and AI draft generation. CC/BCC fields are present in the UI but are not yet forwarded by send APIs.
-- Email HTML rendering uses sanitized iframe rendering with light-mode protection, safe links, safe schemes, and page-width containment.
+- Email HTML rendering uses sanitized iframe rendering with light-mode protection, safe links, safe schemes, and page-width containment. Remote images and other network loads are blocked by default; users can explicitly load HTTPS images for the displayed message without persisting that choice.
 - Inbox previews use stored `Message.subject` plus cleaned body snippets through `buildPreviewText`.
 
 ### Gmail Writeback And Local State
@@ -171,6 +171,7 @@ Recently relevant focused tests:
 - `tests/work-item-sync.test.ts`
 - `tests/email-body.test.ts`
 - `tests/email-iframe.test.ts`
+- `tests/email-privacy-ui.test.ts`
 - `tests/gmail-sync.test.ts`
 - `tests/gmail-sync-runner.test.ts`
 - `tests/gmail-watch-cron.test.ts`

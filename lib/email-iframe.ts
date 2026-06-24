@@ -4,6 +4,26 @@ const COLOR_SCHEME_META_RE =
 
 export const EMAIL_IFRAME_SANDBOX = "allow-popups allow-popups-to-escape-sandbox allow-same-origin";
 
+export type EmailIframeOptions = {
+  allowRemoteImages?: boolean;
+};
+
+function emailContentSecurityPolicy(allowRemoteImages: boolean): string {
+  const images = allowRemoteImages ? "https: data: cid:" : "data: cid:";
+  return [
+    "default-src 'none'",
+    `img-src ${images}`,
+    "style-src 'unsafe-inline'",
+    "font-src 'none'",
+    "connect-src 'none'",
+    "media-src 'none'",
+    "frame-src 'none'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+  ].join("; ");
+}
+
 function removeBalancedCssBlocks(css: string, pattern: RegExp): string {
   let output = "";
   let cursor = 0;
@@ -51,9 +71,13 @@ function lightModeContainmentCss(): string {
   `;
 }
 
-export function buildEmailIframeSrcDoc(html: string): string {
+export function buildEmailIframeSrcDoc(
+  html: string,
+  options: EmailIframeOptions = {}
+): string {
   const lightHtml = stripEmailDarkModeHints(html);
-  const meta = `<meta charset="utf-8"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">`;
+  const policy = emailContentSecurityPolicy(options.allowRemoteImages === true);
+  const meta = `<meta http-equiv="Content-Security-Policy" content="${policy}"><meta charset="utf-8"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">`;
   const injected = `${meta}<style>${lightModeContainmentCss()}</style>`;
 
   if (/<html\b/i.test(lightHtml)) {

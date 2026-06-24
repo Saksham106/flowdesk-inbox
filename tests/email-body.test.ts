@@ -3,6 +3,7 @@ import {
   isHtmlBody,
   sanitizeEmailHtml,
   sanitizeEmailHtmlForIframe,
+  hasRemoteEmailImages,
   linkifyText,
   renderEmailBodyHtml,
   stripHtmlToText,
@@ -108,7 +109,7 @@ describe("sanitizeEmailHtml", () => {
 });
 
 describe("sanitizeEmailHtmlForIframe", () => {
-  it("removes scripts, event handlers, and javascript URLs before iframe rendering", () => {
+  it("removes scripts, event handlers, javascript URLs, and remote image sources by default", () => {
     const result = sanitizeEmailHtmlForIframe(
       '<div onclick="steal()"><a href="javascript:alert(1)">bad</a><img src="https://example.com/a.png" onerror="xss()"><script>alert(1)</script></div>'
     );
@@ -116,7 +117,37 @@ describe("sanitizeEmailHtmlForIframe", () => {
     expect(result).not.toContain("onclick");
     expect(result).not.toContain("onerror");
     expect(result).not.toContain("javascript:");
-    expect(result).toContain('src="https://example.com/a.png"');
+    expect(result).not.toContain('src="https://example.com/a.png"');
+    expect(result).toContain("<img");
+  });
+
+  it("preserves image layout attributes and cid sources while blocking network images", () => {
+    const result = sanitizeEmailHtmlForIframe(
+      '<img src="https://tracker.example/open.gif" alt="Receipt" width="600" height="200"><img src="cid:logo@example" alt="Logo">'
+    );
+
+    expect(result).not.toContain("tracker.example");
+    expect(result).toContain('alt="Receipt"');
+    expect(result).toContain('width="600"');
+    expect(result).toContain('height="200"');
+    expect(result).toContain('src="cid:logo@example"');
+  });
+
+  it("allows only HTTPS remote images after explicit opt-in", () => {
+    const result = sanitizeEmailHtmlForIframe(
+      '<img src="https://cdn.example/newsletter.png"><img src="http://tracker.example/open.gif">',
+      { allowRemoteImages: true }
+    );
+
+    expect(result).toContain('src="https://cdn.example/newsletter.png"');
+    expect(result).not.toContain("http://tracker.example");
+  });
+
+  it("detects remote image sources without treating cid images as remote", () => {
+    expect(hasRemoteEmailImages('<img src="https://cdn.example/a.png">')).toBe(true);
+    expect(hasRemoteEmailImages('<img src="http://cdn.example/a.png">')).toBe(false);
+    expect(hasRemoteEmailImages('<img src="cid:logo@example">')).toBe(false);
+    expect(hasRemoteEmailImages('<p>https://cdn.example/a.png</p>')).toBe(false);
   });
 
   it("does not allow data image URLs in rendered email HTML", () => {

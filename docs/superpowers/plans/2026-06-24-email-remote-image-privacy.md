@@ -16,17 +16,17 @@
 - Modify: `lib/email-body.ts`
 - Test: `tests/email-body.test.ts`
 
-- [ ] **Step 1: Write failing sanitizer tests**
+- [x] **Step 1: Write failing sanitizer tests**
 
 Add tests proving the default sanitizer removes HTTP and HTTPS image sources while preserving `alt`, dimensions, and `cid:` sources; add a test proving `{ allowRemoteImages: true }` preserves HTTPS but still removes HTTP; add detection tests for `hasRemoteEmailImages`.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `npm test -- tests/email-body.test.ts`
 
 Expected: FAIL because remote images are currently preserved and the options/detection API does not exist.
 
-- [ ] **Step 3: Implement the minimal sanitizer API**
+- [x] **Step 3: Implement the minimal sanitizer API**
 
 Add:
 
@@ -45,7 +45,7 @@ export function hasRemoteEmailImages(html: string): boolean {
 
 Change `sanitizeEmailHtmlForIframe` to accept the options object and add an `img` transform. The transform removes every remote source unless opt-in is true and the source uses HTTPS. It leaves non-network `cid:` sources and layout attributes for the sanitizer to validate.
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 Run: `npm test -- tests/email-body.test.ts`
 
@@ -57,17 +57,17 @@ Expected: all email-body tests pass.
 - Modify: `lib/email-iframe.ts`
 - Test: `tests/email-iframe.test.ts`
 
-- [ ] **Step 1: Write failing CSP tests**
+- [x] **Step 1: Write failing CSP tests**
 
 Add tests that call `buildEmailIframeSrcDoc` in default and opt-in modes. Assert the default document contains `default-src 'none'` and `img-src data: cid:` without `https:`, while opt-in contains `img-src https: data: cid:`. Both policies must contain `connect-src 'none'`, `font-src 'none'`, `frame-src 'none'`, `form-action 'none'`, and `base-uri 'none'`.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `npm test -- tests/email-iframe.test.ts`
 
 Expected: FAIL because no CSP is currently injected and no options argument exists.
 
-- [ ] **Step 3: Implement policy generation**
+- [x] **Step 3: Implement policy generation**
 
 Add:
 
@@ -93,7 +93,7 @@ function emailContentSecurityPolicy(allowRemoteImages: boolean): string {
 
 Inject the escaped policy as the first metadata entry in `buildEmailIframeSrcDoc`. Default `allowRemoteImages` to false.
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 Run: `npm test -- tests/email-iframe.test.ts`
 
@@ -106,17 +106,17 @@ Expected: all email-iframe tests pass.
 - Modify: `app/components/EmailBodyIframe.tsx`
 - Create: `tests/email-privacy-ui.test.ts`
 
-- [ ] **Step 1: Write a failing wiring test**
+- [x] **Step 1: Write a failing wiring test**
 
 Create a source-level regression test following existing UI wiring tests. Assert `EmailBody` uses `hasRemoteEmailImages`, creates blocked and opt-in sanitized variants, and passes `remoteHtml`; assert `EmailBodyIframe` contains the privacy notice, `Load images` button, `referrerPolicy="no-referrer"`, and calls `buildEmailIframeSrcDoc` with the opt-in state.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `npm test -- tests/email-privacy-ui.test.ts`
 
 Expected: FAIL because the UI and props are absent.
 
-- [ ] **Step 3: Implement server/client wiring**
+- [x] **Step 3: Implement server/client wiring**
 
 In `EmailBody`, compute:
 
@@ -132,7 +132,7 @@ Pass `blockedHtml` as `html` and the optional `remoteHtml` to `EmailBodyIframe`.
 
 In `EmailBodyIframe`, track `remoteImagesLoaded`, reset it when the two HTML props change, render the compact privacy notice only when `remoteHtml` exists and is not selected, and render the selected variant with the matching CSP option. Add `referrerPolicy="no-referrer"` to the iframe.
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 Run: `npm test -- tests/email-privacy-ui.test.ts tests/email-body.test.ts tests/email-iframe.test.ts`
 
@@ -141,13 +141,13 @@ Expected: all privacy tests pass.
 ### Task 4: Document and verify issue #45
 
 **Files:**
-- Modify: `docs/README.md`
+- Modify: `docs/CURRENT_STATE.md`
 
-- [ ] **Step 1: Document privacy behavior**
+- [x] **Step 1: Document privacy behavior**
 
-Add an “Email image privacy” section stating that remote images are blocked by default, loading images can notify a sender, the choice applies only to the displayed message, and CID resolution remains separate.
+Update the current-state email rendering entry to state that remote images and other network loads are blocked by default, users can opt into HTTPS images for the displayed message, and the choice is not persisted.
 
-- [ ] **Step 2: Run complete verification**
+- [x] **Step 2: Run complete verification**
 
 Run:
 
@@ -161,7 +161,7 @@ git diff --check
 
 Expected: all commands exit 0; 606 or more tests pass.
 
-- [ ] **Step 3: Commit the implementation**
+- [x] **Step 3: Commit the implementation**
 
 Stage only issue #45 implementation, tests, and docs. Commit with:
 
