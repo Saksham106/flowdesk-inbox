@@ -169,6 +169,6 @@ Stage only issue #45 implementation, tests, and docs. Commit with:
 git commit -m "fix: block remote email images by default (#45)"
 ```
 
-- [ ] **Step 4: Publish and report**
+- [x] **Step 4: Publish and report**
 
 Push `codex/issue-45-email-privacy`, open a draft PR targeting `main`, and comment on issue #45 with the root cause, behavior change, test/build evidence, and PR link. Leave the issue open until the PR is merged and the acceptance criteria are verified on `main`.
