@@ -30,6 +30,7 @@ export async function getStaleConversations(
       },
     },
     orderBy: { lastMessageAt: "asc" },
+    take: 200,
   })
 
   return conversations.map((conv) => ({

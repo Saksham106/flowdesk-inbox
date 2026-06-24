@@ -17,6 +17,7 @@ export async function POST() {
 
   const candidates = await prisma.conversation.findMany({
     where: { tenantId, status: "needs_reply" },
+    take: 100,
     include: {
       contact: { select: { phoneE164: true } },
       messages: {
