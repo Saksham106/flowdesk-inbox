@@ -33,8 +33,8 @@ Start here:
 
 - `docs/README.md` — documentation index
 - `docs/CURRENT_STATE.md` — current implemented/partial/deferred state
-- `docs/MASTER_PRODUCT_PLAN.md` — living master roadmap for the 45-feature product vision
-- `docs/archive/` — completed specs and implementation plans
+- `docs/MASTER_PRODUCT_PLAN.md` — concise product direction and priorities
+- `docs/TODO.md` — actionable remaining work
 
 ## Deferred: SMS
 

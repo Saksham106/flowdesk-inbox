@@ -1,25 +1,27 @@
-# FlowDesk Remaining Work
+# Remaining Work
 
-Last updated: 2026-06-18
+Last updated: 2026-06-24
 
-This is the actionable checklist of work that is still unfinished. Shipped history belongs in `CURRENT_STATE.md`, `MASTER_PRODUCT_PLAN.md`, or `docs/archive/`, not here.
+## Near term
 
-Feature numbers reference the 45-feature index in `MASTER_PRODUCT_PLAN.md`.
+- [ ] Consolidate command-center and inbox auto-email/classification heuristics.
+- [ ] Persist command-center snapshots for history and explainability.
+- [ ] Show classification source, confidence, evidence, and correction history.
+- [ ] Add manual sender/domain rule creation, editing, and conflict handling.
+- [ ] Decide and implement Outlook archive/trash/unsubscribe parity.
+- [ ] Forward reply-composer CC/BCC fields through send APIs.
+- [ ] Resolve Gmail inline `cid:` images safely.
 
-## Near-Term Product Hardening
+## Finish existing foundations
 
-- [ ] **Finish auto-email heuristic consolidation** — inbox list/mobile filtering now uses `lib/inbox-fyi.ts`; fold command-center auto-email logic into the same helper or shared classifier so dashboard and list behavior cannot drift again.
-- [ ] **Persist command-center snapshots** (#1/#6) — reduce recomputation, preserve explainability, and make daily state auditable over time.
-- [ ] **Classification explainability** (#42/#44) — expose why a thread received its attention category, including rule/AI/user source and correction history.
-- [ ] **Preference-learning controls** (#27/#42) — add manual rule creation/editing and conflict handling for sender/domain rules.
-- [ ] **Provider cleanup parity** (#24/#25/#41) — Gmail archive/trash and Clean Inbox exist; decide whether Outlook needs equivalent archive/trash/unsubscribe writeback.
-- [ ] **Reply composer CC/BCC send support** (#3/#30) — UI captures CC/BCC, but send APIs still need to forward those fields.
+- [ ] Complete scheduling confirmation and event booking.
+- [ ] Add a workflow-template builder.
+- [ ] Inject connected Google Drive context into draft generation.
+- [ ] Add semantic knowledge/search retrieval and scheduled website recrawling.
+- [ ] Make lead-sequence timing configurable and visible.
 
-## Phase 5: Team Inbox Platform
+## Later
 
-- [ ] **Team model and shared inboxes** (#18) — assignments, comments, collision detection, shared snippets/KB, roles, SLA tracking, and team analytics.
-
-## Cross-Cutting
-
-- [ ] **Paid packaging enforcement** (#45) — free/pro/business/team gates are positioned but not enforced in code.
-- [ ] **Privacy/security positioning** — retention, data handling, audit story, and buyer-facing security posture.
+- [ ] Design the team/shared-inbox data and permission model.
+- [ ] Enforce free, personal, business, and team packaging in code.
+- [ ] Document customer-facing privacy, retention, security, and audit posture.

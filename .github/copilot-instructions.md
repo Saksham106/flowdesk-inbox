@@ -7,7 +7,7 @@ FlowDesk is a Next.js, Prisma, PostgreSQL, and OpenAI app for an email-first AI 
 - Read `docs/README.md` for documentation structure.
 - Read `docs/CURRENT_STATE.md` before assuming what is implemented.
 - Read `docs/MASTER_PRODUCT_PLAN.md` before starting roadmap work.
-- For feature work, prefer an existing spec/plan under `docs/superpowers/`; create one if the feature is substantial.
+- For substantial feature work, create a temporary focused spec/plan only when it materially reduces ambiguity; remove completed process documents after their durable facts are reflected in living docs.
 
 ## Documentation Freshness Rules
 
@@ -15,7 +15,7 @@ FlowDesk is a Next.js, Prisma, PostgreSQL, and OpenAI app for an email-first AI 
 - If a feature status changes, update `docs/MASTER_PRODUCT_PLAN.md`.
 - If implemented capabilities, partial limitations, verification notes, or deferred scope change, update `docs/CURRENT_STATE.md`.
 - If setup, environment variables, scripts, connectors, or deployment steps change, update `README.md`.
-- If a detailed feature plan exists under `docs/superpowers/plans/`, update its checklist and verification notes when work is completed.
+- Keep completed implementation narratives in Git history instead of accumulating checked-off plan files.
 - Delete or consolidate stale handoff/checklist docs instead of leaving contradictory guidance behind.
 - Do not create new one-off Markdown files unless the docs index explains where they fit.
 
