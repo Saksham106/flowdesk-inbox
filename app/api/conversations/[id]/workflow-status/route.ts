@@ -4,7 +4,11 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidateInboxViews } from "@/lib/cache-tags"
-import { conversationUpdateForWorkflowStatus, type SettableWorkflowStatus } from "@/lib/workflow-status-transitions"
+import {
+  conversationUpdateForWorkflowStatus,
+  shouldClearDraftForWorkflowStatus,
+  type SettableWorkflowStatus,
+} from "@/lib/workflow-status-transitions"
 
 const SETTABLE_STATUSES = new Set(["needs_reply", "waiting_on", "read_later", "done"])
 
@@ -32,10 +36,26 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
+  const settableWorkflowStatus = workflowStatus as SettableWorkflowStatus
+
   await prisma.conversation.update({
     where: { id: params.id, tenantId: session.user.tenantId },
-    data: conversationUpdateForWorkflowStatus(workflowStatus as SettableWorkflowStatus),
+    data: conversationUpdateForWorkflowStatus(settableWorkflowStatus),
   })
+
+  if (shouldClearDraftForWorkflowStatus(settableWorkflowStatus)) {
+    await prisma.draft.updateMany({
+      where: {
+        conversationId: params.id,
+        status: { in: ["proposed", "approved"] },
+        conversation: { tenantId: session.user.tenantId },
+      },
+      data: {
+        status: "none",
+        text: "",
+      },
+    })
+  }
 
   revalidateInboxViews(session.user.tenantId, params.id)
   return NextResponse.json({ ok: true })

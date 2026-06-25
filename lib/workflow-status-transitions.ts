@@ -39,3 +39,7 @@ export function conversationUpdateForDraftReady() {
     status: ConversationStatus.needs_reply,
   }
 }
+
+export function shouldClearDraftForWorkflowStatus(workflowStatus: SettableWorkflowStatus) {
+  return workflowStatus === "done" || workflowStatus === "waiting_on" || workflowStatus === "read_later"
+}
