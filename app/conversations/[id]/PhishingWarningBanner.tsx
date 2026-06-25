@@ -12,12 +12,15 @@ export default function PhishingWarningBanner({
 }) {
   const router = useRouter()
   const [dismissed, setDismissed] = useState(false)
+  const [loading, setLoading] = useState(false)
 
   if (dismissed) return null
 
   const isHighRisk = verdict === "likely_phishing"
 
   async function markSafe() {
+    if (loading) return
+    setLoading(true)
     await fetch(`/api/conversations/${conversationId}/phishing-safe`, { method: "POST" })
     setDismissed(true)
     router.refresh()
@@ -33,8 +36,12 @@ export default function PhishingWarningBanner({
             : "This email has some suspicious characteristics — proceed with caution."}
         </p>
       </div>
-      <button onClick={markSafe} className="shrink-0 text-xs underline opacity-70 hover:opacity-100">
-        Mark as safe
+      <button
+        onClick={markSafe}
+        disabled={loading}
+        className="shrink-0 text-xs underline opacity-70 hover:opacity-100 disabled:opacity-40 disabled:cursor-wait"
+      >
+        {loading ? "Checking…" : "Mark as safe"}
       </button>
     </div>
   )

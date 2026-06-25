@@ -45,3 +45,6 @@ next-env.d.ts
 
 # Local MCP config (contains credentials)
 .vscode/mcp.json
+
+# Session handoff (local context only)
+SESSION_HANDOFF.md
