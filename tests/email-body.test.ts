@@ -170,6 +170,14 @@ describe("sanitizeEmailHtmlForIframe", () => {
     expect(result).toContain(`src="${jpegData}"`);
   });
 
+  it("blocks non-raster data URIs on image tags", () => {
+    const result = sanitizeEmailHtmlForIframe(
+      '<img src="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==" alt="x">'
+    );
+    expect(result).not.toContain("data:text/html");
+    expect(result).toContain("<img");
+  });
+
   it("preserves HubSpot-style tracking hrefs for iframe rendering", () => {
     const trackingUrl =
       "https://info.tailscale.com/e3t/Ctc/OT+113/d4K34c04/VX8QL33KvRDRW6lM-WB6GpGF8W9fbdmV5Qmkd9N8GDX6T3qgz0W7Y8-PT6lZ3mBW2k9_gr3nCxcXW40hBfy4sz-8vW6lkkpC1xp3bYW2Pb0yc3tVbGrW139cm71dxZCgVdfvmx8rbR2QW82vFsQ3jgwSPW6t8m9y8x5f_VW8WKzcZ2M9L_3W7bql6N5PyB3qW46t3bk6-CY1wN4Kx2nRhLfqlW6p8RLp7kyGV8W3jMBbw590yLzMhLvRJ9vjr4N7H834gvyZQbW4WpQsj3cF8QTW37FZYr2fgJv6N1Dks5K35g0gW8b0-D68X9V5zW4RMR3X4X87QkW8vNMWC8LFDKDW3y5SWz8r3VS6W63G4nC8mw2-YVtbn5P40K3j2W5Wvqd53B78zGf5_nShY04";
