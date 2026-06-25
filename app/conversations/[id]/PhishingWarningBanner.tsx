@@ -13,6 +13,7 @@ export default function PhishingWarningBanner({
   const router = useRouter()
   const [dismissed, setDismissed] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   if (dismissed) return null
 
@@ -21,9 +22,17 @@ export default function PhishingWarningBanner({
   async function markSafe() {
     if (loading) return
     setLoading(true)
-    await fetch(`/api/conversations/${conversationId}/phishing-safe`, { method: "POST" })
-    setDismissed(true)
-    router.refresh()
+    setError(null)
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}/phishing-safe`, { method: "POST" })
+      if (!res.ok) throw new Error("Failed to mark safe")
+      setDismissed(true)
+      router.refresh()
+    } catch {
+      setError("Couldn't mark safe")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -35,6 +44,7 @@ export default function PhishingWarningBanner({
             ? "This email shows strong signs of phishing — do not click links or share personal information."
             : "This email has some suspicious characteristics — proceed with caution."}
         </p>
+        {error && <p className="mt-1 text-xs opacity-80">{error}</p>}
       </div>
       <button
         onClick={markSafe}

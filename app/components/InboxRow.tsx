@@ -102,14 +102,22 @@ export default function InboxRow({
     const next = !isRead
     setIsRead(next)
     setPendingAction("read")
-    const res = await fetch(`/api/conversations/${id}/read`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ read: next }),
-    })
-    if (!res.ok) setIsRead(!next)
-    setPendingAction(null)
-    router.refresh()
+    try {
+      const res = await fetch(`/api/conversations/${id}/read`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ read: next }),
+      })
+      if (!res.ok) {
+        setIsRead(!next)
+        return
+      }
+      router.refresh()
+    } catch {
+      setIsRead(!next)
+    } finally {
+      setPendingAction(null)
+    }
   }
 
   async function toggleStatus(e: React.MouseEvent) {
@@ -119,14 +127,22 @@ export default function InboxRow({
     const nextStatus = isClosed ? "needs_reply" : "done"
     setWorkflowStatus(nextStatus as WorkflowStatus)
     setPendingAction("status")
-    const res = await fetch(`/api/conversations/${id}/workflow-status`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workflowStatus: nextStatus }),
-    })
-    if (!res.ok) setWorkflowStatus(initialWorkflowStatus)
-    setPendingAction(null)
-    if (res.ok) router.refresh()
+    try {
+      const res = await fetch(`/api/conversations/${id}/workflow-status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workflowStatus: nextStatus }),
+      })
+      if (!res.ok) {
+        setWorkflowStatus(initialWorkflowStatus)
+        return
+      }
+      router.refresh()
+    } catch {
+      setWorkflowStatus(initialWorkflowStatus)
+    } finally {
+      setPendingAction(null)
+    }
   }
 
   async function archiveConversation(e: React.MouseEvent) {
@@ -137,13 +153,20 @@ export default function InboxRow({
     const prevStatus = status
     setStatus("closed")
     setPendingAction("archive")
-    const res = await fetch(`/api/conversations/${id}/archive`, { method: "PATCH" })
-    if (!res.ok) {
+    try {
+      const res = await fetch(`/api/conversations/${id}/archive`, { method: "PATCH" })
+      if (!res.ok) {
+        setStatus(prevStatus)
+        setArchiveError("Archive failed")
+        return
+      }
+      router.refresh()
+    } catch {
       setStatus(prevStatus)
       setArchiveError("Archive failed")
+    } finally {
+      setPendingAction(null)
     }
-    setPendingAction(null)
-    if (res.ok) router.refresh()
   }
 
   function openAttentionDropdown(e: React.MouseEvent) {
@@ -165,14 +188,24 @@ export default function InboxRow({
     setAttention(cat)
     setWorkflowStatus(cat as WorkflowStatus)
     setPendingAction("attention")
-    const res = await fetch(`/api/conversations/${id}/workflow-status`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workflowStatus: cat }),
-    })
-    if (!res.ok) { setAttention(prev); setWorkflowStatus(initialWorkflowStatus) }
-    setPendingAction(null)
-    if (res.ok) router.refresh()
+    try {
+      const res = await fetch(`/api/conversations/${id}/workflow-status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workflowStatus: cat }),
+      })
+      if (!res.ok) {
+        setAttention(prev)
+        setWorkflowStatus(initialWorkflowStatus)
+        return
+      }
+      router.refresh()
+    } catch {
+      setAttention(prev)
+      setWorkflowStatus(initialWorkflowStatus)
+    } finally {
+      setPendingAction(null)
+    }
   }
 
   return (
