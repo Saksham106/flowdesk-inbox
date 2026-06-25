@@ -207,10 +207,12 @@ describe('POST /api/conversations/[id]/draft/suggest', () => {
       data: expect.objectContaining({
         label: 'Pricing',
         status: 'needs_reply',
-        userState: null,
-        userStateSource: 'ai',
       }),
     })
+    // userState must NOT be reset by draft generation — manual user choice must survive
+    const updateData = mockConversationUpdate.mock.calls[0][0].data
+    expect(updateData).not.toHaveProperty('userState')
+    expect(updateData).not.toHaveProperty('userStateSource')
     expect(mockAuditCreate.mock.calls[0][0].data).toMatchObject({
       tenantId: 'tenant-A',
       userId: 'user1',
@@ -373,10 +375,12 @@ describe('PATCH /api/conversations/[id]/draft', () => {
       where: { id: 'conv1' },
       data: expect.objectContaining({
         status: 'needs_reply',
-        userState: null,
-        userStateSource: 'ai',
       }),
     })
+    // userState must NOT be reset by draft text edits — manual user choice must survive
+    const updateData = mockConversationUpdate.mock.calls[0][0].data
+    expect(updateData).not.toHaveProperty('userState')
+    expect(updateData).not.toHaveProperty('userStateSource')
   })
 
   it('can approve an existing draft', async () => {

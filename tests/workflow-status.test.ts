@@ -9,8 +9,14 @@ import {
 } from "@/lib/workflow-status-transitions"
 
 describe("deriveWorkflowStatus", () => {
-  it("returns draft_ready when draft is proposed, regardless of other signals", () => {
-    expect(deriveWorkflowStatus({ status: "needs_reply", userState: "done", draftStatus: "proposed" })).toBe("draft_ready")
+  it("returns draft_ready when draft is proposed and no manual userState is set", () => {
+    expect(deriveWorkflowStatus({ status: "needs_reply", userState: null, draftStatus: "proposed" })).toBe("draft_ready")
+  })
+  it("userState=done wins over proposed draft (manual choice persists)", () => {
+    expect(deriveWorkflowStatus({ status: "needs_reply", userState: "done", draftStatus: "proposed" })).toBe("done")
+  })
+  it("userState=waiting_on wins over proposed draft", () => {
+    expect(deriveWorkflowStatus({ status: "needs_reply", userState: "waiting_on", draftStatus: "proposed" })).toBe("waiting_on")
   })
   it("respects userState=waiting_on", () => {
     expect(deriveWorkflowStatus({ status: "needs_reply", userState: "waiting_on" })).toBe("waiting_on")
@@ -78,12 +84,11 @@ describe("aiCategoryLabel", () => {
 })
 
 describe("workflow status persistence helpers", () => {
-  it("draft generation moves the conversation back to Draft Ready inputs", () => {
-    expect(conversationUpdateForDraftReady(new Date("2026-06-25T12:00:00Z"))).toMatchObject({
-      status: "needs_reply",
-      userState: null,
-      userStateSource: "ai",
-    })
+  it("draft generation sets status to needs_reply without resetting userState", () => {
+    const update = conversationUpdateForDraftReady()
+    expect(update).toMatchObject({ status: "needs_reply" })
+    expect(update).not.toHaveProperty("userState")
+    expect(update).not.toHaveProperty("userStateSource")
   })
 
   it("mark Done persists as a closed conversation with userState=done", () => {

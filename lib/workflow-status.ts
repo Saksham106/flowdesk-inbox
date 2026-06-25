@@ -18,12 +18,12 @@ const FYI_ATTENTION = new Set(["fyi_done", "quiet"])
 const FYI_EMAIL_TYPES = new Set(["notification", "newsletter", "marketing"])
 
 export function deriveWorkflowStatus(input: DeriveWorkflowStatusInput): WorkflowStatus {
-  // draft_ready is always derived from draft state — cannot be overridden by userState
-  if (input.draftStatus === "proposed") return "draft_ready"
-
-  // Explicit user choice wins (except needs_reply which means "reset to derive")
+  // Explicit user choice wins over all AI signals, including an active draft
   const u = input.userState
   if (u === "waiting_on" || u === "read_later" || u === "done") return u
+
+  // Active draft surfaces when no manual override is set
+  if (input.draftStatus === "proposed") return "draft_ready"
 
   // AI attention category signals
   if (input.attentionCategory === "waiting_on") return "waiting_on"
