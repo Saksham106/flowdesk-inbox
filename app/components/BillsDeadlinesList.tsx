@@ -29,10 +29,10 @@ function BillItem({ item }: ItemRowProps) {
           body: JSON.stringify({ status: "closed" }),
         })
       } else {
-        res = await fetch(`/api/conversations/${item.conversationId}/attention`, {
+        res = await fetch(`/api/conversations/${item.conversationId}/workflow-status`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ attentionCategory: "fyi_done" }),
+          body: JSON.stringify({ workflowStatus: "done" }),
         })
       }
       if (!res.ok) throw new Error("Failed to dismiss")
@@ -56,18 +56,23 @@ function BillItem({ item }: ItemRowProps) {
           </span>
         )}
       </a>
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
         {error && <span className="text-[10px] text-red-500">{error}</span>}
         <button
           type="button"
           onClick={handleDismiss}
-          title="Mark done"
-          className="opacity-0 group-hover:opacity-100 transition-opacity flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:opacity-100"
-          aria-label="Mark done"
+          className="text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:opacity-100"
+          aria-label="Done"
         >
-          <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M2 6.5 5 9.5 10 3" />
-          </svg>
+          Done
+        </button>
+        <button
+          type="button"
+          onClick={handleDismiss}
+          className="text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200 text-slate-500 hover:bg-slate-50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:opacity-100"
+          aria-label="Not relevant"
+        >
+          Not relevant
         </button>
       </div>
     </li>
