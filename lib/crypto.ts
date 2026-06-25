@@ -31,6 +31,22 @@ function getKey(): Buffer | null {
   return Buffer.from(secret, "base64");
 }
 
+// Returns the previous encryption key, used as fallback during key rotation.
+// Set ENCRYPTION_SECRET_PREVIOUS to the old key while migrating; unset once rekey is complete.
+function getPreviousKey(): Buffer | null {
+  const secret = process.env.ENCRYPTION_SECRET_PREVIOUS;
+  return secret ? Buffer.from(secret, "base64") : null;
+}
+
+function decryptWithKey(key: Buffer, ivHex: string, tagHex: string, ciphertextHex: string): string {
+  const iv = Buffer.from(ivHex, "hex");
+  const tag = Buffer.from(tagHex, "hex");
+  const ciphertext = Buffer.from(ciphertextHex, "hex");
+  const decipher = createDecipheriv(ALGORITHM, key, iv);
+  decipher.setAuthTag(tag);
+  return decipher.update(ciphertext).toString("utf8") + decipher.final("utf8");
+}
+
 /**
  * Encrypts a plaintext string.
  * Returns encrypted string in format "iv:tag:ciphertext" (hex).
@@ -52,6 +68,10 @@ export function encryptString(plaintext: string): string {
  * Decrypts a string encrypted by encryptString.
  * If the value doesn't match the encrypted format, returns it as-is
  * (backwards-compatible with existing plaintext values).
+ *
+ * During key rotation: if decryption with ENCRYPTION_SECRET fails, falls back to
+ * ENCRYPTION_SECRET_PREVIOUS. Remove ENCRYPTION_SECRET_PREVIOUS once /api/admin/rekey
+ * has migrated all rows to the new key.
  */
 export function decryptString(value: string): string {
   if (!ENCRYPTED_PATTERN.test(value)) {
@@ -63,14 +83,27 @@ export function decryptString(value: string): string {
   if (!key) return value; // dev passthrough — no key, return raw value
 
   const [ivHex, tagHex, ciphertextHex] = value.split(":");
-  const iv = Buffer.from(ivHex, "hex");
-  const tag = Buffer.from(tagHex, "hex");
-  const ciphertext = Buffer.from(ciphertextHex, "hex");
 
-  const decipher = createDecipheriv(ALGORITHM, key, iv);
-  decipher.setAuthTag(tag);
+  try {
+    return decryptWithKey(key, ivHex, tagHex, ciphertextHex);
+  } catch {
+    // Current key failed — try previous key (rotation in progress)
+    const previousKey = getPreviousKey();
+    if (!previousKey) {
+      throw new Error("[crypto] Decryption failed. Check ENCRYPTION_SECRET.");
+    }
+    return decryptWithKey(previousKey, ivHex, tagHex, ciphertextHex);
+  }
+}
 
-  return decipher.update(ciphertext).toString("utf8") + decipher.final("utf8");
+/**
+ * Decrypts value with the current or previous key, then re-encrypts with the current key.
+ * Used by /api/admin/rekey to migrate all rows to a new ENCRYPTION_SECRET.
+ * No-ops on plaintext values (not in encrypted format).
+ */
+export function reEncryptString(value: string): string {
+  if (!isEncrypted(value)) return value;
+  return encryptString(decryptString(value));
 }
 
 /**
