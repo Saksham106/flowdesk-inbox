@@ -52,7 +52,7 @@ export async function PATCH(
   }
 
   await prisma.conversation.update({
-    where: { id: params.id },
+    where: { id: params.id, tenantId: session.user.tenantId },
     data,
   })
 
