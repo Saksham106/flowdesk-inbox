@@ -1,6 +1,9 @@
 const DARK_MODE_MEDIA_RE = /@media[^{]*prefers-color-scheme\s*:\s*dark[^{]*\{/gi;
 const COLOR_SCHEME_META_RE =
   /<meta\b(?=[^>]*(?:name=["']?(?:color-scheme|supported-color-schemes)["']?|content=["']?[^"'>]*\blight\s+dark\b))[^>]*>/gi;
+// Viewport meta tags can cause browsers to zoom srcdoc iframe content: e.g. <meta name="viewport"
+// content="width=600"> in a 900px-wide iframe produces a 1.5× zoom. Strip them unconditionally.
+const VIEWPORT_META_RE = /<meta\b(?=[^>]*\bname\s*=\s*["']?viewport["']?)[^>]*>/gi;
 
 export const EMAIL_IFRAME_SANDBOX = "allow-popups allow-popups-to-escape-sandbox allow-same-origin";
 
@@ -53,6 +56,11 @@ export function stripEmailDarkModeHints(html: string): string {
   return removeBalancedCssBlocks(html, DARK_MODE_MEDIA_RE).replace(COLOR_SCHEME_META_RE, "");
 }
 
+export function stripEmailViewportMeta(html: string): string {
+  VIEWPORT_META_RE.lastIndex = 0;
+  return html.replace(VIEWPORT_META_RE, "");
+}
+
 function lightModeContainmentCss(): string {
   return `
     :root { color-scheme: light only; supported-color-schemes: light; background: #ffffff; }
@@ -62,9 +70,13 @@ function lightModeContainmentCss(): string {
     body { max-width: 100%; overflow-x: hidden; background: #ffffff; box-sizing: border-box; color: #111827; font-size: 14px; line-height: 1.5; word-break: break-word; overflow-wrap: anywhere; }
     *, *::before, *::after { box-sizing: border-box; max-width: 100%; }
     /* Do NOT set width:auto — that overrides HTML width="" attributes and breaks
-       newsletter centering (e.g. <table width="600" align="center">). */
-    table { max-width: 100% !important; border-collapse: collapse; table-layout: auto; }
+       newsletter centering (e.g. <table width="600" align="center">).
+       Do NOT use !important on max-width — newsletter inner tables intentionally set
+       max-width: 600px (or similar) to center a content column. !important would override
+       those inline constraints, expanding the table to full iframe width and zooming the email. */
+    table { max-width: 100%; border-collapse: collapse; table-layout: auto; }
     td, th { overflow-wrap: anywhere; word-break: break-word; }
+    /* Keep !important on img/video to prevent wide images from overflowing their container. */
     img, video { max-width: 100% !important; height: auto !important; }
     pre, code { white-space: pre-wrap; overflow-wrap: anywhere; }
     a { color: #2563eb; overflow-wrap: anywhere; }
@@ -75,7 +87,7 @@ export function buildEmailIframeSrcDoc(
   html: string,
   options: EmailIframeOptions = {}
 ): string {
-  const lightHtml = stripEmailDarkModeHints(html);
+  const lightHtml = stripEmailViewportMeta(stripEmailDarkModeHints(html));
   const policy = emailContentSecurityPolicy(options.allowRemoteImages === true);
   const meta = `<meta http-equiv="Content-Security-Policy" content="${policy}"><meta charset="utf-8"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">`;
   const injected = `${meta}<style>${lightModeContainmentCss()}</style>`;
