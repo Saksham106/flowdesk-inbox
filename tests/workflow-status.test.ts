@@ -1,0 +1,65 @@
+import { describe, it, expect } from "vitest"
+import { deriveWorkflowStatus, aiCategoryLabel } from "@/lib/workflow-status"
+
+describe("deriveWorkflowStatus", () => {
+  it("returns draft_ready when draft is proposed, regardless of other signals", () => {
+    expect(deriveWorkflowStatus({ status: "needs_reply", userState: "done", draftStatus: "proposed" })).toBe("draft_ready")
+  })
+  it("respects userState=waiting_on", () => {
+    expect(deriveWorkflowStatus({ status: "needs_reply", userState: "waiting_on" })).toBe("waiting_on")
+  })
+  it("respects userState=read_later", () => {
+    expect(deriveWorkflowStatus({ status: "needs_reply", userState: "read_later" })).toBe("read_later")
+  })
+  it("respects userState=done", () => {
+    expect(deriveWorkflowStatus({ status: "needs_reply", userState: "done" })).toBe("done")
+  })
+  it("falls through to derive when userState=needs_reply (reset)", () => {
+    expect(deriveWorkflowStatus({ status: "closed", userState: "needs_reply" })).toBe("done")
+  })
+  it("attentionCategory=waiting_on → waiting_on", () => {
+    expect(deriveWorkflowStatus({ status: "needs_reply", userState: null, attentionCategory: "waiting_on" })).toBe("waiting_on")
+  })
+  it("attentionCategory=read_later → read_later", () => {
+    expect(deriveWorkflowStatus({ status: "needs_reply", userState: null, attentionCategory: "read_later" })).toBe("read_later")
+  })
+  it("attentionCategory=fyi_done → done", () => {
+    expect(deriveWorkflowStatus({ status: "needs_reply", userState: null, attentionCategory: "fyi_done" })).toBe("done")
+  })
+  it("attentionCategory=quiet → done", () => {
+    expect(deriveWorkflowStatus({ status: "needs_reply", userState: null, attentionCategory: "quiet" })).toBe("done")
+  })
+  it("status=closed → done", () => {
+    expect(deriveWorkflowStatus({ status: "closed", userState: null })).toBe("done")
+  })
+  it("status=in_progress → waiting_on", () => {
+    expect(deriveWorkflowStatus({ status: "in_progress", userState: null })).toBe("waiting_on")
+  })
+  it("emailType=newsletter → done", () => {
+    expect(deriveWorkflowStatus({ status: "needs_reply", userState: null, emailType: "newsletter" })).toBe("done")
+  })
+  it("emailType=notification → done", () => {
+    expect(deriveWorkflowStatus({ status: "needs_reply", userState: null, emailType: "notification" })).toBe("done")
+  })
+  it("emailType=marketing → done", () => {
+    expect(deriveWorkflowStatus({ status: "needs_reply", userState: null, emailType: "marketing" })).toBe("done")
+  })
+  it("defaults to needs_reply", () => {
+    expect(deriveWorkflowStatus({ status: "needs_reply", userState: null })).toBe("needs_reply")
+  })
+})
+
+describe("aiCategoryLabel", () => {
+  it("returns label for attentionCategory", () => {
+    expect(aiCategoryLabel("needs_action", null)).toBe("Needs Action")
+  })
+  it("returns label for emailType", () => {
+    expect(aiCategoryLabel(null, "newsletter")).toBe("Newsletter")
+  })
+  it("attentionCategory takes precedence over emailType", () => {
+    expect(aiCategoryLabel("review_soon", "newsletter")).toBe("Review Soon")
+  })
+  it("returns null when neither is recognized", () => {
+    expect(aiCategoryLabel(null, null)).toBeNull()
+  })
+})
