@@ -124,9 +124,108 @@ function getHeader(
 
 type GmailPart = {
   mimeType?: string | null;
-  body?: { data?: string | null; attachmentId?: string | null } | null;
+  body?: { data?: string | null; attachmentId?: string | null; size?: number | null } | null;
+  headers?: Array<{ name?: string | null; value?: string | null }> | null;
   parts?: GmailPart[] | null;
 };
+
+// Raster MIME types safe to embed as data URIs (SVG is excluded — can carry script)
+const SAFE_INLINE_IMAGE_TYPES = new Set([
+  "image/png", "image/jpeg", "image/jpg", "image/gif",
+  "image/webp", "image/bmp", "image/tiff", "image/ico",
+]);
+const MAX_CID_EMBED_BYTES = 2 * 1024 * 1024; // 2 MB total per message
+const MAX_CID_SINGLE_BYTES = 512 * 1024;      // 512 KB per image
+
+type InlineImagePart = {
+  contentId: string;
+  mimeType: string;
+  data: string | null;
+  attachmentId: string | null;
+  size: number;
+};
+
+export function collectInlineImages(
+  payload: GmailPart | null | undefined,
+  images: InlineImagePart[],
+  depth = 0
+): void {
+  if (!payload || depth > 12) return;
+
+  const mime = (payload.mimeType ?? "").toLowerCase();
+  if (SAFE_INLINE_IMAGE_TYPES.has(mime)) {
+    const contentIdHeader = (payload.headers ?? []).find(
+      (h) => h.name?.toLowerCase() === "content-id"
+    );
+    if (contentIdHeader?.value) {
+      const contentId = contentIdHeader.value.trim().replace(/^<|>$/g, "");
+      images.push({
+        contentId,
+        mimeType: mime,
+        data: payload.body?.data ?? null,
+        attachmentId: payload.body?.attachmentId ?? null,
+        size: payload.body?.size ?? 0,
+      });
+    }
+  }
+
+  for (const part of payload.parts ?? []) {
+    collectInlineImages(part, images, depth + 1);
+  }
+}
+
+async function resolveInlineCids(
+  html: string,
+  payload: GmailPart | null | undefined,
+  gmail: ReturnType<typeof google.gmail>,
+  messageId: string
+): Promise<string> {
+  if (!html.includes("cid:")) return html;
+
+  const inlineImages: InlineImagePart[] = [];
+  collectInlineImages(payload, inlineImages);
+  if (inlineImages.length === 0) return html;
+
+  let totalBytes = 0;
+  const cidMap = new Map<string, string>();
+
+  for (const img of inlineImages) {
+    try {
+      let base64Data = img.data;
+
+      if (!base64Data && img.attachmentId) {
+        const estimatedSize = img.size;
+        if (estimatedSize > MAX_CID_SINGLE_BYTES) continue;
+
+        const res = await gmail.users.messages.attachments.get({
+          userId: "me",
+          messageId,
+          id: img.attachmentId,
+        });
+        base64Data = res.data.data ?? null;
+      }
+
+      if (!base64Data) continue;
+
+      // Gmail uses base64url; convert to standard base64 for data URIs
+      const standardBase64 = base64Data.replace(/-/g, "+").replace(/_/g, "/");
+      const byteSize = Math.ceil(standardBase64.length * 0.75);
+      if (byteSize > MAX_CID_SINGLE_BYTES || totalBytes + byteSize > MAX_CID_EMBED_BYTES) continue;
+      totalBytes += byteSize;
+
+      cidMap.set(img.contentId, `data:${img.mimeType};base64,${standardBase64}`);
+    } catch {
+      // Skip images that fail to fetch — broken image is better than a sync failure
+    }
+  }
+
+  if (cidMap.size === 0) return html;
+
+  return html.replace(/src=(["'])cid:([^"'>\s]+)\1/gi, (_match, quote, cid) => {
+    const dataUri = cidMap.get(cid);
+    return dataUri ? `src=${quote}${dataUri}${quote}` : _match;
+  });
+}
 
 type ExtractedEmailBody = {
   htmlBody: string;
@@ -201,24 +300,29 @@ export async function fetchThread(
     format: "full",
   });
 
-  return (res.data.messages ?? []).map((msg) => {
-    const headers = msg.payload?.headers ?? [];
-    const extracted = extractedBodyForPayload(msg.payload);
-    return {
-      id: msg.id ?? "",
-      threadId: msg.threadId ?? "",
-      from: getHeader(headers, "From"),
-      to: getHeader(headers, "To"),
-      subject: getHeader(headers, "Subject"),
-      body: extracted.htmlBody || extracted.textBody,
-      textBody: extracted.textBody,
-      cleanSnippet: extracted.cleanSnippet,
-      renderMode: extracted.renderMode,
-      labelIds: msg.labelIds ?? [],
-      date: new Date(parseInt(msg.internalDate ?? "0")),
-      rfc822MessageId: getHeader(headers, "Message-ID"),
-    };
-  });
+  return Promise.all(
+    (res.data.messages ?? []).map(async (msg) => {
+      const headers = msg.payload?.headers ?? [];
+      const extracted = extractedBodyForPayload(msg.payload);
+      const resolvedHtml = extracted.htmlBody
+        ? await resolveInlineCids(extracted.htmlBody, msg.payload, gmail, msg.id ?? "")
+        : extracted.htmlBody;
+      return {
+        id: msg.id ?? "",
+        threadId: msg.threadId ?? "",
+        from: getHeader(headers, "From"),
+        to: getHeader(headers, "To"),
+        subject: getHeader(headers, "Subject"),
+        body: resolvedHtml || extracted.textBody,
+        textBody: extracted.textBody,
+        cleanSnippet: extracted.cleanSnippet,
+        renderMode: extracted.renderMode,
+        labelIds: msg.labelIds ?? [],
+        date: new Date(parseInt(msg.internalDate ?? "0")),
+        rfc822MessageId: getHeader(headers, "Message-ID"),
+      };
+    })
+  );
 }
 
 // Strips "Display Name <email@example.com>" → "email@example.com"

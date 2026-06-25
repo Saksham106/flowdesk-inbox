@@ -524,10 +524,11 @@ export default function ReplyComposer({
         <span className="flex-1" />
         <button
           type="button"
-          onClick={() => {
+          onClick={async () => {
             if (hasDraftText && !draft) {
               if (!window.confirm("Discard your reply?")) return
             }
+            await clearDraft()
             setIsExpanded(false)
           }}
           disabled={isBusy}

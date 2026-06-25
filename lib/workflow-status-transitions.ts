@@ -34,11 +34,12 @@ export function conversationUpdateForWorkflowStatus(
   return update
 }
 
-export function conversationUpdateForDraftReady(now = new Date()) {
+export function conversationUpdateForDraftReady() {
   return {
     status: ConversationStatus.needs_reply,
-    userState: null,
-    userStateSource: "ai",
-    userStateUpdatedAt: now,
   }
+}
+
+export function shouldClearDraftForWorkflowStatus(workflowStatus: SettableWorkflowStatus) {
+  return workflowStatus === "done" || workflowStatus === "waiting_on" || workflowStatus === "read_later"
 }

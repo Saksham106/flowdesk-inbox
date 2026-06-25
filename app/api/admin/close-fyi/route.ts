@@ -2,11 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-
-const AUTOMATED_SENDER_RE = /\b(no-?reply|noreply|notifications?|alerts?|do-not-reply|automated)\b/i
-const AUTOMATED_BODY_RE =
-  /\b(unsubscribe|you'?re receiving this|this is an automated (email|message|notification)|do not reply to this email)\b/i
-const FYI_RE = /\b(fyi|newsletter|for your records|no action|all set|thanks, all set)\b/i
+import { AUTOMATED_SENDER_RE, AUTOMATED_BODY_RE, FYI_RE } from "@/lib/inbox-fyi"
 
 export async function POST() {
   const session = await getServerSession(authOptions)

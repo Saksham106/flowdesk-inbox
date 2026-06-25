@@ -1,5 +1,6 @@
 import { resolveAccountMode, type AccountMode } from "@/lib/account-mode"
 import { stripHtmlToText } from "@/lib/email-body"
+import { AUTOMATED_SENDER_RE, AUTOMATED_BODY_RE, FYI_RE, FYI_EMAIL_TYPES } from "@/lib/inbox-fyi"
 
 type MessageDirection = "inbound" | "outbound" | string
 
@@ -169,17 +170,12 @@ export type RelationshipContext = {
   relationshipStatus: string
 }
 
-const LEGACY_AUTO_EMAIL_TYPES = new Set(["notification", "newsletter", "marketing"])
 const IGNORABLE_ATTENTION_CATEGORIES = new Set(["quiet", "fyi_done"])
 
 const SENSITIVE_PATTERN =
   /\b(legal|lawsuit|attorney|immigration|tax|medical|doctor|diagnosis|angry|furious|refund|dispute|contract|hr|employment|breakup|divorce|owed|collections|overdue)\b/i
 const LEAD_PATTERN =
   /\b(pricing|price|charge|cost|quote|demo|available|availability|book|setup|interested|can you help|do you work with)\b/i
-const FYI_PATTERN = /\b(fyi|newsletter|for your records|no action|all set|thanks, all set)\b/i
-const AUTOMATED_SENDER_PATTERN = /\b(no-?reply|noreply|notifications?|alerts?|do-not-reply|automated)\b/i
-const AUTOMATED_BODY_PATTERN =
-  /\b(unsubscribe|you'?re receiving this|this is an automated (email|message|notification)|do not reply to this email)\b/i
 const MONEY_PATTERN = /\b(pricing|price|charge|cost|quote|budget|invoice|payment|paid|refund|setup fee|contract)\b/i
 const PROMISE_PATTERN = /\b(i promised|you promised|we promised|send|follow up|circle back|confirm|provide|share)\b/i
 const ACTION_DURATION_RE =
@@ -288,9 +284,9 @@ function isSafelyIgnorable(conversation: CommandCenterInputConversation): boolea
   // Check automated patterns before the sensitive guard so that marketing emails
   // containing words like "refund", "tax", or "collections" are not misclassified.
   if (
-    AUTOMATED_SENDER_PATTERN.test(senderEmail) ||
-    AUTOMATED_BODY_PATTERN.test(body) ||
-    FYI_PATTERN.test(body)
+    AUTOMATED_SENDER_RE.test(senderEmail) ||
+    AUTOMATED_BODY_RE.test(body) ||
+    FYI_RE.test(body)
   ) return true
 
   if (hasPendingApproval(conversation) || isSensitive(conversation)) return false
@@ -398,7 +394,7 @@ function isAutoEmail(conversation: CommandCenterInputConversation): boolean {
   const attentionCategory = getAttentionCategory(conversation)
   if (attentionCategory) return IGNORABLE_ATTENTION_CATEGORIES.has(attentionCategory)
   const emailType = getEmailType(conversation)
-  return emailType !== null && LEGACY_AUTO_EMAIL_TYPES.has(emailType)
+  return emailType !== null && FYI_EMAIL_TYPES.has(emailType)
 }
 
 function isClassifiedSupport(conversation: CommandCenterInputConversation, accountMode: AccountMode): boolean {
