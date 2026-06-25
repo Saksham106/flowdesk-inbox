@@ -74,6 +74,7 @@ export default function InboxRow({
   const portalRef                   = useRef<HTMLDivElement>(null)
 
   const [archiveError, setArchiveError] = useState<string | null>(null)
+  const [pendingAction, setPendingAction] = useState<"read" | "status" | "archive" | "attention" | null>(null)
   const isUnread = !isRead
   const isClosed = workflowStatus === "done"
 
@@ -97,43 +98,74 @@ export default function InboxRow({
   async function toggleRead(e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
+    if (pendingAction) return
     const next = !isRead
     setIsRead(next)
-    const res = await fetch(`/api/conversations/${id}/read`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ read: next }),
-    })
-    if (!res.ok) setIsRead(!next)
-    router.refresh()
+    setPendingAction("read")
+    try {
+      const res = await fetch(`/api/conversations/${id}/read`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ read: next }),
+      })
+      if (!res.ok) {
+        setIsRead(!next)
+        return
+      }
+      router.refresh()
+    } catch {
+      setIsRead(!next)
+    } finally {
+      setPendingAction(null)
+    }
   }
 
   async function toggleStatus(e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
+    if (pendingAction) return
     const nextStatus = isClosed ? "needs_reply" : "done"
     setWorkflowStatus(nextStatus as WorkflowStatus)
-    const res = await fetch(`/api/conversations/${id}/workflow-status`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workflowStatus: nextStatus }),
-    })
-    if (!res.ok) setWorkflowStatus(initialWorkflowStatus)
-    else router.refresh()
+    setPendingAction("status")
+    try {
+      const res = await fetch(`/api/conversations/${id}/workflow-status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workflowStatus: nextStatus }),
+      })
+      if (!res.ok) {
+        setWorkflowStatus(initialWorkflowStatus)
+        return
+      }
+      router.refresh()
+    } catch {
+      setWorkflowStatus(initialWorkflowStatus)
+    } finally {
+      setPendingAction(null)
+    }
   }
 
   async function archiveConversation(e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
+    if (pendingAction) return
     setArchiveError(null)
     const prevStatus = status
     setStatus("closed")
-    const res = await fetch(`/api/conversations/${id}/archive`, { method: "PATCH" })
-    if (!res.ok) {
+    setPendingAction("archive")
+    try {
+      const res = await fetch(`/api/conversations/${id}/archive`, { method: "PATCH" })
+      if (!res.ok) {
+        setStatus(prevStatus)
+        setArchiveError("Archive failed")
+        return
+      }
+      router.refresh()
+    } catch {
       setStatus(prevStatus)
       setArchiveError("Archive failed")
-    } else {
-      router.refresh()
+    } finally {
+      setPendingAction(null)
     }
   }
 
@@ -150,17 +182,30 @@ export default function InboxRow({
   async function changeAttention(e: React.MouseEvent, cat: string) {
     e.preventDefault()
     e.stopPropagation()
+    if (pendingAction) return
     setShowAtt(false)
     const prev = attention
     setAttention(cat)
     setWorkflowStatus(cat as WorkflowStatus)
-    const res = await fetch(`/api/conversations/${id}/workflow-status`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workflowStatus: cat }),
-    })
-    if (!res.ok) { setAttention(prev); setWorkflowStatus(initialWorkflowStatus) }
-    else router.refresh()
+    setPendingAction("attention")
+    try {
+      const res = await fetch(`/api/conversations/${id}/workflow-status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workflowStatus: cat }),
+      })
+      if (!res.ok) {
+        setAttention(prev)
+        setWorkflowStatus(initialWorkflowStatus)
+        return
+      }
+      router.refresh()
+    } catch {
+      setAttention(prev)
+      setWorkflowStatus(initialWorkflowStatus)
+    } finally {
+      setPendingAction(null)
+    }
   }
 
   return (
@@ -232,13 +277,16 @@ export default function InboxRow({
         <button
           type="button"
           onClick={toggleRead}
+          disabled={!!pendingAction}
           title={isRead ? "Mark unread" : "Mark read"}
           aria-label={isRead ? "Mark unread" : "Mark read"}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-40 disabled:cursor-wait"
         >
-          {isRead
-            ? <span className="inline-block h-2 w-2 rounded-full border-2 border-slate-400" />
-            : <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />}
+          {pendingAction === "read"
+            ? <span className="inline-block h-2 w-2 rounded-full border-2 border-slate-300 border-t-slate-500 animate-spin" />
+            : isRead
+              ? <span className="inline-block h-2 w-2 rounded-full border-2 border-slate-400" />
+              : <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />}
         </button>
 
         {/* Attention / tag picker — dropdown rendered in a portal to escape the scroll container */}
@@ -246,22 +294,27 @@ export default function InboxRow({
           ref={attentionBtnRef}
           type="button"
           onClick={openAttentionDropdown}
+          disabled={!!pendingAction}
           title="Change tag"
           aria-label="Change tag"
           aria-expanded={showAttention}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-40 disabled:cursor-wait"
         >
-          {/* Tag icon */}
-          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M1 1h4.5L11 6.5 6.5 11 1 5.5V1Z" />
-            <circle cx="3.5" cy="3.5" r="0.75" fill="currentColor" stroke="none" />
-          </svg>
+          {pendingAction === "attention"
+            ? <span className="inline-block h-2 w-2 rounded-full border-2 border-slate-300 border-t-slate-500 animate-spin" />
+            : (
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M1 1h4.5L11 6.5 6.5 11 1 5.5V1Z" />
+                <circle cx="3.5" cy="3.5" r="0.75" fill="currentColor" stroke="none" />
+              </svg>
+            )}
         </button>
         {onSnooze && (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onSnooze() }}
-            className="rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-100"
+            disabled={!!pendingAction}
+            className="rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-wait"
             title="Snooze"
           >
             💤
@@ -273,20 +326,24 @@ export default function InboxRow({
           <button
             type="button"
             onClick={archiveConversation}
+            disabled={!!pendingAction}
             title={archiveError ?? "Archive"}
             aria-label="Archive"
-            className={`flex h-6 w-6 items-center justify-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+            className={`flex h-6 w-6 items-center justify-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-40 disabled:cursor-wait ${
               archiveError
                 ? "text-red-500 hover:bg-red-50"
                 : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
             }`}
           >
-            {/* Archive: inbox-with-down-arrow icon */}
-            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="1" y="1" width="10" height="3" rx="0.5" />
-              <path d="M2 4v6.5h8V4" />
-              <path d="M4.5 6.5L6 8l1.5-1.5M6 8V5.5" />
-            </svg>
+            {pendingAction === "archive"
+              ? <span className="inline-block h-2 w-2 rounded-full border-2 border-slate-300 border-t-slate-500 animate-spin" />
+              : (
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="1" y="1" width="10" height="3" rx="0.5" />
+                  <path d="M2 4v6.5h8V4" />
+                  <path d="M4.5 6.5L6 8l1.5-1.5M6 8V5.5" />
+                </svg>
+              )}
           </button>
         )}
 
@@ -295,22 +352,23 @@ export default function InboxRow({
           <button
             type="button"
             onClick={toggleStatus}
+            disabled={!!pendingAction}
             title={isClosed ? "Reopen thread" : "Close thread"}
             aria-label={isClosed ? "Reopen thread" : "Close thread"}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-40 disabled:cursor-wait"
           >
-            {isClosed ? (
-              // Reopen: 270° arc with arrowhead
-              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M10 6A4 4 0 1 1 6 2" />
-                <path d="M4.5 3.5L6 2L7.5 3.5" />
-              </svg>
-            ) : (
-              // Close: checkmark
-              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M2 6.5 5 9.5 10 3" />
-              </svg>
-            )}
+            {pendingAction === "status"
+              ? <span className="inline-block h-2 w-2 rounded-full border-2 border-slate-300 border-t-slate-500 animate-spin" />
+              : isClosed ? (
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M10 6A4 4 0 1 1 6 2" />
+                  <path d="M4.5 3.5L6 2L7.5 3.5" />
+                </svg>
+              ) : (
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M2 6.5 5 9.5 10 3" />
+                </svg>
+              )}
           </button>
         )}
       </div>

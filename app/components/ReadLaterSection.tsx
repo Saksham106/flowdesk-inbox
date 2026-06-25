@@ -28,6 +28,7 @@ interface CardProps {
 function ReadLaterCard({ item }: CardProps) {
   const router = useRouter()
   const [doneState, setDoneState] = useState<"idle" | "undoable" | "done">("idle")
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -42,6 +43,8 @@ function ReadLaterCard({ item }: CardProps) {
   async function markDone(e: React.MouseEvent, withUndo: boolean) {
     e.preventDefault()
     e.stopPropagation()
+    if (loading) return
+    setLoading(true)
     setError(null)
     try {
       const res = await fetch(`/api/conversations/${item.id}/workflow-status`, {
@@ -62,6 +65,8 @@ function ReadLaterCard({ item }: CardProps) {
       }
     } catch {
       setError("Couldn't update")
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -109,16 +114,18 @@ function ReadLaterCard({ item }: CardProps) {
           <button
             type="button"
             onClick={(e) => markDone(e, true)}
-            className="text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-100 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:opacity-100"
+            disabled={loading}
+            className="text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-100 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:opacity-100 disabled:opacity-40 disabled:cursor-wait"
           >
-            Done
+            {loading ? "…" : "Done"}
           </button>
           <button
             type="button"
             onClick={(e) => markDone(e, false)}
-            className="text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200 text-slate-500 hover:bg-slate-100 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:opacity-100"
+            disabled={loading}
+            className="text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200 text-slate-500 hover:bg-slate-100 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:opacity-100 disabled:opacity-40 disabled:cursor-wait"
           >
-            Not interested
+            {loading ? "…" : "Not interested"}
           </button>
         </div>
       </div>
