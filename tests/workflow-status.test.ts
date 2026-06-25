@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest"
-import { deriveWorkflowStatus, aiCategoryLabel } from "@/lib/workflow-status"
+import {
+  deriveWorkflowStatus,
+  aiCategoryLabel,
+} from "@/lib/workflow-status"
+import {
+  conversationUpdateForDraftReady,
+  conversationUpdateForWorkflowStatus,
+} from "@/lib/workflow-status-transitions"
 
 describe("deriveWorkflowStatus", () => {
   it("returns draft_ready when draft is proposed, regardless of other signals", () => {
@@ -67,5 +74,31 @@ describe("aiCategoryLabel", () => {
   })
   it("returns null when neither is recognized", () => {
     expect(aiCategoryLabel(null, null)).toBeNull()
+  })
+})
+
+describe("workflow status persistence helpers", () => {
+  it("draft generation moves the conversation back to Draft Ready inputs", () => {
+    expect(conversationUpdateForDraftReady(new Date("2026-06-25T12:00:00Z"))).toMatchObject({
+      status: "needs_reply",
+      userState: null,
+      userStateSource: "ai",
+    })
+  })
+
+  it("mark Done persists as a closed conversation with userState=done", () => {
+    expect(conversationUpdateForWorkflowStatus("done", new Date("2026-06-25T12:00:00Z"))).toMatchObject({
+      status: "closed",
+      userState: "done",
+      userStateSource: "user",
+    })
+  })
+
+  it("mark Waiting On persists as in_progress with userState=waiting_on", () => {
+    expect(conversationUpdateForWorkflowStatus("waiting_on", new Date("2026-06-25T12:00:00Z"))).toMatchObject({
+      status: "in_progress",
+      userState: "waiting_on",
+      userStateSource: "user",
+    })
   })
 })

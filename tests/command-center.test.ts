@@ -697,6 +697,33 @@ describe("buildDailyCommandCenter with persisted states", () => {
     expect(result.conversations[0].state).toBe("done")
   })
 
+  it("does not show user-done conversations in Handle First even with fresh persisted needs-reply state", () => {
+    const persisted = makePersistedState({
+      conversationId: "conv-user-done",
+      state: "needs_reply",
+      priority: "high",
+      reason: "Old AI state",
+      nextAction: "Draft a reply.",
+    })
+
+    const result = buildDailyCommandCenter(
+      [
+        conversation({
+          id: "conv-user-done",
+          status: "closed",
+          userState: "done",
+        }),
+      ],
+      now,
+      "business",
+      new Map([["conv-user-done", persisted]])
+    )
+
+    expect(result.topActions.map((item) => item.id)).not.toContain("conv-user-done")
+    expect(result.conversations[0].state).toBe("done")
+    expect(result.conversations[0].needsReply).toBe(false)
+  })
+
   it("surfaces detectedCode from conversationState action metadata", () => {
     const conv = conversation({
       conversationState: {

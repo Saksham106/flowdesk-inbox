@@ -358,6 +358,13 @@ export default async function ConversationPage({
       } | null;
     } | null
   )?.metadataJson;
+  const activeDraft =
+    conversation.draft &&
+    conversation.draft.status !== "none" &&
+    conversation.draft.status !== "sent" &&
+    conversation.draft.text.trim()
+      ? conversation.draft
+      : null
 
   const vipBanner = isVip ? (
     <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800">
@@ -595,11 +602,11 @@ export default async function ConversationPage({
         })()}
         threadSubject={conversation.externalThreadId}
         initialDraft={
-          conversation.draft
+          activeDraft
             ? {
-                id: conversation.draft.id,
-                text: conversation.draft.text,
-                status: conversation.draft.status,
+                id: activeDraft.id,
+                text: activeDraft.text,
+                status: activeDraft.status,
                 metadataJson: draftMetadata ?? null,
               }
             : null

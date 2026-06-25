@@ -72,10 +72,10 @@ function HandleFirstCard({ item }: CardProps) {
   async function handleMarkDone() {
     setDone(true) // optimistic
     try {
-      const res = await fetch(`/api/conversations/${item.id}/status`, {
+      const res = await fetch(`/api/conversations/${item.id}/workflow-status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "closed" }),
+        body: JSON.stringify({ workflowStatus: "done" }),
       })
       if (!res.ok) throw new Error("Failed to close")
     } catch {

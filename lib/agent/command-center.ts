@@ -24,6 +24,7 @@ export type CommandCenterInputConversation = {
   externalThreadId: string
   label: string | null
   status: string
+  userState?: string | null
   readAt?: Date | null
   gmailUnread?: boolean | null
   lastMessageAt: Date
@@ -460,7 +461,27 @@ export function analyzeConversationForCommandCenter(
   let reason = "Safely ignored for now."
   let nextAction = "No action needed."
 
-  if (expiredAction) {
+  if (conversation.draft?.status === "proposed" || conversation.draft?.status === "approved") {
+    state = "waiting_on_you"
+    priority = "high"
+    reason = "Draft is ready for review."
+    nextAction = "Review and send the draft."
+  } else if (conversation.userState === "done") {
+    state = "done"
+    priority = "none"
+    reason = "Conversation is done."
+    nextAction = "No action needed."
+  } else if (conversation.userState === "waiting_on") {
+    state = "waiting_on_them"
+    priority = "low"
+    reason = "Waiting on their response."
+    nextAction = "Check back later."
+  } else if (conversation.userState === "read_later") {
+    state = "fyi_only"
+    priority = "low"
+    reason = "Saved to read later."
+    nextAction = "Read later if relevant."
+  } else if (expiredAction) {
     state = "fyi_only"
     priority = "none"
     reason = "Action link or code has expired."
@@ -564,7 +585,12 @@ export function analyzeConversationForCommandCenter(
     sensitive,
     approvalReason: approvalReason(conversation),
     safelyIgnored: state === "done" || expiredAction || safelyIgnored,
-    needsReply: conversation.status === "needs_reply" && !expiredAction && !safelyIgnored && (!attentionCategory || attentionCategory === "needs_reply"),
+    needsReply:
+      conversation.status === "needs_reply" &&
+      !conversation.userState &&
+      !expiredAction &&
+      !safelyIgnored &&
+      (!attentionCategory || attentionCategory === "needs_reply"),
     needsAction: attentionCategory === "needs_action" && !expiredAction,
     readLater: attentionCategory === "read_later",
     opportunity,
@@ -579,7 +605,7 @@ export function analyzeConversationForCommandCenter(
 /** Convert a persisted ConversationState to a CommandCenterConversation for display */
 export function persistedStateToCommandCenterConversation(
   persisted: PersistedCommandCenterState,
-  conversation: Pick<CommandCenterInputConversation, "id" | "externalThreadId" | "label" | "status" | "readAt" | "gmailUnread" | "lastMessageAt" | "contact" | "channel">,
+  conversation: Pick<CommandCenterInputConversation, "id" | "externalThreadId" | "label" | "status" | "userState" | "readAt" | "gmailUnread" | "lastMessageAt" | "contact" | "channel">,
   lead?: { score: number; scoreExplanation: string | null; estimatedValue?: number | null } | null,
   now = new Date()
 ): CommandCenterConversation {
@@ -597,6 +623,19 @@ export function persistedStateToCommandCenterConversation(
       typeof meta?.escalationReason === "string" ||
       conversation.label === "Complaint")
   const opportunity = meta?.suggestedLabel === "Lead" || conversation.label === "Lead"
+  const userDone = conversation.userState === "done" || conversation.status === "closed"
+  const userWaiting = conversation.userState === "waiting_on"
+  const userReadLater = conversation.userState === "read_later"
+  const derivedState = userDone
+    ? "done"
+    : userWaiting
+      ? "waiting_on_them"
+      : userReadLater
+        ? "fyi_only"
+        : expiredAction
+          ? "fyi_only"
+          : (persisted.state as CommandCenterState)
+  const derivedPriority = userDone || expiredAction ? "none" : userWaiting || userReadLater ? "low" : (persisted.priority as CommandCenterPriority)
   const approvalReasonStr = typeof meta?.escalationReason === "string" && meta.escalationReason.trim()
     ? meta.escalationReason.trim()
     : meta?.riskLevel === "high"
@@ -610,10 +649,10 @@ export function persistedStateToCommandCenterConversation(
   return {
     id: conversation.id,
     displayName: conversation.contact?.name ?? conversation.externalThreadId,
-    state: expiredAction ? "fyi_only" : (persisted.state as CommandCenterState),
-    priority: expiredAction ? "none" : (persisted.priority as CommandCenterPriority),
-    reason: expiredAction ? "Action link or code has expired." : persisted.reason,
-    nextAction: expiredAction ? "No action needed." : persisted.nextAction,
+    state: derivedState,
+    priority: derivedPriority,
+    reason: userDone ? "Conversation is done." : expiredAction ? "Action link or code has expired." : persisted.reason,
+    nextAction: userDone ? "No action needed." : expiredAction ? "No action needed." : persisted.nextAction,
     href: `/conversations/${conversation.id}`,
     lastMessageAt: conversation.lastMessageAt,
     label: conversation.label,
@@ -621,10 +660,12 @@ export function persistedStateToCommandCenterConversation(
     approvalReason: approvalReasonStr,
     safelyIgnored:
       persisted.state === "done" ||
+      userDone ||
       expiredAction ||
       (persisted.state === "fyi_only" && meta?.attentionCategory !== "read_later"),
     needsReply:
       conversation.status === "needs_reply" &&
+      !conversation.userState &&
       !expiredAction &&
       persisted.state !== "fyi_only" &&
       (!meta?.attentionCategory || meta.attentionCategory === "needs_reply"),

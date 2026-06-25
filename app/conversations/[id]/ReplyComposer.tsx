@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type DraftStatus = "none" | "proposed" | "approved" | "sent";
 
@@ -57,6 +57,7 @@ export default function ReplyComposer({
   const [bccOpen, setBccOpen] = useState(false)
   const [cc, setCc] = useState("")
   const [bcc, setBcc] = useState("")
+  const [showNextStep, setShowNextStep] = useState(false)
 
   const isEmail = channelType === "email";
   const canAI = isEmail && canSuggest;
@@ -67,6 +68,19 @@ export default function ReplyComposer({
   const riskLevel = draft?.metadataJson?.riskLevel;
   const escalationReason = draft?.metadataJson?.escalationReason;
   const isRisky = hasDraftText && (riskLevel === "high" || Boolean(escalationReason));
+
+  useEffect(() => {
+    if (!initialDraft || initialDraft.status === "none" || initialDraft.status === "sent" || !initialDraft.text.trim()) {
+      return
+    }
+    if (draft?.id === initialDraft.id && draft?.status === initialDraft.status && draft?.text === initialDraft.text) {
+      return
+    }
+    setDraft(initialDraft)
+    setText(initialDraft.text)
+    setIsExpanded(true)
+    setShowNextStep(false)
+  }, [initialDraft, draft?.id, draft?.status, draft?.text])
 
   async function loadSnippets() {
     if (snippetsLoaded) return
@@ -124,6 +138,7 @@ export default function ReplyComposer({
       if (newDraft) {
         setDraft(newDraft);
         setText(newDraft.text);
+        setShowNextStep(false);
         setNotice("Draft ready — review and edit before sending.");
       }
       router.refresh();
@@ -160,7 +175,8 @@ export default function ReplyComposer({
         await assertOk(approveRes, "Failed to approve draft.");
         const sendRes = await fetch(`/api/conversations/${conversationId}/draft/send-approved`, { method: "POST" });
         await assertOk(sendRes, "Failed to send.");
-        setDraft((d) => d ? { ...d, status: "sent", text: trimmedText } : d);
+        setDraft(null);
+        setText("");
       } else {
         // Manual path: send directly
         const sendRes = await fetch(`/api/conversations/${conversationId}/send`, {
@@ -172,12 +188,33 @@ export default function ReplyComposer({
         setDraft(null);
         setText("");
       }
-      setNotice("Sent.");
+      setInstruction("");
+      setShowNextStep(true);
+      setNotice("Sent. What should happen next?");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send.");
     } finally {
       setAction("idle");
+    }
+  }
+
+  async function setWorkflowStatus(workflowStatus: "done" | "waiting_on") {
+    if (isBusy) return
+    setError(null)
+    setNotice(null)
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}/workflow-status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workflowStatus }),
+      })
+      await assertOk(response, "Failed to update status.")
+      setShowNextStep(false)
+      setNotice(workflowStatus === "done" ? "Marked done." : "Marked waiting on them.")
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update status.")
     }
   }
 
@@ -420,6 +457,26 @@ export default function ReplyComposer({
       {/* Error / notice */}
       {error && <p className="px-3 pb-1 text-xs text-red-600">{error}</p>}
       {notice && <p className="px-3 pb-1 text-xs text-emerald-700">{notice}</p>}
+      {showNextStep && (
+        <div className="mx-3 mb-2 flex flex-wrap gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
+          <button
+            type="button"
+            onClick={() => setWorkflowStatus("done")}
+            disabled={isBusy}
+            className="rounded-md bg-emerald-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
+          >
+            Done
+          </button>
+          <button
+            type="button"
+            onClick={() => setWorkflowStatus("waiting_on")}
+            disabled={isBusy}
+            className="rounded-md border border-emerald-200 bg-white px-2.5 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-60"
+          >
+            Waiting On
+          </button>
+        </div>
+      )}
 
       {/* No business profile hint */}
       {isEmail && !isPersonal && !canSuggest && (

@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidateInboxViews } from "@/lib/cache-tags"
+import { conversationUpdateForDraftReady } from "@/lib/workflow-status-transitions"
 
 export const runtime = "nodejs"
 
@@ -47,6 +48,11 @@ export async function PATCH(
     const draft = await prisma.draft.update({
       where: { conversationId: conversation.id },
       data: { text, status: "proposed" },
+    })
+
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: conversationUpdateForDraftReady(),
     })
 
     await prisma.auditLog.create({

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { extractEmail, fetchThread, getGmailClient, sendGmailReply } from "@/lib/google"
 import { sendOutlookReply } from "@/lib/microsoft"
+import { conversationUpdateForWorkflowStatus } from "@/lib/workflow-status-transitions"
 
 type ConversationForSend = NonNullable<
   Awaited<
@@ -166,7 +167,10 @@ async function sendEmailConversationMessage({
       }),
       prisma.conversation.update({
         where: { id: conversation.id },
-        data: { lastMessageAt: now, status: "in_progress" },
+        data: {
+          lastMessageAt: now,
+          ...conversationUpdateForWorkflowStatus("waiting_on", now),
+        },
       }),
       prisma.auditLog.create({
         data: {
@@ -242,7 +246,10 @@ async function sendOutlookEmailMessage({
       }),
       prisma.conversation.update({
         where: { id: conversation.id },
-        data: { lastMessageAt: now, status: "in_progress" },
+        data: {
+          lastMessageAt: now,
+          ...conversationUpdateForWorkflowStatus("waiting_on", now),
+        },
       }),
       prisma.auditLog.create({
         data: {

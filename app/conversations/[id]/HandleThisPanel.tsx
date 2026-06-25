@@ -38,7 +38,7 @@ export default function HandleThisPanel({
       if (!response.ok) {
         throw new Error(body?.error ?? "FlowDesk could not handle this yet.")
       }
-      setNotice("Handled: draft and next-step context are ready for review.")
+      setNotice("Draft ready in the reply box.")
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : "FlowDesk could not handle this yet.")
@@ -97,4 +97,3 @@ function ContextRow({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
-

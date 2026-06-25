@@ -204,7 +204,12 @@ describe('POST /api/conversations/[id]/draft/suggest', () => {
     })
     expect(mockConversationUpdate).toHaveBeenCalledWith({
       where: { id: 'conv1' },
-      data: { label: 'Pricing' },
+      data: expect.objectContaining({
+        label: 'Pricing',
+        status: 'needs_reply',
+        userState: null,
+        userStateSource: 'ai',
+      }),
     })
     expect(mockAuditCreate.mock.calls[0][0].data).toMatchObject({
       tenantId: 'tenant-A',
@@ -364,6 +369,14 @@ describe('PATCH /api/conversations/[id]/draft', () => {
       where: { conversationId: 'conv1' },
       data: { text: 'Edited reply', status: 'proposed' },
     })
+    expect(mockConversationUpdate).toHaveBeenCalledWith({
+      where: { id: 'conv1' },
+      data: expect.objectContaining({
+        status: 'needs_reply',
+        userState: null,
+        userStateSource: 'ai',
+      }),
+    })
   })
 
   it('can approve an existing draft', async () => {
@@ -390,7 +403,7 @@ describe('POST /api/conversations/[id]/draft/send-approved', () => {
     mockAuditCreate.mockResolvedValue({})
   })
 
-  it('sends a human-approved draft through the shared send helper and marks it sent', async () => {
+  it('sends a human-approved draft through the shared send helper and clears the saved composer text', async () => {
     const res = await sendApprovedDraft(makeReq() as never, { params: { id: 'conv1' } })
 
     expect(res.status).toBe(200)
@@ -403,7 +416,7 @@ describe('POST /api/conversations/[id]/draft/send-approved', () => {
     })
     expect(mockDraftUpdate).toHaveBeenCalledWith({
       where: { conversationId: 'conv1' },
-      data: { status: 'sent' },
+      data: { status: 'sent', text: '' },
     })
   })
 })

@@ -201,10 +201,10 @@ export default function AIDraftPanel({
         throw new Error("Failed to send approved draft.");
       }
 
-      setDraft((current) =>
-        current ? { ...current, status: "sent", text: trimmedText } : current,
-      );
-      setNotice("Approved draft sent.");
+      setDraft(null);
+      setText("");
+      setMetadata(null);
+      setNotice("Approved draft sent. Mark it Done if no reply is needed, or leave it Waiting On.");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send approved draft.");

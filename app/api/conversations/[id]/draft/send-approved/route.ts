@@ -76,7 +76,7 @@ export async function POST(
 
   await prisma.draft.update({
     where: { conversationId: conversation.id },
-    data: { status: "sent" },
+    data: { status: "sent", text: "" },
   })
 
   await prisma.auditLog.create({

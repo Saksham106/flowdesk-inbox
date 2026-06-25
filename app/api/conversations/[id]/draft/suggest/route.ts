@@ -13,6 +13,7 @@ import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import { checkAiBudget, estimateCostUsd } from "@/lib/ai/budget"
 import { prisma } from "@/lib/prisma"
 import { revalidateInboxViews } from "@/lib/cache-tags"
+import { conversationUpdateForDraftReady } from "@/lib/workflow-status-transitions"
 
 export const runtime = "nodejs"
 
@@ -242,7 +243,15 @@ export async function POST(
   if (accountType === "business" && suggestedLabel && VALID_LABELS.includes(suggestedLabel)) {
     await prisma.conversation.update({
       where: { id: conversation.id },
-      data: { label: suggestedLabel },
+      data: {
+        label: suggestedLabel,
+        ...conversationUpdateForDraftReady(),
+      },
+    })
+  } else {
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: conversationUpdateForDraftReady(),
     })
   }
 
@@ -313,6 +322,10 @@ async function maybeReturnCachedDraft(input: {
           draftId: input.draft.id,
         },
       },
+    })
+    await prisma.conversation.update({
+      where: { id: input.conversationId },
+      data: conversationUpdateForDraftReady(),
     })
     return NextResponse.json({ draft: input.draft, meta })
   }

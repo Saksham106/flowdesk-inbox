@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { markGmailThreadRead } from "@/lib/google";
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata";
 import { revalidateInboxViews } from "@/lib/cache-tags";
+import { conversationUpdateForWorkflowStatus } from "@/lib/workflow-status-transitions";
 
 const VALID_STATUSES = ["needs_reply", "in_progress", "closed"] as const;
 type Status = (typeof VALID_STATUSES)[number];
@@ -36,6 +37,8 @@ export async function PATCH(
   }
 
   const now = new Date();
+  const workflowStatus =
+    status === "closed" ? "done" : status === "in_progress" ? "waiting_on" : "needs_reply";
 
   // Merge with existing metadata to preserve attentionCategory, emailType, action, etc.
   const existingState = await prisma.conversationState.findUnique({
@@ -59,10 +62,7 @@ export async function PATCH(
   await prisma.conversation.update({
     where: { id: params.id },
     data: {
-      status,
-      userState: status === "closed" ? "done" : status,
-      userStateSource: "user",
-      userStateUpdatedAt: now,
+      ...conversationUpdateForWorkflowStatus(workflowStatus, now),
       ...(status === "closed" ? { readAt: now, gmailUnread: false } : {}),
     },
   });
