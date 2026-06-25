@@ -85,20 +85,21 @@ describe("buildEmailIframeSrcDoc", () => {
   });
 
   // Regression: newsletter inner tables use max-width:600px to center a content column.
-  // Our injected table rule must NOT use !important or it overrides those constraints,
-  // expanding the table to full iframe width and making the email appear zoomed.
-  it("does not use !important on table max-width so newsletter centering constraints are preserved", () => {
+  // Our injected table/img rules must NOT use !important on max-width or they override those
+  // constraints: tables expand to full iframe width (zoom), and retina icons render at 2× size.
+  it("does not use !important on table or img max-width so sender constraints are preserved", () => {
     const srcDoc = buildEmailIframeSrcDoc(`
       <table style="width:100%;background:#f4f4f4">
         <tr><td align="center">
-          <table style="max-width:600px;width:100%"><tr><td>Content</td></tr></table>
+          <table style="max-width:600px;width:100%"><tr><td>
+            <img src="icon@2x.png" style="max-width:24px;display:block" alt="icon">
+          </td></tr></table>
         </td></tr>
       </table>
     `);
 
-    // The injected CSS must not have "max-width: 100% !important" on table
-    // (allow other !important rules like for img/video, just not table)
     expect(srcDoc).not.toMatch(/table\s*\{[^}]*max-width\s*:\s*100%\s*!important/);
+    expect(srcDoc).not.toMatch(/img\s*,\s*video\s*\{[^}]*max-width\s*:\s*100%\s*!important/);
   });
 
   it("strips viewport meta tags to prevent browser-level zoom in srcdoc iframes", () => {
@@ -119,6 +120,23 @@ describe("buildEmailIframeSrcDoc", () => {
     expect(stripEmailViewportMeta(html)).not.toMatch(/name=["']?viewport["']?/i);
   });
 });
+
+  // Regression: LinkedIn-style emails use retina PNGs constrained only by inline
+  // max-width (no HTML width attribute, no CSS width property). !important on our
+  // max-width rule would override that and render the 2× PNG at its natural size.
+  it("preserves inline max-width constraints on small icons (no !important override)", () => {
+    // Icon: natural size 48×48, displayed at 24px via max-width only
+    const srcDoc = buildEmailIframeSrcDoc(
+      `<img src="settings@2x.png" alt="Settings" style="max-width:24px;max-height:24px;display:block;">`
+    );
+
+    // The injected CSS must not carry !important on img max-width
+    expect(srcDoc).not.toMatch(/img\s*,\s*video\s*\{[^}]*max-width\s*:\s*100%\s*!important/);
+    // height:auto !important is still expected (prevents distortion from fixed email heights)
+    expect(srcDoc).toMatch(/img\s*,\s*video\s*\{[^}]*height\s*:\s*auto\s*!important/);
+    // The img tag itself must survive
+    expect(srcDoc).toContain('alt="Settings"');
+  });
 
 describe("newsletter rendering layout", () => {
   it("preserves inner table max-width centering for a typical newsletter structure", () => {

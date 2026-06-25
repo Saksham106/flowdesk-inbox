@@ -76,8 +76,12 @@ function lightModeContainmentCss(): string {
        those inline constraints, expanding the table to full iframe width and zooming the email. */
     table { max-width: 100%; border-collapse: collapse; table-layout: auto; }
     td, th { overflow-wrap: anywhere; word-break: break-word; }
-    /* Keep !important on img/video to prevent wide images from overflowing their container. */
-    img, video { max-width: 100% !important; height: auto !important; }
+    /* No !important on max-width: small icons use inline max-width (e.g. style="max-width:24px")
+       as their sole size constraint — !important would override that, rendering retina PNGs at
+       their natural 2× size. Without !important, inline/class constraints win (higher specificity)
+       while our rule still caps images that have no sender-defined max-width.
+       Keep !important on height:auto to prevent aspect-ratio distortion from fixed email heights. */
+    img, video { max-width: 100%; height: auto !important; }
     pre, code { white-space: pre-wrap; overflow-wrap: anywhere; }
     a { color: #2563eb; overflow-wrap: anywhere; }
   `;
