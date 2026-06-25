@@ -32,15 +32,15 @@ function ReadLaterCard({ item }: CardProps) {
 
   if (dismissed) return null
 
-  async function handleDismiss(e: React.MouseEvent, attentionCategory: string) {
+  async function handleDismiss(e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
     setDismissed(true)
     setError(null)
-    const res = await fetch(`/api/conversations/${item.id}/attention`, {
+    const res = await fetch(`/api/conversations/${item.id}/workflow-status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ attentionCategory }),
+      body: JSON.stringify({ workflowStatus: "done" }),
     })
     if (!res.ok) {
       setDismissed(false)
@@ -67,7 +67,7 @@ function ReadLaterCard({ item }: CardProps) {
           {error && <span className="text-[9px] text-red-500 self-center mr-1">{error}</span>}
           <button
             type="button"
-            onClick={(e) => handleDismiss(e, "fyi_done")}
+            onClick={(e) => handleDismiss(e)}
             title="Mark as FYI / Done"
             className="flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-200 hover:text-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             aria-label="Mark as FYI / Done"
@@ -79,7 +79,7 @@ function ReadLaterCard({ item }: CardProps) {
           </button>
           <button
             type="button"
-            onClick={(e) => handleDismiss(e, "quiet")}
+            onClick={(e) => handleDismiss(e)}
             title="Mark as Quiet"
             className="flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-200 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             aria-label="Mark as Quiet"

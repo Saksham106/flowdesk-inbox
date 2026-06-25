@@ -31,8 +31,7 @@ export default function HomeCommandCenter({
   const firstName: string | null = null
 
   const statPills = [
-    { label: "Needs Reply", value: counts.needsReply, accent: "red" as const },
-    { label: "Needs Action", value: counts.needsAction, accent: "amber" as const },
+    { label: "Handle First", value: topActions.length, accent: "red" as const },
     { label: "Waiting On", value: counts.waitingOnThem, accent: "blue" as const },
     { label: "Read Later", value: counts.readLater, accent: "neutral" as const },
     { label: "Quietly Handled", value: counts.safelyIgnored, accent: "dim" as const },

@@ -65,10 +65,10 @@ function NeedsActionCard({ item }: { item: CommandCenterConversation }) {
     setDismissing(true)
     setDismissError(null)
     try {
-      const res = await fetch(`/api/conversations/${item.id}/attention`, {
+      const res = await fetch(`/api/conversations/${item.id}/workflow-status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ attentionCategory: "fyi_done" }),
+        body: JSON.stringify({ workflowStatus: "done" }),
       })
       if (!res.ok) throw new Error("Dismiss failed")
       setDismissed(true)
