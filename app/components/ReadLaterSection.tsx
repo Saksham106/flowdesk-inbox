@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import type { CommandCenterConversation } from "@/lib/agent/command-center"
 
@@ -27,27 +27,68 @@ interface CardProps {
 
 function ReadLaterCard({ item }: CardProps) {
   const router = useRouter()
-  const [dismissed, setDismissed] = useState(false)
+  const [doneState, setDoneState] = useState<"idle" | "undoable" | "done">("idle")
   const [error, setError] = useState<string | null>(null)
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  if (dismissed) return null
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
+    }
+  }, [])
 
-  async function handleDismiss(e: React.MouseEvent) {
+  if (doneState === "done") return null
+
+  async function markDone(e: React.MouseEvent, withUndo: boolean) {
     e.preventDefault()
     e.stopPropagation()
-    setDismissed(true)
     setError(null)
-    const res = await fetch(`/api/conversations/${item.id}/workflow-status`, {
+    try {
+      const res = await fetch(`/api/conversations/${item.id}/workflow-status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workflowStatus: "done" }),
+      })
+      if (!res.ok) throw new Error()
+      if (withUndo) {
+        setDoneState("undoable")
+        undoTimerRef.current = setTimeout(() => {
+          setDoneState("done")
+          router.refresh()
+        }, 5000)
+      } else {
+        setDoneState("done")
+        router.refresh()
+      }
+    } catch {
+      setError("Couldn't update")
+    }
+  }
+
+  function handleUndo(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
+    setDoneState("idle")
+    fetch(`/api/conversations/${item.id}/workflow-status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workflowStatus: "done" }),
+      body: JSON.stringify({ workflowStatus: "read_later" }),
     })
-    if (!res.ok) {
-      setDismissed(false)
-      setError("Couldn't update")
-    } else {
-      router.refresh()
-    }
+  }
+
+  if (doneState === "undoable") {
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+        <span className="text-[11px] text-slate-500">Marked as done · </span>
+        <button
+          onClick={handleUndo}
+          className="text-[10px] font-semibold text-blue-600 hover:underline"
+        >
+          Undo
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -63,31 +104,21 @@ function ReadLaterCard({ item }: CardProps) {
       </a>
       <div className="flex flex-col items-end gap-1 shrink-0">
         <span className="text-[10px] text-slate-400 mt-0.5">{relativeTime(item.lastMessageAt)}</span>
-        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
           {error && <span className="text-[9px] text-red-500 self-center mr-1">{error}</span>}
           <button
             type="button"
-            onClick={(e) => handleDismiss(e)}
-            title="Mark as FYI / Done"
-            className="flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-200 hover:text-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            aria-label="Mark as FYI / Done"
+            onClick={(e) => markDone(e, true)}
+            className="text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-100 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:opacity-100"
           >
-            {/* checkmark */}
-            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M2 6.5 5 9.5 10 3" />
-            </svg>
+            Done
           </button>
           <button
             type="button"
-            onClick={(e) => handleDismiss(e)}
-            title="Mark as Quiet"
-            className="flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-200 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            aria-label="Mark as Quiet"
+            onClick={(e) => markDone(e, false)}
+            className="text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200 text-slate-500 hover:bg-slate-100 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:opacity-100"
           >
-            {/* mute / x icon */}
-            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M2 2l8 8M10 2l-8 8" />
-            </svg>
+            Not interested
           </button>
         </div>
       </div>
@@ -108,7 +139,9 @@ export default function ReadLaterSection({ items }: Props) {
       <div className="flex items-center justify-between mb-2">
         <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Read Later</p>
         {overflow > 0 && (
-          <span className="text-[10px] text-blue-500">+{overflow} more</span>
+          <a href="/inbox?attention=read_later" className="text-[10px] text-blue-500 hover:underline">
+            +{overflow} more
+          </a>
         )}
       </div>
       {preview.length === 0 ? (
