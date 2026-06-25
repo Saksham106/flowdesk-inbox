@@ -76,17 +76,6 @@ const STATUS_FILTERS = [
   { label: "Done",        value: "closed" },
 ]
 
-const STATUS_STYLE: Record<string, { dot: string; text: string }> = {
-  needs_reply: { dot: "bg-red-500", text: "text-red-700" },
-  in_progress: { dot: "bg-amber-400", text: "text-amber-700" },
-  closed: { dot: "bg-emerald-500", text: "text-emerald-700" },
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  needs_reply: "Needs Reply",
-  in_progress: "In Progress",
-  closed: "Closed",
-}
 
 const WORKFLOW_STATUS_STYLE: Record<WorkflowStatus, { dot: string; text: string }> = {
   needs_reply: { dot: "bg-red-500",     text: "text-red-700" },

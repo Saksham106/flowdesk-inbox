@@ -43,7 +43,6 @@ export default function InboxRow({
   id,
   href,
   isSelected,
-  isFyi,
   isUnread: initialIsUnread,
   name,
   snippet,
