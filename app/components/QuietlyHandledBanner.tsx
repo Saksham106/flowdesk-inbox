@@ -20,7 +20,7 @@ export default function QuietlyHandledBanner({ count, breakdown }: Props) {
     <div className="mt-4 flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-3">
       <span className="text-2xl font-extrabold text-slate-300 flex-shrink-0">{count}</span>
       <div className="flex-1 min-w-0">
-        <p className="text-[11px] font-medium text-slate-500">emails quietly handled</p>
+        <p className="text-[11px] font-medium text-slate-500">emails sorted quietly</p>
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {pills.map(({ label, value }) => (
             <span
@@ -33,7 +33,7 @@ export default function QuietlyHandledBanner({ count, breakdown }: Props) {
         </div>
       </div>
       <Link
-        href="/inbox?attention=fyi_done"
+        href="/inbox?status=closed"
         className="text-[10px] font-semibold text-slate-500 border border-slate-200 bg-slate-50 rounded-lg px-3 py-1.5 hover:bg-slate-100 transition flex-shrink-0"
       >
         Review all →
