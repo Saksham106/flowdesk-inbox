@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-06-24 (landing-page-redesign + inbox query perf + dashboard UX fixes)
+Last updated: 2026-06-25 (inbox-ux-simplification)
 
 FlowDesk is an email-first AI inbox assistant for individuals and small businesses. It prioritizes important messages, extracts work, drafts responses, and keeps risky actions approval-gated.
 
@@ -45,7 +45,8 @@ FlowDesk is an email-first AI inbox assistant for individuals and small business
 - **Email classifier** (`lib/agent/email-classifier.ts`): fully deterministic, no DB or AI calls. Evaluates no-reply sender addresses, known notification domains (GitHub, Google Docs, Jira, Linear, Supabase, etc.), subject patterns, and body patterns (unsubscribe links, marketing language) in priority order. Result stored in `ConversationState.metadataJson.emailType`; no schema migration needed.
 - **Account-mode separation**: personal accounts receive a different classify prompt with no sales/lead/business framing. Lead scoring (`scoreLeadForConversation`) and sales signal classification are skipped entirely for personal accounts.
 - **Reply-style learning**: reads FlowDesk outbound DB rows first; falls back to `fetchGmailSentSamples` (Gmail SENT label) when DB sample count < 5. Source counts stored in `sourceStatsJson` for transparency in the settings UI.
-- Attention categories (`needs_reply`, `needs_action`, `review_soon`, `read_later`, `waiting_on`, `fyi_done`, `quiet`), manual corrections, and learned sender/domain rules. Explicit user corrections always take precedence over learned rules and AI classification.
+- **User-facing workflow status** (`Conversation.userState`): five clean states — Needs Reply, Draft Ready, Waiting On, Read Later, Done. `userState` is the canonical user choice; when null, `deriveWorkflowStatus()` computes it from DB status + AI attention category + draft state. AI signals (`attentionCategory`, `emailType`) remain in `ConversationState` as secondary read-only context, not primary user controls.
+- Manual corrections via `WorkflowStatusSelect` in the conversation right rail; learned sender/domain rules. Explicit user corrections always take precedence over learned rules and AI classification.
 - Tasks, leads, follow-ups, risk radar, meeting prep/follow-up, weekly value reports, and revenue-at-risk reporting.
 - AI drafts with knowledge-document citations, learned reply style, per-feature budget limits, and human approval gates.
 - Search, inbox chat, person memory, attachment extraction, phishing warnings, VIPs, snooze, and Clean Inbox bulk actions.
@@ -56,7 +57,7 @@ FlowDesk is an email-first AI inbox assistant for individuals and small business
 - **Bills & Deadlines**: items sourced from `inboxTask` records with due dates ≤ 7 days out, plus conversations with `review_soon` attention. Per-item dismiss button: tasks close via `PATCH /api/tasks/:id/status`; billing alerts reclassify to `fyi_done` via `PATCH /api/conversations/:id/attention`.
 - **Read Later**: per-card ✓ (mark FYI/Done) and ✕ (mark Quiet) buttons, both persisted via `PATCH /api/conversations/:id/attention`. Dismissals are optimistic; page refreshes on success.
 - **Quietly Handled**: "Review all" links to `/inbox?attention=fyi_done` so users see the actual quietly-handled emails, not an unfiltered inbox.
-- Stat pills (Needs Reply, Needs Action, Waiting On, Read Later, Quietly Handled) pull counts from the `DailyCommandCenter` built by `lib/agent/command-center.ts`.
+- Stat pills (Handle First, Waiting On, Read Later, Quietly Handled) pull counts from the `DailyCommandCenter` built by `lib/agent/command-center.ts`. Handle First count equals `topActions.length` so it always matches the items shown.
 
 ### Work items and classification persistence
 
