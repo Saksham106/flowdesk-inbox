@@ -7,6 +7,7 @@ export type WorkflowStatus =
 
 export interface DeriveWorkflowStatusInput {
   status: string
+  /** Set to "needs_reply" to clear an explicit user choice and re-derive from AI signals. Other values (waiting_on, read_later, done) are respected as-is. */
   userState?: string | null
   draftStatus?: string | null
   attentionCategory?: string | null

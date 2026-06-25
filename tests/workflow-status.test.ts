@@ -47,6 +47,12 @@ describe("deriveWorkflowStatus", () => {
   it("defaults to needs_reply", () => {
     expect(deriveWorkflowStatus({ status: "needs_reply", userState: null })).toBe("needs_reply")
   })
+  it("userState=needs_reply with no other signals defaults to needs_reply", () => {
+    expect(deriveWorkflowStatus({ status: "needs_reply", userState: "needs_reply" })).toBe("needs_reply")
+  })
+  it("unrecognized field values fall through to needs_reply", () => {
+    expect(deriveWorkflowStatus({ status: "archived", userState: "custom_value", attentionCategory: "unknown", emailType: "unknown" })).toBe("needs_reply")
+  })
 })
 
 describe("aiCategoryLabel", () => {
