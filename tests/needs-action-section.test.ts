@@ -9,7 +9,7 @@ describe("NeedsActionSection dismissal control", () => {
       "utf8"
     )
 
-    expect(source).toContain("Not needed")
+    expect(source).toContain("Handled")
     expect(source).toContain('/api/conversations/${item.id}/workflow-status')
     expect(source).toContain('workflowStatus: "done"')
   })

@@ -149,7 +149,7 @@ function NeedsActionCard({ item }: { item: CommandCenterConversation }) {
             title="Dismiss"
             className="text-[10px] font-semibold px-2 py-1 rounded-md border border-amber-300 bg-white/70 text-amber-800 transition hover:bg-white disabled:opacity-60"
           >
-            {dismissing ? "Saving..." : "Not needed"}
+            {dismissing ? "Saving…" : "Handled"}
           </button>
           {dismissError && <span className="text-[10px] text-red-600">{dismissError}</span>}
         </div>
