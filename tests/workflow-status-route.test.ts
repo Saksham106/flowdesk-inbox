@@ -5,11 +5,15 @@ const {
   mockConversationUpdate,
   mockDraftUpdateMany,
   mockRevalidateInboxViews,
+  mockWritebackUpsert,
+  mockAuditCreate,
 } = vi.hoisted(() => ({
   mockConversationFindFirst: vi.fn(),
   mockConversationUpdate: vi.fn(),
   mockDraftUpdateMany: vi.fn(),
   mockRevalidateInboxViews: vi.fn(),
+  mockWritebackUpsert: vi.fn(),
+  mockAuditCreate: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -20,6 +24,12 @@ vi.mock("@/lib/prisma", () => ({
     },
     draft: {
       updateMany: mockDraftUpdateMany,
+    },
+    gmailWritebackQueue: {
+      upsert: mockWritebackUpsert,
+    },
+    auditLog: {
+      create: mockAuditCreate,
     },
   },
 }))
@@ -65,9 +75,19 @@ describe("PATCH /api/conversations/[id]/workflow-status", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSession = { user: { id: "user1", tenantId: "tenant-A" } }
-    mockConversationFindFirst.mockResolvedValue({ id: "conv1" })
+    mockConversationFindFirst.mockResolvedValue({
+      id: "conv1",
+      channelId: "channel-1",
+      externalThreadId: "thread-1",
+      label: null,
+      draft: { status: "proposed" },
+      stateRecord: { attentionCategory: null },
+      channel: { provider: "google" },
+    })
     mockConversationUpdate.mockResolvedValue({ id: "conv1" })
     mockDraftUpdateMany.mockResolvedValue({ count: 1 })
+    mockWritebackUpsert.mockResolvedValue({})
+    mockAuditCreate.mockResolvedValue({})
   })
 
   it("clears unsent drafts when a manual Done action leaves draft review", async () => {
@@ -95,6 +115,30 @@ describe("PATCH /api/conversations/[id]/workflow-status", () => {
       },
     })
     expect(mockRevalidateInboxViews).toHaveBeenCalledWith("tenant-A", "conv1")
+    expect(mockWritebackUpsert).toHaveBeenCalledWith({
+      where: {
+        conversationId_action: {
+          conversationId: "conv1",
+          action: "apply_labels",
+        },
+      },
+      create: expect.objectContaining({
+        tenantId: "tenant-A",
+        channelId: "channel-1",
+        conversationId: "conv1",
+        action: "apply_labels",
+        providerMessageIdsJson: expect.objectContaining({
+          threadId: "thread-1",
+          labels: ["FlowDesk/Handled"],
+        }),
+      }),
+      update: expect.objectContaining({
+        providerMessageIdsJson: expect.objectContaining({
+          threadId: "thread-1",
+          labels: ["FlowDesk/Handled"],
+        }),
+      }),
+    })
   })
 
   it("clears unsent drafts when Waiting On is selected after sending", async () => {
@@ -108,6 +152,9 @@ describe("PATCH /api/conversations/[id]/workflow-status", () => {
       status: "in_progress",
       userState: "waiting_on",
     })
+    expect(mockWritebackUpsert.mock.calls[0][0].create.providerMessageIdsJson.labels).toEqual([
+      "FlowDesk/Waiting On",
+    ])
   })
 
   it("does not clear drafts when a conversation is explicitly reset to Needs Reply", async () => {

@@ -9,6 +9,10 @@ import {
   shouldClearDraftForWorkflowStatus,
   type SettableWorkflowStatus,
 } from "@/lib/workflow-status-transitions"
+import {
+  flowDeskLabelsForConversationState,
+  queueFlowDeskLabelWriteback,
+} from "@/lib/gmail-labels"
 
 const SETTABLE_STATUSES = new Set(["needs_reply", "waiting_on", "read_later", "done"])
 
@@ -30,7 +34,15 @@ export async function PATCH(
 
   const conversation = await prisma.conversation.findFirst({
     where: { id: params.id, tenantId: session.user.tenantId },
-    select: { id: true },
+    select: {
+      id: true,
+      channelId: true,
+      externalThreadId: true,
+      label: true,
+      draft: { select: { status: true } },
+      stateRecord: { select: { attentionCategory: true } },
+      channel: { select: { provider: true } },
+    },
   })
   if (!conversation) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -54,6 +66,24 @@ export async function PATCH(
         status: "none",
         text: "",
       },
+    })
+  }
+
+  if (conversation.channel.provider === "google") {
+    await queueFlowDeskLabelWriteback({
+      tenantId: session.user.tenantId,
+      channelId: conversation.channelId,
+      conversationId: params.id,
+      threadId: conversation.externalThreadId,
+      labels: flowDeskLabelsForConversationState({
+        workflowStatus: settableWorkflowStatus,
+        localLabel: conversation.label,
+        draftStatus: shouldClearDraftForWorkflowStatus(settableWorkflowStatus)
+          ? null
+          : conversation.draft?.status,
+        attentionCategory: conversation.stateRecord?.attentionCategory,
+      }),
+      reason: `workflow_status.${settableWorkflowStatus}`,
     })
   }
 

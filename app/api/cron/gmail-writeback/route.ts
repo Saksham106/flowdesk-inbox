@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
-import { markGmailThreadRead } from "@/lib/google"
+import { normalizeFlowDeskLabelPayload } from "@/lib/gmail-labels"
+import { applyFlowDeskLabelsToGmailThread, markGmailThreadRead } from "@/lib/google"
 import { prisma } from "@/lib/prisma"
 
 export const runtime = "nodejs"
@@ -28,13 +29,44 @@ export async function GET(request: Request) {
   let errors = 0
 
   for (const job of jobs) {
-    if (job.action !== "mark_read") continue
     try {
-      const providerMessageIds = asStringArray(job.providerMessageIdsJson)
-      await markGmailThreadRead(job.channelId, providerMessageIds, {
-        tenantId: job.tenantId,
-        conversationId: job.conversationId,
-      })
+      if (job.action === "mark_read") {
+        const providerMessageIds = asStringArray(job.providerMessageIdsJson)
+        await markGmailThreadRead(job.channelId, providerMessageIds, {
+          tenantId: job.tenantId,
+          conversationId: job.conversationId,
+        })
+      } else if (job.action === "apply_labels") {
+        const payload = normalizeFlowDeskLabelPayload(job.providerMessageIdsJson)
+        if (!payload) {
+          await prisma.gmailWritebackQueue.update({
+            where: { id: job.id },
+            data: {
+              status: "failed",
+              attempts: { increment: 1 },
+              lastError: "Invalid FlowDesk label writeback payload",
+            },
+          })
+          errors++
+          continue
+        }
+        await applyFlowDeskLabelsToGmailThread(job.channelId, payload.threadId, payload.labels)
+        await prisma.auditLog.create({
+          data: {
+            tenantId: job.tenantId,
+            action: "gmail.labels.applied",
+            payloadJson: {
+              conversationId: job.conversationId,
+              channelId: job.channelId,
+              threadId: payload.threadId,
+              labels: payload.labels,
+            },
+          },
+        })
+      } else {
+        continue
+      }
+
       await prisma.gmailWritebackQueue.update({
         where: { id: job.id },
         data: {
@@ -43,7 +75,14 @@ export async function GET(request: Request) {
         },
       })
       processed++
-    } catch {
+    } catch (err) {
+      await prisma.gmailWritebackQueue.update({
+        where: { id: job.id },
+        data: {
+          attempts: { increment: 1 },
+          lastError: err instanceof Error ? err.message : "Unknown Gmail writeback error",
+        },
+      }).catch(() => {})
       errors++
     }
   }

@@ -7,6 +7,10 @@ import { markGmailThreadRead } from "@/lib/google";
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata";
 import { revalidateInboxViews } from "@/lib/cache-tags";
 import { conversationUpdateForWorkflowStatus } from "@/lib/workflow-status-transitions";
+import {
+  flowDeskLabelsForConversationState,
+  queueFlowDeskLabelWriteback,
+} from "@/lib/gmail-labels";
 
 const VALID_STATUSES = ["needs_reply", "in_progress", "closed"] as const;
 type Status = (typeof VALID_STATUSES)[number];
@@ -30,6 +34,10 @@ export async function PATCH(
 
   const conversation = await prisma.conversation.findFirst({
     where: { id: params.id, tenantId: session.user.tenantId },
+    include: {
+      channel: { select: { provider: true } },
+      draft: { select: { status: true } },
+    },
   });
 
   if (!conversation) {
@@ -110,6 +118,21 @@ export async function PATCH(
         conversationId: params.id,
         message: err instanceof Error ? err.message : "Unknown error",
       });
+    });
+  }
+
+  if (conversation.channel.provider === "google") {
+    await queueFlowDeskLabelWriteback({
+      tenantId: session.user.tenantId,
+      channelId: conversation.channelId,
+      conversationId: params.id,
+      threadId: conversation.externalThreadId,
+      labels: flowDeskLabelsForConversationState({
+        workflowStatus,
+        localLabel: conversation.label,
+        draftStatus: status === "closed" ? null : conversation.draft?.status,
+      }),
+      reason: `conversation_status.${status}`,
     });
   }
 

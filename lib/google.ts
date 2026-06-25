@@ -4,6 +4,11 @@ import { encryptString, decryptString } from "@/lib/crypto";
 import { stripHtmlToText } from "@/lib/email-body";
 import { prisma } from "@/lib/prisma";
 import { syncConversationWorkItems } from "@/lib/agent/work-item-sync";
+import {
+  FLOWDESK_GMAIL_LABEL_NAMES,
+  isFlowDeskGmailLabelName,
+  type FlowDeskGmailLabelName,
+} from "@/lib/gmail-labels";
 
 export const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -635,6 +640,90 @@ export async function markGmailThreadRead(
     }
     throw err;
   }
+}
+
+type GmailLabelRecord = {
+  id?: string | null
+  name?: string | null
+}
+
+async function listGmailLabels(
+  gmail: ReturnType<typeof google.gmail>
+): Promise<Map<string, string>> {
+  const existing = await gmail.users.labels.list({ userId: "me" })
+  const labelsByName = new Map<string, string>()
+
+  for (const label of (existing.data.labels ?? []) as GmailLabelRecord[]) {
+    if (label.name && label.id) labelsByName.set(label.name, label.id)
+  }
+
+  return labelsByName
+}
+
+async function getOrCreateFlowDeskLabelIds(
+  gmail: ReturnType<typeof google.gmail>,
+  existingLabelIdsByName: Map<string, string>,
+  labelsToEnsure: FlowDeskGmailLabelName[]
+): Promise<Map<FlowDeskGmailLabelName, string>> {
+  const ids = new Map<FlowDeskGmailLabelName, string>()
+  for (const labelName of labelsToEnsure) {
+    const existingId = existingLabelIdsByName.get(labelName)
+    if (existingId) {
+      ids.set(labelName, existingId)
+      continue
+    }
+
+    const created = await gmail.users.labels.create({
+      userId: "me",
+      requestBody: {
+        name: labelName,
+        labelListVisibility: "labelShow",
+        messageListVisibility: "show",
+      },
+    })
+    const createdId = created.data.id
+    if (!createdId) throw new Error(`Gmail did not return an id for label ${labelName}`)
+    existingLabelIdsByName.set(labelName, createdId)
+    ids.set(labelName, createdId)
+  }
+
+  return ids
+}
+
+export async function applyFlowDeskLabelsToGmailThread(
+  channelId: string,
+  gmailThreadId: string,
+  labels: FlowDeskGmailLabelName[]
+): Promise<void> {
+  const requestedLabels = Array.from(new Set(labels.filter(isFlowDeskGmailLabelName)))
+  if (requestedLabels.length === 0) return
+
+  const gmail = await getGmailClient(channelId)
+  const existingLabelIdsByName = await listGmailLabels(gmail)
+  const labelIds = await getOrCreateFlowDeskLabelIds(gmail, existingLabelIdsByName, requestedLabels)
+
+  const addLabelIds = requestedLabels
+    .map((label) => labelIds.get(label))
+    .filter((id): id is string => Boolean(id))
+  const removeLabelIds = FLOWDESK_GMAIL_LABEL_NAMES
+    .filter((label) => !requestedLabels.includes(label))
+    .map((label) => existingLabelIdsByName.get(label))
+    .filter((id): id is string => Boolean(id))
+
+  await gmail.users.threads.modify({
+    userId: "me",
+    id: gmailThreadId,
+    requestBody: {
+      addLabelIds,
+      removeLabelIds,
+    },
+  })
+}
+
+export async function ensureFlowDeskLabels(channelId: string): Promise<void> {
+  const gmail = await getGmailClient(channelId)
+  const existingLabelIdsByName = await listGmailLabels(gmail)
+  await getOrCreateFlowDeskLabelIds(gmail, existingLabelIdsByName, [...FLOWDESK_GMAIL_LABEL_NAMES])
 }
 
 // Removes the INBOX label from a thread (archive). The thread remains in All Mail.
