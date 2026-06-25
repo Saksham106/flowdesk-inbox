@@ -1,4 +1,4 @@
-import type { AgentSummary } from "@/lib/agent/command-center"
+import type { AgentSummary, QuietlyHandledBreakdown } from "@/lib/agent/command-center"
 
 interface ActivityRow {
   icon: string
@@ -8,24 +8,25 @@ interface ActivityRow {
 
 interface Props {
   agentSummary: AgentSummary
-  needsActionCount: number
+  quietlyHandledBreakdown: QuietlyHandledBreakdown
 }
 
-export default function AgentActivitySection({ agentSummary, needsActionCount }: Props) {
+export default function AgentActivitySection({ agentSummary, quietlyHandledBreakdown }: Props) {
   const rows: ActivityRow[] = []
 
   if (agentSummary.classifiedLast24h > 0) {
     rows.push({
       icon: "✦",
-      text: `Sorted ${agentSummary.classifiedLast24h} email${agentSummary.classifiedLast24h === 1 ? "" : "s"} into categories`,
+      text: `Sorted ${agentSummary.classifiedLast24h} email${agentSummary.classifiedLast24h === 1 ? "" : "s"} today`,
       timestamp: "today",
     })
   }
 
-  if (needsActionCount > 0) {
+  const quietCount = quietlyHandledBreakdown.newsletter + quietlyHandledBreakdown.notification + quietlyHandledBreakdown.marketing
+  if (quietCount > 0) {
     rows.push({
-      icon: "⚠",
-      text: `Found ${needsActionCount} item${needsActionCount === 1 ? "" : "s"} needing action`,
+      icon: "✦",
+      text: `Moved ${quietCount} newsletter${quietCount === 1 ? "" : "s"} & update${quietCount === 1 ? "" : "s"} to Quiet`,
       timestamp: "today",
     })
   }
@@ -41,7 +42,7 @@ export default function AgentActivitySection({ agentSummary, needsActionCount }:
   if (agentSummary.learnedRecentlyUpdated) {
     rows.push({
       icon: "🧠",
-      text: "Updated your preferences from feedback",
+      text: "Learned from your recent feedback",
       timestamp: "this week",
     })
   }
@@ -54,7 +55,7 @@ export default function AgentActivitySection({ agentSummary, needsActionCount }:
       </div>
       <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
         {rows.length === 0 ? (
-          <p className="text-[10px] text-slate-400">No agent activity yet.</p>
+          <p className="text-[10px] text-slate-400">All quiet — no activity in the last 24 hours.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {rows.map((row, i) => (

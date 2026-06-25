@@ -82,7 +82,7 @@ export default function HomeCommandCenter({
             <WaitingOnSection items={sections.waitingOnThem} />
             <AgentActivitySection
               agentSummary={agentSummary}
-              needsActionCount={counts.needsAction}
+              quietlyHandledBreakdown={quietlyHandledBreakdown}
             />
           </div>
         </div>
