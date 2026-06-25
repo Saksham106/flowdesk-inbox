@@ -22,6 +22,7 @@ import { AppNavigationItem, getInboxNavigation } from "@/lib/app-navigation";
 import { buildConversationHref } from "@/lib/client-navigation";
 import { stripHtmlToText } from "@/lib/email-body";
 import { isFyiConversation } from "@/lib/inbox-fyi";
+import { deriveWorkflowStatus } from "@/lib/workflow-status";
 
 export const revalidate = 60;
 
@@ -641,7 +642,13 @@ async function renderInboxPage(
                               {displayName}
                             </p>
                             <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                              <StatusBadge status={isFyiConversation(conversation) ? "closed" : conversation.status} />
+                              <StatusBadge status={deriveWorkflowStatus({
+                                status: conversation.status,
+                                userState: conversation.userState,
+                                draftStatus: null,
+                                attentionCategory: conversation.stateRecord?.attentionCategory ?? null,
+                                emailType: conversation.stateRecord?.emailType ?? null,
+                              })} />
                               {isBusiness && conversation.label && <LabelBadge label={conversation.label} />}
                             </div>
                           </div>
