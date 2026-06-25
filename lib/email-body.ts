@@ -92,7 +92,9 @@ export function sanitizeEmailHtmlForIframe(
     },
     allowedSchemesByTag: {
       a: ["http", "https", "mailto"],
-      img: ["http", "https", "cid"],
+      // "data" is included so resolved cid: inline images (stored as data URIs) survive
+      // sanitization. SVG data URIs are blocked in the img transform below.
+      img: ["http", "https", "cid", "data"],
     },
     // Completely remove dangerous tags and their content
     nonTextTags: ["script", "iframe", "frame", "object", "embed", "applet", "base"],
@@ -110,8 +112,10 @@ export function sanitizeEmailHtmlForIframe(
         const src = nextAttribs.src?.trim();
         const isRemote = /^https?:\/\//i.test(src ?? "");
         const isAllowedRemote = options.allowRemoteImages && /^https:\/\//i.test(src ?? "");
+        // Block SVG data URIs — SVG can carry inline script
+        const isSvgData = /^data:image\/svg/i.test(src ?? "");
 
-        if (isRemote && !isAllowedRemote) {
+        if (isSvgData || (isRemote && !isAllowedRemote)) {
           delete nextAttribs.src;
         } else if (src) {
           nextAttribs.src = src;

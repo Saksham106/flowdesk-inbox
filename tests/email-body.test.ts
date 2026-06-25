@@ -8,6 +8,7 @@ import {
   renderEmailBodyHtml,
   stripHtmlToText,
 } from "@/lib/email-body";
+import { collectInlineImages } from "@/lib/google";
 
 describe("isHtmlBody", () => {
   it("detects DOCTYPE as HTML", () => {
@@ -150,11 +151,23 @@ describe("sanitizeEmailHtmlForIframe", () => {
     expect(hasRemoteEmailImages('<p>https://cdn.example/a.png</p>')).toBe(false);
   });
 
-  it("does not allow data image URLs in rendered email HTML", () => {
+  it("blocks SVG data URIs (can carry inline script)", () => {
     const result = sanitizeEmailHtmlForIframe(
       '<img src="data:image/svg+xml,<svg onload=alert(1)>" alt="x">'
     );
-    expect(result).not.toContain("data:image");
+    expect(result).not.toContain("data:image/svg");
+  });
+
+  it("preserves raster data URIs (resolved cid: inline images)", () => {
+    const pngData = "data:image/png;base64,iVBORw0KGgo=";
+    const result = sanitizeEmailHtmlForIframe(`<img src="${pngData}" alt="logo">`);
+    expect(result).toContain('src="data:image/png;base64,iVBORw0KGgo="');
+  });
+
+  it("preserves JPEG data URIs (resolved cid: inline images)", () => {
+    const jpegData = "data:image/jpeg;base64,/9j/4AAQ==";
+    const result = sanitizeEmailHtmlForIframe(`<img src="${jpegData}" alt="sig">`);
+    expect(result).toContain(`src="${jpegData}"`);
   });
 
   it("preserves HubSpot-style tracking hrefs for iframe rendering", () => {
@@ -303,5 +316,77 @@ describe("stripHtmlToText", () => {
   it("returns empty string for blank input", () => {
     expect(stripHtmlToText("")).toBe("");
     expect(stripHtmlToText("   ")).toBe("");
+  });
+});
+
+describe("collectInlineImages", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function collect(payload: any) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result: any[] = [];
+    collectInlineImages(payload, result);
+    return result;
+  }
+
+  it("collects an inline image part with a Content-ID header", () => {
+    const result = collect({
+      mimeType: "image/png",
+      headers: [{ name: "Content-ID", value: "<logo@example.com>" }],
+      body: { data: "iVBORw0KGgo=", attachmentId: null, size: 8 },
+      parts: [],
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0].contentId).toBe("logo@example.com");
+    expect(result[0].mimeType).toBe("image/png");
+    expect(result[0].data).toBe("iVBORw0KGgo=");
+  });
+
+  it("strips angle brackets from Content-ID value", () => {
+    const result = collect({
+      mimeType: "image/jpeg",
+      headers: [{ name: "Content-Id", value: "<img123@mail>" }],
+      body: { data: "abc", attachmentId: null, size: 2 },
+      parts: [],
+    });
+    expect(result[0].contentId).toBe("img123@mail");
+  });
+
+  it("ignores image parts without a Content-ID header", () => {
+    const result = collect({
+      mimeType: "image/png",
+      headers: [{ name: "Content-Type", value: "image/png" }],
+      body: { data: "abc", attachmentId: null, size: 2 },
+      parts: [],
+    });
+    expect(result).toHaveLength(0);
+  });
+
+  it("skips SVG parts (not in safe set)", () => {
+    const result = collect({
+      mimeType: "image/svg+xml",
+      headers: [{ name: "Content-ID", value: "<icon@example>" }],
+      body: { data: "PHN2Zy8+", attachmentId: null, size: 5 },
+      parts: [],
+    });
+    expect(result).toHaveLength(0);
+  });
+
+  it("recurses into nested MIME parts", () => {
+    const result = collect({
+      mimeType: "multipart/related",
+      body: null,
+      headers: [],
+      parts: [
+        { mimeType: "text/html", body: { data: "PHA+SGk8L3A+" }, headers: [], parts: [] },
+        {
+          mimeType: "image/png",
+          headers: [{ name: "Content-ID", value: "<nested@example>" }],
+          body: { data: "iVBORw0KGgo=", attachmentId: null, size: 8 },
+          parts: [],
+        },
+      ],
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0].contentId).toBe("nested@example");
   });
 });
