@@ -29,7 +29,7 @@ Constraint: Read-only inspection of codebase. No code changes in this document.
 | `gmail-watch` | `/api/cron/gmail-watch` | Renews Gmail push watches |
 | `gmail-push-retry` | `/api/cron/gmail-push-retry` | Retries failed push notifications |
 | `gmail-state-reconcile` | `/api/cron/gmail-state-reconcile` | Detects local/remote read_state drift |
-| `gmail-writeback` | `/api/cron/gmail-writeback` | Retries failed Gmail mark-read writebacks |
+| `gmail-writeback` | `/api/cron/gmail-writeback` | Retries Gmail read-state and FlowDesk label writebacks |
 | `lead-sequence` | `/api/cron/lead-sequence` | Queues follow-up jobs for leads |
 | `value-snapshot` | `/api/cron/value-snapshot` | Weekly metrics snapshot |
 
@@ -66,6 +66,7 @@ Constraint: Read-only inspection of codebase. No code changes in this document.
 | **Budget enforcement** | `AiBudget` + `checkAiBudgetForTokens` pre-flight on every LLM call |
 | **Deterministic fallbacks** | Classification, work items, person memory all have rule-based fallbacks |
 | **Gmail push + incremental sync** | Real-time-ish sync with history cursor, fallback on cursor expiry |
+| **Gmail-native label projection** | Local workflow/status changes queue retryable `FlowDesk/*` label updates back into Gmail |
 
 ### What Feels Like "AI Utility Calls" (Not Agentic)
 

@@ -139,6 +139,6 @@ When a user changes workflow/status, queue `apply_labels` for Gmail conversation
 
 Run focused tests, then `npm test`, `npm run lint`, and `npm run build`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Commit the plan and implementation with clear messages.

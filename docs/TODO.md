@@ -1,9 +1,15 @@
 # Remaining Work
 
-Last updated: 2026-06-24
+Last updated: 2026-06-25
 
 ## Near term
 
+- [ ] Bootstrap FlowDesk Gmail labels on account connect and scheduled maintenance.
+- [ ] Apply Gmail label projection after classification and draft creation, not only manual workflow/status changes.
+- [ ] Create real Gmail drafts for proposed replies, dedupe by thread/latest message, and store provider draft IDs.
+- [ ] Add automation level settings for Gmail-native actions before expanding auto-read/archive/send behavior.
+- [ ] Track sent threads waiting for replies and apply `Waiting On` / `Follow Up` Gmail labels.
+- [ ] Update dashboard/settings copy and indicators so the website reads as the agent control room.
 - [ ] Consolidate command-center and inbox auto-email/classification heuristics.
 - [ ] Persist command-center snapshots for history and explainability.
 - [ ] Show classification source, confidence, evidence, and correction history.

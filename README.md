@@ -1,16 +1,17 @@
-# FlowDesk Inbox
+# FlowDesk
 
-FlowDesk is an email-first AI inbox agent for individuals and small businesses. It turns email into an actionable command center: what needs a reply, what can be ignored, who needs follow-up, where money or deadlines are at risk, and which AI actions need approval before anything sends.
+FlowDesk is a Gmail-native AI email operator for individuals and small businesses. It works inside the user's existing Gmail to label, prioritize, draft, follow up, and organize email automatically, while the FlowDesk web app acts as the agent control room for setup, preferences, approvals, audit history, and power-user review.
 
 ---
 
 ## Current Product Scope
 
-- **Gmail and Outlook sync** — connect an email account and import email threads into FlowDesk
+- **Gmail-native operator layer** — keep Gmail as the primary daily workspace while FlowDesk projects agent state back into Gmail with readable labels and safe actions
+- **Gmail and Outlook sync** — connect an email account and import email threads into FlowDesk for supervision, review, and automation context
 - **Manual and automatic Gmail refresh controls** — the inbox shell exposes real Gmail sync with last-synced/error status, app-load sync, tab-return sync, and periodic sync while open
 - **Idempotent Gmail sync with local overrides** — duplicate syncs are locked per account, Gmail read/unread is imported separately from local read/done state, and user actions win over AI classification
-- **Gmail read/archive/trash writeback** — read, archive, and trash actions update Gmail where supported while preserving local override metadata
-- **Conversation inbox** — view email threads with status, drafts, and assistant context
+- **Gmail label/read/archive/trash writeback** — workflow labels, read, archive, and trash actions update Gmail where supported while preserving local override metadata
+- **Agent control room** — review email threads with status, drafts, assistant context, settings, approvals, and audit history without replacing Gmail
 - **Email-style thread view** — opened conversations read top-to-bottom like an email client, with sender/recipient/timestamp metadata and a reply composer below the thread
 - **Daily Command Center** — see the conversations that actually matter today, plus what can be safely ignored
 - **Richer attention classification** — distinguishes needs reply, needs action, review soon, read later, waiting on, FYI done, and quiet instead of treating all automated email as useless
@@ -33,7 +34,8 @@ Start here:
 
 - `docs/README.md` — documentation index
 - `docs/CURRENT_STATE.md` — current implemented/partial/deferred state
-- `docs/MASTER_PRODUCT_PLAN.md` — concise product direction and priorities
+- `docs/product-direction.md` — Gmail-native product direction and strategy
+- `docs/MASTER_PRODUCT_PLAN.md` — concise product direction, roadmap, and priorities
 - `docs/TODO.md` — actionable remaining work
 - `docs/reference/` — curated design rationale for core subsystems
 
@@ -51,7 +53,7 @@ Email is the active channel. SMS may return later only after customer demand jus
 - **Tailwind CSS v4**
 - **PostgreSQL + Prisma 5**
 - **NextAuth** (credentials-based auth, JWT sessions)
-- **Google APIs** — Gmail API (email read/reply) + Google Calendar API (availability + events)
+- **Google APIs** — Gmail API (email read/reply/modify/labels) + Google Calendar API (availability + events)
 - **OpenAI** — draft suggestions, thread explanations, lead scoring, meeting prep/follow-up, reply-learning profiles, and gated relationship-memory extraction
 - **MindBody Public API v6** — optional connector foundation
 - **Railway** — hosting + managed Postgres
@@ -132,7 +134,7 @@ Optional real-time sync:
 - Create a Pub/Sub topic and subscription that pushes to `/api/connectors/gmail/push?secret=<GMAIL_PUSH_SECRET>`.
 - Set `GMAIL_PUSH_TOPIC` to the topic name and `GMAIL_PUSH_SECRET` to the same secret used in the push URL.
 - Schedule `GET /api/cron/gmail-watch` daily with `Authorization: Bearer <CRON_SECRET>` so Gmail watches renew before their 7-day expiration.
-- Schedule `GET /api/cron/gmail-push-retry`, `GET /api/cron/gmail-writeback`, and `GET /api/cron/gmail-state-reconcile` with the same bearer token to retry failed push syncs, retry Gmail writebacks, and detect local/Gmail read-state drift.
+- Schedule `GET /api/cron/gmail-push-retry`, `GET /api/cron/gmail-writeback`, and `GET /api/cron/gmail-state-reconcile` with the same bearer token to retry failed push syncs, retry Gmail label/read writebacks, and detect local/Gmail read-state drift.
 
 Gmail cron monitoring:
 - Treat non-2xx responses from `GET /api/cron/gmail-watch` as alerts. The endpoint returns `500` and `X-Gmail-Watch-Errors: <count>` when any channel renewal fails.
@@ -146,6 +148,7 @@ Inbox sync behavior:
 - Overlapping server requests return `202 { skipped: "sync_in_progress" }`.
 - Gmail raw state (`gmailUnread`, `gmailRawState`, `gmailLabelIds`) is stored separately from local user/read state (`userState`, `readAt`, `isRead`). Sync imports Gmail read/unread, but user actions such as Mark Done and local reads are not overwritten by AI classification.
 - Sync observability is stored on `GmailCredential.lastSyncMode`, `lastSyncStatus`, `lastSyncError`, `lastSyncedAt`, `watchExpiresAt`, `watchRenewalError`, `watchLastRenewalAttempt`, and `lastHistoryFallbackAt`.
+- Workflow/status changes queue FlowDesk Gmail label projection through `GmailWritebackQueue`. The cron applies the current `FlowDesk/*` labels to the Gmail thread and removes stale FlowDesk labels from that same namespace.
 - Opening or marking a Gmail conversation read updates local state immediately, retries Gmail `UNREAD` removal, and queues failed writeback for cron retry without blocking the UI.
 - If Gmail push is configured, Pub/Sub notifications trigger incremental sync server-side; push events are persisted by Pub/Sub `messageId` for idempotency and retry.
 - Inbox auto-refresh polls `GET /api/inbox/summary` once per minute for lightweight status data instead of calling `router.refresh()` on the whole page.

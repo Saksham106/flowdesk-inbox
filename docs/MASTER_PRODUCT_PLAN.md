@@ -1,32 +1,37 @@
 # Product Plan
 
-Last updated: 2026-06-24
+Last updated: 2026-06-25
 
 ## Product thesis
 
-FlowDesk is the AI chief of staff for the inbox. Every morning it tells you what matters, what can be ignored, who needs follow-up, where money or deadlines are at risk, and safely handles the boring work. Trust comes from visible reasoning, user correction, approval gates, audit history, and undo — not from replying to everything automatically.
+FlowDesk is the Gmail-native AI email operator. It works inside the user's existing Gmail to label, prioritize, draft, follow up, and organize email automatically. The website remains important, but its job is the agent control room: setup, rules, training, approvals, audit logs, daily brief, and power-user review.
 
 The product should consistently do five things:
 
-1. Know what matters.
-2. Know what can be ignored.
-3. Know the relationship history.
-4. Know the next action.
-5. Do the boring work safely.
+1. Project useful organization into Gmail with readable labels and safe state changes.
+2. Know what matters, what can be ignored, and who needs follow-up.
+3. Draft useful replies in the user's voice, with approval gates before risky actions.
+4. Remember relationship context and operational rules.
+5. Make every automated action inspectable, correctable, and reversible where possible.
 
 ## Product principles
 
 1. Prioritize obligations, relationships, risk, and revenue over inbox volume.
 2. Preserve explicit user intent across provider synchronization and classification.
-3. Prefer deterministic handling for routine mail; use richer AI where it adds measurable value.
-4. Draft and explain before automating; gate sensitive actions by confidence and risk.
-5. Keep connector work incremental, idempotent, bounded, observable, and recoverable.
+3. Use Gmail API actions as the source of truth for mailbox mutations; use the dashboard for supervision and configuration.
+4. Prefer deterministic handling for routine mail; use richer AI where it adds measurable value.
+5. Draft and explain before automating; gate sensitive actions by confidence and risk.
+6. Keep connector work incremental, idempotent, bounded, observable, and recoverable.
 
 ## North star experience
 
-### Morning brief
+### Gmail-native organization
 
-The first screen should say: "Here are the N things that actually matter today." It shows needs-reply, waiting-on-others, meetings that need prep, bills and deadlines, opportunities and leads, potential problems, and things safely ignored.
+When a user opens Gmail, the inbox should already be organized with FlowDesk labels such as Handle First, Needs Reply, Waiting On, Follow Up, Read Later, Handled, Autodrafted, and Low Priority. The user should see value before visiting the FlowDesk website.
+
+### Control room brief
+
+The FlowDesk web app should say: "Here is what your agent did, what needs approval, and what matters today." It shows needs-reply, waiting-on-others, meetings that need prep, bills and deadlines, opportunities and leads, potential problems, and things safely ignored.
 
 ### Thread view
 
@@ -38,9 +43,17 @@ Users do not trust an AI that replies to everything. They trust an assistant wit
 
 ## Phases
 
-### Foundations and daily control — implemented, still hardening
+### Gmail-native labels and safe mailbox actions — active priority
 
-Command center, attention categories, tasks, follow-ups, approval queue, relationship memory, sensitive detection, drafts, risk radar, and value reporting are available. Current work should improve consistency and explainability rather than add another overlapping inbox surface.
+FlowDesk now has the first slice of Gmail label projection: local workflow/status changes queue `FlowDesk/*` Gmail labels through the writeback queue. Next work should bootstrap labels on connect, apply labels after classification, add label settings, and make the Gmail inbox itself the visible proof of value.
+
+### Gmail-native drafts and follow-up tracking — next
+
+Create real Gmail drafts, dedupe them aggressively, mark threads `Autodrafted`, detect manual replies, track outbound threads waiting for replies, and apply `Waiting On` / `Follow Up` labels in Gmail.
+
+### Control room dashboard — implemented, repositioning
+
+Command center, attention categories, tasks, follow-ups, approval queue, relationship memory, sensitive detection, local drafts, risk radar, and value reporting are available. Current work should make the dashboard feel like supervising an employee, not replacing Gmail.
 
 ### Revenue inbox — implemented first slices
 
@@ -62,7 +75,7 @@ Shared inboxes, assignments, comments, collision detection, roles, permissions, 
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 1 | Daily Command Center | `Partial` | First slice shipped; needs persistence and richer source signals. |
+| 1 | Daily Command Center / Control Room | `Partial` | First slice shipped; needs Gmail-native status indicators, persistence, and richer source signals. |
 | 2 | Autopilot Modes | `Shipped` | Per-attention-category policy table (auto-send / require approval / never) in settings. |
 | 3 | Handle This Button | `Partial` | Button exists and triggers draft suggestion; needs task/lead/calendar side effects. |
 | 4 | AI Follow-Up Brain | `Partial` | Follow-up tracker and lead sequences shipped; sequence settings UI and sent-output visibility remain. |
@@ -91,7 +104,7 @@ Shared inboxes, assignments, comments, collision detection, roles, permissions, 
 | 27 | Train My Agent | `Shipped` | AgentRule model, NL compiler, preview endpoint, conflict detection, settings UI. |
 | 28 | Approval Queue | `Partial` | Inline approve/reject, batch actions, draft preview; edit-before-send and teach-the-agent remain. |
 | 29 | Confidence Before Sending | `Partial` | Draft confidence, sensitive warnings, per-category autopilot thresholds; clearer user-facing policy education remains. |
-| 30 | Auto-Draft on Intent | `Shipped` | AI draft panel accepts rough instructions and produces approval-gated drafts. |
+| 30 | Auto-Draft on Intent | `Partial` | AI draft panel accepts rough instructions and produces approval-gated local drafts. Gmail-native draft creation remains. |
 | 31 | Multi-Step Workflows | `Partial` | WorkflowTemplate + WorkflowRun, runner, cron, 3 seeded templates, settings panel. Builder UI not yet implemented. |
 | 32 | Email Analytics / ROI | `Shipped` | 4-week trend bars, pipeline value, revenue opportunities on `/reports`; `ValueSnapshot` with weekly cron. |
 | 33 | VIP Protection | `Shipped` | VipContact model, detector, urgent priority, inbox badge, conversation banner, settings form. |
@@ -103,18 +116,19 @@ Shared inboxes, assignments, comments, collision detection, roles, permissions, 
 | 39 | Auto-Personalized Outreach | `Later` | Valuable, but avoid spam positioning. |
 | 40 | Email Triage by Money Impact | `Shipped` | Revenue-weighted score bonus in command center; Revenue at Risk subsection for stale high-value leads. |
 | 41 | Clean My Inbox | `Shipped` | /clean-inbox page, batch archive/unsubscribe, 1-hour undo via AuditLog. |
-| 42 | Smart Labels | `Partial` | Action-oriented attention taxonomy, corrections, bulk close, learned rules; deeper explainability remains. |
+| 42 | Gmail-Native Smart Labels | `Partial` | Canonical `FlowDesk/*` label vocabulary, state mapping, queued Gmail label writeback, and audit events shipped. Label bootstrap, classification-triggered projection, settings, and explainability remain. |
 | 43 | Ask My Inbox Chat | `Partial` | Streaming RAG pipeline, /chat page, SSE route; action-taking answers remain later. |
 | 44 | Trust, Privacy, and Audit Log | `Partial` | Audit log and undo for reversible autopilot approvals; broader coverage remains. |
 | 45 | Paid Packaging | `Discovery` | Use as product packaging decision, not an engineering feature. |
 
 ## Current priorities
 
-1. Make classification decisions inspectable — show why a thread was classified the way it was, with source, rule/AI/user, confidence, and key evidence.
-2. Add intentional sender/domain rule management while preserving user correction precedence.
-3. Finish provider parity and reliability gaps, including Outlook writeback and Gmail CID images.
-4. Complete scheduling, workflow-builder, and connected-context loops already started.
-5. Define paid packaging and a primary business persona before building team features.
+1. Finish Gmail-native labels: bootstrap on connect, apply after classification, expose label settings, and show Gmail-native status in the control room.
+2. Build Gmail-native drafts: create provider drafts, dedupe by thread/latest message, mark `Autodrafted`, and detect manual replies.
+3. Make classification and Gmail mutations inspectable — show why a thread was labeled, with source, rule/AI/user, confidence, key evidence, audit history, and correction path.
+4. Add automation level controls before expanding auto-read/archive/send behavior.
+5. Complete waiting-on/follow-up tracking across sent threads.
+6. Finish provider reliability gaps where they support the core wedge, including Gmail CID images and Outlook writeback parity.
 
 ## Trust and safety invariants
 
@@ -148,10 +162,15 @@ Shared inboxes, assignments, comments, collision detection, roles, permissions, 
 | 2026-06-18 | Outlook webhook only queues `OutlookSyncEvent` hints; Graph sync happens in cron, not inline. | Webhook response time must be < 5 s or Microsoft retries. Delta sync can take much longer for large mailboxes. |
 | 2026-06-24 | Block remote images by default; allow per-message explicit load without persisting the choice. | Remote image loads expose the user's IP and confirm email opens to senders. Per-message explicit load keeps the UX practical without making the choice permanent. |
 | 2026-06-24 | `invalid_grant` sets `lastSyncStatus: "needs_reauth"` and stops auto-polling. | Silent retry loop was burning background requests every 15 minutes while showing a stale "synced 5 days ago" timestamp. |
+| 2026-06-25 | Reposition FlowDesk as a Gmail-native AI email operator, with the website as the control room. | Users already live in Gmail; projecting labels/drafts/actions into Gmail reduces switching cost while keeping FlowDesk trustworthy and configurable. |
+| 2026-06-25 | Add canonical `FlowDesk/*` Gmail labels and queue label projection through `GmailWritebackQueue`. | User-facing Gmail labels are the visible projection of FlowDesk state; queueing keeps writes retryable, auditable, and safe. |
 
 ## Open product questions
 
-- Which first paid persona matters most: personal chief of staff, local business revenue inbox, or team support desk?
+- Which first paid persona matters most for the Gmail-native wedge: personal chief of staff, local business revenue inbox, or team support desk?
+- Should FlowDesk stay Gmail-only until PMF, or keep Outlook parity as a trust/enterprise requirement?
+- What default automation level should new users start with: labels-only or labels plus Gmail drafts?
+- What minimum audit trail makes Gmail-native automation feel safe without becoming noisy?
 - Should `Lead` be generic or opinionated toward a first niche (tutors, clinics, agencies, salons)?
 - What actions should be allowed in free accounts versus paid accounts?
 - How much user-visible explanation is enough before automation feels noisy?

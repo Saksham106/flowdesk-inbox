@@ -252,14 +252,19 @@ Never start users at auto-send.
 
 Goal: FlowDesk directly organizes Gmail.
 
+Current state:
+
+- First slice shipped: canonical `FlowDesk/*` label vocabulary, workflow/status-to-label mapping, queued `apply_labels` writebacks, Gmail label creation/application, stale FlowDesk label removal, and audit events for queued/applied label mutations.
+- Still needed: label bootstrap on connect, automatic projection after classification/draft creation, settings UI, custom mappings, and fuller status indicators.
+
 Build:
 
-- Create FlowDesk label namespace.
-- Map internal statuses to Gmail labels.
+- Create FlowDesk label namespace. First slice shipped.
+- Map internal statuses to Gmail labels. First slice shipped for manual workflow/status changes.
 - Apply/remove labels after classification.
 - Keep label state synced with internal conversation/work item state.
 - Add setting page for label names and visibility.
-- Add audit log entries for every label change.
+- Add audit log entries for every label change. First slice shipped for queued/applied writebacks.
 
 Success metric:
 
@@ -353,12 +358,12 @@ Recommended order:
 
 ### Backend
 
-- Add `gmail_label_mappings` table.
+- Add `gmail_label_mappings` table for configurable labels.
 - Add label bootstrap function on account connect.
 - Add idempotent `ensureFlowDeskLabels(userId)` job.
-- Add `applyFlowDeskStateToGmail(conversationId)` service.
-- Add audit log table for Gmail mutations.
-- Add retry-safe Gmail modify wrapper.
+- Extend the shipped label projection service into `applyFlowDeskStateToGmail(conversationId)`.
+- Continue using `AuditLog` for Gmail mutations unless label/action audit volume requires a dedicated table.
+- Extend the shipped retry-safe `GmailWritebackQueue` wrapper to cover all Gmail mutations.
 - Add draft deduplication logic.
 
 ### Frontend dashboard
