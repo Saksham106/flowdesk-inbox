@@ -7,7 +7,6 @@ import { buildConversationHref } from "@/lib/client-navigation"
 import ClientFilteredInboxList, { type InboxListItem } from "@/app/components/ClientFilteredInboxList"
 import { resolveAccountMode } from "@/lib/account-mode"
 import { inboxTag } from "@/lib/cache-tags"
-import { isFyiConversation } from "@/lib/inbox-fyi"
 import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status"
 
 interface Props {
@@ -87,14 +86,6 @@ const STATUS_LABEL: Record<string, string> = {
   needs_reply: "Needs Reply",
   in_progress: "In Progress",
   closed: "Closed",
-}
-
-const ATTENTION_STYLE: Record<string, { dot: string; text: string; label: string }> = {
-  needs_action: { dot: "bg-blue-500", text: "text-blue-700", label: "Needs Action" },
-  review_soon: { dot: "bg-amber-500", text: "text-amber-700", label: "Review Soon" },
-  read_later: { dot: "bg-violet-400", text: "text-violet-700", label: "Read Later" },
-  fyi_done: { dot: "bg-emerald-500", text: "text-emerald-700", label: "FYI" },
-  quiet: { dot: "bg-slate-300", text: "text-slate-500", label: "Quiet" },
 }
 
 const WORKFLOW_STATUS_STYLE: Record<WorkflowStatus, { dot: string; text: string }> = {
@@ -256,7 +247,6 @@ export default async function AppListColumn({
       : conversations
 
   const listItems: InboxListItem[] = displayConversations.map((conv) => {
-    const fyi = isFyiConversation(conv)
     const attention = attentionCategory(conv)
     const attnCat = attention
     const workflowStatus = deriveWorkflowStatus({
