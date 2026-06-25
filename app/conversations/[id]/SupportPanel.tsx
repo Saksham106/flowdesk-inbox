@@ -27,6 +27,7 @@ export default function SupportPanel({
 }: SupportPanelProps) {
   const router = useRouter()
   const [expanded, setExpanded] = useState(false)
+  const [useAnswerLoading, setUseAnswerLoading] = useState(false)
 
   if (!isSupport) return null
 
@@ -73,6 +74,8 @@ export default function SupportPanel({
           )}
           <button
             onClick={async () => {
+              if (useAnswerLoading) return
+              setUseAnswerLoading(true)
               const res = await fetch(`/api/conversations/${conversationId}/draft`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -82,13 +85,13 @@ export default function SupportPanel({
                   kbDocId: suggestedKbDoc.id,
                 }),
               })
-              if (res.ok) {
-                router.refresh()
-              }
+              setUseAnswerLoading(false)
+              if (res.ok) router.refresh()
             }}
-            className="mt-3 block rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-800"
+            disabled={useAnswerLoading}
+            className="mt-3 block rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-800 disabled:opacity-60 disabled:cursor-wait"
           >
-            Use this answer
+            {useAnswerLoading ? "Applying…" : "Use this answer"}
           </button>
         </div>
       )}

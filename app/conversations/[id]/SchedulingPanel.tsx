@@ -23,6 +23,7 @@ export default function SchedulingPanel({
   const [session, setSession] = useState(initialSession)
   const [selectedCalendar, setSelectedCalendar] = useState(calendarEmails[0] ?? "")
   const [loading, setLoading] = useState(false)
+  const [confirmingSlot, setConfirmingSlot] = useState<number | null>(null)
 
   async function proposeSlots() {
     setLoading(true)
@@ -36,7 +37,9 @@ export default function SchedulingPanel({
     setLoading(false)
   }
 
-  async function confirmSlot(slot: ProposedSlot) {
+  async function confirmSlot(slot: ProposedSlot, index: number) {
+    if (confirmingSlot !== null) return
+    setConfirmingSlot(index)
     const res = await fetch(`/api/conversations/${conversationId}/scheduling`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -44,6 +47,7 @@ export default function SchedulingPanel({
     })
     const data = await res.json()
     setSession(data.schedulingSession)
+    setConfirmingSlot(null)
   }
 
   if (!session && calendarEmails.length === 0) return null
@@ -77,10 +81,11 @@ export default function SchedulingPanel({
           {session.proposedTimesJson.map((slot, i) => (
             <button
               key={i}
-              onClick={() => confirmSlot(slot)}
-              className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-left text-xs hover:bg-blue-50"
+              onClick={() => confirmSlot(slot, i)}
+              disabled={confirmingSlot !== null}
+              className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-left text-xs hover:bg-blue-50 disabled:opacity-50 disabled:cursor-wait"
             >
-              {slot.label}
+              {confirmingSlot === i ? "Confirming…" : slot.label}
             </button>
           ))}
         </div>
