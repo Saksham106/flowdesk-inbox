@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import type { CommandCenterConversation, CommandCenterPriority } from "@/lib/agent/command-center"
 
@@ -36,6 +36,35 @@ function actionLabel(type: string): string {
   return ACTION_TYPE_LABELS[type] ?? type.replace(/_/g, " ")
 }
 
+function getTonightEightPM(): Date {
+  const d = new Date()
+  d.setHours(20, 0, 0, 0)
+  if (d <= new Date()) d.setDate(d.getDate() + 1)
+  return d
+}
+
+function getTomorrowMorning(): Date {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  d.setHours(9, 0, 0, 0)
+  return d
+}
+
+function getNextMonday(): Date {
+  const d = new Date()
+  const day = d.getDay()
+  const daysUntilMonday = day === 0 ? 1 : 8 - day
+  d.setDate(d.getDate() + daysUntilMonday)
+  d.setHours(9, 0, 0, 0)
+  return d
+}
+
+const SNOOZE_PRESETS = [
+  { label: "Tonight (8 pm)", getDate: getTonightEightPM },
+  { label: "Tomorrow morning", getDate: getTomorrowMorning },
+  { label: "Next week", getDate: getNextMonday },
+]
+
 interface CardProps {
   item: CommandCenterConversation
 }
@@ -44,10 +73,54 @@ function HandleFirstCard({ item }: CardProps) {
   const router = useRouter()
   const [draftLoading, setDraftLoading] = useState(false)
   const [draftError, setDraftError] = useState<string | null>(null)
-  const [done, setDone] = useState(false)
+  const [doneState, setDoneState] = useState<"idle" | "undoable" | "done">("idle")
   const [doneError, setDoneError] = useState<string | null>(null)
+  const [showSnooze, setShowSnooze] = useState(false)
+  const [snoozeError, setSnoozeError] = useState<string | null>(null)
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const snoozeRef = useRef<HTMLDivElement>(null)
 
-  if (done) return null
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!showSnooze) return
+    function handleOutsideClick(e: MouseEvent) {
+      if (snoozeRef.current && !snoozeRef.current.contains(e.target as Node)) {
+        setShowSnooze(false)
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick)
+    return () => document.removeEventListener("mousedown", handleOutsideClick)
+  }, [showSnooze])
+
+  if (doneState === "done") return null
+
+  if (doneState === "undoable") {
+    return (
+      <div className={`rounded-xl border border-slate-200 bg-white px-4 py-3 flex items-center justify-between ${PRIORITY_STYLES[item.priority] ?? ""}`}>
+        <span className="text-[11px] text-slate-500">Marked as done · </span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
+            setDoneState("idle")
+            fetch(`/api/conversations/${item.id}/workflow-status`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ workflowStatus: "needs_reply" }),
+            })
+          }}
+          className="text-[10px] font-semibold text-blue-600 hover:underline"
+        >
+          Undo
+        </button>
+      </div>
+    )
+  }
 
   async function handleDraftReply() {
     setDraftLoading(true)
@@ -69,18 +142,54 @@ function HandleFirstCard({ item }: CardProps) {
     }
   }
 
-  async function handleMarkDone() {
-    setDone(true) // optimistic
+  async function handleDone(e: React.MouseEvent) {
+    e.stopPropagation()
+    setDoneError(null)
     try {
       const res = await fetch(`/api/conversations/${item.id}/workflow-status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workflowStatus: "done" }),
       })
-      if (!res.ok) throw new Error("Failed to close")
+      if (!res.ok) throw new Error("Failed")
+      setDoneState("undoable")
+      undoTimerRef.current = setTimeout(() => setDoneState("done"), 5000)
     } catch {
-      setDone(false)
       setDoneError("Couldn't mark as done")
+    }
+  }
+
+  async function handleWaitingOn(e: React.MouseEvent) {
+    e.stopPropagation()
+    try {
+      const res = await fetch(`/api/conversations/${item.id}/workflow-status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workflowStatus: "waiting_on" }),
+      })
+      if (!res.ok) throw new Error()
+      setDoneState("done")
+      router.refresh()
+    } catch {
+      // silent — secondary action
+    }
+  }
+
+  async function handleSnooze(e: React.MouseEvent, getDate: () => Date) {
+    e.stopPropagation()
+    setShowSnooze(false)
+    setSnoozeError(null)
+    try {
+      const res = await fetch(`/api/conversations/${item.id}/snooze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ snoozeUntil: getDate().toISOString() }),
+      })
+      if (!res.ok) throw new Error()
+      setDoneState("done")
+      router.refresh()
+    } catch {
+      setSnoozeError("Couldn't snooze")
     }
   }
 
@@ -96,10 +205,7 @@ function HandleFirstCard({ item }: CardProps) {
   }
 
   const priorityClass = PRIORITY_STYLES[item.priority] ?? ""
-  const readClass = item.isRead
-    ? ""
-    : "ring-1 ring-blue-100"
-
+  const readClass = item.isRead ? "" : "ring-1 ring-blue-100"
   const action = item.action
 
   return (
@@ -121,7 +227,6 @@ function HandleFirstCard({ item }: CardProps) {
       <p className="text-[11px] text-slate-600 truncate mb-1">{item.nextAction}</p>
       <p className="text-[10px] text-slate-400 italic mb-2">{item.reason}</p>
 
-      {/* Action metadata */}
       {action && (
         <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
           {action.hasDetectedCode && (
@@ -143,12 +248,8 @@ function HandleFirstCard({ item }: CardProps) {
       <div className="flex items-center gap-2 flex-wrap">
         {item.needsReply && (
           <button
-            onClick={(event) => {
-              event.stopPropagation()
-              handleDraftReply()
-            }}
+            onClick={(e) => { e.stopPropagation(); handleDraftReply() }}
             disabled={draftLoading}
-            title="Draft reply"
             className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-blue-600 text-white disabled:opacity-60 hover:bg-blue-700 transition"
           >
             {draftLoading ? "Generating…" : "Draft Reply"}
@@ -156,11 +257,7 @@ function HandleFirstCard({ item }: CardProps) {
         )}
         {item.approvalReason && !item.needsReply && (
           <button
-            onClick={(event) => {
-              event.stopPropagation()
-              router.push(item.href)
-            }}
-            title="Review draft"
+            onClick={(e) => { e.stopPropagation(); router.push(item.href) }}
             className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition"
           >
             Review Draft
@@ -171,29 +268,54 @@ function HandleFirstCard({ item }: CardProps) {
             href={action.actionLink}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={(event) => event.stopPropagation()}
-            title="Open link"
+            onClick={(e) => e.stopPropagation()}
             className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-amber-500 text-white hover:bg-amber-600 transition"
           >
             Open link →
           </a>
         )}
+        {item.needsReply && (
+          <button
+            onClick={handleWaitingOn}
+            className="text-[10px] font-medium px-2.5 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
+          >
+            Waiting On
+          </button>
+        )}
         <button
-          onClick={(event) => {
-            event.stopPropagation()
-            handleMarkDone()
-          }}
-          title="Mark done"
+          onClick={handleDone}
           className="text-[10px] font-medium px-2.5 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
         >
-          Mark Done
+          Done
         </button>
-        {draftError && (
-          <span className="text-[10px] text-red-500">{draftError}</span>
-        )}
-        {doneError && (
-          <span className="text-[10px] text-red-500">{doneError}</span>
-        )}
+        <div ref={snoozeRef} className="relative">
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowSnooze((v) => !v) }}
+            className="text-[10px] font-medium px-2.5 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
+          >
+            Snooze
+          </button>
+          {showSnooze && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="absolute left-0 top-full mt-1 z-20 min-w-[160px] rounded-xl border border-slate-200 bg-white shadow-md py-1"
+            >
+              {SNOOZE_PRESETS.map(({ label, getDate }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={(e) => handleSnooze(e, getDate)}
+                  className="w-full text-left px-3 py-1.5 text-[11px] text-slate-700 hover:bg-slate-50 transition"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {draftError && <span className="text-[10px] text-red-500">{draftError}</span>}
+        {doneError && <span className="text-[10px] text-red-500">{doneError}</span>}
+        {snoozeError && <span className="text-[10px] text-red-500">{snoozeError}</span>}
       </div>
     </div>
   )
@@ -204,7 +326,6 @@ interface Props {
 }
 
 export default function HandleFirstSection({ items }: Props) {
-  // Deduplicate by id
   const seen = new Set<string>()
   const deduped = items.filter((item) => {
     if (seen.has(item.id)) return false
