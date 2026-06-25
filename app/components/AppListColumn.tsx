@@ -8,6 +8,7 @@ import ClientFilteredInboxList, { type InboxListItem } from "@/app/components/Cl
 import { resolveAccountMode } from "@/lib/account-mode"
 import { inboxTag } from "@/lib/cache-tags"
 import { isFyiConversation } from "@/lib/inbox-fyi"
+import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status"
 
 interface Props {
   tenantId: string
@@ -38,6 +39,7 @@ type ConvRow = {
   externalThreadId: string
   readAt: Date | null
   gmailUnread: boolean | null
+  userState: string | null
   contact: { name: string; phoneE164: string | null } | null
   messages: { body: string; subject: string | null; direction: string }[]
   draft: { status: string } | null
@@ -69,10 +71,10 @@ function relativeTime(date: Date | string): string {
 }
 
 const STATUS_FILTERS = [
-  { label: "All", value: null },
-  { label: "Reply", value: "needs_reply" },
-  { label: "Progress", value: "in_progress" },
-  { label: "Closed", value: "closed" },
+  { label: "All",         value: null },
+  { label: "Needs Reply", value: "needs_reply" },
+  { label: "Waiting",     value: "in_progress" },
+  { label: "Done",        value: "closed" },
 ]
 
 const STATUS_STYLE: Record<string, { dot: string; text: string }> = {
@@ -93,6 +95,22 @@ const ATTENTION_STYLE: Record<string, { dot: string; text: string; label: string
   read_later: { dot: "bg-violet-400", text: "text-violet-700", label: "Read Later" },
   fyi_done: { dot: "bg-emerald-500", text: "text-emerald-700", label: "FYI" },
   quiet: { dot: "bg-slate-300", text: "text-slate-500", label: "Quiet" },
+}
+
+const WORKFLOW_STATUS_STYLE: Record<WorkflowStatus, { dot: string; text: string }> = {
+  needs_reply: { dot: "bg-red-500",     text: "text-red-700" },
+  draft_ready: { dot: "bg-blue-500",    text: "text-blue-700" },
+  waiting_on:  { dot: "bg-indigo-400",  text: "text-indigo-700" },
+  read_later:  { dot: "bg-violet-400",  text: "text-violet-700" },
+  done:        { dot: "bg-emerald-500", text: "text-emerald-700" },
+}
+
+const WORKFLOW_STATUS_LABEL: Record<WorkflowStatus, string> = {
+  needs_reply: "Needs Reply",
+  draft_ready: "Draft Ready",
+  waiting_on:  "Waiting On",
+  read_later:  "Read Later",
+  done:        "Done",
 }
 
 async function getCachedStatusCounts(tenantId: string) {
@@ -224,20 +242,36 @@ export default async function AppListColumn({
   const scrollKey = [status ?? "all", q ?? "", sales ? "s" : ""].join("_")
   const emptyMessage = q || status || sales ? "No results." : "No conversations yet."
   const displayConversations =
-    status === "needs_reply" ? conversations.filter((conv) => !isFyiConversation(conv)) : conversations
+    status === "needs_reply"
+      ? conversations.filter((conv) => {
+          const ws = deriveWorkflowStatus({
+            status: conv.status,
+            userState: conv.userState,
+            draftStatus: conv.draft?.status,
+            attentionCategory: attentionCategory(conv),
+            emailType: conv.stateRecord?.emailType,
+          })
+          return ws !== "done"
+        })
+      : conversations
 
   const listItems: InboxListItem[] = displayConversations.map((conv) => {
     const fyi = isFyiConversation(conv)
     const attention = attentionCategory(conv)
-    const attentionStyle = attention ? ATTENTION_STYLE[attention] : null
-    const displayStatus = fyi ? "closed" : conv.status
-    const style = STATUS_STYLE[displayStatus] ?? { dot: "bg-slate-300", text: "text-slate-500" }
+    const attnCat = attention
+    const workflowStatus = deriveWorkflowStatus({
+      status: conv.status,
+      userState: conv.userState,
+      draftStatus: conv.draft?.status,
+      attentionCategory: attnCat,
+      emailType: conv.stateRecord?.emailType,
+    })
+    const wfStyle = WORKFLOW_STATUS_STYLE[workflowStatus]
     const name = conv.contact?.name ?? conv.externalThreadId
     const msg0 = conv.messages[0]
     const bodySnippet = msg0?.body ? stripHtmlToText(msg0.body, 75) : ""
     const snippet = buildPreviewText(msg0?.subject, bodySnippet)
     const hasDraft = conv.draft?.status === "proposed" || conv.draft?.status === "approved"
-    const isClosed = conv.status === "closed"
     const meta = conv.stateRecord?.metadataJson as Record<string, unknown> | null ?? {}
     const isVip = meta?.isVip === true
     const vipLabel = typeof meta?.vipLabel === "string" ? meta.vipLabel : null
@@ -248,14 +282,14 @@ export default async function AppListColumn({
       href: buildConversationHref(conv.id, returnTo),
       isSelected: conv.id === activeConversationId,
       isUnread: !conv.readAt && conv.gmailUnread !== false,
-      isFyi: fyi,
-      isClosed,
+      isFyi: workflowStatus === "done",
+      isClosed: workflowStatus === "done",
       name,
       snippet,
       timeLabel: relativeTime(conv.lastMessageAt),
-      statusDot: attentionStyle?.dot ?? style.dot,
-      statusText: attentionStyle?.text ?? style.text,
-      statusLabel: attentionStyle?.label ?? (fyi ? "No reply needed" : STATUS_LABEL[displayStatus] ?? displayStatus),
+      statusDot: wfStyle.dot,
+      statusText: wfStyle.text,
+      statusLabel: WORKFLOW_STATUS_LABEL[workflowStatus],
       hasDraft,
       initialStatus: conv.status,
       attentionCategory: attention,
@@ -265,6 +299,7 @@ export default async function AppListColumn({
       vipLabel,
       snoozeUntil,
       searchText: `${name} ${conv.externalThreadId} ${snippet}`.toLowerCase(),
+      workflowStatus,
     }
   })
 

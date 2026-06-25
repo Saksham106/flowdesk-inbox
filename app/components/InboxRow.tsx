@@ -4,14 +4,13 @@ import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import type { WorkflowStatus } from "@/lib/workflow-status"
 
-type AttentionOption = { value: string; label: string; dot: string }
-
-const ATTENTION_OPTIONS: AttentionOption[] = [
-  { value: "needs_reply", label: "Reply needed", dot: "bg-red-500" },
-  { value: "read_later",  label: "Read later",   dot: "bg-violet-400" },
-  { value: "fyi_done",    label: "FYI / Done",   dot: "bg-emerald-500" },
-  { value: "quiet",       label: "Quiet",        dot: "bg-slate-300" },
+const WORKFLOW_OPTIONS: { value: string; label: string; dot: string }[] = [
+  { value: "needs_reply", label: "Needs Reply", dot: "bg-red-500" },
+  { value: "waiting_on",  label: "Waiting On",  dot: "bg-indigo-400" },
+  { value: "read_later",  label: "Read Later",  dot: "bg-violet-400" },
+  { value: "done",        label: "Done",        dot: "bg-emerald-500" },
 ]
 
 type InboxRowProps = {
@@ -37,6 +36,7 @@ type InboxRowProps = {
   attentionCategory: string | null
   isPersonal: boolean
   isGmail: boolean
+  workflowStatus: WorkflowStatus
 }
 
 export default function InboxRow({
@@ -60,6 +60,7 @@ export default function InboxRow({
   attentionCategory: initialAttention,
   isPersonal,
   isGmail,
+  workflowStatus: initialWorkflowStatus,
 }: InboxRowProps) {
   const router = useRouter()
   // Derive isRead from the pre-computed isUnread prop (considers readAt + gmailUnread).
@@ -67,6 +68,7 @@ export default function InboxRow({
   const [isRead, setIsRead]         = useState(!initialIsUnread)
   const [status, setStatus]         = useState(initialStatus)
   const [attention, setAttention]   = useState(initialAttention)
+  const [workflowStatus, setWorkflowStatus] = useState(initialWorkflowStatus)
   const [showAttention, setShowAtt] = useState(false)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null)
   const attentionBtnRef             = useRef<HTMLButtonElement>(null)
@@ -74,7 +76,7 @@ export default function InboxRow({
 
   const [archiveError, setArchiveError] = useState<string | null>(null)
   const isUnread = !isRead
-  const isClosed = status === "closed"
+  const isClosed = workflowStatus === "done"
 
   // Close attention dropdown on outside click or any scroll (covers inbox list scroll)
   useEffect(() => {
@@ -110,15 +112,15 @@ export default function InboxRow({
   async function toggleStatus(e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
-    const next = isClosed ? "needs_reply" : "closed"
-    setStatus(next)
-    const res = await fetch(`/api/conversations/${id}/status`, {
+    const nextStatus = isClosed ? "needs_reply" : "done"
+    setWorkflowStatus(nextStatus as WorkflowStatus)
+    const res = await fetch(`/api/conversations/${id}/workflow-status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: next }),
+      body: JSON.stringify({ workflowStatus: nextStatus }),
     })
-    if (!res.ok) setStatus(status)
-    router.refresh()
+    if (!res.ok) setWorkflowStatus(initialWorkflowStatus)
+    else router.refresh()
   }
 
   async function archiveConversation(e: React.MouseEvent) {
@@ -152,12 +154,13 @@ export default function InboxRow({
     setShowAtt(false)
     const prev = attention
     setAttention(cat)
-    const res = await fetch(`/api/conversations/${id}/attention`, {
+    setWorkflowStatus(cat as WorkflowStatus)
+    const res = await fetch(`/api/conversations/${id}/workflow-status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ attentionCategory: cat }),
+      body: JSON.stringify({ workflowStatus: cat }),
     })
-    if (!res.ok) setAttention(prev)
+    if (!res.ok) { setAttention(prev); setWorkflowStatus(initialWorkflowStatus) }
     else router.refresh()
   }
 
@@ -182,7 +185,7 @@ export default function InboxRow({
               className={`min-w-0 truncate text-xs ${
                 isUnread
                   ? "font-bold text-slate-900"
-                  : isFyi || isClosed
+                  : workflowStatus === "done"
                     ? "font-normal text-slate-500"
                     : "font-semibold text-slate-800"
               }`}
@@ -199,7 +202,7 @@ export default function InboxRow({
         </div>
         {snippet && (
           <p className={`mt-0.5 truncate text-[11px] ${
-            isUnread ? "text-slate-600" : isFyi || isClosed ? "text-slate-400" : "text-slate-500"
+            isUnread ? "text-slate-600" : workflowStatus === "done" ? "text-slate-400" : "text-slate-500"
           }`}>{snippet}</p>
         )}
         <div className="mt-1 flex items-center gap-1.5">
@@ -207,7 +210,7 @@ export default function InboxRow({
             <span className={`inline-block h-1.5 w-1.5 rounded-full ${statusDot}`} />
             {statusLabel}
           </span>
-          {hasDraft && !isFyi && (
+          {hasDraft && workflowStatus !== "done" && (
             <span className="text-[10px] font-semibold text-blue-600">✦ draft</span>
           )}
           {snoozeUntil && (
@@ -321,7 +324,7 @@ export default function InboxRow({
           style={{ position: "fixed", top: dropdownPos.top, right: dropdownPos.right, zIndex: 9999 }}
           className="min-w-[126px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
         >
-          {ATTENTION_OPTIONS.map((opt) => (
+          {WORKFLOW_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               type="button"

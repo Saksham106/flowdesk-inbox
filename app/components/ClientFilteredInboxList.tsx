@@ -6,6 +6,7 @@ import type { ReactNode } from "react"
 import InboxRowWithSnooze from "@/app/components/InboxRowWithSnooze"
 import InboxScrollContainer from "@/app/components/InboxScrollContainer"
 import SearchInput from "@/app/inbox/SearchInput"
+import type { WorkflowStatus } from "@/lib/workflow-status"
 
 export type InboxListItem = {
   id: string
@@ -30,6 +31,7 @@ export type InboxListItem = {
   vipLabel?: string | null
   snoozeUntil?: string | null
   searchText: string
+  workflowStatus: WorkflowStatus
 }
 
 export default function ClientFilteredInboxList({
@@ -93,6 +95,7 @@ export default function ClientFilteredInboxList({
               isVip={item.isVip}
               vipLabel={item.vipLabel}
               snoozeUntil={item.snoozeUntil}
+              workflowStatus={item.workflowStatus}
             />
           ))
         )}

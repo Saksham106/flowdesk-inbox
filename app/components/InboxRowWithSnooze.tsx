@@ -3,6 +3,7 @@
 import { useState } from "react"
 import InboxRow from "./InboxRow"
 import SnoozeModal from "@/app/conversations/[id]/SnoozeModal"
+import type { WorkflowStatus } from "@/lib/workflow-status"
 
 type InboxRowWithSnoozeProps = {
   id: string
@@ -25,6 +26,7 @@ type InboxRowWithSnoozeProps = {
   isVip?: boolean
   vipLabel?: string | null
   snoozeUntil?: string | null
+  workflowStatus: WorkflowStatus
 }
 
 export default function InboxRowWithSnooze(props: InboxRowWithSnoozeProps) {
