@@ -41,6 +41,9 @@ export type EmailIframeSanitizeOptions = {
   allowRemoteImages?: boolean;
 };
 
+const SAFE_RASTER_DATA_IMAGE_RE =
+  /^data:image\/(?:png|jpe?g|gif|webp|bmp|tiff|ico);base64,[a-z0-9+/=]+$/i;
+
 export function hasRemoteEmailImages(html: string): boolean {
   const imageOnly = sanitizeHtml(html, {
     allowedTags: ["img"],
@@ -92,7 +95,9 @@ export function sanitizeEmailHtmlForIframe(
     },
     allowedSchemesByTag: {
       a: ["http", "https", "mailto"],
-      img: ["http", "https", "cid"],
+      // "data" is included so resolved cid: inline images (stored as data URIs) survive
+      // sanitization. Non-raster data URIs are blocked in the img transform below.
+      img: ["http", "https", "cid", "data"],
     },
     // Completely remove dangerous tags and their content
     nonTextTags: ["script", "iframe", "frame", "object", "embed", "applet", "base"],
@@ -110,8 +115,10 @@ export function sanitizeEmailHtmlForIframe(
         const src = nextAttribs.src?.trim();
         const isRemote = /^https?:\/\//i.test(src ?? "");
         const isAllowedRemote = options.allowRemoteImages && /^https:\/\//i.test(src ?? "");
+        const isData = /^data:/i.test(src ?? "");
+        const isAllowedDataImage = SAFE_RASTER_DATA_IMAGE_RE.test(src ?? "");
 
-        if (isRemote && !isAllowedRemote) {
+        if ((isData && !isAllowedDataImage) || (isRemote && !isAllowedRemote)) {
           delete nextAttribs.src;
         } else if (src) {
           nextAttribs.src = src;

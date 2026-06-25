@@ -10,12 +10,12 @@ type FyiConversationInput = {
   messages: { direction: string; body: string }[]
 }
 
-const AUTOMATED_SENDER_RE = /\b(no-?reply|noreply|notifications?|alerts?|do-not-reply|automated)\b/i
-const AUTOMATED_BODY_RE =
+export const AUTOMATED_SENDER_RE = /\b(no-?reply|noreply|notifications?|alerts?|do-not-reply|automated)\b/i
+export const AUTOMATED_BODY_RE =
   /\b(unsubscribe|you'?re receiving this|this is an automated (email|message|notification)|do not reply to this email)\b/i
-const FYI_RE = /\b(fyi|newsletter|for your records|no action|all set|thanks, all set)\b/i
+export const FYI_RE = /\b(fyi|newsletter|for your records|no action|all set|thanks, all set)\b/i
 const FYI_ATTENTION = new Set(["quiet", "fyi_done"])
-const FYI_EMAIL_TYPES = new Set(["notification", "newsletter", "marketing"])
+export const FYI_EMAIL_TYPES = new Set(["notification", "newsletter", "marketing"])
 
 export function isFyiConversation(conversation: FyiConversationInput): boolean {
   if (
