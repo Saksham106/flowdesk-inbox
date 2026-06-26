@@ -1,71 +1,70 @@
 # GitHub Audit — 2026-06-25
 ## Summary
-Last 7 days show strong velocity across Outlook sync, email privacy hardening, workflow UX, and landing-page polish. Main risk is documentation drift: README and CURRENT_STATE are still inconsistent on several shipped behaviors, and the clean-inbox dashboard target metadata fields were expanded by #62 without schema migration yet. Good test coverage added for new areas; direct pushes to main are uncontroversial docs/UX fixes from the repo owner.
+Healthy push: five merged PRs in the last 36h cover critical resilience work (loading states, encryption rotation, Outlook delta sync, and remote-image privacy). No seats-of-pants iOS bugs, but PR #67 ships with a real fallback-path regression that will silently leave stale Outlook mailboxes un-synced in some cron runs.
 
-## Merged PRs
-### #68 feat: redesign landing page to match Figma design
-- **Author:** Mehmet Battal | **Merged:** 2026-06-24
-- **Intent:** Full visual overhaul matching Figma.
-- **Reality:** Replaced landing layout, fonts, static assets, OG metadata; updated `README.md` and `CURRENT_STATE.md`.
+## Merged PRs (past 36 hours)
+### #71 fix: loading states across inbox (thread skeleton, row actions, banners)
+- **Author:** Shivansh Goel | **Merged:** 2026-06-25 17:26Z
+- **Intent:** Prevent double-click / ambiguous state while inbox row actions are in flight.
+- **Reality:** `pendingAction` lock added across `toggleRead`, `toggleStatus`, `archiveConversation`, and `changeAttention` in `InboxRow`. Skeleton loader added in `app/conversations/[id]/loading.tsx`. `ReadLaterSection` and `PhishingWarningBanner` also get loading/error state. Tests cover resilience contract.
 - **Rating:** Healthy
 - **Findings:**
-  - [P3] `public/images/landing/*` binaries are non-text; confirm `.gitignore` excludes large generated assets at build time | — | fix: confirm CI/build ignores generated `public/images` copies
+  - [P3] Loading lock scope is row-level only; if a user is on the thread detail page and triggers a workflow-status action, there is still a small window where a rapid double-click could cause a duplicate request unless caller-side locking is also present.
 
-### #67 feat: durable hybrid Outlook delta sync (#42)
-- **Author:** Saksham Goel | **Merged:** 2026-06-24
-- **Intent:** Durable Microsoft Graph delta sync with webhook, subscription, worker.
-- **Reality:** Prisma migration adds `OutlookCredential` sync lease/cursor/subscription fields and `OutlookSyncEvent` queue. `lib/outlook-sync.ts` implements lease-gated bounded paging, 410 cursor reset, encrypted cursor, `affectedConversationIds` work-item sync, `applyRemovedMessage` closing empty conversations. `lib/outlook-worker.ts` batches claimed events, renews subscriptions, stale fallback. Tests exist for paging, lease atomicity, cursor reset, removed-message close, skip-if-busy.
-- **Rating:** Healthy
-- **Findings:**
-  - [P1] Webhook endpoint returns `{ id, channelId, tenantId, ... }` shape consumers rely on contract | `app/api/connectors/outlook/webhook/route.ts` | fix: add response schema doc + integration test asserting 202 shape
-  - [P2] `processOutlookSyncWork` swallows leaf errors with `catch { errors++ }` without attaching `lastError` for subscription renewals | `lib/outlook-worker.ts:100` | fix: log/`auditLog` the renewal failure cause for observability
-  - [P2] `applyLiveMessage` reuses `phoneE164` for email as the unique contact key; if someone connects both Gmail and Outlook, email and SMS contacts collide under the same unique constraint | `lib/outlook-sync.ts:135` | fix: add `emailAddress` column/uniqueness on Contact or composite `(tenantId, provider, externalId)` key
-
-### #66 [codex] Block remote email images by default
-- **Author:** Saksham Goel | **Merged:** 2026-06-24
-- **Intent:** Privacy-safe rendering: block remote images, strip dark-mode/viewport, prevent newsletter zoom.
-- **Reality:** New CSP handles network isolation; `stripEmailViewportMeta` and stricter CSS rules; regression tests added. Commit notes are specific about root cause and fix. Existing inline `max-width` preserves retina icon sizing; `!important` kept on `height: auto`.
-- **Rating:** Healthy
-- **Findings:**
-  - [P2] Remote image opt-in is per-message/non-persistent; consider adding a “Remember for this sender” opt-in to reduce repeat clicks as a UX follow-up | — | fix: roadmap item, not blocking
-
-### #63 fix: conversation page crash and sidebar/dashboard FYI sync
-- **Author:** Shivansh Goel | **Merged:** 2026-06-18
-- **Intent:** Fix conversation page crash, align sidebar with command-center FYI classification.
-- **Reality:** Likely crash fix + UI state sync; tests added for inbox FYI, automation runner, clean-inbox batch, work-item sync.
-- **Rating:** Healthy
-- **Findings:**
-  - [P1] `InboxTask.deterministicKey` uniqueness implies same email across re-syncs must keep a stable key; confirm `work-item-sync.ts` uses deterministic string, not timestamps, across channels | `lib/agent/work-item-sync.ts` | fix: assert deterministicKey is derived from explicit fields (e.g., `conversationId:taskTitle`)
-
-### #62 feat: Phase 4 v4.0.0 — Automations & Integrations
-- **Author:** Shivansh Goel | **Merged:** 2026-06-18
-- **Intent:** Automations, integrations, settings UI, DB models.
-- **Reality:** Added 5 Prisma migrations: `AgentRule`, `Snippet`, `SchedulingSession`, `AutomationRun`, `WorkflowTemplate/Run`, `GoogleDriveCredential`. New API routes and settings panels. `conversationUpdateForWorkflowStatus` resets/routes `userState`; `deriveWorkflowStatus()` decides from `status + userState + attentionCategory + emailType + draftStatus`.
+### #70 fix: close issues #64, #40, #41 — regex dedup, CID images, encryption rotation
+- **Author:** Shivansh Goel | **Merged:** 2026-06-25 17:20Z
+- **Intent:** Fix deduplicated FYI constants, resolve Gmail CID inline images safely, and add encryption key rotation support.
+- **Reality:** Regex constants centralized in `lib/inbox-fyi.ts`, `collectInlineImages` implemented in `lib/google.ts`, size-capped CID embedding added, `decryptString` gains previous-key fallback, new `/api/admin/rekey` endpoint, tests added in `tests/crypto.test.ts` and `tests/email-body.test.ts`.
 - **Rating:** Minor gaps
 - **Findings:**
-  - [P0] Schema drift risk: `app/components/AppListColumn.tsx` now references `InboxTask` fields (e.g., `taskId`) in `BillSignal`, but no migration adds them to `InboxTask`; if this is a runtime join by FK, verify `InboxTask` actually stores `taskId` or title for Bills targets | `app/components/AppListColumn.tsx` | fix: audit `InboxTask` usage or add `taskId` column if the component expects it
-  - [P1] README `## Connectors` section omits Outlook setup entirely; Outlook is now shipped and should have its own block | `README.md` | fix: add Outlook section mirroring `CURRENT_STATE.md`’s Outlook subsection
-  - [P2] `autopilot` actions can update conversation attention; no explicit audit-log verification in `executeAutomationStep` | `lib/agent/automation-runner.ts` | fix: add summary audit log line after successful automation steps
-  - [P2] `WorkflowRunner` cron-driven runs still unverified in production README; no alerting guidance or X- header | `README.md`, `app/api/cron/workflow-runner/route.ts` | fix: add cron monitoring/misfire behavior to README
+  - [P2] Admin rekey route is hard to operationalize without docs. Add a README/CURRENT_STATE section for key rotation procedure and env-var naming. files: README.md, docs/CURRENT_STATE.md | fix: Add operational checklist (similar to Outlook sync checks) for rekey: backup DB before migration, monitor error count, then unset `ENCRYPTION_SECRET_PREVIOUS`.
 
-## Direct Commits to main
-Recent direct commits in the last 7 days (after PRs merged) are all from the repo owner and are docs/UX polish:
-- `docs: update CURRENT_STATE` / design spec / implementation plan / UX polish docs
-- `fix: email workflow state transitions`
-- `fix: remove dead STATUS_STYLE/STATUS_LABEL vars and unused isFyi destructuring to fix ESLint build errors`
-- Various targeted UX fixes on dashboard and Handle First cards
+### #68 feat: redesign landing page to match Figma design
+- **Author:** Mehmet Battal | **Merged:** 2026-06-24 20:33Z
+- **Intent:** Full visual redesign of landing.
+- **Reality:** Huge restyle of `FAQ.tsx`, `Features.tsx`, `SocialProof.tsx`, layout/page, global CSS vars, product assets added to `public/images/landing/`, OG/Twitter metadata. CURRENT_STATE doc updated.
+- **Rating:** Healthy
+- **Findings:**
+  - [P3] Footer social/company/tools links use `href="#"`. Confirm these are populated before public launch or explicitly marked as placeholder. files: app/page.tsx | fix: Replace `#` hrefs or add `aria-hidden` / `role=none` to avoid accidental focus/hover states.
 
-No suspicious remote pushes; commit messages follow conventional style.
+### #67 feat: durable hybrid Outlook delta sync (#42)
+- **Author:** Saksham Goel | **Merged:** 2026-06-24 17:09Z
+- **Intent:** Add durable paginated Outlook delta sync with webhook intake, subscription lifecycle, and bounded worker.
+- **Reality:** New `lib/outlook-sync.ts`, `lib/outlook-worker.ts`, `lib/outlook-subscriptions.ts`, webhook/cron routes, upsert schema + tests. Architecture is solid.
+- **Rating:** Significant gaps
+- **Findings:**
+  - [P1] Stale fallback is silently skipped for channels already seen in `processedChannels`. In the same cron invocation, if one channel’s event is busy, another stale mailbox paired with it will not receive its fallback sync until a future run. This reduces the 15-minute fallback guarantee in some cases. files: lib/outlook-worker.ts:125-137 | fix: Either dedupe fallback candidates against only *completed* events, or run fallback passes after event processing regardless of `processedChannels`.
+  - [P2] repo roadmap docs reference a future `gmail_label_mappings` table not present in current schema. This is acceptable as plan prose, but reinforces the gap that label customization is missing. files: docs/superpowers/plans/2026-06-25-gmail-native-direction.md | fix: Clarify it is a future work or issue link.
+  - [P2] Operational checklist for Outlook is in README, but there is no corresponding section in CURRENT_STATE. files: docs/CURRENT_STATE.md | fix: Mirror Outlook notes from README so the canonical state doc stays authoritative.
+
+### #66 [codex] Block remote email images by default
+- **Author:** Saksham Goel | **Merged:** 2026-06-24 05:15Z
+- **Intent:** Default-deny remote images; per-message opt-in.
+- **Reality:** Server produces blocked/opt-in HTML variants, iframe enforces default-deny CSP, opt-in permits only HTTPS, UI added to `EmailBodyIframe`.
+- **Rating:** Healthy
+- **Findings:**
+  - [P3] Remote images blocked message should include a one-line disclosure that “loading images notifies senders”, per spec `2026-06-24-email-remote-image-privacy.md`. files: app/components/EmailBodyIframe.tsx | fix: Append short privacy copy below the banner.
+
+## Direct Commits to main (past 36 hours)
+### <no direct commits beyond merge commits>
+All PR commits reached main via squash merges. No additional non-PR commits detected.
+
+## Recent Commits — Light Review (36h–7d)
+- squat merge PR landing noise is consistent and doc-aligned.
+- Commit `91a234b` adds roadmap and product-direction alignment — healthy.
+- Commit `7e78e4b` introduces Gmail-native label writeback — already covered above.
+- Commits `dffb49f`, `2405dc0`, `0ff34d0`, `6c681a9`, `df2836e` are refactor/test cleanups supporting workflow status — healthy.
+- No suspicious direct pushes to main outside normal PR flow.
 
 ## Issues Summary
 | Severity | Count | Description |
 |----------|-------|-------------|
-| P0 | 1 | Possible schema/contract mismatch in Bills dismiss behavior |
-| P1 | 3 | Missing README Outlook docs, webhook response contract, deterministicKey stability |
-| P2 | 4 | Error telemetry gaps, contact-key collision, automation audit logging, cron observability |
-| P3 | 2 | Landing asset policy, remote-image UX follow-up |
+| P0 | 0 | — |
+| P1 | 1 | Outlook cron fallback-path skip (PR #67) |
+| P2 | 2 | Missing user-facing docs for rekey and Outlook operational checks duplication; `gmail_label_mappings` roadmap vs schema mismatch |
+| P3 | 2 | Footer hrefs placeholders; missing privacy copy in banner |
 
 ## Recommendations
-- Close the Outlook section in `README.md` so operators know setup requirements.
-- Validate Bills/Deadlines dismiss wiring against the actual `InboxTask` schema; if `taskId` doesn’t exist, either add it via migration or stop referencing it.
-- Add response contracts and minimal smoke tests for health-sensitive routes (Outlook webhook 202, cron `X-Outlook-Sync-Errors`).
+- Fix the `processedChannels` stale-fallback skip in `lib/outlook-worker.ts` and add a test for a mixed busy + stale mailbox run.
+- Add operational documentation for encryption rotation in README/CURRENT_STATE so #70’s rekey endpoint isn’t a secret handshake.
+- Close the label-mapping gap explicitly in issue tracker so the roadmap and schema stay in sync.
