@@ -53,10 +53,6 @@ export default function ReplyComposer({
   const [snippets, setSnippets] = useState<Array<{id:string;title:string;content:string}>>([])
   const [showSnippets, setShowSnippets] = useState(false)
   const [snippetsLoaded, setSnippetsLoaded] = useState(false)
-  const [ccOpen, setCcOpen] = useState(false)
-  const [bccOpen, setBccOpen] = useState(false)
-  const [cc, setCc] = useState("")
-  const [bcc, setBcc] = useState("")
   const [showNextStep, setShowNextStep] = useState(false)
 
   const isEmail = channelType === "email";
@@ -149,7 +145,6 @@ export default function ReplyComposer({
     }
   }
 
-  // TODO: wire cc/bcc into send API when backend supports it
   async function send() {
     if (!hasDraftText || isBusy) return;
     setAction("sending");
@@ -278,77 +273,13 @@ export default function ReplyComposer({
     <div className="space-y-0 rounded-xl border border-slate-300 overflow-hidden bg-white shadow-sm">
       {/* Email header fields */}
       <div className="border-b border-slate-100">
-        {/* To field */}
+        {/* To field. CC/BCC are hidden until the send API supports them. */}
         <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100">
           <span className="text-[11px] font-semibold text-slate-400 w-6 shrink-0">To</span>
           <span className="flex-1 text-sm text-slate-700 truncate">
             {senderAddress ?? "—"}
           </span>
-          <div className="flex items-center gap-2 shrink-0">
-            {!ccOpen && (
-              <button
-                type="button"
-                onClick={() => setCcOpen(true)}
-                className="text-[11px] text-slate-400 hover:text-slate-600"
-              >
-                CC
-              </button>
-            )}
-            {!bccOpen && (
-              <button
-                type="button"
-                onClick={() => setBccOpen(true)}
-                className="text-[11px] text-slate-400 hover:text-slate-600"
-              >
-                BCC
-              </button>
-            )}
-          </div>
         </div>
-
-        {/* CC field */}
-        {ccOpen && (
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100">
-            <span className="text-[11px] font-semibold text-slate-400 w-6 shrink-0">CC</span>
-            <input
-              type="text"
-              value={cc}
-              onChange={(e) => setCc(e.target.value)}
-              placeholder="cc@example.com"
-              className="flex-1 text-sm text-slate-700 outline-none bg-transparent"
-              disabled={isBusy}
-            />
-            <button
-              type="button"
-              onClick={() => { setCcOpen(false); setCc("") }}
-              className="text-[11px] text-slate-400 hover:text-slate-600"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
-        {/* BCC field */}
-        {bccOpen && (
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100">
-            <span className="text-[11px] font-semibold text-slate-400 w-6 shrink-0">BCC</span>
-            <input
-              type="text"
-              value={bcc}
-              onChange={(e) => setBcc(e.target.value)}
-              placeholder="bcc@example.com"
-              className="flex-1 text-sm text-slate-700 outline-none bg-transparent"
-              disabled={isBusy}
-            />
-            <button
-              type="button"
-              onClick={() => { setBccOpen(false); setBcc("") }}
-              className="text-[11px] text-slate-400 hover:text-slate-600"
-            >
-              ✕
-            </button>
-          </div>
-        )}
 
         {/* Subject (read-only) */}
         <div className="flex items-center gap-2 px-3 py-2">

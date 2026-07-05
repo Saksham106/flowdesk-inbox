@@ -97,7 +97,7 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 - Outlook does not yet have archive/trash writeback (Gmail equivalent exists).
 - Gmail label projection currently runs from manual workflow/status changes. Label bootstrap on connect, automatic projection after classification, configurable label names, and Gmail-native draft creation remain unfinished.
 - Gmail `cid:` inline images are not resolved from related MIME attachments.
-- CC/BCC fields are displayed in the compose UI but not forwarded by send APIs.
+- CC/BCC sending is not supported; the compose UI hides these fields until the send APIs support them.
 - Bills & Deadlines items dismiss optimistically client-side but reappear on hard refresh until the server cache invalidates (60 s TTL).
 - Read Later section shows a fixed 3-item preview; dismissed items vanish optimistically but the overflow count only updates after a page refresh.
 - Classification heuristics still have edge-case overlap between command-center FYI logic and inbox list filtering.
