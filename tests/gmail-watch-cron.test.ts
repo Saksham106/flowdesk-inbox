@@ -47,7 +47,7 @@ vi.mock("next/server", () => {
   return { NextResponse }
 })
 
-import { GET } from "@/app/api/cron/gmail-watch/route"
+import { DELETE, GET } from "@/app/api/cron/gmail-watch/route"
 
 function request() {
   return {
@@ -111,5 +111,27 @@ describe("GET /api/cron/gmail-watch", () => {
         }),
       }),
     })
+  })
+
+  it("rejects Bearer undefined when CRON_SECRET is unset", async () => {
+    delete process.env.CRON_SECRET
+
+    const res = await GET({
+      headers: new Headers({ authorization: "Bearer undefined" }),
+    } as Request)
+
+    expect(res.status).toBe(401)
+    expect(mockCredFindMany).not.toHaveBeenCalled()
+  })
+
+  it("DELETE rejects Bearer undefined when CRON_SECRET is unset", async () => {
+    delete process.env.CRON_SECRET
+
+    const res = await DELETE({
+      headers: new Headers({ authorization: "Bearer undefined" }),
+    } as Request)
+
+    expect(res.status).toBe(401)
+    expect(mockCredUpdate).not.toHaveBeenCalled()
   })
 })
