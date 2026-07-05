@@ -4,6 +4,14 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@prisma/client"
 
+// Must stay in sync with CommandCenterPriority (lib/agent/command-center.ts) — any
+// other value NaNs the command-center score lookup.
+const VALID_PRIORITIES = new Set(["urgent", "high", "medium", "low", "none"])
+
+function restorablePriority(value: unknown): string {
+  return typeof value === "string" && VALID_PRIORITIES.has(value) ? value : "medium"
+}
+
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
@@ -35,10 +43,11 @@ export async function POST(
     },
   })
 
-  // Mark conversation priority as snoozed in state
+  // Drop the conversation out of top actions while snoozed; keep the pre-snooze
+  // priority in metadata so dismiss/resurface can restore it.
   const state = await prisma.conversationState.findUnique({
     where: { conversationId: params.id },
-    select: { metadataJson: true },
+    select: { metadataJson: true, priority: true },
   })
   const meta =
     state?.metadataJson && typeof state.metadataJson === "object" && !Array.isArray(state.metadataJson)
@@ -47,8 +56,13 @@ export async function POST(
   await prisma.conversationState.update({
     where: { conversationId: params.id },
     data: {
-      priority: "snoozed",
-      metadataJson: { ...meta, snoozeReminderId: snooze.id, snoozeUntil } as Prisma.InputJsonValue,
+      priority: "none",
+      metadataJson: {
+        ...meta,
+        snoozeReminderId: snooze.id,
+        snoozeUntil,
+        preSnoozePriority: state?.priority ?? null,
+      } as Prisma.InputJsonValue,
     },
   })
 
@@ -71,10 +85,21 @@ export async function DELETE(
 
   await prisma.snoozeReminder.update({ where: { id: pending.id }, data: { status: "dismissed" } })
 
-  // Restore priority
+  // Restore the pre-snooze priority ("medium" for rows snoozed before it was saved)
+  const state = await prisma.conversationState.findUnique({
+    where: { conversationId: params.id },
+    select: { metadataJson: true },
+  })
+  const meta =
+    state?.metadataJson && typeof state.metadataJson === "object" && !Array.isArray(state.metadataJson)
+      ? (state.metadataJson as Record<string, unknown>)
+      : {}
   await prisma.conversationState.update({
     where: { conversationId: params.id },
-    data: { priority: "normal" },
+    data: {
+      priority: restorablePriority(meta.preSnoozePriority),
+      metadataJson: { ...meta, snoozeReminderId: null, preSnoozePriority: null } as Prisma.InputJsonValue,
+    },
   })
 
   return NextResponse.json({ ok: true })

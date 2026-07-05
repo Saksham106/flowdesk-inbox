@@ -4,6 +4,14 @@ import type { Prisma } from "@prisma/client"
 
 export const runtime = "nodejs"
 
+// Must stay in sync with CommandCenterPriority (lib/agent/command-center.ts) — any
+// other value NaNs the command-center score lookup.
+const VALID_PRIORITIES = new Set(["urgent", "high", "medium", "low", "none"])
+
+function restorablePriority(value: unknown): string {
+  return typeof value === "string" && VALID_PRIORITIES.has(value) ? value : "medium"
+}
+
 export async function GET(request: Request) {
   const auth = request.headers.get("authorization")
   const secret = process.env.CRON_SECRET
@@ -34,8 +42,13 @@ export async function GET(request: Request) {
     await prisma.conversationState.update({
       where: { conversationId: snooze.conversationId },
       data: {
-        priority: "normal",
-        metadataJson: { ...meta, resurfacedFromSnooze: true, snoozeReminderId: null } as Prisma.InputJsonValue,
+        priority: restorablePriority(meta.preSnoozePriority),
+        metadataJson: {
+          ...meta,
+          resurfacedFromSnooze: true,
+          snoozeReminderId: null,
+          preSnoozePriority: null,
+        } as Prisma.InputJsonValue,
       },
     })
     fired++
