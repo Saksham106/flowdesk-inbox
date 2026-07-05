@@ -84,7 +84,13 @@ export async function POST() {
   // OutlookCredential
   const outlookCreds = await prisma.outlookCredential.findMany({
     where: { channel: { tenantId } },
-    select: { id: true, accessTokenEncrypted: true, refreshTokenEncrypted: true },
+    select: {
+      id: true,
+      accessTokenEncrypted: true,
+      refreshTokenEncrypted: true,
+      deltaLinkEncrypted: true,
+      subscriptionClientStateEncrypted: true,
+    },
   })
   for (const cred of outlookCreds) {
     try {
@@ -93,6 +99,10 @@ export async function POST() {
         data: {
           accessTokenEncrypted: reEncryptString(cred.accessTokenEncrypted),
           refreshTokenEncrypted: reEncryptString(cred.refreshTokenEncrypted),
+          deltaLinkEncrypted: cred.deltaLinkEncrypted ? reEncryptString(cred.deltaLinkEncrypted) : cred.deltaLinkEncrypted,
+          subscriptionClientStateEncrypted: cred.subscriptionClientStateEncrypted
+            ? reEncryptString(cred.subscriptionClientStateEncrypted)
+            : cred.subscriptionClientStateEncrypted,
         },
       })
       rekeyed++
