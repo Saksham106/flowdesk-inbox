@@ -198,6 +198,16 @@ Credentials are verified live against MindBody's API before being saved. Use Sit
 
 ---
 
+## Agent Job Executor
+
+- Schedule `GET /api/cron/agent-jobs` every five minutes with `Authorization: Bearer <CRON_SECRET>`. It drains pending `AgentJob`s (LLM classification, follow-up, and lead-sequence work enqueued by the follow-up and lead-sequence crons).
+- Each invocation runs at most 25 jobs, interleaving tenants round-robin so one tenant's backlog cannot starve others. Jobs are claimed atomically (`pending` → `running`), so overlapping invocations never double-run a job.
+- Pending jobs older than 7 days are bulk-marked failed with the error `stale_at_executor_launch` (at most 200 per run) instead of executed — acting on weeks-old email would do more harm than good.
+- The response body is `{ processed, succeeded, failed, skippedStale }`. Treat non-2xx responses and `X-Agent-Jobs-Errors` above zero as alerts: the endpoint returns `500` with the failed-job count in that header when any job fails, matching the Gmail/Outlook cron conventions.
+- Executing jobs does not loosen autopilot: sends still pass policy, budget, confidence and per-intent thresholds, the intent allow-list, the daily cap, and the failure limit, and stay off until autopilot is explicitly enabled.
+
+---
+
 ## Environment Variables
 
 | Variable | Required | Description |

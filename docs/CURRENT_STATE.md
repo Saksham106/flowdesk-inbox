@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-06-25 (gmail-native-label-projection)
+Last updated: 2026-07-06 (agent-job-executor)
 
 FlowDesk is a Gmail-native AI email operator for individuals and small businesses. Gmail is the primary daily workspace; the FlowDesk web app is the agent control room for setup, preferences, approvals, audit history, training, and power-user review.
 
@@ -72,6 +72,7 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 ### Automations and integrations
 
 - Plain-English agent rules (`AgentRule` model, NL compiler, conflict detection), category-scoped autopilot settings, snippets miner cron, scheduling sessions, automation run traces with rollback, and cron-driven workflow templates.
+- `GET /api/cron/agent-jobs` executes pending `AgentJob`s (LLM classification, follow-up, lead-sequence) through `runAgentJob`: at most 25 jobs per run with per-tenant round-robin fairness, atomic pending → running claims so overlapping runs never double-execute, and per-job failure isolation. Pending jobs older than 7 days are bulk-failed as `stale_at_executor_launch` (200/run) rather than executed. Autopilot sends stay gated behind opt-in, learned profile, policy, budget, confidence/per-intent thresholds, daily cap, and failure limit — executing jobs does not enable sending.
 - Google Calendar (events, free/busy, calendar holds), Google Drive OAuth foundation (not yet injected into drafts), and optional MindBody connector.
 
 ### Landing page
@@ -88,7 +89,7 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 - Mobile inbox list is paginated at 50 conversations per page (offset + "Load more" link). The `?page=N` param preserves all active filters.
 - Desktop sidebar (`AppListColumn`) fetches the top 50 conversations per filter view. The needs-reply badge count is a direct `prisma.conversation.count()` against deterministic `stateRecord` columns — body/sender regex heuristics are not applied to the count (badge may be slightly high for fully unclassified inboxes).
 - Status counts (groupBy) are cached once per tenant per 60 s in their own `unstable_cache` entry (`["app-list-counts", tenantId]`) and shared across all filter views. `inbox/page.tsx` passes its already-fetched counts into `AppListColumn` to avoid a duplicate groupBy on desktop renders.
-- Background jobs are bounded: `getStaleConversations` (`lib/agent/follow-up.ts`) processes at most 200 conversations per run; `close-fyi` admin route processes at most 100.
+- Background jobs are bounded: `getStaleConversations` (`lib/agent/follow-up.ts`) processes at most 200 conversations per run; `close-fyi` admin route processes at most 100; the agent-jobs executor runs at most 25 jobs and stale-fails at most 200 per run.
 - Home view (`commandCenterConversations`) is capped at `HOME_CONVERSATION_LIMIT = 25` conversations with `HOME_MESSAGE_LIMIT = 5` messages each.
 
 ## Important limitations

@@ -76,9 +76,9 @@ Shared inboxes, assignments, comments, collision detection, roles, permissions, 
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 1 | Daily Command Center / Control Room | `Partial` | First slice shipped; needs Gmail-native status indicators, persistence, and richer source signals. |
-| 2 | Autopilot Modes | `Shipped` | Per-attention-category policy table (auto-send / require approval / never) in settings. |
+| 2 | Autopilot Modes | `Partial` | Settings policy table shipped; agent jobs now execute via `GET /api/cron/agent-jobs`. Autopilot sends remain fully gated (opt-in, learned profile, confidence/per-intent thresholds, daily cap, failure limit) and are off by default. |
 | 3 | Handle This Button | `Partial` | Button exists and triggers draft suggestion; needs task/lead/calendar side effects. |
-| 4 | AI Follow-Up Brain | `Partial` | Follow-up tracker and lead sequences shipped; sequence settings UI and sent-output visibility remain. |
+| 4 | AI Follow-Up Brain | `Partial` | Follow-up tracker and lead sequences shipped; enqueued jobs now execute via the agent-jobs cron. Sequence settings UI and sent-output visibility remain. |
 | 5 | Relationship Memory | `Partial` | Persisted `PersonMemory`, relationship panel, user editing, gated LLM extraction; richer history and retrieval remain. |
 | 6 | Never Drop the Ball | `Partial` | Attention taxonomy, inbox filters, and corrections exist; clearer alerts and filter coverage remain. |
 | 7 | Business Lead Capture | `Partial` | LLM scoring, score explanation, estimated value, CRM funnel header shipped. CRM search and value forecasting remain. |
