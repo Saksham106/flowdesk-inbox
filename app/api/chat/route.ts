@@ -19,6 +19,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "question required" }, { status: 400 })
   }
 
+  if (!process.env.OPENAI_API_KEY) {
+    return NextResponse.json({ error: "OPENAI_API_KEY is not configured" }, { status: 503 })
+  }
+
   const tenantId = session.user.tenantId
 
   const stream = new ReadableStream({
