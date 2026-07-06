@@ -10,7 +10,7 @@ Last updated: 2026-07-06
 - [ ] Record Outlook renewal/sync failure causes (`OutlookCredential.subscriptionError`, `OutlookSyncEvent.lastError`, audit log) instead of bare catch blocks, and stop adding failed channels to `processedChannels` so the stale-mailbox fallback doesn't skip them.
 - [ ] Fix `FlowDesk/Handle First` label mapping — `handle_first` is not an attention category the classifier or corrections can produce; map it from the command-center top-action selection or drop it from the vocabulary.
 - [ ] Implement or remove the `create_draft` automation step type — declared in the step union but falls through to "Unknown step type" at runtime.
-- [ ] Schedule FlowDesk Gmail label bootstrap as recurring maintenance (bootstrap on OAuth connect and manual sync is done).
+- [x] Schedule FlowDesk Gmail label bootstrap/projection as recurring maintenance — `gmail-state-reconcile` now reprojects labels for recent Google conversations in addition to read/unread drift reconciliation.
 - [x] Add automation level settings for Gmail-native actions — done: per-tenant Level 0–5 trust ladder (`lib/agent/automation-level.ts`) gates label projection (≥2), Gmail drafts (≥3), and auto-send (5), with a confirm-to-change settings selector. Auto mark-read/archive (Level 4) is gated but has no automatic callers yet.
 - [x] Track sent threads waiting for replies and apply `Waiting On` / `Follow Up` Gmail labels (Phase C: deterministic expects-reply detection on FlowDesk and Gmail-native sends, self-healing on inbound reply, follow-up-due label after the tenant's business-day delay, dashboard due dates).
 - [ ] Update dashboard/settings copy and indicators so the website reads as the agent control room.

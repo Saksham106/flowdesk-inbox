@@ -44,6 +44,7 @@ Status: Core shipped. Remaining work is hardening, reconciliation, correctness, 
 - Fix or remove `FlowDesk/Handle First` from canonical label projection.
   - Areas: `lib/gmail-labels.ts`, `lib/agent/command-center.ts`, `lib/agent/work-item-sync.ts`, label settings UI.
 - Schedule and verify Gmail label bootstrap/reconciliation maintenance.
+  - Status: shipped through `gmail-state-reconcile`, which reprojects labels for recent Google conversations.
   - Areas: `app/api/connectors/gmail/sync/route.ts`, new/existing cron route, `lib/gmail-labels.ts`, deployment cron config.
 - Link every Gmail writeback result to human-readable audit entries.
   - Areas: `app/api/cron/gmail-writeback/route.ts`, `lib/gmail-labels.ts`, `lib/gmail-drafts.ts`, `prisma/schema.prisma` if result linkage needs schema support.

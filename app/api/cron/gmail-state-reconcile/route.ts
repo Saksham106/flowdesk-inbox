@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { prisma } from "@/lib/prisma"
+import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
 
 export const runtime = "nodejs"
 
@@ -32,9 +33,22 @@ export async function GET(request: Request) {
     },
     take: 100,
   })
+  const labelConversations = await prisma.conversation.findMany({
+    where: {
+      lastMessageAt: { gte: cutoff },
+      externalThreadId: { not: "" },
+      channel: { provider: "google" },
+    },
+    select: {
+      id: true,
+      tenantId: true,
+    },
+    take: 500,
+  })
 
   let queued = 0
   let reconciled = 0
+  let labelsReconciled = 0
 
   for (const conversation of driftedConversations) {
     const providerMessageIds = conversation.messages.map((message) => message.providerMessageId)
@@ -109,5 +123,31 @@ export async function GET(request: Request) {
     queued++
   }
 
-  return NextResponse.json({ drifted: driftedConversations.length, queued, reconciled })
+  for (const conversation of labelConversations) {
+    try {
+      await projectFlowDeskLabelsForConversation({
+        tenantId: conversation.tenantId,
+        conversationId: conversation.id,
+      })
+      labelsReconciled++
+    } catch (error) {
+      await prisma.auditLog.create({
+        data: {
+          tenantId: conversation.tenantId,
+          action: "gmail.labels.reconcile_failed",
+          payloadJson: {
+            conversationId: conversation.id,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        },
+      })
+    }
+  }
+
+  return NextResponse.json({
+    drifted: driftedConversations.length,
+    queued,
+    reconciled,
+    labelsReconciled,
+  })
 }
