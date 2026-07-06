@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ScrollReveal from "@/app/components/ScrollReveal";
 
 const faqs = [
   {
@@ -31,7 +32,7 @@ function FAQItem({ q, a }: { q: string; a: string }) {
       className="w-full bg-[#f5f5f4] rounded-lg overflow-hidden text-left"
       aria-expanded={open}
     >
-      <div className="flex items-center justify-between p-4 gap-4">
+      <div className="flex items-center justify-between p-5 gap-4">
         <span className="text-base font-normal text-black">{q}</span>
         <div className="shrink-0 text-black">
           {open ? (
@@ -50,7 +51,7 @@ function FAQItem({ q, a }: { q: string; a: string }) {
           open ? "max-h-48" : "max-h-0"
         }`}
       >
-        <p className="px-4 pb-4 text-sm text-[#6b6f76] leading-relaxed text-left">{a}</p>
+        <p className="px-5 pb-5 text-sm text-[#6b6f76] leading-relaxed text-left">{a}</p>
       </div>
     </button>
   );
@@ -58,21 +59,25 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 
 export default function FAQ() {
   return (
-    <section id="faq" className="py-10 px-5 sm:px-8">
+    <section id="faq" className="py-20 px-5 sm:px-8">
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col lg:flex-row gap-8 items-start">
           {/* Left: heading */}
-          <div className="flex-1 min-w-0 flex flex-col gap-1">
-            <p className="text-sm text-black font-normal">{"// FAQ"}</p>
-            <h2 className="text-[40px] leading-[1.1] font-normal text-black">
-              Questions before you hand off follow-up?
-            </h2>
-          </div>
+          <ScrollReveal className="flex-1 min-w-0">
+            <div className="flex flex-col gap-1">
+              <p className="text-sm text-black font-normal">{"// FAQ"}</p>
+              <h2 className="text-[36px] leading-[1.1] font-normal text-black">
+                Questions before you hand off follow-up?
+              </h2>
+            </div>
+          </ScrollReveal>
 
           {/* Right: FAQ list */}
-          <div className="flex-1 min-w-0 flex flex-col gap-2 w-full">
-            {faqs.map((item) => (
-              <FAQItem key={item.q} q={item.q} a={item.a} />
+          <div className="flex-1 min-w-0 flex flex-col gap-3 w-full">
+            {faqs.map((item, i) => (
+              <ScrollReveal key={item.q} delay={i * 80}>
+                <FAQItem q={item.q} a={item.a} />
+              </ScrollReveal>
             ))}
           </div>
         </div>
