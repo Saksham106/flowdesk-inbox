@@ -256,6 +256,54 @@ describe('checkAutopilotEligibility', () => {
     const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
     expect(result.eligible).toBe(true)
   })
+
+  it('returns ineligible when the per-category policy requires approval', async () => {
+    mockAutopilotSettingFindUnique.mockResolvedValue({
+      ...enabledSetting,
+      categoryThresholdsJson: {
+        'appointment booking request': { action: 'require_approval' },
+      },
+    })
+
+    const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
+
+    expect(result.eligible).toBe(false)
+    if (!result.eligible) {
+      expect(result.reason).toContain('requires approval')
+    }
+  })
+
+  it('returns ineligible when the per-category policy is never auto-send', async () => {
+    mockAutopilotSettingFindUnique.mockResolvedValue({
+      ...enabledSetting,
+      categoryThresholdsJson: {
+        'appointment booking request': { action: 'never' },
+      },
+    })
+
+    const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
+
+    expect(result.eligible).toBe(false)
+    if (!result.eligible) {
+      expect(result.reason).toContain('disallows auto-send')
+    }
+  })
+
+  it('enforces object-form per-category auto-send thresholds', async () => {
+    mockAutopilotSettingFindUnique.mockResolvedValue({
+      ...enabledSetting,
+      categoryThresholdsJson: {
+        'appointment booking request': { action: 'auto_send', threshold: 0.95 },
+      },
+    })
+
+    const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
+
+    expect(result.eligible).toBe(false)
+    if (!result.eligible) {
+      expect(result.reason).toContain('per-category threshold')
+    }
+  })
 })
 
 // ---------------------------------------------------------------------------

@@ -51,17 +51,45 @@ export async function checkAutopilotEligibility(
     }
   }
 
-  // Per-intent threshold override — case-insensitive key lookup, consistent with allowedIntentsJson
+  // Per-intent policy override — case-insensitive key lookup, consistent with
+  // allowedIntentsJson. Supports the legacy bare-number threshold format and
+  // the newer CategoryPolicy object saved by the settings UI.
   if (setting.categoryThresholdsJson) {
-    const categoryThresholds = setting.categoryThresholdsJson as Record<string, number>
+    const categoryThresholds = setting.categoryThresholdsJson as Record<string, unknown>
     const intentLower = classification.intent.toLowerCase()
     const matchedKey = Object.keys(categoryThresholds).find((k) => k.toLowerCase() === intentLower)
     if (matchedKey !== undefined) {
-      const categoryThreshold = categoryThresholds[matchedKey]
-      if (typeof categoryThreshold === "number" && classification.confidence < categoryThreshold) {
+      const categoryPolicy = categoryThresholds[matchedKey]
+      if (typeof categoryPolicy === "number" && classification.confidence < categoryPolicy) {
         return {
           eligible: false,
-          reason: `Confidence ${classification.confidence.toFixed(2)} is below per-category threshold ${categoryThreshold} for intent "${classification.intent}"`,
+          reason: `Confidence ${classification.confidence.toFixed(2)} is below per-category threshold ${categoryPolicy} for intent "${classification.intent}"`,
+        }
+      }
+      if (categoryPolicy && typeof categoryPolicy === "object" && !Array.isArray(categoryPolicy)) {
+        const action = (categoryPolicy as Record<string, unknown>).action
+        const threshold = (categoryPolicy as Record<string, unknown>).threshold
+        if (action === "require_approval") {
+          return {
+            eligible: false,
+            reason: `Intent "${classification.intent}" requires approval by per-category policy`,
+          }
+        }
+        if (action === "never") {
+          return {
+            eligible: false,
+            reason: `Intent "${classification.intent}" disallows auto-send by per-category policy`,
+          }
+        }
+        if (
+          action === "auto_send" &&
+          typeof threshold === "number" &&
+          classification.confidence < threshold
+        ) {
+          return {
+            eligible: false,
+            reason: `Confidence ${classification.confidence.toFixed(2)} is below per-category threshold ${threshold} for intent "${classification.intent}"`,
+          }
         }
       }
     }

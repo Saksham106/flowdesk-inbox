@@ -351,9 +351,6 @@ export default function AutopilotSettingsForm({
           <p className="mt-0.5 text-xs text-slate-400">
             Override autopilot behavior for specific attention categories.
           </p>
-          <p className="text-xs text-amber-600 bg-amber-50 rounded px-3 py-2">
-            Per-category policies are saved but not yet enforced at runtime — coming in the next update.
-          </p>
           <div className="mt-2 space-y-2">
             {CATEGORY_OPTIONS.map(({ key, label }) => {
               const policy = categoryPolicies[key]
