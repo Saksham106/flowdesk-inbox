@@ -8,14 +8,14 @@ const {
   mockCorrectionCreate,
   mockCorrectionCount,
   mockRuleUpsert,
-  mockRuleFindFirst,
+  mockSenderRuleFindMany,
   mockAgentRuleFindMany,
 } = vi.hoisted(() => ({
   mockMessageFindFirst: vi.fn(),
   mockCorrectionCreate: vi.fn(),
   mockCorrectionCount: vi.fn(),
   mockRuleUpsert: vi.fn(),
-  mockRuleFindFirst: vi.fn(),
+  mockSenderRuleFindMany: vi.fn(),
   mockAgentRuleFindMany: vi.fn(),
 }))
 
@@ -28,7 +28,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     senderRule: {
       upsert: mockRuleUpsert,
-      findFirst: mockRuleFindFirst,
+      findMany: mockSenderRuleFindMany,
     },
     agentRule: {
       findMany: mockAgentRuleFindMany,
@@ -47,7 +47,6 @@ import {
   extractDomainFromEmail,
   recordAttentionCorrection,
   applyActiveRule,
-  applyActiveAgentRule,
 } from "@/lib/agent/preference-learning"
 
 // ---------------------------------------------------------------------------
@@ -60,7 +59,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockCorrectionCreate.mockResolvedValue({})
   mockRuleUpsert.mockResolvedValue({})
-  mockRuleFindFirst.mockResolvedValue(null)
+  mockSenderRuleFindMany.mockResolvedValue([])
   mockAgentRuleFindMany.mockResolvedValue([])
 })
 
@@ -175,36 +174,68 @@ describe("recordAttentionCorrection", () => {
 // applyActiveRule
 // ---------------------------------------------------------------------------
 describe("applyActiveRule", () => {
+  function senderRule(overrides: Record<string, unknown>) {
+    return { id: "sr-1", version: 1, matchType: "email", matchValue: "user@example.com", targetAttention: "quiet", ...overrides }
+  }
+
   it("returns null when no active rule matches", async () => {
-    mockRuleFindFirst.mockResolvedValue(null)
     const result = await applyActiveRule({ tenantId: TENANT, fromEmail: "user@example.com" })
     expect(result).toBeNull()
   })
 
   it("returns the attention category from an email-level rule", async () => {
-    mockRuleFindFirst.mockResolvedValueOnce({ targetAttention: "quiet" })
+    mockSenderRuleFindMany.mockResolvedValue([senderRule({ targetAttention: "quiet" })])
     const result = await applyActiveRule({ tenantId: TENANT, fromEmail: "user@example.com" })
     expect(result).toBe("quiet")
   })
 
   it("falls back to domain-level rule when no email rule exists", async () => {
-    mockRuleFindFirst
-      .mockResolvedValueOnce(null)           // email rule → none
-      .mockResolvedValueOnce({ targetAttention: "read_later" }) // domain rule → match
+    mockSenderRuleFindMany.mockResolvedValue([
+      senderRule({ matchType: "domain", matchValue: "example.com", targetAttention: "read_later" }),
+    ])
     const result = await applyActiveRule({ tenantId: TENANT, fromEmail: "user@example.com" })
     expect(result).toBe("read_later")
   })
 
   it("prefers email-level rule over domain-level rule", async () => {
-    mockRuleFindFirst.mockResolvedValueOnce({ targetAttention: "needs_reply" })
+    mockSenderRuleFindMany.mockResolvedValue([
+      senderRule({ id: "sr-domain", matchType: "domain", matchValue: "example.com", targetAttention: "read_later" }),
+      senderRule({ id: "sr-email", targetAttention: "needs_reply" }),
+    ])
     const result = await applyActiveRule({ tenantId: TENANT, fromEmail: "user@example.com" })
     expect(result).toBe("needs_reply")
-    // Second findFirst (domain) never called because email matched
-    expect(mockRuleFindFirst).toHaveBeenCalledOnce()
+  })
+
+  it("prefers an AgentRule over a SenderRule", async () => {
+    mockAgentRuleFindMany.mockResolvedValue([
+      {
+        id: "ar-1",
+        version: 1,
+        ruleType: "attention",
+        conditionsJson: { matchType: "domain", matchValue: "example.com" },
+        actionJson: { targetAttention: "fyi_done" },
+      },
+    ])
+    mockSenderRuleFindMany.mockResolvedValue([senderRule({ targetAttention: "quiet" })])
+    const result = await applyActiveRule({ tenantId: TENANT, fromEmail: "user@example.com" })
+    expect(result).toBe("fyi_done")
+  })
+
+  it("does not apply rules with subject/body conditions when only the sender is known", async () => {
+    mockAgentRuleFindMany.mockResolvedValue([
+      {
+        id: "ar-1",
+        version: 1,
+        ruleType: "attention",
+        conditionsJson: { matchType: "email", matchValue: "user@example.com", subjectContains: "invoice" },
+        actionJson: { targetAttention: "quiet" },
+      },
+    ])
+    const result = await applyActiveRule({ tenantId: TENANT, fromEmail: "user@example.com" })
+    expect(result).toBeNull()
   })
 
   it("returns null when fromEmail has no valid domain", async () => {
-    mockRuleFindFirst.mockResolvedValue(null)
     const result = await applyActiveRule({ tenantId: TENANT, fromEmail: "not-an-email" })
     expect(result).toBeNull()
   })

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { getFullBusinessContext } from "@/lib/agent/context"
-import { classifyConversation } from "@/lib/agent/classify"
+import { classifyConversation, tryStaticClassification } from "@/lib/agent/classify"
+import { extractEmail } from "@/lib/google"
 import { checkPolicy } from "@/lib/agent/policy"
 import { checkAvailability, formatSlots, type AvailableSlot } from "@/lib/agent/availability"
 import { attemptAutopilotSend } from "@/lib/agent/autopilot"
@@ -9,6 +10,7 @@ import { checkAiBudgetForTokens } from "@/lib/ai/budget"
 import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import type { AgentJob, Prisma } from "@prisma/client"
 import type { ClassifyResult } from "@/lib/ai/prompts/classify"
+import type { StaticRuleMatch } from "@/lib/agent/static-rules"
 
 const SCHEDULING_KEYWORDS = /book|appointment|schedul|reschedul|availab|slot|time|when|visit/i
 
@@ -80,6 +82,16 @@ export async function runAgentJob(jobId: string): Promise<AgentJobResult> {
           intent: result.intent,
           confidence: result.confidence,
           requiresApproval: result.requiresApproval,
+          // "Why this fired": which rule version produced the classification.
+          classificationSource: result.staticRule ? "static_rule" : "llm",
+          ...(result.staticRule
+            ? {
+                ruleSource: result.staticRule.ruleSource,
+                ruleId: result.staticRule.ruleId,
+                ruleVersion: result.staticRule.ruleVersion,
+                ruleEvidence: result.staticRule.evidence,
+              }
+            : {}),
         },
       },
     })
@@ -120,7 +132,14 @@ export async function runAgentJob(jobId: string): Promise<AgentJobResult> {
 
 async function _executeJob(
   job: AgentJob
-): Promise<{ intent: string; confidence: number; requiresApproval: boolean; classification: ClassifyResult; policyRequiresApproval: boolean }> {
+): Promise<{
+  intent: string
+  confidence: number
+  requiresApproval: boolean
+  classification: ClassifyResult
+  policyRequiresApproval: boolean
+  staticRule: StaticRuleMatch | null
+}> {
   const [conversation, businessContext, tenant] = await Promise.all([
     prisma.conversation.findFirst({
       where: { id: job.conversationId, tenantId: job.tenantId },
@@ -148,46 +167,22 @@ async function _executeJob(
     },
   })
 
-  let classification
-  const classifyInput = {
-    messages: conversation.messages,
-    businessProfile: businessContext.profile,
-    accountType: tenant?.accountType === "personal" ? "personal" as const : "business" as const,
-  }
-  const classifyPrompt = buildClassifyPrompt(classifyInput)
-  const classifyModel = process.env.OPENAI_MODEL || "gpt-4o-mini"
-  const classifyInputTokens = estimateTokenCount(classifyPrompt)
-  let classifyUsageStatus = "failed"
+  let classification: ClassifyResult
+
+  // Static-first gate ("Static first, AI second"): deterministic
+  // sender/domain/subject/body rules run before the budget check and model
+  // call. A match short-circuits with zero AI budget spend.
+  const firstInbound = conversation.messages.find((m) => m.direction === "inbound")
+  let staticMatch = null
   try {
-    const budgetCheck = await checkAiBudgetForTokens({
-      tenantId: job.tenantId,
-      model: classifyModel,
-      estimatedInputTokens: classifyInputTokens,
-      estimatedOutputTokens: 800,
-    })
-    if (!budgetCheck.allowed) {
-      classifyUsageStatus = "blocked"
-      throw new Error(budgetCheck.reason)
-    }
-
-    classification = await classifyConversation(classifyInput)
-
-    await prisma.agentToolCall.update({
-      where: { id: classifyToolCall.id },
-      data: {
-        status: "completed",
-        completedAt: new Date(),
-        outputJson: classification as unknown as Prisma.InputJsonValue,
-      },
-    })
-    await recordAiUsageEvent({
-      tenantId: job.tenantId,
-      feature: "agent.classify",
-      model: classifyModel,
-      estimatedInputTokens: classifyInputTokens,
-      estimatedOutputTokens: estimateTokenCount(JSON.stringify(classification)),
-      status: "succeeded",
-    })
+    staticMatch = firstInbound?.fromE164
+      ? await tryStaticClassification({
+          tenantId: job.tenantId,
+          fromEmail: extractEmail(firstInbound.fromE164),
+          subject: firstInbound.subject ?? "",
+          body: firstInbound.body ?? "",
+        })
+      : null
   } catch (err) {
     await prisma.agentToolCall.update({
       where: { id: classifyToolCall.id },
@@ -197,14 +192,84 @@ async function _executeJob(
         outputJson: { error: err instanceof Error ? err.message : "Unknown error" },
       },
     })
-    await recordAiUsageEvent({
-      tenantId: job.tenantId,
-      feature: "agent.classify",
-      model: classifyModel,
-      estimatedInputTokens: classifyInputTokens,
-      status: classifyUsageStatus,
-    })
     throw err
+  }
+
+  if (staticMatch) {
+    classification = staticMatch.result
+    await prisma.agentToolCall.update({
+      where: { id: classifyToolCall.id },
+      data: {
+        status: "completed",
+        completedAt: new Date(),
+        outputJson: {
+          source: "static_rule",
+          ruleSource: staticMatch.rule.ruleSource,
+          ruleId: staticMatch.rule.ruleId,
+          ruleVersion: staticMatch.rule.ruleVersion,
+          attentionCategory: staticMatch.rule.targetAttention,
+          evidence: staticMatch.rule.evidence,
+        } as Prisma.InputJsonValue,
+      },
+    })
+  } else {
+    const classifyInput = {
+      messages: conversation.messages,
+      businessProfile: businessContext.profile,
+      accountType: tenant?.accountType === "personal" ? "personal" as const : "business" as const,
+    }
+    const classifyPrompt = buildClassifyPrompt(classifyInput)
+    const classifyModel = process.env.OPENAI_MODEL || "gpt-4o-mini"
+    const classifyInputTokens = estimateTokenCount(classifyPrompt)
+    let classifyUsageStatus = "failed"
+    try {
+      const budgetCheck = await checkAiBudgetForTokens({
+        tenantId: job.tenantId,
+        model: classifyModel,
+        estimatedInputTokens: classifyInputTokens,
+        estimatedOutputTokens: 800,
+      })
+      if (!budgetCheck.allowed) {
+        classifyUsageStatus = "blocked"
+        throw new Error(budgetCheck.reason)
+      }
+
+      classification = await classifyConversation(classifyInput)
+
+      await prisma.agentToolCall.update({
+        where: { id: classifyToolCall.id },
+        data: {
+          status: "completed",
+          completedAt: new Date(),
+          outputJson: classification as unknown as Prisma.InputJsonValue,
+        },
+      })
+      await recordAiUsageEvent({
+        tenantId: job.tenantId,
+        feature: "agent.classify",
+        model: classifyModel,
+        estimatedInputTokens: classifyInputTokens,
+        estimatedOutputTokens: estimateTokenCount(JSON.stringify(classification)),
+        status: "succeeded",
+      })
+    } catch (err) {
+      await prisma.agentToolCall.update({
+        where: { id: classifyToolCall.id },
+        data: {
+          status: "failed",
+          completedAt: new Date(),
+          outputJson: { error: err instanceof Error ? err.message : "Unknown error" },
+        },
+      })
+      await recordAiUsageEvent({
+        tenantId: job.tenantId,
+        feature: "agent.classify",
+        model: classifyModel,
+        estimatedInputTokens: classifyInputTokens,
+        status: classifyUsageStatus,
+      })
+      throw err
+    }
   }
 
   const policy = checkPolicy(classification)
@@ -217,6 +282,7 @@ async function _executeJob(
     requiresApproval: policy.requiresApproval,
     classification,
     policyRequiresApproval: policy.requiresApproval,
+    staticRule: staticMatch?.rule ?? null,
   }
 }
 

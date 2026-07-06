@@ -211,7 +211,16 @@ export default async function SettingsPage({ searchParams }: Props) {
     conditionsJson: (r.conditionsJson ?? {}) as Record<string, string>,
     actionJson: (r.actionJson ?? {}) as Record<string, string>,
     status: r.status,
+    source: r.source,
+    version: r.version,
+    lastDryRunAt: r.lastDryRunAt?.toISOString() ?? null,
   }))
+
+  // Manually-built static rules are managed in the Attention Rules panel
+  // (dry-run preview, enable gate, version history); plain-English rules stay
+  // in Train My Agent.
+  const staticRules = agentRules.filter((r) => r.source === "manual")
+  const plainEnglishRules = agentRules.filter((r) => r.source !== "manual")
 
   const isPersonal = tenant?.accountType === "personal";
 
@@ -669,19 +678,18 @@ export default async function SettingsPage({ searchParams }: Props) {
         )}
 
         {/* Attention Rules */}
-        {senderRules.length > 0 && (
-          <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-6 py-4">
-              <h2 className="font-semibold">Attention Rules</h2>
-              <p className="mt-0.5 text-sm text-slate-500">
-                FlowDesk noticed you consistently change certain senders&apos; attention tag. Accept a rule to apply it automatically.
-              </p>
-            </div>
-            <div className="px-6 py-5">
-              <SenderRulesPanel initialRules={senderRules} />
-            </div>
-          </section>
-        )}
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="font-semibold">Attention Rules</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Static rules run before any AI classification. Build one, preview it against your
+              recent mail, then enable it. Learned sender suggestions appear here too.
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <SenderRulesPanel initialRules={senderRules} initialStaticRules={staticRules} />
+          </div>
+        </section>
 
         {/* Automation level / Autopilot */}
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -727,7 +735,7 @@ export default async function SettingsPage({ searchParams }: Props) {
             </p>
           </div>
           <div className="px-6 py-5">
-            <TrainAgentPanel initialRules={agentRules} />
+            <TrainAgentPanel initialRules={plainEnglishRules} />
           </div>
         </section>
 

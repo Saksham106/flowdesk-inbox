@@ -783,6 +783,8 @@ model SenderRule {
   targetAttention String   // e.g. "quiet", "read_later"
   status          String   @default("suggested")
   triggerCount    Int      @default(0)
+  // Incremented on behavior-changing edits; executions record which version fired.
+  version         Int      @default(1)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -802,6 +804,11 @@ model AgentRule {
   source        String   @default("plain_english")
   previewCount  Int?
   conflictsWith String?
+  // Incremented on behavior-changing edits (conditions/action/plainText);
+  // prior versions are snapshotted to AuditLog ("agent_rule.version_snapshot").
+  version       Int       @default(1)
+  // Set by the dry-run endpoint; draft rules cannot be enabled until a dry-run ran.
+  lastDryRunAt  DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
