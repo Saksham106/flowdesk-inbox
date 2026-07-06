@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma"
-import type { MessageDirection } from "@prisma/client"
+import type { MessageDirection, Prisma } from "@prisma/client"
 
 export type StaleConversation = {
   id: string
@@ -104,6 +104,74 @@ export async function markConversationWaitingOn(input: {
         conversationId: input.conversationId,
         detectedFrom: input.detectedFrom,
         source: WAITING_ON_STATE_SOURCE,
+      },
+    },
+  })
+}
+
+/**
+ * Self-healing on reply: an inbound message arrived on a waiting-on
+ * conversation, so waiting is over. Moves it back to needs_reply (clearing an
+ * explicit waiting_on userState — the reply supersedes it), cancels any
+ * scheduled follow-up jobs, and audits the transition. Label re-projection is
+ * the caller's responsibility (work-item-sync runs it right after).
+ */
+export async function clearWaitingOnForInboundReply(input: {
+  tenantId: string
+  conversationId: string
+}): Promise<void> {
+  const now = new Date()
+
+  await prisma.conversation.update({
+    where: { id: input.conversationId, tenantId: input.tenantId },
+    data: {
+      userState: null,
+      userStateSource: WAITING_ON_STATE_SOURCE,
+      userStateUpdatedAt: now,
+      status: "needs_reply",
+    },
+  })
+
+  // A stale waiting_on attention category would re-derive "Waiting On" at the
+  // next label projection, so rewrite it (column + its metadataJson mirror).
+  const state = await prisma.conversationState.findUnique({
+    where: { conversationId: input.conversationId },
+    select: { attentionCategory: true, metadataJson: true },
+  })
+  if (state?.attentionCategory === "waiting_on") {
+    const meta =
+      state.metadataJson && typeof state.metadataJson === "object" && !Array.isArray(state.metadataJson)
+        ? { ...(state.metadataJson as Record<string, unknown>) }
+        : {}
+    meta.attentionCategory = "needs_reply"
+    await prisma.conversationState.update({
+      where: { conversationId: input.conversationId },
+      data: {
+        attentionCategory: "needs_reply",
+        metadataJson: meta as Prisma.InputJsonValue,
+      },
+    })
+  }
+
+  // A reply arrived — any scheduled follow-up nudge for this thread is moot.
+  const cancelled = await prisma.agentJob.updateMany({
+    where: {
+      tenantId: input.tenantId,
+      conversationId: input.conversationId,
+      trigger: "follow_up",
+      status: "pending",
+    },
+    data: { status: "failed", error: "cancelled_by_inbound_reply", completedAt: now },
+  })
+
+  await prisma.auditLog.create({
+    data: {
+      tenantId: input.tenantId,
+      action: "conversation.waiting_on_cleared",
+      payloadJson: {
+        conversationId: input.conversationId,
+        reason: "inbound_reply",
+        cancelledFollowUpJobs: cancelled.count,
       },
     },
   })

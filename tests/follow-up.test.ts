@@ -11,6 +11,9 @@ const {
   mockJobCreate,
   mockAuditCreate,
   mockConvUpdate,
+  mockJobUpdateMany,
+  mockStateFindUnique,
+  mockStateUpdate,
 } = vi.hoisted(() => ({
   mockFollowUpSettingFindMany: vi.fn(),
   mockConvFindMany:            vi.fn(),
@@ -19,18 +22,23 @@ const {
   mockJobCreate:               vi.fn(),
   mockAuditCreate:             vi.fn(),
   mockConvUpdate:              vi.fn(),
+  mockJobUpdateMany:           vi.fn(),
+  mockStateFindUnique:         vi.fn(),
+  mockStateUpdate:             vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    followUpSetting: { findMany: mockFollowUpSettingFindMany },
-    conversation:    { findMany: mockConvFindMany, update: mockConvUpdate },
-    agentJob:        { findFirst: mockJobFindFirst, count: mockJobCount, create: mockJobCreate },
-    auditLog:        { create: mockAuditCreate },
+    followUpSetting:   { findMany: mockFollowUpSettingFindMany },
+    conversation:      { findMany: mockConvFindMany, update: mockConvUpdate },
+    conversationState: { findUnique: mockStateFindUnique, update: mockStateUpdate },
+    agentJob:          { findFirst: mockJobFindFirst, count: mockJobCount, create: mockJobCreate, updateMany: mockJobUpdateMany },
+    auditLog:          { create: mockAuditCreate },
   },
 }))
 
 import {
+  clearWaitingOnForInboundReply,
   getStaleConversations,
   hasRecentFollowUpJob,
   markConversationWaitingOn,
@@ -190,6 +198,101 @@ describe('markConversationWaitingOn', () => {
           payloadJson: expect.objectContaining({
             conversationId: CONV_1,
             detectedFrom: 'gmail_sync',
+          }),
+        }),
+      })
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// clearWaitingOnForInboundReply
+// ---------------------------------------------------------------------------
+
+describe('clearWaitingOnForInboundReply', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockConvUpdate.mockResolvedValue({})
+    mockStateFindUnique.mockResolvedValue(null)
+    mockStateUpdate.mockResolvedValue({})
+    mockJobUpdateMany.mockResolvedValue({ count: 1 })
+    mockAuditCreate.mockResolvedValue({})
+  })
+
+  it('returns the conversation to needs_reply and clears userState', async () => {
+    await clearWaitingOnForInboundReply({ tenantId: TENANT, conversationId: CONV_1 })
+
+    expect(mockConvUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: CONV_1, tenantId: TENANT },
+        data: expect.objectContaining({
+          userState: null,
+          userStateSource: 'flowdesk_lifecycle',
+          status: 'needs_reply',
+        }),
+      })
+    )
+  })
+
+  it('cancels pending follow_up jobs for the thread', async () => {
+    await clearWaitingOnForInboundReply({ tenantId: TENANT, conversationId: CONV_1 })
+
+    expect(mockJobUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          tenantId: TENANT,
+          conversationId: CONV_1,
+          trigger: 'follow_up',
+          status: 'pending',
+        },
+        data: expect.objectContaining({
+          status: 'failed',
+          error: 'cancelled_by_inbound_reply',
+        }),
+      })
+    )
+  })
+
+  it('rewrites a stale waiting_on attention category so labels cannot resurrect', async () => {
+    mockStateFindUnique.mockResolvedValue({
+      attentionCategory: 'waiting_on',
+      metadataJson: { attentionCategory: 'waiting_on', other: 'kept' },
+    })
+
+    await clearWaitingOnForInboundReply({ tenantId: TENANT, conversationId: CONV_1 })
+
+    expect(mockStateUpdate).toHaveBeenCalledWith({
+      where: { conversationId: CONV_1 },
+      data: {
+        attentionCategory: 'needs_reply',
+        metadataJson: { attentionCategory: 'needs_reply', other: 'kept' },
+      },
+    })
+  })
+
+  it('leaves other attention categories untouched', async () => {
+    mockStateFindUnique.mockResolvedValue({
+      attentionCategory: 'needs_action',
+      metadataJson: { attentionCategory: 'needs_action' },
+    })
+
+    await clearWaitingOnForInboundReply({ tenantId: TENANT, conversationId: CONV_1 })
+
+    expect(mockStateUpdate).not.toHaveBeenCalled()
+  })
+
+  it('audits the transition with the cancelled job count', async () => {
+    await clearWaitingOnForInboundReply({ tenantId: TENANT, conversationId: CONV_1 })
+
+    expect(mockAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tenantId: TENANT,
+          action: 'conversation.waiting_on_cleared',
+          payloadJson: expect.objectContaining({
+            conversationId: CONV_1,
+            reason: 'inbound_reply',
+            cancelledFollowUpJobs: 1,
           }),
         }),
       })

@@ -21,6 +21,7 @@ import { conversationStateMetadataData } from "@/lib/agent/conversation-state-me
 import { detectSchedulingRequest } from "@/lib/agent/scheduling"
 import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
 import {
+  clearWaitingOnForInboundReply,
   markConversationWaitingOn,
   outboundMessageExpectsReply,
 } from "@/lib/agent/follow-up"
@@ -144,9 +145,11 @@ export async function syncConversationWorkItems(
   // Waiting-on lifecycle: a reply sent directly in Gmail (outside FlowDesk)
   // arrives here as the latest outbound message on a needs_reply conversation.
   // If it plausibly expects a response, move to waiting_on so the label
-  // projection below picks it up. The conversation's `messages` include is
-  // capped at 40 ascending, so fetch the true latest message separately.
-  let waitingOnDetected = false
+  // projection below picks it up. Conversely, an inbound message on a
+  // waiting-on conversation self-heals it back to needs_reply and cancels any
+  // scheduled follow-up. The conversation's `messages` include is capped at 40
+  // ascending, so fetch the true latest message separately.
+  let waitingOnLifecycleChanged = false
   const latestMessage = await prisma.message.findFirst({
     where: { conversationId: conversation.id },
     orderBy: { createdAt: "desc" },
@@ -164,17 +167,31 @@ export async function syncConversationWorkItems(
         conversationId: conversation.id,
         detectedFrom: "gmail_sync",
       })
-      waitingOnDetected = true
+      waitingOnLifecycleChanged = true
     } catch (err) {
       console.error("[work-item-sync] waiting-on detection failed:", err)
+    }
+  } else if (
+    latestMessage?.direction === "inbound" &&
+    (conversation.userState === "waiting_on" || conversation.status === "in_progress")
+  ) {
+    try {
+      await clearWaitingOnForInboundReply({
+        tenantId: conversation.tenantId,
+        conversationId: conversation.id,
+      })
+      waitingOnLifecycleChanged = true
+    } catch (err) {
+      console.error("[work-item-sync] waiting-on self-heal failed:", err)
     }
   }
 
   // Project FlowDesk state onto Gmail labels automatically after classification.
   // Self-guards for non-Google channels; best-effort so a Gmail hiccup never
   // fails the sync. Skipped when the user has overridden state manually — their
-  // explicit choice is already projected by the status routes.
-  if (!hasUserOverride || waitingOnDetected) {
+  // explicit choice is already projected by the status routes (the waiting-on
+  // lifecycle transitions above re-project because they change the derived state).
+  if (!hasUserOverride || waitingOnLifecycleChanged) {
     try {
       await projectFlowDeskLabelsForConversation({
         tenantId: conversation.tenantId,
