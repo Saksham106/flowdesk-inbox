@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma"
-import type { WorkflowStatus } from "@/lib/workflow-status"
+import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status"
 
 const LABEL_PREFIX = "FlowDesk/"
 
@@ -156,4 +156,83 @@ export async function queueFlowDeskLabelWriteback(input: {
 
 export function flowDeskLabelPrefix() {
   return LABEL_PREFIX
+}
+
+/**
+ * Removes any labels the tenant has explicitly disabled via GmailLabelMapping.
+ * Absence of a mapping row means the label is enabled (the default), so a tenant
+ * that has never customized anything keeps the full canonical set.
+ */
+export async function filterEnabledFlowDeskLabels(
+  tenantId: string,
+  labels: FlowDeskGmailLabelName[]
+): Promise<FlowDeskGmailLabelName[]> {
+  if (labels.length === 0) return labels
+
+  const mappings = await prisma.gmailLabelMapping.findMany({
+    where: { tenantId, canonical: { in: labels as string[] } },
+    select: { canonical: true, enabled: true },
+  })
+  const disabled = new Set(
+    mappings.filter((m) => !m.enabled).map((m) => m.canonical)
+  )
+
+  return labels.filter((label) => !disabled.has(label))
+}
+
+/**
+ * Computes the FlowDesk Gmail labels for a conversation's current state and
+ * queues them for writeback. This is the automatic projection path invoked after
+ * classification / work-item sync — the counterpart to the manual status routes.
+ *
+ * No-ops (returns null) for non-Google channels, conversations without a Gmail
+ * thread id, or when every applicable label has been disabled by the tenant.
+ */
+export async function projectFlowDeskLabelsForConversation(input: {
+  tenantId: string
+  conversationId: string
+}) {
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: input.conversationId, tenantId: input.tenantId },
+    select: {
+      id: true,
+      channelId: true,
+      externalThreadId: true,
+      label: true,
+      status: true,
+      channel: { select: { provider: true } },
+      draft: { select: { status: true } },
+      stateRecord: { select: { attentionCategory: true, emailType: true } },
+    },
+  })
+
+  if (!conversation) return null
+  if (conversation.channel?.provider !== "google") return null
+  if (!conversation.externalThreadId) return null
+
+  const workflowStatus = deriveWorkflowStatus({
+    status: conversation.status,
+    draftStatus: conversation.draft?.status,
+    attentionCategory: conversation.stateRecord?.attentionCategory,
+    emailType: conversation.stateRecord?.emailType,
+  })
+
+  const labels = flowDeskLabelsForConversationState({
+    workflowStatus,
+    localLabel: conversation.label,
+    draftStatus: conversation.draft?.status,
+    attentionCategory: conversation.stateRecord?.attentionCategory,
+  })
+
+  const enabledLabels = await filterEnabledFlowDeskLabels(input.tenantId, labels)
+  if (enabledLabels.length === 0) return null
+
+  return queueFlowDeskLabelWriteback({
+    tenantId: input.tenantId,
+    channelId: conversation.channelId,
+    conversationId: conversation.id,
+    threadId: conversation.externalThreadId,
+    labels: enabledLabels,
+    reason: `classification.${workflowStatus}`,
+  })
 }
