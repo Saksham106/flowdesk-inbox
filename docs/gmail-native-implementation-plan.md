@@ -39,9 +39,10 @@ exists instead of re-specifying it:
    `ensureFlowDeskLabels` is now called on Gmail connect (OAuth callback) and
    backfilled on manual sync. Projection after classification is also wired via
    `projectFlowDeskLabelsForConversation` in `work-item-sync`.
-2. **No Gmail-native drafts.** There is no `users.drafts.create` call anywhere.
-   The `Draft` model is internal-only and `sendGmailReply` sends immediately.
-   Milestone 2 ("drafts waiting in Gmail") — **addressed in Phase B**.
+2. ~~**No Gmail-native drafts.**~~ **DONE (Phase B).** `createGmailDraftForThread`
+   now calls `users.drafts.create`; a `create_draft`/`withdraw_draft` writeback
+   lane pushes proposed drafts into Gmail with dedup (recorded `gmailDraftId`),
+   manual-reply detection, `Autodrafted` labeling, and withdrawal on draft clear.
 3. **Automation is binary, not a ladder.** The doc's Level 0–5 model does not
    exist as a first-class user-facing control; today it's `enabled` + a
    confidence threshold. *(post-MVP)*

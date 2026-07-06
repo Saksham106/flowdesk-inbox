@@ -14,6 +14,8 @@ import { checkAiBudget, estimateCostUsd } from "@/lib/ai/budget"
 import { prisma } from "@/lib/prisma"
 import { revalidateInboxViews } from "@/lib/cache-tags"
 import { conversationUpdateForDraftReady } from "@/lib/workflow-status-transitions"
+import { queueGmailDraftWriteback } from "@/lib/gmail-drafts"
+import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
 
 export const runtime = "nodejs"
 
@@ -253,6 +255,26 @@ export async function POST(
       where: { id: conversation.id },
       data: conversationUpdateForDraftReady(),
     })
+  }
+
+  // Push the draft into the user's Gmail so it's waiting when they open the
+  // thread, and project the Autodrafted/Needs Reply labels. Best-effort: a Gmail
+  // hiccup must not fail the draft suggestion the user just requested.
+  if (conversation.channel.provider === "google" && conversation.externalThreadId) {
+    try {
+      await queueGmailDraftWriteback({
+        tenantId: session.user.tenantId,
+        channelId: conversation.channelId,
+        conversationId: conversation.id,
+        threadId: conversation.externalThreadId,
+      })
+      await projectFlowDeskLabelsForConversation({
+        tenantId: session.user.tenantId,
+        conversationId: conversation.id,
+      })
+    } catch (err) {
+      console.error("[draft/suggest] Gmail draft/label writeback failed:", err)
+    }
   }
 
   await prisma.auditLog.create({

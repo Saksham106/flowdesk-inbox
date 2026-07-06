@@ -526,6 +526,60 @@ export async function syncGmailChannel(channelId: string, tenantId: string): Pro
 }
 
 // Sends a reply in a Gmail thread, returns the new Gmail message ID
+type ReplyMimeInput = {
+  to: string;
+  from: string;
+  subject: string;
+  body: string;
+  inReplyTo?: string;
+  references?: string;
+};
+
+// Builds a base64url-encoded RFC 822 reply message, forcing an "Re:" subject and
+// threading headers. Shared by immediate sends and Gmail-native draft creation.
+function buildReplyMimeRaw({ to, from, subject, body, inReplyTo, references }: ReplyMimeInput): string {
+  const reSubject = subject.toLowerCase().startsWith("re:") ? subject : `Re: ${subject}`;
+  const lines = [
+    `From: ${from}`,
+    `To: ${to}`,
+    `Subject: ${reSubject}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: text/plain; charset=UTF-8`,
+  ];
+  if (inReplyTo) lines.push(`In-Reply-To: ${inReplyTo}`);
+  if (references) lines.push(`References: ${references}`);
+  lines.push("", body);
+
+  return Buffer.from(lines.join("\r\n")).toString("base64url");
+}
+
+// Resolves the reply target (subject, recipient, threading headers) from a Gmail
+// thread, mirroring how send-message derives its reply headers.
+async function resolveReplyTargetFromThread(
+  gmail: ReturnType<typeof google.gmail>,
+  externalThreadId: string,
+  channelEmail: string
+): Promise<{ subject: string; recipientEmail: string; inReplyTo?: string; references?: string }> {
+  let subject = "No subject";
+  let inReplyTo: string | undefined;
+  let references: string | undefined;
+  let recipientEmail = "";
+
+  const messages = await fetchThread(gmail, externalThreadId);
+  if (messages.length > 0) {
+    subject = messages[0].subject;
+    const lastMsg = messages[messages.length - 1];
+    inReplyTo = lastMsg.rfc822MessageId || undefined;
+    references = lastMsg.rfc822MessageId || undefined;
+    const lastInbound = [...messages]
+      .reverse()
+      .find((message) => extractEmail(message.from) !== channelEmail.toLowerCase());
+    recipientEmail = lastInbound ? extractEmail(lastInbound.from) : "";
+  }
+
+  return { subject, recipientEmail, inReplyTo, references };
+}
+
 export async function sendGmailReply(
   gmail: ReturnType<typeof google.gmail>,
   {
@@ -546,19 +600,7 @@ export async function sendGmailReply(
     references?: string;
   }
 ): Promise<string> {
-  const reSubject = subject.toLowerCase().startsWith("re:") ? subject : `Re: ${subject}`;
-  const lines = [
-    `From: ${from}`,
-    `To: ${to}`,
-    `Subject: ${reSubject}`,
-    `MIME-Version: 1.0`,
-    `Content-Type: text/plain; charset=UTF-8`,
-  ];
-  if (inReplyTo) lines.push(`In-Reply-To: ${inReplyTo}`);
-  if (references) lines.push(`References: ${references}`);
-  lines.push("", body);
-
-  const raw = Buffer.from(lines.join("\r\n")).toString("base64url");
+  const raw = buildReplyMimeRaw({ to, from, subject, body, inReplyTo, references });
 
   const res = await gmail.users.messages.send({
     userId: "me",
@@ -566,6 +608,47 @@ export async function sendGmailReply(
   });
 
   return res.data.id ?? "";
+}
+
+// Creates a Gmail-native draft reply on the given thread and returns the Gmail
+// draft id. Threading + recipient are resolved from the live thread so the draft
+// appears in Gmail exactly where the user expects to reply.
+export async function createGmailDraftForThread(
+  channelId: string,
+  input: { externalThreadId: string; channelEmail: string; body: string }
+): Promise<string> {
+  const gmail = await getGmailClient(channelId);
+  const { subject, recipientEmail, inReplyTo, references } = await resolveReplyTargetFromThread(
+    gmail,
+    input.externalThreadId,
+    input.channelEmail
+  );
+
+  if (!recipientEmail) {
+    throw new Error("Cannot determine recipient email for Gmail draft");
+  }
+
+  const raw = buildReplyMimeRaw({
+    to: recipientEmail,
+    from: input.channelEmail,
+    subject,
+    body: input.body,
+    inReplyTo,
+    references,
+  });
+
+  const res = await gmail.users.drafts.create({
+    userId: "me",
+    requestBody: { message: { raw, threadId: input.externalThreadId } },
+  });
+
+  return res.data.id ?? "";
+}
+
+// Deletes a Gmail-native draft by id (used to withdraw a stale/duplicate draft).
+export async function deleteGmailDraft(channelId: string, draftId: string): Promise<void> {
+  const gmail = await getGmailClient(channelId);
+  await gmail.users.drafts.delete({ userId: "me", id: draftId });
 }
 
 const GMAIL_WRITEBACK_MAX_ATTEMPTS = 3;
