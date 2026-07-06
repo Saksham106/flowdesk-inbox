@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth"
 
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { metadataWithUserEditedField } from "@/lib/agent/user-edited-fields"
+import type { Prisma } from "@prisma/client"
 
 const ALLOWED_STATUSES = ["open", "closed"] as const
 type TaskStatus = (typeof ALLOWED_STATUSES)[number]
@@ -36,7 +38,11 @@ export async function PATCH(
 
   const updated = await prisma.inboxTask.update({
     where: { id: task.id },
-    data: { status },
+    data: {
+      status,
+      source: "user",
+      metadataJson: metadataWithUserEditedField(task.metadataJson, "status") as Prisma.InputJsonValue,
+    },
     select: { id: true, title: true, status: true, dueAt: true, conversationId: true },
   })
 

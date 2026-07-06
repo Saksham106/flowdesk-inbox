@@ -79,7 +79,7 @@ export function deriveAutomationLevelFromLegacySettings(
 export async function getAutomationLevel(tenantId: string): Promise<number> {
   const setting = await prisma.autopilotSetting.findUnique({
     where: { tenantId },
-    select: { automationLevel: true, enabled: true },
+    select: { automationLevel: true },
   })
   if (!setting) return deriveAutomationLevelFromLegacySettings(null)
   return clampAutomationLevel(setting.automationLevel)

@@ -5,8 +5,13 @@ import { getAutomationLevel, isActionAllowedAtLevel } from "@/lib/agent/automati
 
 const LABEL_PREFIX = "FlowDesk/"
 
+// "FlowDesk/Handle First" was removed from this vocabulary: no classifier,
+// rule, or correction can produce a "handle_first" attention category (the
+// dashboard's Handle First section is a relative ranking computed per request
+// by the command center, not a persisted per-conversation state), so the label
+// could never be applied. Accounts connected before the removal may still have
+// the empty label in Gmail; it is never created or applied anymore.
 export const FLOWDESK_GMAIL_LABEL_NAMES = [
-  "FlowDesk/Handle First",
   "FlowDesk/Needs Reply",
   "FlowDesk/Needs Action",
   "FlowDesk/Waiting On",
@@ -57,9 +62,6 @@ export function flowDeskLabelsForConversationState(input: {
       break
   }
 
-  if (input.attentionCategory === "handle_first") {
-    labels.push("FlowDesk/Handle First")
-  }
   if (NEEDS_ACTION_ATTENTION.has(input.attentionCategory ?? "")) {
     labels.push("FlowDesk/Needs Action")
   }
@@ -227,6 +229,7 @@ export async function projectFlowDeskLabelsForConversation(input: {
       externalThreadId: true,
       label: true,
       status: true,
+      userState: true,
       lastMessageAt: true,
       channel: { select: { provider: true } },
       draft: { select: { status: true } },
@@ -240,6 +243,7 @@ export async function projectFlowDeskLabelsForConversation(input: {
 
   const workflowStatus = deriveWorkflowStatus({
     status: conversation.status,
+    userState: conversation.userState,
     draftStatus: conversation.draft?.status,
     attentionCategory: conversation.stateRecord?.attentionCategory,
     emailType: conversation.stateRecord?.emailType,

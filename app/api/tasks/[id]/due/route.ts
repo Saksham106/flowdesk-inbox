@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { metadataWithUserEditedField } from "@/lib/agent/user-edited-fields"
+import type { Prisma } from "@prisma/client"
 
 export async function PATCH(
   req: NextRequest,
@@ -32,7 +34,11 @@ export async function PATCH(
 
   const updated = await prisma.inboxTask.update({
     where: { id: params.id },
-    data: { dueAt },
+    data: {
+      dueAt,
+      source: "user",
+      metadataJson: metadataWithUserEditedField(task.metadataJson, "dueAt") as Prisma.InputJsonValue,
+    },
   })
 
   await prisma.auditLog.create({

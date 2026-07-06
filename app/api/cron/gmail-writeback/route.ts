@@ -31,10 +31,44 @@ function asMetadataObject(value: unknown): Record<string, unknown> {
 
 type WritebackJob = { id: string; tenantId: string; channelId: string; conversationId: string }
 
+// What a handler reports back for the resolution audit entry: a short
+// human-readable result plus any action-specific detail (labels, draft id,
+// skip reason). Every job resolution — completed or permanently failed —
+// becomes exactly one gmail.writeback.completed / gmail.writeback.failed
+// audit row so users can trace what FlowDesk did (or failed to do) in Gmail.
+type WritebackResolution = { result: string; detail?: Record<string, unknown> }
+
+async function recordWritebackResolution(
+  job: { id: string; tenantId: string; channelId: string; conversationId: string; action: string },
+  outcome: "completed" | "failed",
+  resolution: WritebackResolution & { error?: string; attempts?: number }
+): Promise<void> {
+  await prisma.auditLog
+    .create({
+      data: {
+        tenantId: job.tenantId,
+        action: `gmail.writeback.${outcome}`,
+        payloadJson: {
+          writebackId: job.id,
+          action: job.action,
+          conversationId: job.conversationId,
+          channelId: job.channelId,
+          result: resolution.result,
+          ...(resolution.detail ?? {}),
+          ...(resolution.error ? { error: resolution.error } : {}),
+          ...(resolution.attempts !== undefined ? { attempts: resolution.attempts } : {}),
+        } as Prisma.InputJsonValue,
+      },
+    })
+    .catch((err) => {
+      console.error("[gmail-writeback] resolution audit write failed:", err)
+    })
+}
+
 // Creates (or refreshes) a Gmail-native draft for a conversation's proposed
 // FlowDesk draft. Skips silently — without erroring — when there is nothing to
 // draft or the user has already replied manually.
-async function handleCreateDraft(job: WritebackJob): Promise<void> {
+async function handleCreateDraft(job: WritebackJob): Promise<WritebackResolution> {
   const draft = await prisma.draft.findUnique({
     where: { conversationId: job.conversationId },
     include: {
@@ -52,12 +86,18 @@ async function handleCreateDraft(job: WritebackJob): Promise<void> {
     },
   })
 
-  if (!draft || draft.status !== "proposed" || !draft.text.trim()) return
+  if (!draft || draft.status !== "proposed" || !draft.text.trim()) {
+    return { result: "skipped", detail: { reason: "no proposed draft to write" } }
+  }
   const conversation = draft.conversation
-  if (conversation.channel?.provider !== "google" || !conversation.externalThreadId) return
+  if (conversation.channel?.provider !== "google" || !conversation.externalThreadId) {
+    return { result: "skipped", detail: { reason: "not a Gmail thread" } }
+  }
   // Manual-reply detection: the latest message being outbound means the user
   // already replied, so a waiting draft would be noise — don't create one.
-  if (conversation.messages[0]?.direction === "outbound") return
+  if (conversation.messages[0]?.direction === "outbound") {
+    return { result: "skipped", detail: { reason: "user already replied manually" } }
+  }
 
   // Dedup: remove any prior Gmail draft before creating a fresh one so the
   // content stays current and we never leave duplicates behind.
@@ -86,23 +126,22 @@ async function handleCreateDraft(job: WritebackJob): Promise<void> {
     },
   })
 
-  await prisma.auditLog.create({
-    data: {
-      tenantId: job.tenantId,
-      action: "gmail.draft.created",
-      payloadJson: { conversationId: job.conversationId, channelId: job.channelId, gmailDraftId },
-    },
-  })
+  return {
+    result: "draft_created",
+    detail: { threadId: conversation.externalThreadId, gmailDraftId },
+  }
 }
 
 // Deletes a previously-created Gmail-native draft and clears its recorded id.
-async function handleWithdrawDraft(job: WritebackJob): Promise<void> {
+async function handleWithdrawDraft(job: WritebackJob): Promise<WritebackResolution> {
   const draft = await prisma.draft.findUnique({
     where: { conversationId: job.conversationId },
     select: { metadataJson: true },
   })
   const gmailDraftId = draft ? gmailDraftIdFromMetadata(draft.metadataJson) : null
-  if (!gmailDraftId) return
+  if (!gmailDraftId) {
+    return { result: "skipped", detail: { reason: "no Gmail draft to withdraw" } }
+  }
 
   await deleteGmailDraft(job.channelId, gmailDraftId)
 
@@ -113,13 +152,7 @@ async function handleWithdrawDraft(job: WritebackJob): Promise<void> {
     data: { metadataJson: meta as Prisma.InputJsonValue },
   })
 
-  await prisma.auditLog.create({
-    data: {
-      tenantId: job.tenantId,
-      action: "gmail.draft.withdrawn",
-      payloadJson: { conversationId: job.conversationId, channelId: job.channelId, gmailDraftId },
-    },
-  })
+  return { result: "draft_withdrawn", detail: { gmailDraftId } }
 }
 
 export async function GET(request: Request) {
@@ -151,12 +184,15 @@ export async function GET(request: Request) {
     if (claim.count !== 1) continue
 
     try {
+      let resolution: WritebackResolution
+
       if (job.action === "mark_read") {
         const providerMessageIds = asStringArray(job.providerMessageIdsJson)
         await markGmailThreadRead(job.channelId, providerMessageIds, {
           tenantId: job.tenantId,
           conversationId: job.conversationId,
         })
+        resolution = { result: "marked_read", detail: { messageCount: providerMessageIds.length } }
       } else if (job.action === "apply_labels") {
         const payload = normalizeFlowDeskLabelPayload(job.providerMessageIdsJson)
         if (!payload) {
@@ -168,26 +204,23 @@ export async function GET(request: Request) {
               lastError: "Invalid FlowDesk label writeback payload",
             },
           })
+          await recordWritebackResolution(job, "failed", {
+            result: "invalid_payload",
+            error: "Invalid FlowDesk label writeback payload",
+            attempts: job.attempts + 1,
+          })
           errors++
           continue
         }
         await applyFlowDeskLabelsToGmailThread(job.channelId, payload.threadId, payload.labels)
-        await prisma.auditLog.create({
-          data: {
-            tenantId: job.tenantId,
-            action: "gmail.labels.applied",
-            payloadJson: {
-              conversationId: job.conversationId,
-              channelId: job.channelId,
-              threadId: payload.threadId,
-              labels: payload.labels,
-            },
-          },
-        })
+        resolution = {
+          result: "labels_applied",
+          detail: { threadId: payload.threadId, labels: payload.labels },
+        }
       } else if (job.action === GMAIL_DRAFT_CREATE_ACTION) {
-        await handleCreateDraft(job)
+        resolution = await handleCreateDraft(job)
       } else if (job.action === GMAIL_DRAFT_WITHDRAW_ACTION) {
-        await handleWithdrawDraft(job)
+        resolution = await handleWithdrawDraft(job)
       } else {
         // Retrying can never make an unknown action succeed; fail it out so it
         // doesn't sit claimed (or hot-loop as pending) forever.
@@ -198,6 +231,11 @@ export async function GET(request: Request) {
             attempts: { increment: 1 },
             lastError: `Unknown Gmail writeback action: ${job.action}`,
           },
+        })
+        await recordWritebackResolution(job, "failed", {
+          result: "unknown_action",
+          error: `Unknown Gmail writeback action: ${job.action}`,
+          attempts: job.attempts + 1,
         })
         errors++
         continue
@@ -210,21 +248,30 @@ export async function GET(request: Request) {
           lastError: null,
         },
       })
+      await recordWritebackResolution(job, "completed", resolution)
       processed++
     } catch (err) {
       // Exponential backoff between retries; fail out permanently once the
       // attempt budget is spent so a broken job can't hot-loop every cron run.
       const attempts = job.attempts + 1
       const failedOut = attempts >= GMAIL_WRITEBACK_MAX_ATTEMPTS
+      const message = err instanceof Error ? err.message : "Unknown Gmail writeback error"
       await prisma.gmailWritebackQueue.update({
         where: { id: job.id },
         data: {
           attempts,
-          lastError: err instanceof Error ? err.message : "Unknown Gmail writeback error",
+          lastError: message,
           status: failedOut ? "failed" : "pending",
           ...(failedOut ? {} : { nextAttemptAt: nextWritebackAttemptDate(attempts) }),
         },
       }).catch(() => {})
+      if (failedOut) {
+        await recordWritebackResolution(job, "failed", {
+          result: "failed_after_retries",
+          error: message,
+          attempts,
+        })
+      }
       errors++
     }
   }

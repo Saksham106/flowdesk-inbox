@@ -4,13 +4,13 @@ Last updated: 2026-07-06
 
 ## Near term
 
-- [ ] Preserve user-edited `InboxTask` fields (due date, title) across work-item sync — the sync upsert currently overwrites them on the same deterministic key, violating the "user intent wins" invariant. Design decision: flip `source: "user"` on edit vs a `userEditedFields` metadata flag — match how `Lead` preserves `stage`/`score`.
+- [x] Preserve user-edited `InboxTask` fields across work-item sync — done: user edits record the field in `metadataJson.userEditedFields` and flip `source: "user"`; the sync update branch skips user-owned fields (`lib/agent/user-edited-fields.ts`). Label projection now also honors a manual workflow choice (`conversation.userState`).
 - [x] Unify draft approvals onto `ApprovalRequest` — done: all draft-propose paths create a pending request, approve/send/clear/autopilot resolve it, and /approvals decisions project onto `Draft.status` (`lib/agent/approvals.ts`).
 - [x] Gmail writeback cron hardening (done with Phase C): exponential backoff + fail-out after max attempts, atomic pending → processing claim, and empty label sets now project as "remove all FlowDesk labels" for previously-labeled threads.
 - [ ] Record Outlook renewal/sync failure causes (`OutlookCredential.subscriptionError`, `OutlookSyncEvent.lastError`, audit log) instead of bare catch blocks, and stop adding failed channels to `processedChannels` so the stale-mailbox fallback doesn't skip them.
-- [ ] Fix `FlowDesk/Handle First` label mapping — `handle_first` is not an attention category the classifier or corrections can produce; map it from the command-center top-action selection or drop it from the vocabulary.
+- [x] Fix `FlowDesk/Handle First` label mapping — resolved by removing the label from the canonical vocabulary: `handle_first` is not producible by any classifier, rule, or correction, and the dashboard's Handle First ranking is relative/per-request, so it is not a stable per-thread Gmail label.
 - [ ] Implement or remove the `create_draft` automation step type — declared in the step union but falls through to "Unknown step type" at runtime.
-- [ ] Schedule FlowDesk Gmail label bootstrap as recurring maintenance (bootstrap on OAuth connect and manual sync is done).
+- [x] Schedule FlowDesk Gmail label bootstrap as recurring maintenance — done: `GET /api/cron/gmail-label-reconcile` ensures labels per Gmail channel and re-projects a bounded batch of recently-active conversations (scheduling it in production is in the Ops checklist).
 - [x] Add automation level settings for Gmail-native actions — done: per-tenant Level 0–5 trust ladder (`lib/agent/automation-level.ts`) gates label projection (≥2), Gmail drafts (≥3), and auto-send (5), with a confirm-to-change settings selector. Auto mark-read/archive (Level 4) is gated but has no automatic callers yet.
 - [x] Track sent threads waiting for replies and apply `Waiting On` / `Follow Up` Gmail labels (Phase C: deterministic expects-reply detection on FlowDesk and Gmail-native sends, self-healing on inbound reply, follow-up-due label after the tenant's business-day delay, dashboard due dates).
 - [ ] Update dashboard/settings copy and indicators so the website reads as the agent control room.
@@ -29,6 +29,7 @@ Deployment/scheduling tasks (human, not code):
 - [ ] Schedule the executor cron in production: `GET /api/cron/agent-jobs` with `Authorization: Bearer <CRON_SECRET>` — same scheduler setup as the gmail/outlook crons (README scheduled-endpoints section). Until this runs, the AgentJob pipeline (audit P1-1) is still dead in prod. After enabling: the stale backlog bulk-fails 200/run, response JSON should show real numbers, `X-Agent-Jobs-Errors` should stay quiet; check the audit log after a day.
 - [ ] Confirm the `gmail-writeback` cron is scheduled too — Phase A/B label projection and native drafts do nothing without it.
 - [ ] Confirm the `follow-up` cron (`GET /api/cron/follow-up`) is scheduled — Phase C's Follow Up label sweep runs there, and nothing else re-projects labels as time passes.
+- [ ] Schedule `GET /api/cron/gmail-label-reconcile` (daily) with `Authorization: Bearer <CRON_SECRET>` — recreates deleted FlowDesk labels and re-projects drifted labels for recently-active conversations (README scheduled-endpoints section).
 
 ## Finish existing foundations
 

@@ -122,7 +122,12 @@ describe("Gmail writeback cron — draft jobs", () => {
       data: { metadataJson: { gmailDraftId: "gmail-draft-1" } },
     })
     expect(mockAuditCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ action: "gmail.draft.created" }) })
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "gmail.writeback.completed",
+          payloadJson: expect.objectContaining({ result: "draft_created", gmailDraftId: "gmail-draft-1" }),
+        }),
+      })
     )
     expect(mockWritebackUpdate).toHaveBeenCalledWith({
       where: { id: "job-1" },
@@ -189,7 +194,12 @@ describe("Gmail writeback cron — draft jobs", () => {
       data: { metadataJson: { intent: "x" } },
     })
     expect(mockAuditCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ action: "gmail.draft.withdrawn" }) })
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "gmail.writeback.completed",
+          payloadJson: expect.objectContaining({ result: "draft_withdrawn" }),
+        }),
+      })
     )
   })
 })

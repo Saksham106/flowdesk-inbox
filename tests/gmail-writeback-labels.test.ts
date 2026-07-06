@@ -101,10 +101,13 @@ describe("Gmail writeback cron label jobs", () => {
     expect(mockAuditCreate).toHaveBeenCalledWith({
       data: {
         tenantId: "tenant-1",
-        action: "gmail.labels.applied",
+        action: "gmail.writeback.completed",
         payloadJson: {
+          writebackId: "job-1",
+          action: "apply_labels",
           conversationId: "conv-1",
           channelId: "channel-1",
+          result: "labels_applied",
           threadId: "thread-1",
           labels: ["FlowDesk/Needs Reply"],
         },
@@ -156,6 +159,12 @@ describe("Gmail writeback cron label jobs", () => {
         nextAttemptAt: new Date(Date.parse("2026-07-06T00:00:00Z") + 60_000),
       },
     })
+    // A transient retry is not a resolution — no audit row yet
+    expect(mockAuditCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "gmail.writeback.failed" }),
+      })
+    )
   })
 
   it("fails a job out permanently once max attempts are exhausted", async () => {
@@ -182,6 +191,23 @@ describe("Gmail writeback cron label jobs", () => {
         status: "failed",
       },
     })
+    // A permanently failed job leaves a readable audit trail
+    expect(mockAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tenantId: "tenant-1",
+          action: "gmail.writeback.failed",
+          payloadJson: expect.objectContaining({
+            writebackId: "job-1",
+            action: "apply_labels",
+            conversationId: "conv-1",
+            result: "failed_after_retries",
+            error: "still broken",
+            attempts: 3,
+          }),
+        }),
+      })
+    )
   })
 
   it("fails out unknown actions instead of leaving them queued forever", async () => {
@@ -209,6 +235,14 @@ describe("Gmail writeback cron label jobs", () => {
         lastError: "Unknown Gmail writeback action: mystery_action",
       },
     })
+    expect(mockAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "gmail.writeback.failed",
+          payloadJson: expect.objectContaining({ result: "unknown_action" }),
+        }),
+      })
+    )
   })
 
   it("processes an empty label set as a remove-all-FlowDesk-labels mutation", async () => {
@@ -232,8 +266,8 @@ describe("Gmail writeback cron label jobs", () => {
     expect(mockAuditCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          action: "gmail.labels.applied",
-          payloadJson: expect.objectContaining({ labels: [] }),
+          action: "gmail.writeback.completed",
+          payloadJson: expect.objectContaining({ result: "labels_applied", labels: [] }),
         }),
       })
     )
@@ -269,6 +303,14 @@ describe("Gmail writeback cron label jobs", () => {
         lastError: "Invalid FlowDesk label writeback payload",
       },
     })
+    expect(mockAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "gmail.writeback.failed",
+          payloadJson: expect.objectContaining({ result: "invalid_payload" }),
+        }),
+      })
+    )
   })
 
   it("rejects Bearer undefined when CRON_SECRET is unset", async () => {

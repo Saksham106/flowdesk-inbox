@@ -18,6 +18,7 @@ import { detectAttachments, extractPdfText } from "@/lib/agent/attachment-extrac
 import { extractFacts, mergeFacts } from "@/lib/agent/second-brain"
 import { applyActiveRule } from "@/lib/agent/preference-learning"
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
+import { userEditedFieldsFromMetadata } from "@/lib/agent/user-edited-fields"
 import { detectSchedulingRequest } from "@/lib/agent/scheduling"
 import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
 import {
@@ -217,7 +218,29 @@ export async function syncConversationWorkItems(
   }
 
   let tasksSynced = 0
+  // User-edited fields win over sync refreshes (audit P1-5): a user edit
+  // records the field in metadataJson.userEditedFields and flips source to
+  // "user"; the update branch below skips those fields and carries the
+  // ownership markers forward so they survive every subsequent sync.
+  const existingTasks = summary.tasks.length
+    ? await prisma.inboxTask.findMany({
+        where: {
+          tenantId: conversation.tenantId,
+          deterministicKey: { in: summary.tasks.map((t) => t.deterministicKey) },
+        },
+        select: { deterministicKey: true, source: true, metadataJson: true },
+      })
+    : []
+  const existingTaskByKey = new Map(existingTasks.map((t) => [t.deterministicKey, t]))
+
   for (const task of summary.tasks) {
+    const existingTask = existingTaskByKey.get(task.deterministicKey)
+    const userEditedFields = userEditedFieldsFromMetadata(existingTask?.metadataJson)
+    const mergedMetadata = {
+      ...task.metadata,
+      ...(userEditedFields.length > 0 ? { userEditedFields } : {}),
+    }
+
     await prisma.inboxTask.upsert({
       where: {
         tenantId_deterministicKey: {
@@ -237,11 +260,11 @@ export async function syncConversationWorkItems(
         metadataJson: task.metadata as Prisma.InputJsonValue,
       },
       update: {
-        title: task.title,
-        dueAt: task.dueAt,
-        source: task.source,
+        ...(userEditedFields.includes("title") ? {} : { title: task.title }),
+        ...(userEditedFields.includes("dueAt") ? {} : { dueAt: task.dueAt }),
+        ...(existingTask?.source === "user" ? {} : { source: task.source }),
         sourceMessageId: task.sourceMessageId,
-        metadataJson: task.metadata as Prisma.InputJsonValue,
+        metadataJson: mergedMetadata as Prisma.InputJsonValue,
       },
     })
 
