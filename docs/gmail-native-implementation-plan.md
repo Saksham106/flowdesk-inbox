@@ -1,466 +1,258 @@
 # Gmail-Native Implementation Plan
 
-> Companion to [`product-direction.md`](./product-direction.md). That doc sets the
-> "why" and the target positioning ("Gmail-native AI email operator with the
-> dashboard as the control room"). This doc is the practical "how": what to learn
-> from the reference projects, what to copy vs. avoid, a phased roadmap, a
-> P0/P1/P2 task breakdown, the code areas that change, and where to start.
-
-## 0. Where FlowDesk actually is today (ground truth)
-
-Before planning, an honest read of the current codebase so we build on what
-exists instead of re-specifying it:
-
-**Already real:**
-
-- Canonical label vocabulary and state→label mapping —
-  `FLOWDESK_GMAIL_LABEL_NAMES` and `flowDeskLabelsForConversationState` in
-  [`lib/gmail-labels.ts`](../lib/gmail-labels.ts).
-- Label application to Gmail — `applyFlowDeskLabelsToGmailThread` in
-  [`lib/google.ts`](../lib/google.ts).
-- Retry-safe writeback queue — `GmailWritebackQueue` model + the
-  `gmail-writeback` cron, which currently handles `apply_labels` and `mark_read`
-  actions ([`app/api/cron/gmail-writeback/route.ts`](../app/api/cron/gmail-writeback/route.ts)).
-- Sync (full + incremental via history API), push/watch, reconcile crons.
-- An automation substrate: `evaluateAutonomy` ([`lib/agent/autonomy.ts`](../lib/agent/autonomy.ts)),
-  `checkPolicy` ([`lib/agent/policy.ts`](../lib/agent/policy.ts)),
-  `AutopilotSetting`, `LearnedReplyProfile`, per-tenant confidence thresholds,
-  daily send caps, and failure-based auto-disable.
-- A generic `AuditLog` table + an undo route (`app/api/audit/[id]/undo`) and
-  automation-run rollback (`app/api/automation-runs/[id]/rollback`).
-
-**Gaps between the vision and the code (these are what this plan attacks):**
-
-> **Status:** Phase A (gaps #1, #4) is shipped on `feat/gmail-native-labels`;
-> Phase B (gap #2) on `feat/gmail-native-drafts`; Phase C (gap #5) on
-> `feat/gmail-native-followup`. Gaps #3, #6 remain post-MVP.
-
-1. ~~**Label bootstrap is not wired.**~~ **DONE (Phase A).**
-   `ensureFlowDeskLabels` is now called on Gmail connect (OAuth callback) and
-   backfilled on manual sync. Projection after classification is also wired via
-   `projectFlowDeskLabelsForConversation` in `work-item-sync`.
-2. ~~**No Gmail-native drafts.**~~ **DONE (Phase B).** `createGmailDraftForThread`
-   now calls `users.drafts.create`; a `create_draft`/`withdraw_draft` writeback
-   lane pushes proposed drafts into Gmail with dedup (recorded `gmailDraftId`),
-   manual-reply detection, `Autodrafted` labeling, and withdrawal on draft clear.
-3. ~~**Automation is binary, not a ladder.**~~ **DONE (Phase D foundation).**
-   `AutopilotSetting.automationLevel` (0–5) is a first-class user-facing
-   control mapped onto the existing autonomy/policy gates
-   (`lib/agent/automation-level.ts`) with a confirm-to-change settings
-   selector; approvals are unified onto `ApprovalRequest`.
-4. ~~**Labels are hardcoded.**~~ **PARTIAL (Phase A).** A `GmailLabelMapping`
-   table + settings panel now let users **hide** labels; in-Gmail **renaming**
-   is deferred (needs safe reconciliation of already-created labels).
-5. ~~**Waiting-on/follow-up**~~ **DONE (Phase C).** Outbound replies that
-   expect a response (deterministic heuristic; FlowDesk sends + Gmail-native
-   sends via sync) transition to waiting_on and project `Waiting On`; an
-   inbound reply self-heals the state, cancels scheduled follow-ups, and
-   removes the label; `Follow Up` is added after a tenant-configurable
-   business-day delay by the follow-up cron's label sweep; the dashboard
-   Waiting On card shows follow-up due dates. Labels + surfacing only — no
-   auto-sent follow-ups.
-6. **Dashboard still reads as an inbox replacement**, not a control room.
-   *(post-MVP, Phase D)*
-
----
-
-## 0.5 MVP thesis: two hero features, done extremely well
-
-The sharpened product direction: **users never have to leave Gmail.** They keep
-using Gmail's website exactly as they do today and get FlowDesk's value inside
-it. The FlowDesk web app becomes an *optional* dashboard/control room — useful
-if you want to configure, review, or supervise, but never required for daily use.
-
-For MVP, resist breadth. Ship a **small number of features done really well**
-rather than a wide, shallow feature list. The two hero features:
-
-1. **Auto-labeling (full-inbox categorization).** Every email in the user's
-   Gmail is automatically sorted into a small, human-friendly set of FlowDesk
-   labels — so when they open Gmail, the inbox is already organized. This is the
-   "SaneBox quietly works in the background" + "inbox-zero labels everything
-   automatically" promise, delivered natively in Gmail.
-2. **Auto-drafting.** For emails that need a reply, a draft written in the user's
-   voice is waiting in Gmail (native `users.drafts.create`), ready to review and
-   send. This is the "Reply Zero pre-drafts every reply" + Fyxer "drafts in your
-   inbox" promise.
-
-Everything else in this plan (waiting-on tracking, rules engine, bulk
-unsubscribe, analytics, add-on/extension) is **post-MVP**. It stays in the
-roadmap so we build the two hero features on foundations that extend cleanly —
-but it is explicitly *not* MVP scope.
-
-**Superhuman lessons that apply even though we are not a client:** speed and
-forgiveness. Whatever FlowDesk does must be fast (labels/drafts appear quickly
-after mail arrives) and every automated action must be trivially reversible
-(one-click undo, visible history). Trust is the whole game when you're silently
-acting inside someone's real inbox.
-
-**The MVP bar ("done really well") means:**
-- Labeling is *accurate and stable* — no thrash, no relabeling churn, clean
-  human-friendly names, and a sane default taxonomy that works out of the box.
-- Drafts are *high quality and in the user's voice*, deduped, and suppressed the
-  moment the user replies manually.
-- Everything is *reversible and audited*; nothing destructive by default.
-- It *just works after connecting Gmail* — zero dashboard time required.
-
-### Reference deep-dive findings (verified, Jul 2026)
-
-Concrete mechanics pulled from the sources, to copy directly:
-
-**inbox-zero — rules = conditions + actions ([docs][iz-assistant]).**
-- **Conditions** are either **AI-based** (a natural-language instruction the LLM
-  matches per email) or **static** (`From` / `To` / `Subject` match). Static is
-  explicitly preferred because it *"doesn't require AI processing on every email,
-  leading to greater efficiency and reliability."* → **FlowDesk should adopt this
-  static-first / AI-fallback split** so we don't burn a model call on every
-  message; cheap deterministic rules first, LLM only for the ambiguous remainder.
-- **Action vocabulary:** Archive, Label, Reply, Forward, Send Email, Draft Email,
-  Mark Read, Mark Spam, Move to Folder, Call Webhook, Delayed Actions. AI content
-  is templated inline with `{{double braces}}`. → This is essentially the
-  superset FlowDesk's `GmailWritebackQueue` should grow toward; MVP needs just
-  **Label** and **Draft Email**.
-- **Test/dry-run:** a "Test" button shows how a new rule *would have* applied to
-  recent emails before enabling it. → Adopt as the core trust feature for any
-  automation.
-- **Learned behavior:** *"Our AI automatically learns your behavior over time —
-  no setup required,"* viewable/editable. Maps to FlowDesk's
-  `preference-learning.ts` / `ClassificationCorrection`.
-- **One-rule selection:** with multi-select off, the AI picks a single matching
-  rule (a couple of automatic behaviors can still add a second label). → Keep
-  label assignment mostly single-primary-category to avoid label soup.
-
-**inbox-zero — Reply Zero ([docs][iz-reply]).** Two labels: `To Reply` (incoming
-needs response) and `Awaiting Reply` (you sent something expecting a reply →
-added to a "Waiting" list). A `Nudge` button one-click-drafts a follow-up (not
-fully automatic). Must be manually enabled; Gmail users get a dedicated view. →
-Validates FlowDesk's `Needs Reply` / `Waiting On` labels and the post-MVP
-follow-up loop; note it's opt-in, not on by default.
-
-**paabloLC/gmail-ai-draft — drafting mechanics.** Gmail **Watch API + Pub/Sub**
-triggers processing the instant mail arrives (not cron); an AI **intent
-classification** decides which emails warrant a draft; drafts are written into
-Gmail's **native draft folder**; stack is Next.js/TS/Prisma/OpenAI. → FlowDesk
-already runs Gmail watch/push (`gmail-watch`, `gmail/push`), so the draft path
-should hang off the existing push pipeline, gated by a "should we draft?" intent
-+ confidence check, exactly as this project does.
-
-[iz-assistant]: https://docs.getinboxzero.com/essentials/email-ai-personal-assistant
-[iz-reply]: https://docs.getinboxzero.com/essentials/reply-zero
-
----
-
-## 1. Key lessons from each reference
-
-### Primary repos
-
-**elie222/inbox-zero** — the most important reference. (Full mechanics verified
-above in §0.5.)
-- **Rules = conditions + actions**, with a deliberate **static-vs-AI condition
-  split** for efficiency, an inline `{{double-brace}}` templating system for
-  AI-generated action content, and a **Test button** that dry-runs a rule against
-  recent mail before it goes live.
-- **Labels everything automatically** into a small named taxonomy (To Reply,
-  Newsletter, Marketing, Calendar, Notification, Cold Email, Team, Urgent) —
-  directly the model for FlowDesk's MVP hero feature #1.
-- **Reply Zero**: `To Reply` / `Awaiting Reply` labels + a "Waiting" list and a
-  one-click `Nudge` follow-up draft. Opt-in, surfaced as Gmail labels/views.
-- **Behavior learning** over time with no setup, user-inspectable.
-- **Cold-email blocker** and **bulk unsubscribe/analytics** as demonstrable value
-  props (post-MVP for FlowDesk).
-- Stack overlaps FlowDesk almost exactly (Next.js, Prisma, shadcn/ui, Turborepo,
-  Upstash), so patterns port cleanly.
-
-**IAmTomShaw/email-inbox-agent** — a lean agent loop: fetch → classify →
-decide → act, with tool-call-style actions. Lesson: keep the per-message agent
-step small, deterministic, and observable; don't over-orchestrate.
-
-**cloudflare/agentic-inbox** — durable/queue-driven execution of inbox actions
-(the Cloudflare Agents/Workflows angle). Lesson: model each Gmail mutation as a
-durable, idempotent, retryable job — which validates FlowDesk's existing
-`GmailWritebackQueue` direction and argues for extending it to *all* mutations.
-
-### Additional open-source references
-
-- **mail-0/zero** — self-hosting + provider-agnostic email; good reference for
-  keeping the Gmail integration behind a clean boundary if Outlook/others follow.
-- **paabloLC/gmail-ai-draft** — the minimal "generate a draft straight into
-  Gmail" flow. Directly relevant to the missing `users.drafts.create` path.
-- **muqadasejaz/n8n-Smart-Email-Assistant** & n8n Gmail/OpenAI templates —
-  labeling + draft workflows expressed as simple graphs; good mental model for
-  the rule → action pipeline and for what "safe defaults" look like.
-- **ericrosenberg1/ai-email-assistant** — indexes your **sent** mail to imitate
-  your voice; validates FlowDesk's `LearnedReplyProfile` / sent-sample approach.
-- **auroracapital/ai-gmail-assistant** — categorize + star/priority + draft;
-  simple label taxonomy lessons.
-- **darinkishore/Inbox-MCP** — email as an **MCP server** (via Nylas). Strategic
-  lesson: FlowDesk's action layer should be clean enough to later expose as an
-  MCP/tool surface for user-owned agents.
-- **ankitvgupta/exo** — AI-first desktop client; UX patterns for AI-native
-  triage, but it *is* a client (the adoption-friction trap we're avoiding).
-
-### Product/UX inspiration
-
-- **Superhuman** — speed + keyboard-driven flow, "Split Inbox," instant undo.
-  Lesson: whatever we surface must be fast and forgiving; every action needs a
-  visible undo.
-- **Fyxer** — "works where you already work"; drafts + triage appear in the
-  user's own inbox with no client switch. This is FlowDesk's north star for
-  *placement*.
-- **SaneBox** — quiet, reliable background sorting (SaneLater/SaneBlackHole)
-  that people pay for precisely because it's invisible. Lesson: reliability and
-  reversibility beat flashy UI; a digest email is enough surface for many users.
-- **Shortwave** — AI-native Gmail (threads, AI search, assistant). Great feature
-  ideas, but a full client. Borrow the assistant/ask-about-thread UX, not the
-  client.
-- **Gmail / Gemini** — generic "summarize/draft this" is becoming table stakes
-  and free. FlowDesk must be *more personalized, more rule-driven, more
-  operational, and more transparent* than in-Gmail Gemini.
-
----
-
-## 2. What FlowDesk should copy / adapt
-
-1. **Reply-Zero-style waiting-on tracking as first-class labels** (from
-   inbox-zero). FlowDesk already has the internal status; project it as a
-   self-healing `Waiting On` → `Follow Up` label lifecycle.
-2. **Natural-language rules with a dry-run/preview** (inbox-zero). FlowDesk has
-   `rule-compiler.ts` and `AgentRule`/`SenderRule` — extend to a "planned vs.
-   applied" preview before any rule mutates Gmail.
-3. **Gmail-native drafts via `users.drafts.create`** (gmail-ai-draft, Fyxer):
-   the single highest-leverage missing capability. A draft the user sees in
-   Gmail is worth more than a draft in our dashboard.
-4. **Durable, idempotent action queue for every mutation** (agentic-inbox):
-   generalize `GmailWritebackQueue` beyond `apply_labels`/`mark_read`.
-5. **Explicit trust ladder (Level 0–5)** as a user-facing control mapped onto
-   the existing `autonomy`/`policy`/`autopilot` primitives.
-6. **Voice cloning from sent mail** (ericrosenberg / already partly built):
-   deepen `LearnedReplyProfile` and gate autonomy on profile quality.
-7. **Quiet digest + reliability framing** (SaneBox): a daily brief email so the
-   dashboard is optional for casual users.
-8. **Universal undo** (Superhuman): every automated action reversible from both
-   Gmail (label removal) and the dashboard audit log.
-
-## 3. What FlowDesk should avoid
-
-1. **Do not rebuild a Gmail client.** No full thread/compose UI aspirations
-   (the exo / Shortwave trap). The dashboard is a control room, not an inbox.
-2. **Do not depend on a browser extension / DOM scraping for core data or
-   actions.** Gmail API is the source of truth (already the doc's principle).
-   Extension comes last and only calls the backend.
-3. **Do not auto-send by default.** Keep default at Level 2–3. Auto-send only
-   for tightly-scoped, user-approved categories.
-4. **Do not expose internal state as labels** (`triage_pending`,
-   `classification_v2`). Keep labels human-friendly — the code already enforces
-   a clean `FlowDesk/*` vocabulary; keep it that way.
-5. **Avoid destructive-by-default actions.** Prefer archive over trash; prefer
-   "mark read" over delete; everything reversible with a retained undo window.
-6. **Don't let drafts pile up or duplicate.** Dedup aggressively and detect a
-   manual user reply before creating/keeping a draft.
-7. **Don't ship irreversible automations without an audit event.** Every mutation
-   → one `AuditLog` row, no exceptions.
-8. **Resist premature Outlook/multi-provider expansion** until Gmail-native PMF;
-   keep the provider boundary clean but don't fan out early.
-
----
-
-## 4. Phased roadmap
-
-The phases map onto the product doc's milestones but are re-sequenced around the
-real gaps. Each phase ends with a demonstrable "open Gmail and see it" outcome.
-
-> **MVP = Phase A + Phase B only** (the two hero features: auto-labeling and
-> auto-drafting). Ship those to a "done really well" bar, with the dashboard
-> strictly optional, before starting C. Phases C–E are the post-MVP extension
-> path and are intentionally deferred.
-
-**Phase A — Make labels real end-to-end (finish Milestone 1).**
-Wire `ensureFlowDeskLabels` into connect; auto-project labels after every
-classification/state change; add the `gmail_label_mappings` table so labels are
-renameable/hideable; add a settings page; ensure stale-label cleanup and audit
-events for every change. *Outcome: a user connects Gmail and, without touching
-the dashboard, sees FlowDesk organizing their inbox.*
-
-**Phase B — Gmail-native drafts (Milestone 2).**
-Add a `create_draft` writeback action calling `users.drafts.create`; apply
-`Autodrafted`; dedup by thread + track the created `draftId`; detect manual
-replies and withdraw stale drafts; preview/approve/edit from the dashboard.
-*Outcome: high-quality drafts wait in the user's Gmail for important threads.*
-
-**Phase C — Waiting-on & follow-up lifecycle (Milestone 3).** **SHIPPED**
-(`feat/gmail-native-followup`). Detect outbound-awaiting-reply; label
-`Waiting On`; remove on inbound reply (via the history sync we already run);
-add `Follow Up` after a configurable delay; dashboard "people you're waiting
-on" card. *Outcome: users stop dropping follow-ups.*
-
-**Phase D — Control-room dashboard + trust ladder (Milestone 4).**
-Reframe UI language; ship the Level 0–5 automation selector wired to
-autonomy/policy; approval queue; audit-log viewer; daily brief; training center.
-*Outcome: the dashboard feels like supervising an employee.*
-
-> **Status:** foundation shipped on `feat/automation-trust-ladder` — approvals
-> unified onto `ApprovalRequest` (single queue primitive) and the Level 0–5
-> selector wired into the existing gate chain. The control-room reframe,
-> audit-log viewer, and daily brief remain.
-
-**Phase E — In-Gmail surface (Milestone 5).**
-Decision gate → Gmail Workspace **add-on** first (trust, marketplace,
-cross-platform) with contextual panel + quick actions calling the backend; then
-optionally a Chrome side-panel extension for power users. *Outcome: lightweight
-official controls inside Gmail.*
-
-Phases A–C are backend-heavy and largely parallelizable after A. D depends on
-A–C existing. E is explicitly gated on A–C validating the API-first model.
-
----
-
-## 5. P0 / P1 / P2 task breakdown
-
-### P0 — foundational, unblocks the positioning (Phases A–B core)
-
-- **Wire label bootstrap.** Call `ensureFlowDeskLabels(channelId)` from the
-  Gmail connect callback and as an idempotent job; backfill for already-connected
-  channels. *(gap #1)*
-- **Auto-project labels after classification.** After `classify` / state changes,
-  enqueue an `apply_labels` writeback via `flowDeskLabelsForConversationState`.
-  Today projection only fires on manual workflow/status changes.
-- **`gmail_label_mappings` table + migration.** Per-tenant configurable
-  name/visibility/enabled for each canonical label; label code reads mappings.
-- **Gmail-native draft creation (`create_draft` writeback action).** New action
-  in the writeback queue → `users.drafts.create`; store returned `draftId` on
-  `Draft.metadataJson`; apply `Autodrafted`.
-- **Draft dedup + manual-reply detection.** Before create: skip if a live draft
-  or a user reply exists on the thread; withdraw/refresh stale drafts on new
-  inbound.
-- **Audit coverage for all new mutations.** Every label/draft/read/archive
-  writeback writes exactly one `AuditLog` row (action + payload + undo hint).
-
-### P1 — trust, control, and the follow-up loop (Phases C–D)
-
-- **Waiting-on/follow-up label lifecycle**, self-healing on inbound reply +
-  delayed `Follow Up` (extend `follow-up.ts` + follow-up cron).
-- ~~**Automation Level 0–5 model.**~~ **DONE.** `AutopilotSetting.automationLevel`
-  mapped onto the existing gates; new tenants default to Level 2, existing
-  tenants derived without increasing autonomy (enabled → 5, else 3).
-- **Control-room dashboard reframe.** Copy/IA changes: "agent control room,"
-  daily brief, agent activity feed, approval queue, automation-level selector,
-  label-config UI, audit-log viewer.
-- **Rule preview/dry-run.** Extend `rule-compiler.ts` so `AgentRule`s show
-  planned actions on a sample before enabling.
-- **Per-action confidence thresholds + "do not draft" categories** (extend
-  `policy.ts` / `autonomy.ts` and `categoryThresholdsJson`).
-- **Generalize `GmailWritebackQueue`** to cover archive/trash/star and future
-  actions with one idempotent, retryable executor.
-
-### P2 — depth, distribution, differentiation (Phase E + polish)
-
-- **Gmail Workspace add-on** (contextual card, label reason, quick actions:
-  Mark handled / Follow up later / Draft reply / Teach FlowDesk) — server-side
-  mutations only.
-- **Chrome side-panel extension** for power users (calls backend; no DOM
-  scraping for data).
-- **Bulk unsubscribe/clean-inbox analytics** surfaced as a value dashboard
-  (partly exists under `app/clean-inbox`).
-- **Cold-email / low-value auto-triage policies** (Level 4 categories).
-- **MCP/tool surface** exposing FlowDesk actions to user-owned agents
-  (Inbox-MCP-style), once the action layer is clean.
-- **Dedicated audit/analytics store** if `AuditLog` volume warrants it.
-- **Outlook parity** behind the existing provider boundary — only post-PMF.
-
----
-
-## 6. Codebase areas that likely need changes
-
-**Gmail integration / actions**
-- [`lib/google.ts`](../lib/google.ts) — call site for `ensureFlowDeskLabels`;
-  add `createGmailDraft`, `withdrawGmailDraft`; extend archive/trash coverage.
-- [`lib/gmail-labels.ts`](../lib/gmail-labels.ts) — read from
-  `gmail_label_mappings`; add draft/waiting/follow-up projection cases.
-- [`lib/gmail-sync.ts`](../lib/gmail-sync.ts) — hook incremental sync to remove
-  `Waiting On` and withdraw stale drafts on inbound reply.
-
-**Action queue / crons**
-- [`app/api/cron/gmail-writeback/route.ts`](../app/api/cron/gmail-writeback/route.ts)
-  — add `create_draft`, `withdraw_draft`, `archive`, `remove_labels` actions.
-- [`app/api/cron/follow-up/route.ts`](../app/api/cron/follow-up/route.ts) &
-  [`lib/agent/follow-up.ts`](../lib/agent/follow-up.ts) — waiting-on/follow-up
-  lifecycle.
-- [`app/api/connectors/gmail/callback/route.ts`](../app/api/connectors/gmail/callback/route.ts)
-  — bootstrap labels on connect.
-
-**Agent / classification / policy**
-- [`lib/agent/classify.ts`](../lib/agent/classify.ts),
-  [`lib/agent/workflow-runner.ts`](../lib/agent/workflow-runner.ts),
-  [`lib/agent/work-item-sync.ts`](../lib/agent/work-item-sync.ts) — enqueue label
-  projection after every state change.
-- [`lib/agent/policy.ts`](../lib/agent/policy.ts) &
-  [`lib/agent/autonomy.ts`](../lib/agent/autonomy.ts) — per-action thresholds,
-  "do not draft" categories, Level 0–5 mapping.
-- [`lib/agent/autopilot.ts`](../lib/agent/autopilot.ts) — draft-create eligibility
-  vs. auto-send eligibility split.
-- [`lib/agent/rule-compiler.ts`](../lib/agent/rule-compiler.ts) — dry-run/preview.
-
-**Drafting**
-- Draft API routes under `app/api/conversations/[id]/draft/*` and
-  [`lib/ai/prompts/draft-reply.ts`](../lib/ai/prompts/draft-reply.ts) — route the
-  approved/generated draft into Gmail rather than only internal storage.
-
-**Schema / migrations**
-- [`prisma/schema.prisma`](../prisma/schema.prisma) — new `GmailLabelMapping`
-  model; `Draft.metadataJson` gains `gmailDraftId`; `AutopilotSetting` (or a new
-  `AutomationSetting`) gains an explicit level.
-
-**Dashboard (frontend)**
-- `app/settings/*` — new Gmail-native label config page; automation-level
-  selector (extend `AutopilotSettingsForm.tsx`).
-- `app/audit/page.tsx` — audit-log viewer as control-room surface.
-- `app/approvals/*` — approval-queue polish for draft review.
-- `app/digest/*` — daily brief; global copy/IA reframe to "control room."
-
----
-
-## 7. Recommended first implementation steps
-
-Do these in order; each is a small, shippable PR (own worktree + branch per
-repo convention), and together they finish Milestone 1 and open Milestone 2.
-
-1. **Wire `ensureFlowDeskLabels` into connect** and add an idempotent backfill
-   for existing channels. Smallest possible change that makes labels appear at
-   all. Verify: connect a test account → labels exist in Gmail. Add the audit
-   event.
-2. **Auto-project labels after classification.** In the classify/state-write
-   path, enqueue `apply_labels` from `flowDeskLabelsForConversationState`. Verify
-   with an integration test that a newly-classified thread gets the right
-   `GmailWritebackQueue` row and, after cron, the right Gmail labels.
-3. **Add `GmailLabelMapping` (migration + model)** and make `gmail-labels.ts`
-   read it, with the current hardcoded names as defaults. Ship a minimal settings
-   page to rename/hide. (Backend + a thin UI.)
-4. **Add the `create_draft` writeback action** (`users.drafts.create` in
-   `lib/google.ts`, new case in the writeback cron) with dedup + manual-reply
-   detection, applying `Autodrafted`. This is the first Milestone-2 slice and the
-   biggest perceived-value jump.
-5. **Prototype the Level 0–5 selector** mapped onto existing autonomy/policy
-   gates, defaulting to Level 2, so steps 1–4 are governed by an explicit,
-   user-visible trust setting from day one.
-
-**Guardrails for every step (repo conventions):**
-- New git worktree per task: `git worktree add .worktrees/<branch> -b <branch> origin/main`.
-- Tests are Vitest (`npx vitest run`); there's a strong existing Gmail test
-  suite (`gmail-*.test.ts`) — extend it, especially tenant-isolation and
-  writeback-idempotency cases.
-- Required before any PR: `npm test`, `npx tsc --noEmit`, `npm run lint`.
-- Every Gmail mutation must be idempotent, reversible, and audited.
-- Update the living docs affected (per `docs/README.md`); no handoff files.
-
----
-
-## Open questions to resolve before Phase D
-
-Carried from the product doc; these gate the trust/UX design:
-
-- Target first: individuals, SMBs, or shared/team inboxes? (Changes label
-  taxonomy and audit granularity.)
-- Default automation level for new users (recommend Level 2, opt-in to 3).
-- Minimum audit surface for users to feel safe (probably: per-action row +
-  one-click undo + a daily "here's what I did" brief).
-- Add-on vs. extension first for Phase E (recommend add-on for trust/marketplace).
-- Permissions framing at OAuth consent to maximize trust (least-scope, staged).
+This plan turns FlowDesk into a Gmail-native AI email operator. Gmail remains the user's main workspace. FlowDesk becomes the control room for setup, supervision, analytics, approvals, and training.
+
+Companion research:
+
+- `docs/reference-research/inbox-zero-architecture.md`
+- `docs/reference-research/email-ai-reference-summary.md`
+- `docs/flowdesk-vs-reference-gap-analysis.md`
+
+## Current Ground Truth
+
+Shipped foundations:
+
+- Gmail OAuth connect/callback, encrypted tokens, invalid-token reauth CTA.
+- Gmail full and incremental history sync, Pub/Sub push/watch, sync locks.
+- Gmail read/archive/trash/unsubscribe writeback and retry queue.
+- Canonical `FlowDesk/*` Gmail labels, `GmailLabelMapping`, and label projection gated by automation level.
+- Gmail-native draft creation and withdrawal through writeback.
+- Waiting-on/follow-up lifecycle: outbound expected-reply detection, inbound self-healing, `Waiting On` and `Follow Up` labels, follow-up cron sweep, and no auto-sent follow-ups.
+- Unified approvals: `ApprovalRequest` is the single approval primitive for proposed drafts and future approval surfaces.
+- Level 0-5 automation trust ladder mapped onto existing autonomy/policy/budget/cap gates.
+- Dashboard sections for Handle First, Needs Action, Read Later, Waiting On, Agent Activity, and Quietly Handled.
+- Outlook OAuth/delta/webhooks exist, but Outlook action parity is incomplete.
+
+Therefore this plan focuses on hardening and exposing the operator layer rather than re-building the Gmail-native basics from scratch.
+
+## Product Principles
+
+1. **Gmail is the workspace.** FlowDesk writes labels, drafts, read/archive/trash/unsubscribe actions, and follow-up status into Gmail.
+2. **FlowDesk is the control room.** The dashboard explains what happened, what needs approval, what the agent learned, and where automation is unhealthy.
+3. **Static first, AI second.** Deterministic sender/domain/subject/body rules run before LLM classification.
+4. **Every mutation is queued, idempotent, auditable, and undo-aware.**
+5. **No broad auto-send.** Auto-send requires Level 5, narrow rules, high confidence, policy pass, budget/cap pass, and explicit user intent.
+6. **Small human labels beat label soup.** Keep the default Gmail taxonomy compact.
+7. **Preview before trust.** New rules and cleanup jobs should dry-run before mutating Gmail.
+
+## Phase 1: Gmail-Native Labels, Drafts, Statuses, And Audit Logs
+
+Status: Core shipped. Remaining work is hardening, reconciliation, correctness, and control-room visibility.
+
+### P0
+
+- Fix or remove `FlowDesk/Handle First` from canonical label projection.
+  - Areas: `lib/gmail-labels.ts`, `lib/agent/command-center.ts`, `lib/agent/work-item-sync.ts`, label settings UI.
+- Schedule and verify Gmail label bootstrap/reconciliation maintenance.
+  - Areas: `app/api/connectors/gmail/sync/route.ts`, new/existing cron route, `lib/gmail-labels.ts`, deployment cron config.
+- Link every Gmail writeback result to human-readable audit entries.
+  - Areas: `app/api/cron/gmail-writeback/route.ts`, `lib/gmail-labels.ts`, `lib/gmail-drafts.ts`, `prisma/schema.prisma` if result linkage needs schema support.
+- Preserve user-edited `InboxTask` and workflow fields during sync/classification refresh.
+  - Areas: `lib/agent/work-item-sync.ts`, `lib/workflow-status.ts`, `InboxTask` writes.
+- Move dashboard/settings copy toward "Gmail workspace, FlowDesk control room."
+  - Areas: `app/page.tsx`, `app/components/HomeCommandCenter.tsx`, `app/settings/page.tsx`, `lib/app-navigation.ts`.
+
+### P1
+
+- Improve Gmail draft fidelity: CC/BCC, inline images/CID, reply headers, and duplicate detection.
+  - Areas: `lib/gmail-drafts.ts`, `lib/email-body.ts`, `app/conversations/[id]/ReplyComposer.tsx`.
+- Add a conversation-level audit timeline showing label/draft/status changes and undo availability.
+  - Areas: `app/audit/page.tsx`, `app/conversations/[id]/AutomationRunHistory.tsx`, `app/conversations/[id]/ExplainThreadPanel.tsx`.
+- Expose Gmail watch/sync/writeback health in settings.
+  - Areas: `app/settings/ConnectedAppsPanel.tsx`, `lib/gmail-sync.ts`, `GmailCredential`, `GmailPushEvent`, `GmailWritebackQueue`.
+
+### P2
+
+- Rename/reconcile existing Gmail labels if users rename FlowDesk labels in settings.
+- Provider-neutral action queue if Outlook/other providers become equally important.
+
+## Phase 2: AI Rules And User-Controlled Automation
+
+Status: Foundations exist (`AgentRule`, `SenderRule`, classifier, rule compiler, approvals, automation level), but the user-facing rules product is the largest gap versus Inbox Zero.
+
+### P0
+
+- Build static-first rule evaluation for sender/domain/subject/body conditions.
+  - Areas: `lib/agent/rule-compiler.ts`, `lib/agent/classify.ts`, `lib/agent/email-classifier.ts`, `app/settings/SenderRulesPanel.tsx`.
+- Add rule dry-run/preview over recent conversations before enabling.
+  - Output: matched/skipped, planned labels/status/draft/archive action, confidence, evidence, and audit preview.
+  - Areas: new API route under `app/api`, `app/settings/TrainAgentPanel.tsx`, rule compiler/classifier modules.
+- Version rules and preserve execution history.
+  - Areas: Prisma rule models or `AutomationRun`/`AuditLog` metadata, `lib/agent/automation-runner.ts`.
+- Show "why this automation fired" in the control room.
+  - Areas: `app/components/AgentActivitySection.tsx`, `app/conversations/[id]/ExplainThreadPanel.tsx`, `app/audit/page.tsx`.
+
+### P1
+
+- Add "approve once" vs "approve and teach rule" flows.
+  - Areas: `app/approvals/*`, `lib/agent/approvals.ts`, rule compiler.
+- Let users manually edit sender/domain rules and see learned correction history.
+  - Areas: `app/settings/SenderRulesPanel.tsx`, `app/settings/TrainAgentPanel.tsx`, classification correction storage.
+- Add safe action vocabulary expansion: archive, mark read, read later, follow-up nudge, webhook.
+  - Areas: `lib/agent/automation-runner.ts`, `GmailWritebackQueue`, `AuditLog`.
+
+### P2
+
+- Organization/team shared rules.
+- External API/OpenAPI for rules once internal semantics are stable.
+
+## Phase 3: Waiting-On, Reply Tracking, And Cleanup Flows
+
+Status: Waiting-on core shipped. Cleanup and reply analytics remain.
+
+### P0
+
+- Confirm `GET /api/cron/follow-up` is scheduled in production.
+  - Areas: deployment cron config, `app/api/cron/follow-up/route.ts`.
+- Show waiting-on evidence: detected outbound message, expected-reply reason, due date, and clear event.
+  - Areas: `lib/agent/follow-up.ts`, `app/components/WaitingOnSection.tsx`, conversation header/status UI.
+
+### P1
+
+- Add one-click "draft nudge" for due waiting-on threads.
+  - Areas: `lib/agent/follow-up.ts`, `lib/ai/prompts/draft-reply.ts`, `app/components/WaitingOnSection.tsx`, approvals/draft writeback.
+- Add response-time and follow-up-debt analytics.
+  - Areas: command-center snapshots, digest, new analytics queries.
+- Build cleanup proposals: sender/domain groups, sample messages, counts, proposed archive/unsubscribe/filter actions, and approval.
+  - Areas: `app/clean-inbox/*`, `lib/agent/unsubscribe.ts`, `GmailWritebackQueue`, `AuditLog`.
+
+### P2
+
+- SaneBox-style training from label moves/removals.
+- Future auto-archive filters for explicitly approved senders.
+- Team cleanup policies.
+
+## Phase 4: Dashboard As Control Room
+
+Status: Dashboard exists but needs IA and copy polish to match the product direction.
+
+### P0
+
+- Reframe home as:
+  - "Needs approval"
+  - "What FlowDesk did"
+  - "What needs training"
+  - "Gmail health"
+  - "Automation health"
+  - "Waiting/follow-up debt"
+- Reframe settings as setup and supervision:
+  - Connected apps and permission health.
+  - Automation level.
+  - Gmail labels.
+  - Rules.
+  - Approvals.
+  - Training.
+  - Audit/undo.
+- Persist command-center snapshots for trend reporting.
+  - Areas: `lib/agent/command-center.ts`, Prisma snapshot model if needed, `app/components/HomeStats.tsx`.
+
+### P1
+
+- Add analytics:
+  - Label distribution.
+  - Drafts created/sent/rejected.
+  - Time waiting on others.
+  - Quietly handled count.
+  - Cleanup opportunity count.
+  - Provider/writeback failures.
+- Add correction history and source/confidence/evidence on classifications.
+- Add queue health panels for operators/users.
+
+### P2
+
+- Daily/weekly digest email with approvals, follow-ups, cleanup proposals, and agent activity.
+- Team supervision dashboards.
+- Billing/plan enforcement and usage reporting.
+
+## Phase 5: Optional Gmail Add-On, Browser Extension, And Integrations
+
+Status: Not core. Do this only after backend actions, audit, and rules are reliable.
+
+### P1/P2 Candidate Surfaces
+
+- Gmail add-on or browser extension:
+  - Show FlowDesk label reason, draft reason, approval buttons, and training buttons inside Gmail.
+  - Must call FlowDesk APIs; no DOM scraping as source of truth.
+- Slack/Telegram/Teams:
+  - Approval notifications and daily digests only.
+  - No external auto-send bypass.
+- MCP/API:
+  - Expose safe read/search/status/propose-action tools first.
+  - Require FlowDesk approvals/audit for mutations.
+- Calendar/meeting extensions:
+  - Borrow Fyxer's meeting-note/follow-up direction after email core is dependable.
+
+## Immediate Next Implementation Order
+
+1. P0 correctness: `Handle First` label, label reconciliation cron, user-edited task preservation.
+2. P0 control-room copy/IA update.
+3. P0 audit result linking for Gmail writebacks.
+4. P0 static sender/domain rule editor and dry-run preview.
+5. P0 operational health for sync/writeback/follow-up crons.
+6. P1 draft fidelity and edited-draft learning.
+7. P1 waiting-on nudge drafts and analytics.
+8. P1 cleanup proposals.
+9. P1 Outlook writeback parity.
+10. P2 extension/add-on/MCP surfaces.
+
+## Module Map
+
+- Gmail sync/writeback/labels/drafts:
+  - `lib/gmail-sync.ts`
+  - `lib/gmail-labels.ts`
+  - `lib/gmail-drafts.ts`
+  - `lib/google.ts`
+  - `app/api/cron/gmail-writeback/route.ts`
+  - `app/api/connectors/gmail/*`
+- Outlook:
+  - `lib/outlook-sync.ts`
+  - `lib/outlook-worker.ts`
+  - `lib/outlook-notifications.ts`
+  - `lib/outlook-subscriptions.ts`
+  - `lib/microsoft.ts`
+- Rules/automation/classification:
+  - `lib/agent/rule-compiler.ts`
+  - `lib/agent/automation-runner.ts`
+  - `lib/agent/workflow-runner.ts`
+  - `lib/agent/classify.ts`
+  - `lib/agent/email-classifier.ts`
+  - `lib/agent/autonomy.ts`
+  - `lib/agent/policy.ts`
+  - `lib/agent/automation-level.ts`
+- Drafting/learning/context:
+  - `lib/ai/prompts/draft-reply.ts`
+  - `lib/agent/reply-learning.ts`
+  - `lib/agent/reply-context.ts`
+  - `lib/agent/preference-learning.ts`
+  - `lib/agent/person-memory.ts`
+- Waiting/follow-up:
+  - `lib/agent/follow-up.ts`
+  - `lib/business-days.ts`
+  - `app/api/cron/follow-up/route.ts`
+- Approvals/audit:
+  - `lib/agent/approvals.ts`
+  - `app/approvals/*`
+  - `app/audit/*`
+  - `AuditLog`
+  - `ApprovalRequest`
+- Control room:
+  - `app/page.tsx`
+  - `app/components/HomeCommandCenter.tsx`
+  - `app/components/AgentActivitySection.tsx`
+  - `app/components/WaitingOnSection.tsx`
+  - `app/settings/*`
+  - `lib/agent/command-center.ts`
+- Cleanup:
+  - `app/clean-inbox/*`
+  - `lib/agent/unsubscribe.ts`
+  - `app/conversations/[id]/UnsubscribeButton.tsx`
+
+## Definition Of Done For The Gmail-Native Operator
+
+- A user can connect Gmail, leave the dashboard, and see useful labels/drafts/statuses inside Gmail.
+- A user can return to FlowDesk and understand exactly what happened, why, what needs approval, and how to undo it.
+- A user can define or approve rules only after seeing a dry-run preview.
+- Provider mutations are queued, retried, audited, and linked to visible outcomes.
+- Waiting-on and follow-up labels remain accurate over time.
+- Cleanup is proposal-first and reversible.
+- Extensions/integrations are optional surfaces over the same audited backend, not alternate sources of truth.
