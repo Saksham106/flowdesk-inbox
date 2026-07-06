@@ -49,6 +49,7 @@ vi.mock("next/server", () => {
 })
 
 import { GET, PATCH } from "@/app/api/gmail-label-settings/route"
+import { FLOWDESK_GMAIL_LABEL_NAMES } from "@/lib/gmail-labels"
 
 function makeReq(body: Record<string, unknown>): Request {
   return { json: async () => body } as unknown as Request
@@ -73,7 +74,9 @@ describe("GET /api/gmail-label-settings", () => {
     const res = (await GET()) as unknown as {
       body: { labels: Array<{ canonical: string; enabled: boolean }> }
     }
-    expect(res.body.labels).toHaveLength(10)
+    expect(res.body.labels.map((label) => label.canonical)).toEqual([
+      ...FLOWDESK_GMAIL_LABEL_NAMES,
+    ])
     const lowPriority = res.body.labels.find(
       (l) => l.canonical === "FlowDesk/Low Priority"
     )

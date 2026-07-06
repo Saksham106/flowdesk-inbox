@@ -23,7 +23,7 @@ The biggest remaining gaps are not "can FlowDesk touch Gmail?" They are control,
 | Area | Reference Pattern | Current FlowDesk | Gap | Priority |
 | --- | --- | --- | --- | --- |
 | Gmail/Outlook auth and sync | Inbox Zero provider abstraction, Gmail history/watch, Outlook subscriptions, provider health | Gmail strong; Outlook sync exists | Outlook provider issue UX and writeback parity incomplete | P0/P1 |
-| Gmail-native labels | Inbox Zero/SaneBox/Fyxer labels/folders as main UX | `FlowDesk/*` labels shipped with mapping/hide settings | Scheduled reconciliation and `Handle First` mapping need cleanup | P0 |
+| Gmail-native labels | Inbox Zero/SaneBox/Fyxer labels/folders as main UX | `FlowDesk/*` labels shipped with mapping/hide settings; `Handle First` is dashboard-only | Scheduled reconciliation still needs cleanup | P0 |
 | Gmail-native drafts | GmailDraft/Fyxer/Exo native drafts | `create_draft` and `withdraw_draft` shipped | Need stronger dedup, CC/BCC/body fidelity, edited-draft learning | P1 |
 | Thread actions | Inbox Zero provider action vocabulary | Gmail writeback supports key actions | Outlook archive/trash/unsubscribe parity missing | P1 |
 | AI rules | Inbox Zero conditions + actions + dry-run | Agent/sender rules exist | Natural-language rule UI, static-first evaluator, dry-run, versions, execution history lacking | P0 |
@@ -133,7 +133,7 @@ Likely areas:
 Needed:
 
 - Preserve user-edited `InboxTask` fields across sync/classification refresh.
-- Fix `FlowDesk/Handle First` mapping or remove it from canonical labels.
+- Keep `Handle First` dashboard-only; do not project it as a Gmail label.
 - Implement or remove the `create_draft` automation step type if still referenced separately from Gmail writeback.
 - Schedule label bootstrap/reconciliation maintenance.
 - Consolidate duplicate heuristics.

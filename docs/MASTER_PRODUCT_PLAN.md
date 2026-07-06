@@ -27,7 +27,7 @@ The product should consistently do five things:
 
 ### Gmail-native organization
 
-When a user opens Gmail, the inbox should already be organized with FlowDesk labels such as Handle First, Needs Reply, Waiting On, Follow Up, Read Later, Handled, Autodrafted, and Low Priority. The user should see value before visiting the FlowDesk website.
+When a user opens Gmail, the inbox should already be organized with stable FlowDesk labels such as Needs Reply, Waiting On, Follow Up, Read Later, Handled, Autodrafted, and Low Priority. Handle First remains a FlowDesk dashboard ranking so Gmail labels do not churn as priorities are recalculated. The user should see value before visiting the FlowDesk website.
 
 ### Control room brief
 

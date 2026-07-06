@@ -119,7 +119,7 @@ A per-tenant automation level (`AutopilotSetting.automationLevel`, 0–5) is the
 ## Important limitations
 
 - Outlook does not yet have archive/trash writeback (Gmail equivalent exists).
-- Scheduled label-maintenance re-bootstrap is unfinished, and the `FlowDesk/Handle First` label is defined but never applied (nothing produces the `handle_first` attention category).
+- Scheduled label-maintenance re-bootstrap is unfinished. `Handle First` remains a dashboard ranking, not a Gmail label; it is intentionally excluded from the canonical `FlowDesk/*` Gmail label vocabulary to avoid unstable label churn.
 - Gmail `cid:` inline images are only partially supported through size-capped embedding and still need broader safe rendering coverage.
 - CC/BCC sending is not supported; the compose UI hides these fields until the send APIs support them.
 - Bills & Deadlines items dismiss optimistically client-side but reappear on hard refresh until the server cache invalidates (60 s TTL).

@@ -41,8 +41,9 @@ Status: Core shipped. Remaining work is hardening, reconciliation, correctness, 
 
 ### P0
 
-- Fix or remove `FlowDesk/Handle First` from canonical label projection.
-  - Areas: `lib/gmail-labels.ts`, `lib/agent/command-center.ts`, `lib/agent/work-item-sync.ts`, label settings UI.
+- Keep `Handle First` as dashboard ranking only, not Gmail label projection.
+  - Status: shipped by removing `FlowDesk/Handle First` from the canonical label vocabulary and projection path.
+  - Areas: `lib/gmail-labels.ts`, `lib/agent/command-center.ts`, label settings UI.
 - Schedule and verify Gmail label bootstrap/reconciliation maintenance.
   - Areas: `app/api/connectors/gmail/sync/route.ts`, new/existing cron route, `lib/gmail-labels.ts`, deployment cron config.
 - Link every Gmail writeback result to human-readable audit entries.
@@ -184,7 +185,7 @@ Status: Not core. Do this only after backend actions, audit, and rules are relia
 
 ## Immediate Next Implementation Order
 
-1. P0 correctness: `Handle First` label, label reconciliation cron, user-edited task preservation.
+1. P0 correctness: label reconciliation cron and user-edited task preservation.
 2. P0 control-room copy/IA update.
 3. P0 audit result linking for Gmail writebacks.
 4. P0 static sender/domain rule editor and dry-run preview.

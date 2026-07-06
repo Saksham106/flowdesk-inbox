@@ -84,7 +84,6 @@ describe("FlowDesk Gmail labels", () => {
 
   it("keeps the user-facing Gmail label vocabulary small and friendly", () => {
     expect(FLOWDESK_GMAIL_LABEL_NAMES).toEqual([
-      "FlowDesk/Handle First",
       "FlowDesk/Needs Reply",
       "FlowDesk/Needs Action",
       "FlowDesk/Waiting On",
@@ -95,6 +94,15 @@ describe("FlowDesk Gmail labels", () => {
       "FlowDesk/Autodrafted",
       "FlowDesk/Low Priority",
     ])
+  })
+
+  it("does not project Handle First as a Gmail label because it is dashboard ranking", () => {
+    expect(
+      flowDeskLabelsForConversationState({
+        workflowStatus: "needs_reply",
+        attentionCategory: "handle_first",
+      })
+    ).toEqual(["FlowDesk/Needs Reply"])
   })
 
   it("maps conversation state into Gmail-native labels", () => {

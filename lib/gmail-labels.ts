@@ -6,7 +6,6 @@ import { getAutomationLevel, isActionAllowedAtLevel } from "@/lib/agent/automati
 const LABEL_PREFIX = "FlowDesk/"
 
 export const FLOWDESK_GMAIL_LABEL_NAMES = [
-  "FlowDesk/Handle First",
   "FlowDesk/Needs Reply",
   "FlowDesk/Needs Action",
   "FlowDesk/Waiting On",
@@ -57,9 +56,6 @@ export function flowDeskLabelsForConversationState(input: {
       break
   }
 
-  if (input.attentionCategory === "handle_first") {
-    labels.push("FlowDesk/Handle First")
-  }
   if (NEEDS_ACTION_ATTENTION.has(input.attentionCategory ?? "")) {
     labels.push("FlowDesk/Needs Action")
   }
