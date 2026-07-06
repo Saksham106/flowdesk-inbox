@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-07-06 (agent-job-executor)
+Last updated: 2026-07-06 (post-merge docs refresh)
 
 FlowDesk is a Gmail-native AI email operator for individuals and small businesses. Gmail is the primary daily workspace; the FlowDesk web app is the agent control room for setup, preferences, approvals, audit history, training, and power-user review.
 
@@ -22,6 +22,7 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 - Local read/archive/trash/unsubscribe writeback to Gmail. Failed mark-read writes queue into `GmailWritebackQueue` and are retried by cron with exponential backoff.
 - Gmail-native label projection is implemented for manual workflow/status changes. `lib/gmail-labels.ts` maps FlowDesk state to user-facing labels under the `FlowDesk/` namespace (`Needs Reply`, `Waiting On`, `Read Later`, `Handled`, `Autodrafted`, etc.), queues `apply_labels` jobs in `GmailWritebackQueue`, and records `gmail.labels.queued` audit entries.
 - `GET /api/cron/gmail-writeback` now processes both `mark_read` and `apply_labels` jobs. Label jobs create missing Gmail labels, apply the current FlowDesk labels to the thread, remove stale labels from the FlowDesk namespace, and record `gmail.labels.applied`.
+- Gmail cron routes reject bearer-token auth when `CRON_SECRET` is unset, preventing accidental `Authorization: Bearer undefined` access in misconfigured deployments.
 - Local user intent (read state, conversation status, attention category) is stored separately from raw Gmail state (`gmailUnread`, `gmailLabelIds`, `gmailRawState`) so provider syncs cannot overwrite explicit user choices.
 - `GmailStateReconcile` cron detects local-read/Gmail-unread drift; auto-reconciles non-user reads and queues writeback for user-initiated reads.
 
@@ -32,6 +33,7 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 - Lease uses a random owner ID (`syncLeaseId`); the completion update requires the same ID so a stale worker cannot release a newer worker's lock. HTTP 410 / invalid-cursor clears the saved cursor and schedules a fresh start.
 - Webhook endpoint queues authenticated `OutlookSyncEvent` hints only (constant-time client-state comparison; message content and tokens are never stored). Graph delta sync happens in cron, not inline with the webhook response.
 - Bounded cron: at most 25 queued events, 25 fallback credentials, and 25 subscription renewals per run.
+- Admin rekey covers Outlook access/refresh tokens plus encrypted delta links and subscription client state, so key rotation does not strand incremental sync metadata.
 - Outlook does not yet have archive/trash writeback.
 
 ### Email rendering
@@ -51,8 +53,8 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 - **Reply workflow transitions**: AI draft generation/editing resets the conversation to Draft Ready inputs (`status: needs_reply`, `userState: null`) so proposed drafts win over stale Done/Waiting state. Successful sends create the outbound message, persist the conversation as Waiting On by default, clear the composer and saved draft text, and expose immediate Done / Waiting On next-step actions in the conversation composer.
 - Manual corrections via `WorkflowStatusSelect` in the conversation right rail; learned sender/domain rules. Explicit user corrections always take precedence over learned rules and AI classification.
 - Tasks, leads, follow-ups, risk radar, meeting prep/follow-up, weekly value reports, and revenue-at-risk reporting.
-- AI drafts with knowledge-document citations, learned reply style, per-feature budget limits, and human approval gates.
-- Search, inbox chat, person memory, attachment extraction, phishing warnings, VIPs, snooze, and Clean Inbox bulk actions.
+- AI drafts with knowledge-document citations, learned reply style, per-feature budget limits, metered AI usage, and human approval gates. Inbox chat and the agent-rule compiler both enforce budget checks and instantiate the OpenAI client at request/runtime boundaries, so missing keys return controlled errors instead of import-time crashes.
+- Search, budget-metered inbox chat, person memory, attachment extraction, phishing warnings, VIPs, snooze, and Clean Inbox bulk actions.
 
 ### Control room dashboard
 
@@ -62,17 +64,20 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 - **Read Later**: per-card ✓ (mark FYI/Done) and ✕ (mark Quiet) buttons, both persisted via `PATCH /api/conversations/:id/attention`. Dismissals are optimistic; page refreshes on success.
 - **Quietly Handled**: "Review all" links to `/inbox?attention=fyi_done` so users see the actual quietly-handled emails, not an unfiltered inbox.
 - Stat pills (Handle First, Waiting On, Read Later, Quietly Handled) pull counts from the `DailyCommandCenter` built by `lib/agent/command-center.ts`. Handle First count equals `topActions.length` so it always matches the items shown.
+- Support and Scheduling panel request loading states clear through `finally` blocks, so failed `fetch`/JSON parsing paths no longer leave buttons stuck in a loading state.
 
 ### Work items and classification persistence
 
 - `lib/agent/work-items.ts` extracts task and lead candidates from conversation analysis. `lib/agent/work-item-sync.ts` persists them with tenant-scoped upserts and audit logs.
 - Persistence never overwrites records with source `"user"`; only `"deterministic"` source records are updated by sync. This preserves explicit user edits across provider syncs.
+- Fire-and-forget work-item sync calls catch and log async rejections, preventing background extraction failures from becoming unhandled promise rejections.
 - `ConversationState.metadataJson` is a free-form JSON blob — all classification metadata (attention category, reason, confidence, email type, action code, expiry) lives here without dedicated schema columns. Existing rows without a field fall through to current default behavior.
 
 ### Automations and integrations
 
-- Plain-English agent rules (`AgentRule` model, NL compiler, conflict detection), category-scoped autopilot settings, snippets miner cron, scheduling sessions, automation run traces with rollback, and cron-driven workflow templates.
+- Plain-English agent rules (`AgentRule` model, budget-metered NL compiler, conflict detection), category-scoped autopilot settings, snippets miner cron, scheduling sessions, automation run traces with rollback, and cron-driven workflow templates.
 - `GET /api/cron/agent-jobs` executes pending `AgentJob`s (LLM classification, follow-up, lead-sequence) through `runAgentJob`: at most 25 jobs per run with per-tenant round-robin fairness, atomic pending → running claims so overlapping runs never double-execute, and per-job failure isolation. Pending jobs older than 7 days are bulk-failed as `stale_at_executor_launch` (200/run) rather than executed. Autopilot sends stay gated behind opt-in, learned profile, policy, budget, confidence/per-intent thresholds, daily cap, and failure limit — executing jobs does not enable sending.
+- Snooze persists a valid pre-snooze priority, marks snoozed conversations as `none`, and restores the saved priority on resurface with a medium fallback for legacy values.
 - Google Calendar (events, free/busy, calendar holds), Google Drive OAuth foundation (not yet injected into drafts), and optional MindBody connector.
 
 ### Landing page
@@ -82,7 +87,7 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 - Lora serif font added via `next/font/google` for the CTA heading; Geist Sans + Geist Mono replace Space Grotesk + DM Mono app-wide.
 - Enterprise "Contact sales" CTA routes to `mailto:admin@flowdeskinbox.com`.
 - OG and Twitter card metadata added to `app/layout.tsx`.
-- SocialProof section is text-only (no customer logos yet).
+- ScrollReveal and staggered animations are applied across landing sections; local committed images avoid expiring design-tool URLs. SocialProof section is text-only (no customer logos yet).
 
 ## Query and performance constraints
 
@@ -96,7 +101,7 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 
 - Outlook does not yet have archive/trash writeback (Gmail equivalent exists).
 - Gmail label projection currently runs from manual workflow/status changes. Label bootstrap on connect, automatic projection after classification, configurable label names, and Gmail-native draft creation remain unfinished.
-- Gmail `cid:` inline images are not resolved from related MIME attachments.
+- Gmail `cid:` inline images are only partially supported through size-capped embedding and still need broader safe rendering coverage.
 - CC/BCC sending is not supported; the compose UI hides these fields until the send APIs support them.
 - Bills & Deadlines items dismiss optimistically client-side but reappear on hard refresh until the server cache invalidates (60 s TTL).
 - Read Later section shows a fixed 3-item preview; dismissed items vanish optimistically but the overflow count only updates after a page refresh.
