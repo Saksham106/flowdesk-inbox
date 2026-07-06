@@ -6,6 +6,7 @@ import { checkAiBudgetForTokens } from "@/lib/ai/budget"
 import { buildDraftReplyPrompt } from "@/lib/ai/prompts/draft-reply"
 import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import { sendConversationMessage, ConversationSendError } from "@/lib/conversations/send-message"
+import { resolveDraftApprovalRequests } from "@/lib/agent/approvals"
 import type { ClassifyResult } from "@/lib/ai/prompts/classify"
 import type { PolicyDecision } from "@/lib/agent/policy"
 import { summarizeConversation } from "@/lib/ai/summarize"
@@ -311,6 +312,15 @@ export async function attemptAutopilotSend(
     await prisma.draft.update({
       where: { conversationId: job.conversationId },
       data: { status: "sent" },
+    })
+
+    // Close out any pending approval for this draft so the unified queue
+    // never shows work autopilot already completed.
+    await resolveDraftApprovalRequests({
+      tenantId: job.tenantId,
+      draftId: draft.id,
+      resolution: "approved",
+      note: "autopilot_send",
     })
 
     await recordAutopilotSuccess(job.tenantId)

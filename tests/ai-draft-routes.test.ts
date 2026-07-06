@@ -11,6 +11,9 @@ const {
   mockAiBudgetFindUnique,
   mockAiUsageAggregate,
   mockAgentJobFindFirst,
+  mockApprovalFindFirst,
+  mockApprovalCreate,
+  mockApprovalUpdateMany,
   mockGenerateDraftReply,
   mockGetFullBusinessContext,
   mockGetReplyGenerationContext,
@@ -26,6 +29,9 @@ const {
   mockAiBudgetFindUnique: vi.fn(),
   mockAiUsageAggregate: vi.fn(),
   mockAgentJobFindFirst: vi.fn(),
+  mockApprovalFindFirst: vi.fn(),
+  mockApprovalCreate: vi.fn(),
+  mockApprovalUpdateMany: vi.fn(),
   mockGenerateDraftReply: vi.fn(),
   mockGetFullBusinessContext: vi.fn(),
   mockGetReplyGenerationContext: vi.fn(),
@@ -45,6 +51,11 @@ vi.mock('@/lib/prisma', () => ({
     },
     agentJob: {
       findFirst: mockAgentJobFindFirst,
+    },
+    approvalRequest: {
+      findFirst: mockApprovalFindFirst,
+      create: mockApprovalCreate,
+      updateMany: mockApprovalUpdateMany,
     },
     auditLog: {
       create: mockAuditCreate,
@@ -131,6 +142,9 @@ describe('POST /api/conversations/[id]/draft/suggest', () => {
     vi.clearAllMocks()
     mockSession = { user: { id: 'user1', tenantId: 'tenant-A' } }
     mockAgentJobFindFirst.mockResolvedValue(null)
+    mockApprovalFindFirst.mockResolvedValue(null)
+    mockApprovalCreate.mockResolvedValue({ id: 'approval-1' })
+    mockApprovalUpdateMany.mockResolvedValue({ count: 0 })
     mockAiBudgetFindUnique.mockResolvedValue(null)
     mockAiUsageAggregate.mockResolvedValue({ _sum: { estimatedCostUsd: 0 } })
     mockGetReplyGenerationContext.mockResolvedValue({
@@ -269,6 +283,9 @@ describe('POST /api/conversations/[id]/draft/suggest', () => {
     vi.clearAllMocks()
     mockSession = { user: { id: 'user1', tenantId: 'tenant-A' } }
     mockAgentJobFindFirst.mockResolvedValue(null)
+    mockApprovalFindFirst.mockResolvedValue(null)
+    mockApprovalCreate.mockResolvedValue({ id: 'approval-1' })
+    mockApprovalUpdateMany.mockResolvedValue({ count: 0 })
     mockAiBudgetFindUnique.mockResolvedValue(null)
     mockAiUsageAggregate.mockResolvedValue({ _sum: { estimatedCostUsd: 0 } })
     mockGetReplyGenerationContext.mockResolvedValue({
@@ -359,6 +376,9 @@ describe('PATCH /api/conversations/[id]/draft', () => {
     mockSession = { user: { id: 'user1', tenantId: 'tenant-A' } }
     mockConversationFindFirst.mockResolvedValue(emailConversation)
     mockDraftUpdate.mockResolvedValue({ id: 'draft1', status: 'approved', text: 'Edited reply' })
+    mockApprovalFindFirst.mockResolvedValue(null)
+    mockApprovalCreate.mockResolvedValue({ id: 'approval-1' })
+    mockApprovalUpdateMany.mockResolvedValue({ count: 0 })
     mockAuditCreate.mockResolvedValue({})
   })
 
@@ -404,6 +424,7 @@ describe('POST /api/conversations/[id]/draft/send-approved', () => {
     })
     mockDraftUpdate.mockResolvedValue({})
     mockSendConversationMessage.mockResolvedValue({ ok: true, providerMessageId: 'gmail_123' })
+    mockApprovalUpdateMany.mockResolvedValue({ count: 0 })
     mockAuditCreate.mockResolvedValue({})
   })
 

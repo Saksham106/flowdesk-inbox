@@ -44,6 +44,7 @@ enum ApprovalStatus {
   pending
   approved
   rejected
+  cancelled
 }
 
 enum AgentJobStatus {
@@ -538,9 +539,11 @@ model ApprovalRequest {
   conversationId String
   agentJobId     String?
   draftId        String?
+  step           String         @default("send")
   status         ApprovalStatus @default(pending)
   reviewerUserId String?
   decisionNote   String?
+  metadataJson   Json?
   createdAt      DateTime       @default(now())
   decidedAt      DateTime?
   tenant         Tenant         @relation(fields: [tenantId], references: [id])
@@ -550,6 +553,7 @@ model ApprovalRequest {
   reviewer       User?          @relation(fields: [reviewerUserId], references: [id])
 
   @@index([tenantId, createdAt])
+  @@index([tenantId, status, createdAt])
   @@index([conversationId])
 }
 
@@ -623,6 +627,10 @@ model FollowUpSetting {
 model AutopilotSetting {
   id                   String    @id @default(cuid())
   tenantId             String    @unique
+  // Automation trust ladder (Level 0-5, see lib/agent/automation-level.ts).
+  // Default 2 = "apply labels in Gmail" per product-direction.md; existing
+  // tenants were backfilled by migration (enabled -> 5, otherwise 3).
+  automationLevel      Int       @default(2)
   enabled              Boolean   @default(false)
   confidenceThreshold  Float     @default(0.85)
   allowedIntentsJson     Json?

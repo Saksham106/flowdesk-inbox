@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth"
 import { ConversationSendError, sendConversationMessage } from "@/lib/conversations/send-message"
 import { prisma } from "@/lib/prisma"
 import { revalidateInboxViews } from "@/lib/cache-tags"
+import { resolveDraftApprovalRequests } from "@/lib/agent/approvals"
 
 export const runtime = "nodejs"
 
@@ -77,6 +78,14 @@ export async function POST(
   await prisma.draft.update({
     where: { conversationId: conversation.id },
     data: { status: "sent", text: "" },
+  })
+
+  await resolveDraftApprovalRequests({
+    tenantId: session.user.tenantId,
+    draftId: draft.id,
+    resolution: "approved",
+    reviewerUserId: session.user.id,
+    note: "sent",
   })
 
   await prisma.auditLog.create({

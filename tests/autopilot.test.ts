@@ -12,6 +12,7 @@ const {
   mockDraftUpdate,
   mockAuditCreate,
   mockAuditCount,
+  mockApprovalUpdateMany,
   mockAiUsageCreate,
   mockGetFullBusinessContext,
   mockGetReplyGenerationContext,
@@ -27,6 +28,7 @@ const {
   mockDraftUpdate:                vi.fn(),
   mockAuditCreate:                vi.fn(),
   mockAuditCount:                 vi.fn(),
+  mockApprovalUpdateMany:         vi.fn(),
   mockAiUsageCreate:              vi.fn(),
   mockGetFullBusinessContext:     vi.fn(),
   mockGetReplyGenerationContext:  vi.fn(),
@@ -45,6 +47,7 @@ vi.mock('@/lib/prisma', () => ({
     agentJob: { findUnique: mockJobFindUnique },
     draft:    { upsert: mockDraftUpsert, update: mockDraftUpdate },
     auditLog: { create: mockAuditCreate, count: mockAuditCount },
+    approvalRequest: { updateMany: mockApprovalUpdateMany },
     aiUsageEvent: { create: mockAiUsageCreate },
   },
 }))
@@ -323,6 +326,7 @@ describe('attemptAutopilotSend', () => {
     mockAutopilotSettingUpdateMany.mockResolvedValue({})
     mockAiUsageCreate.mockResolvedValue({})
     mockCheckAiBudgetForTokens.mockResolvedValue({ allowed: true, reason: 'Within budget' })
+    mockApprovalUpdateMany.mockResolvedValue({ count: 0 })
   })
 
   it('sends draft and returns sent: true on success', async () => {

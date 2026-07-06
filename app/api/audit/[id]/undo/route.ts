@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { ensureDraftApprovalRequest } from "@/lib/agent/approvals"
 
 export const runtime = "nodejs"
 
@@ -40,6 +41,17 @@ export async function POST(
 
     if (result.count === 0) {
       return NextResponse.json({ error: "Draft not found" }, { status: 404 })
+    }
+
+    // The draft is proposed again, so re-open its pending approval request
+    // (proposed draft => pending approval is the unified-queue invariant).
+    if (typeof payload.conversationId === "string") {
+      await ensureDraftApprovalRequest({
+        tenantId,
+        conversationId: payload.conversationId,
+        draftId,
+        source: "autopilot_approval_undo",
+      })
     }
 
     await prisma.auditLog.create({

@@ -7,6 +7,7 @@ import { generateMeetingFollowUp } from "@/lib/ai/provider"
 import { buildMeetingFollowUpPrompt } from "@/lib/ai/prompts/meeting-follow-up"
 import { checkAiBudgetForTokens } from "@/lib/ai/budget"
 import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
+import { ensureDraftApprovalRequest } from "@/lib/agent/approvals"
 import type { MeetingFollowUpAttendee } from "@/lib/ai/prompts/meeting-follow-up"
 
 export const runtime = "nodejs"
@@ -156,8 +157,11 @@ export async function POST(request: Request) {
       },
     })
 
-    const approval = await prisma.approvalRequest.create({
-      data: { tenantId, conversationId, draftId: draft.id },
+    const approval = await ensureDraftApprovalRequest({
+      tenantId,
+      conversationId,
+      draftId: draft.id,
+      source: "meeting_follow_up",
     })
     approvalRequestId = approval.id
   }
