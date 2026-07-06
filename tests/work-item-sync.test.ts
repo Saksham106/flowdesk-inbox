@@ -14,6 +14,8 @@ const {
   mockConversationUpdate,
   mockSyncPersonMemoryWithLLM,
   mockVipContactFindFirst,
+  mockMessageFindFirst,
+  mockAgentJobUpdateMany,
 } = vi.hoisted(() => ({
   mockConversationFindFirst: vi.fn(),
   mockStateUpsert: vi.fn(),
@@ -28,11 +30,15 @@ const {
   mockConversationUpdate: vi.fn(),
   mockSyncPersonMemoryWithLLM: vi.fn(),
   mockVipContactFindFirst: vi.fn(),
+  mockMessageFindFirst: vi.fn(),
+  mockAgentJobUpdateMany: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     conversation: { findFirst: mockConversationFindFirst, update: mockConversationUpdate },
+    message: { findFirst: mockMessageFindFirst },
+    agentJob: { updateMany: mockAgentJobUpdateMany },
     conversationState: { upsert: mockStateUpsert, update: mockStateUpdate, findUnique: mockStateFindUnique },
     inboxTask: { upsert: mockTaskUpsert },
     lead: { upsert: mockLeadUpsert, findFirst: mockLeadFindFirst },
@@ -92,6 +98,8 @@ describe("syncConversationWorkItems", () => {
     mockConversationUpdate.mockResolvedValue({})
     mockSyncPersonMemoryWithLLM.mockResolvedValue({ status: "llm_completed" })
     mockVipContactFindFirst.mockResolvedValue(null)
+    mockMessageFindFirst.mockResolvedValue(null)
+    mockAgentJobUpdateMany.mockResolvedValue({ count: 0 })
   })
 
   it("loads the conversation scoped to the tenant", async () => {
@@ -190,6 +198,136 @@ describe("syncConversationWorkItems", () => {
     expect(mockAuditCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ tenantId: "tenant-1", action: "lead.synced" }),
+      })
+    )
+  })
+
+  it("marks a needs_reply conversation waiting_on when the latest outbound expects a reply", async () => {
+    mockMessageFindFirst.mockResolvedValue({
+      direction: "outbound",
+      body: "Attached the proposal — could you confirm by Friday?",
+    })
+
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    expect(mockConversationUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: "conv-1" }),
+        data: { status: "in_progress" },
+      })
+    )
+    expect(mockAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "conversation.waiting_on_detected",
+          payloadJson: expect.objectContaining({ detectedFrom: "gmail_sync" }),
+        }),
+      })
+    )
+  })
+
+  it("does not mark waiting_on when the latest outbound does not expect a reply", async () => {
+    mockMessageFindFirst.mockResolvedValue({
+      direction: "outbound",
+      body: "Thanks so much. All set on my end.",
+    })
+
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    expect(mockConversationUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "in_progress" } })
+    )
+    expect(mockAuditCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "conversation.waiting_on_detected" }),
+      })
+    )
+  })
+
+  it("does not mark waiting_on when the latest message is inbound", async () => {
+    mockMessageFindFirst.mockResolvedValue({
+      direction: "inbound",
+      body: "Could you confirm by Friday?",
+    })
+
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    expect(mockAuditCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "conversation.waiting_on_detected" }),
+      })
+    )
+  })
+
+  it("self-heals waiting_on back to needs_reply when an inbound reply arrives", async () => {
+    mockConversationFindFirst.mockResolvedValue({
+      ...conversation,
+      status: "in_progress",
+      userState: "waiting_on",
+    })
+    mockMessageFindFirst.mockResolvedValue({
+      direction: "inbound",
+      body: "Here is the signed contract, thanks!",
+    })
+
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    expect(mockConversationUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: "conv-1" }),
+        data: expect.objectContaining({
+          userState: null,
+          status: "needs_reply",
+        }),
+      })
+    )
+    expect(mockAgentJobUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          conversationId: "conv-1",
+          trigger: "follow_up",
+          status: "pending",
+        }),
+      })
+    )
+    expect(mockAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "conversation.waiting_on_cleared" }),
+      })
+    )
+  })
+
+  it("does not self-heal when the conversation is not waiting_on", async () => {
+    mockMessageFindFirst.mockResolvedValue({
+      direction: "inbound",
+      body: "Following up on my earlier note.",
+    })
+
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    expect(mockAuditCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "conversation.waiting_on_cleared" }),
       })
     )
   })

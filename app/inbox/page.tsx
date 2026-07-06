@@ -283,6 +283,14 @@ async function renderInboxPage(
     ? buildBillsSection(upcomingTasks, mappedConvs)
     : { items: [], count: 0 }
 
+  // Tenant follow-up delay (business days) for the Waiting On card's due dates.
+  const followUpSetting = isHomeView
+    ? await prisma.followUpSetting.findUnique({
+        where: { tenantId },
+        select: { staleAfterDays: true },
+      })
+    : null
+
   const agentSummaryRaw = isHomeView
     ? await Promise.all([
         prisma.conversationState.count({
@@ -459,6 +467,7 @@ async function renderInboxPage(
                 agentSummary={agentSummary}
                 gmailChannels={gmailSyncChannels}
                 billsSection={billsSection}
+                followUpDelayBusinessDays={followUpSetting?.staleAfterDays}
               />
             ) : (
               <div className="flex h-full items-center justify-center">
@@ -605,6 +614,7 @@ async function renderInboxPage(
                   agentSummary={agentSummary}
                   gmailChannels={gmailSyncChannels}
                   billsSection={billsSection}
+                  followUpDelayBusinessDays={followUpSetting?.staleAfterDays}
                 />
               )}
               <BulkCloseButton />

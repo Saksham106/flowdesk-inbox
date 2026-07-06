@@ -55,6 +55,7 @@ vi.mock("@/lib/agent/work-item-sync", () => ({
 import {
   FLOWDESK_GMAIL_LABEL_NAMES,
   flowDeskLabelsForConversationState,
+  normalizeFlowDeskLabelPayload,
 } from "@/lib/gmail-labels"
 import { applyFlowDeskLabelsToGmailThread } from "@/lib/google"
 
@@ -135,5 +136,40 @@ describe("FlowDesk Gmail labels", () => {
         removeLabelIds: ["Label_2"],
       },
     })
+  })
+
+  it("removes every existing FlowDesk label when given an empty label set", async () => {
+    await applyFlowDeskLabelsToGmailThread("channel-1", "thread-1", [])
+
+    expect(mockLabelsCreate).not.toHaveBeenCalled()
+    expect(mockThreadsModify).toHaveBeenCalledWith({
+      userId: "me",
+      id: "thread-1",
+      requestBody: {
+        addLabelIds: [],
+        removeLabelIds: ["Label_1", "Label_2"],
+      },
+    })
+  })
+
+  it("skips the Gmail call entirely when no FlowDesk labels exist to remove", async () => {
+    mockLabelsList.mockResolvedValue({ data: { labels: [{ id: "X", name: "INBOX" }] } })
+
+    await applyFlowDeskLabelsToGmailThread("channel-1", "thread-1", [])
+
+    expect(mockThreadsModify).not.toHaveBeenCalled()
+  })
+
+  it("normalizes label payloads, treating an empty labels array as valid", () => {
+    expect(
+      normalizeFlowDeskLabelPayload({ threadId: "thread-1", labels: [] })
+    ).toEqual({ threadId: "thread-1", labels: [] })
+    expect(
+      normalizeFlowDeskLabelPayload({ threadId: "thread-1", labels: ["FlowDesk/Needs Reply", "Bogus"] })
+    ).toEqual({ threadId: "thread-1", labels: ["FlowDesk/Needs Reply"] })
+    // Missing threadId or a non-array labels field is still invalid.
+    expect(normalizeFlowDeskLabelPayload({ labels: [] })).toBeNull()
+    expect(normalizeFlowDeskLabelPayload({ threadId: "thread-1" })).toBeNull()
+    expect(normalizeFlowDeskLabelPayload({ threadId: "thread-1", labels: "all" })).toBeNull()
   })
 })

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const {
   mockWritebackFindMany,
   mockWritebackUpdate,
+  mockWritebackUpdateMany,
   mockDraftFindUnique,
   mockDraftUpdate,
   mockAuditCreate,
@@ -11,6 +12,7 @@ const {
 } = vi.hoisted(() => ({
   mockWritebackFindMany: vi.fn(),
   mockWritebackUpdate: vi.fn(),
+  mockWritebackUpdateMany: vi.fn(),
   mockDraftFindUnique: vi.fn(),
   mockDraftUpdate: vi.fn(),
   mockAuditCreate: vi.fn(),
@@ -20,13 +22,19 @@ const {
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    gmailWritebackQueue: { findMany: mockWritebackFindMany, update: mockWritebackUpdate },
+    gmailWritebackQueue: {
+      findMany: mockWritebackFindMany,
+      update: mockWritebackUpdate,
+      updateMany: mockWritebackUpdateMany,
+    },
     draft: { findUnique: mockDraftFindUnique, update: mockDraftUpdate },
     auditLog: { create: mockAuditCreate },
   },
 }))
 
 vi.mock("@/lib/google", () => ({
+  GMAIL_WRITEBACK_MAX_ATTEMPTS: 3,
+  nextWritebackAttemptDate: () => new Date(),
   createGmailDraftForThread: mockCreateGmailDraftForThread,
   deleteGmailDraft: mockDeleteGmailDraft,
   applyFlowDeskLabelsToGmailThread: vi.fn(),
@@ -89,6 +97,7 @@ describe("Gmail writeback cron — draft jobs", () => {
     vi.clearAllMocks()
     process.env.CRON_SECRET = "cron-secret"
     mockWritebackUpdate.mockResolvedValue({})
+    mockWritebackUpdateMany.mockResolvedValue({ count: 1 })
     mockDraftUpdate.mockResolvedValue({})
     mockAuditCreate.mockResolvedValue({})
     mockCreateGmailDraftForThread.mockResolvedValue("gmail-draft-1")
