@@ -17,6 +17,7 @@ type CategoryPolicy = { action: "auto_send" | "require_approval" | "never"; thre
 type RawCategoryPolicy = { action: string; threshold?: number }
 
 type AutopilotSnapshot = {
+  automationLevel: number
   enabled: boolean
   confidenceThreshold: number
   maxAutoSendsPerDay: number
@@ -25,6 +26,45 @@ type AutopilotSnapshot = {
   disabledAt: string | null
   categoryThresholds: Record<string, RawCategoryPolicy | number>
 } | null
+
+const AUTOMATION_LEVELS = [
+  {
+    level: 0,
+    name: "Observe only",
+    does: "Reads and analyzes your email so the dashboard stays informed.",
+    wont: "Won't touch your Gmail at all — no labels, no drafts, never sends.",
+  },
+  {
+    level: 1,
+    name: "Suggest in dashboard",
+    does: "Shows suggested labels and reply drafts inside FlowDesk.",
+    wont: "Won't change anything in Gmail — suggestions stay in the dashboard, never sends.",
+  },
+  {
+    level: 2,
+    name: "Organize Gmail",
+    does: "Applies FlowDesk labels in your Gmail so the inbox arrives sorted.",
+    wont: "Won't create drafts in Gmail, mark anything read, or send anything.",
+  },
+  {
+    level: 3,
+    name: "Draft in Gmail",
+    does: "Labels your inbox and leaves suggested replies in your Gmail drafts folder.",
+    wont: "Won't send anything — you always review and press Send yourself.",
+  },
+  {
+    level: 4,
+    name: "Light autopilot",
+    does: "Labels, drafts, and may mark clearly low-risk email read or archive safe categories.",
+    wont: "Won't send replies on your behalf.",
+  },
+  {
+    level: 5,
+    name: "Auto-send (restricted)",
+    does: "May auto-send replies, but only for tightly approved categories that also pass every confidence, policy, and budget check.",
+    wont: "Won't send anything risky, sensitive, or low-confidence — those still wait for your approval.",
+  },
+] as const
 
 export default function AutopilotSettingsForm({
   initial,
@@ -35,6 +75,13 @@ export default function AutopilotSettingsForm({
   requiresLearnedProfile?: boolean
   hasLearnedProfile?: boolean
 }) {
+  // A tenant without a settings row predates the ladder: legacy default is
+  // Level 3 (labels + Gmail drafts, what shipped in Phases A/B), matching
+  // getAutomationLevel's server-side fallback.
+  const [currentLevel, setCurrentLevel] = useState(initial?.automationLevel ?? 3)
+  const [pendingLevel, setPendingLevel] = useState<number | null>(null)
+  const [levelSaving, setLevelSaving] = useState(false)
+  const [levelError, setLevelError] = useState<string | null>(null)
   const [enabled, setEnabled] = useState(initial?.enabled ?? false)
   const [threshold, setThreshold] = useState(String(initial?.confidenceThreshold ?? 0.85))
   const [maxSends, setMaxSends] = useState(String(initial?.maxAutoSendsPerDay ?? 10))
@@ -91,6 +138,27 @@ export default function AutopilotSettingsForm({
     }
   }
 
+  async function handleConfirmLevel() {
+    if (pendingLevel === null) return
+    setLevelSaving(true)
+    setLevelError(null)
+    try {
+      const res = await fetch("/api/autopilot-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ automationLevel: pendingLevel }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Failed to change level")
+      setCurrentLevel(pendingLevel)
+      setPendingLevel(null)
+    } catch (err) {
+      setLevelError(err instanceof Error ? err.message : "Failed to change level")
+    } finally {
+      setLevelSaving(false)
+    }
+  }
+
   async function handleReset() {
     setSaving(true)
     setError(null)
@@ -109,8 +177,86 @@ export default function AutopilotSettingsForm({
     }
   }
 
+  const pendingInfo = pendingLevel !== null ? AUTOMATION_LEVELS[pendingLevel] : null
+
   return (
     <div className="space-y-4">
+      {/* Trust ladder: the primary control. Levels are a ceiling on what the
+          agent may do; the advanced settings below stay as additional gates. */}
+      <div className="space-y-2" role="radiogroup" aria-label="Automation level">
+        {AUTOMATION_LEVELS.map(({ level, name, does, wont }) => {
+          const isCurrent = level === currentLevel
+          const isPending = level === pendingLevel
+          return (
+            <button
+              key={level}
+              type="button"
+              role="radio"
+              aria-checked={isCurrent}
+              onClick={() => {
+                setLevelError(null)
+                setPendingLevel(level === currentLevel ? null : level)
+              }}
+              className={`w-full rounded-lg border p-3 text-left transition-colors ${
+                isCurrent
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : isPending
+                    ? "border-slate-400 bg-slate-100"
+                    : "border-slate-200 bg-white hover:border-slate-300"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">
+                  Level {level}: {name}
+                </p>
+                {isCurrent && (
+                  <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-medium">
+                    Current
+                  </span>
+                )}
+              </div>
+              <p className={`mt-1 text-xs ${isCurrent ? "text-slate-200" : "text-slate-600"}`}>
+                {does}
+              </p>
+              <p className={`mt-0.5 text-xs ${isCurrent ? "text-slate-300" : "text-slate-400"}`}>
+                {wont}
+              </p>
+            </button>
+          )
+        })}
+      </div>
+
+      {pendingInfo && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <p className="font-medium">
+            Switch to Level {pendingInfo.level}: {pendingInfo.name}?
+          </p>
+          <p className="mt-1 text-xs">
+            {pendingInfo.does} {pendingInfo.wont}
+            {pendingInfo.level === 5 &&
+              " Auto-send additionally requires autopilot to be enabled in the advanced settings below."}
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={handleConfirmLevel}
+              disabled={levelSaving}
+              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+            >
+              {levelSaving ? "Saving..." : `Confirm Level ${pendingInfo.level}`}
+            </button>
+            <button
+              onClick={() => setPendingLevel(null)}
+              disabled={levelSaving}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {levelError && <p className="text-xs text-red-600">{levelError}</p>}
+
       {isDisabled && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
           <p className="font-medium">Autopilot disabled after {initial?.disableAfterFailures} consecutive failures.</p>
@@ -131,12 +277,22 @@ export default function AutopilotSettingsForm({
         </div>
       )}
 
+      <details className="rounded-lg border border-slate-200">
+        <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-slate-700">
+          Advanced auto-send settings
+          <span className="ml-2 text-xs font-normal text-slate-400">
+            thresholds, caps, and per-category policies — these gates apply on top of the level above
+          </span>
+        </summary>
+        <div className="space-y-4 border-t border-slate-100 px-4 py-4">
+
       {/* Enable toggle */}
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium">Enable autopilot</p>
           <p className="text-xs text-slate-500">
             AI sends replies automatically when all safety conditions are met.
+            Auto-send also requires Level 5 above.
           </p>
         </div>
         <button
@@ -280,6 +436,8 @@ export default function AutopilotSettingsForm({
       >
         {saving ? "Saving..." : "Save"}
       </button>
+        </div>
+      </details>
     </div>
   )
 }
