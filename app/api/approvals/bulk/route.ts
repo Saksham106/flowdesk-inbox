@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { projectDecisionOntoDraft } from "@/lib/agent/approvals"
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   const owned = await prisma.approvalRequest.findMany({
     where: { id: { in: ids }, tenantId: session.user.tenantId, status: "pending" },
-    select: { id: true },
+    select: { id: true, draftId: true, conversationId: true },
   })
   const ownedIds = owned.map((r) => r.id)
 
@@ -40,6 +41,16 @@ export async function POST(req: NextRequest) {
       decidedAt: new Date(),
     },
   })
+
+  for (const approval of owned) {
+    if (!approval.draftId) continue
+    await projectDecisionOntoDraft({
+      tenantId: session.user.tenantId,
+      draftId: approval.draftId,
+      conversationId: approval.conversationId,
+      decision,
+    })
+  }
 
   await prisma.auditLog.create({
     data: {

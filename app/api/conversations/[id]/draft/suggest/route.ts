@@ -16,6 +16,7 @@ import { revalidateInboxViews } from "@/lib/cache-tags"
 import { conversationUpdateForDraftReady } from "@/lib/workflow-status-transitions"
 import { queueGmailDraftWriteback } from "@/lib/gmail-drafts"
 import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
+import { ensureDraftApprovalRequest } from "@/lib/agent/approvals"
 
 export const runtime = "nodejs"
 
@@ -242,6 +243,13 @@ export async function POST(
     },
   })
 
+  await ensureDraftApprovalRequest({
+    tenantId: session.user.tenantId,
+    conversationId: conversation.id,
+    draftId: draft.id,
+    source: "draft_suggest",
+  })
+
   if (accountType === "business" && suggestedLabel && VALID_LABELS.includes(suggestedLabel)) {
     await prisma.conversation.update({
       where: { id: conversation.id },
@@ -328,6 +336,12 @@ async function maybeReturnCachedDraft(input: {
     metadata?.draftCacheKey === input.draftCacheKey
   ) {
     const meta = { ...metadata, cacheHit: true }
+    await ensureDraftApprovalRequest({
+      tenantId: input.tenantId,
+      conversationId: input.conversationId,
+      draftId: input.draft.id,
+      source: "draft_suggest",
+    })
     await recordAiUsageEvent({
       tenantId: input.tenantId,
       feature: "draft.suggest.cache_hit",

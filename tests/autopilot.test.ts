@@ -12,6 +12,7 @@ const {
   mockDraftUpdate,
   mockAuditCreate,
   mockAuditCount,
+  mockApprovalUpdateMany,
   mockAiUsageCreate,
   mockGetFullBusinessContext,
   mockGetReplyGenerationContext,
@@ -27,6 +28,7 @@ const {
   mockDraftUpdate:                vi.fn(),
   mockAuditCreate:                vi.fn(),
   mockAuditCount:                 vi.fn(),
+  mockApprovalUpdateMany:         vi.fn(),
   mockAiUsageCreate:              vi.fn(),
   mockGetFullBusinessContext:     vi.fn(),
   mockGetReplyGenerationContext:  vi.fn(),
@@ -45,6 +47,7 @@ vi.mock('@/lib/prisma', () => ({
     agentJob: { findUnique: mockJobFindUnique },
     draft:    { upsert: mockDraftUpsert, update: mockDraftUpdate },
     auditLog: { create: mockAuditCreate, count: mockAuditCount },
+    approvalRequest: { updateMany: mockApprovalUpdateMany },
     aiUsageEvent: { create: mockAiUsageCreate },
   },
 }))
@@ -111,6 +114,7 @@ const policyRequires: PolicyDecision = { requiresApproval: true, escalate: false
 const enabledSetting = {
   tenantId: TENANT,
   enabled: true,
+  automationLevel: 5,
   confidenceThreshold: 0.85,
   allowedIntentsJson: null,
   disableAfterFailures: 3,
@@ -194,6 +198,24 @@ describe('checkAutopilotEligibility', () => {
     expect(result.eligible).toBe(true)
   })
 
+  it('returns ineligible below automation Level 5 even with autopilot enabled', async () => {
+    for (const automationLevel of [0, 1, 2, 3, 4]) {
+      mockAutopilotSettingFindUnique.mockResolvedValue({ ...enabledSetting, automationLevel })
+      const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
+      expect(result.eligible).toBe(false)
+      if (!result.eligible) {
+        expect(result.reason).toContain('Automation level')
+      }
+    }
+  })
+
+  it('fails closed when automationLevel is missing from the setting row', async () => {
+    const { automationLevel: _omitted, ...withoutLevel } = enabledSetting
+    mockAutopilotSettingFindUnique.mockResolvedValue(withoutLevel)
+    const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
+    expect(result.eligible).toBe(false)
+  })
+
   it('returns eligible when allowedIntentsJson matches the intent', async () => {
     mockAutopilotSettingFindUnique.mockResolvedValue({
       ...enabledSetting,
@@ -233,6 +255,54 @@ describe('checkAutopilotEligibility', () => {
     })
     const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
     expect(result.eligible).toBe(true)
+  })
+
+  it('returns ineligible when the per-category policy requires approval', async () => {
+    mockAutopilotSettingFindUnique.mockResolvedValue({
+      ...enabledSetting,
+      categoryThresholdsJson: {
+        'appointment booking request': { action: 'require_approval' },
+      },
+    })
+
+    const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
+
+    expect(result.eligible).toBe(false)
+    if (!result.eligible) {
+      expect(result.reason).toContain('requires approval')
+    }
+  })
+
+  it('returns ineligible when the per-category policy is never auto-send', async () => {
+    mockAutopilotSettingFindUnique.mockResolvedValue({
+      ...enabledSetting,
+      categoryThresholdsJson: {
+        'appointment booking request': { action: 'never' },
+      },
+    })
+
+    const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
+
+    expect(result.eligible).toBe(false)
+    if (!result.eligible) {
+      expect(result.reason).toContain('disallows auto-send')
+    }
+  })
+
+  it('enforces object-form per-category auto-send thresholds', async () => {
+    mockAutopilotSettingFindUnique.mockResolvedValue({
+      ...enabledSetting,
+      categoryThresholdsJson: {
+        'appointment booking request': { action: 'auto_send', threshold: 0.95 },
+      },
+    })
+
+    const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
+
+    expect(result.eligible).toBe(false)
+    if (!result.eligible) {
+      expect(result.reason).toContain('per-category threshold')
+    }
   })
 })
 
@@ -323,6 +393,7 @@ describe('attemptAutopilotSend', () => {
     mockAutopilotSettingUpdateMany.mockResolvedValue({})
     mockAiUsageCreate.mockResolvedValue({})
     mockCheckAiBudgetForTokens.mockResolvedValue({ allowed: true, reason: 'Within budget' })
+    mockApprovalUpdateMany.mockResolvedValue({ count: 0 })
   })
 
   it('sends draft and returns sent: true on success', async () => {

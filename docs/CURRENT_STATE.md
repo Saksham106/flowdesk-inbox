@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-07-06 (Phase C: waiting-on / follow-up lifecycle)
+Last updated: 2026-07-06 (Phase D foundation: trust ladder + unified approvals)
 
 FlowDesk is a Gmail-native AI email operator for individuals and small businesses. Gmail is the primary daily workspace; the FlowDesk web app is the agent control room for setup, preferences, approvals, audit history, training, and power-user review.
 
@@ -11,6 +11,22 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 - NextAuth credentials authentication with tenant-scoped data isolation.
 - Personal and business account modes via `Tenant.accountType`. Personal accounts suppress all CRM, sales, lead-scoring, and business-framing AI behavior at the prompt and sync layers.
 - Audit logs, approval requests, automation run traces, and undo for selected reversible actions.
+- Unified approvals: `ApprovalRequest` is the single approval primitive (`step: "send"`, source in `metadataJson`). Every draft that reaches `proposed` (suggest, manual edit, meeting follow-up) gets one pending request; approve/send/clear/autopilot-send resolve it (`lib/agent/approvals.ts`), and `/approvals` decisions project back onto `Draft.status` — approve marks the draft approved, reject clears it and withdraws any Gmail-native draft. Cleared drafts cancel their request (`cancelled` status).
+
+### Automation trust ladder
+
+A per-tenant automation level (`AutopilotSetting.automationLevel`, 0–5) is the user-facing ceiling on what the agent may do on its own. It is mapped onto the existing gates (`lib/agent/automation-level.ts`) and never loosens them — an automated action runs only when the level allows it AND every pre-existing confidence/policy/budget/cap gate passes. User-initiated actions are never level-gated.
+
+| Level | Meaning | Gmail labels | Gmail drafts | Auto mark-read/archive | Auto-send |
+|-------|---------|--------------|--------------|------------------------|-----------|
+| 0 | Read-only insights | no | no | no | no |
+| 1 | Suggest in dashboard only | no | no | no | no |
+| 2 | Apply labels in Gmail (new-tenant default) | yes | no | no | no |
+| 3 | Create Gmail drafts | yes | yes | no | no |
+| 4 | Mark low-risk read / archive safe categories | yes | yes | yes | no |
+| 5 | Auto-send approved categories | yes | yes | yes | yes* |
+
+*Auto-send requires Level 5 **and** autopilot enabled **and** all existing gates (learned profile, risk, confidence + per-category thresholds, allow-list, budget, daily cap, failure auto-disable). Levels ≤ 4 can never auto-send; the gate fails closed on a missing level. No automatic mark-read/archive path exists yet — the Level 4 gate is defined for future callers. Level changes require an explicit confirm in settings, are audited (`automation_level.changed`), and take effect immediately. Existing tenants were migrated without increasing autonomy: autopilot-enabled → 5, everyone else → 3 (labels + Gmail drafts were already unconditional); tenants without a settings row derive Level 3.
 
 ### Gmail
 
@@ -20,9 +36,9 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 - Pub/Sub push notifications via renewable watches. Each notification is persisted in `GmailPushEvent` with idempotency on the Pub/Sub message ID; duplicate deliveries are no-ops.
 - Per-channel sync lock via `updateMany` on `syncLockExpiresAt`. Parallel sync attempts skip and return 202 without duplicating work. Lock owner is implicit (row-level); lock expires after 2 minutes.
 - Local read/archive/trash/unsubscribe writeback to Gmail. Failed mark-read writes queue into `GmailWritebackQueue` and are retried by cron with exponential backoff.
-- Gmail-native label projection runs on manual workflow/status changes and automatically after classification and draft creation (`projectFlowDeskLabelsForConversation` in `lib/agent/work-item-sync.ts`, skipped when the user has manually overridden state). `lib/gmail-labels.ts` maps FlowDesk state to user-facing labels under the `FlowDesk/` namespace (`Needs Reply`, `Waiting On`, `Read Later`, `Handled`, `Autodrafted`, etc.), queues `apply_labels` jobs in `GmailWritebackQueue`, and records `gmail.labels.queued` audit entries.
+- Gmail-native label projection runs on manual workflow/status changes and automatically after classification and draft creation (`projectFlowDeskLabelsForConversation` in `lib/agent/work-item-sync.ts`, skipped when the user has manually overridden state or the tenant's automation level is below 2). `lib/gmail-labels.ts` maps FlowDesk state to user-facing labels under the `FlowDesk/` namespace (`Needs Reply`, `Waiting On`, `Read Later`, `Handled`, `Autodrafted`, etc.), queues `apply_labels` jobs in `GmailWritebackQueue`, and records `gmail.labels.queued` audit entries.
 - FlowDesk labels are bootstrapped in Gmail on OAuth connect and manual sync (`ensureFlowDeskLabels`); per-label enable/disable and rename settings persist in `GmailLabelMapping` via `/api/gmail-label-settings` and the settings page.
-- Gmail-native drafts: proposed FlowDesk reply drafts are written to Gmail as real drafts through `create_draft` writeback jobs (`lib/gmail-drafts.ts`). Creation dedupes by deleting the prior Gmail draft, skips when the user already replied manually, and stores the provider draft ID in draft metadata; `withdraw_draft` jobs remove the Gmail draft when the conversation leaves Draft Ready.
+- Gmail-native drafts: proposed FlowDesk reply drafts are written to Gmail as real drafts through `create_draft` writeback jobs (`lib/gmail-drafts.ts`), at automation Level 3+ (below that the draft stays dashboard-only). Creation dedupes by deleting the prior Gmail draft, skips when the user already replied manually, and stores the provider draft ID in draft metadata; `withdraw_draft` jobs remove the Gmail draft when the conversation leaves Draft Ready and are never level-gated (cleanup keeps working after a tenant lowers their level).
 - `GET /api/cron/gmail-writeback` processes `mark_read`, `apply_labels`, `create_draft`, and `withdraw_draft` jobs. Label jobs create missing Gmail labels, apply the current FlowDesk labels to the thread, remove stale labels from the FlowDesk namespace, and record `gmail.labels.applied`. Every job is claimed atomically (pending → processing via `updateMany`) so overlapping cron runs never double-process; failures retry with exponential backoff (`nextWritebackAttemptDate`) and fail out permanently after `GMAIL_WRITEBACK_MAX_ATTEMPTS`. An empty label set is a valid payload meaning "remove all FlowDesk labels" and is queued only for threads that were labeled before, so no-label transitions clean up stale labels without spamming untouched threads.
 - **Waiting-on / follow-up lifecycle** (Phase C): outbound replies that plausibly expect a response (deterministic heuristic `outboundMessageExpectsReply` in `lib/agent/follow-up.ts` — no LLM, personal and business modes alike) move the conversation to Waiting On. FlowDesk sends transition directly in the send path; replies sent natively in Gmail are detected during history sync (`conversation.waiting_on_detected` audit). An inbound reply self-heals: back to Needs Reply, pending follow-up jobs cancelled, stale waiting-on attention cleared, labels re-projected (`conversation.waiting_on_cleared`). After a tenant-configurable delay (`FollowUpSetting.staleAfterDays`, business days, default 3) the follow-up cron's label sweep (`runFollowUpLabelSweep`) adds `FlowDesk/Follow Up` (`follow_up.due_labeled`); the sweep runs for every tenant, while `FollowUpSetting.enabled` continues to gate only the automated follow-up job pipeline. No auto-sent follow-ups — labels and dashboard surfacing only.
 - Gmail cron routes reject bearer-token auth when `CRON_SECRET` is unset, preventing accidental `Authorization: Bearer undefined` access in misconfigured deployments.
@@ -79,7 +95,7 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 ### Automations and integrations
 
 - Plain-English agent rules (`AgentRule` model, budget-metered NL compiler, conflict detection), category-scoped autopilot settings, snippets miner cron, scheduling sessions, automation run traces with rollback, and cron-driven workflow templates.
-- `GET /api/cron/agent-jobs` executes pending `AgentJob`s (LLM classification, follow-up, lead-sequence) through `runAgentJob`: at most 25 jobs per run with per-tenant round-robin fairness, atomic pending → running claims so overlapping runs never double-execute, and per-job failure isolation. Pending jobs older than 7 days are bulk-failed as `stale_at_executor_launch` (200/run) rather than executed. Autopilot sends stay gated behind opt-in, learned profile, policy, budget, confidence/per-intent thresholds, daily cap, and failure limit — executing jobs does not enable sending.
+- `GET /api/cron/agent-jobs` executes pending `AgentJob`s (LLM classification, follow-up, lead-sequence) through `runAgentJob`: at most 25 jobs per run with per-tenant round-robin fairness, atomic pending → running claims so overlapping runs never double-execute, and per-job failure isolation. Pending jobs older than 7 days are bulk-failed as `stale_at_executor_launch` (200/run) rather than executed. Autopilot sends stay gated behind opt-in, learned profile, policy, budget, confidence/per-intent thresholds, daily cap, and failure limit — executing jobs does not enable sending. Auto-send additionally requires automation Level 5 (trust ladder above).
 - Snooze persists a valid pre-snooze priority, marks snoozed conversations as `none`, and restores the saved priority on resurface with a medium fallback for legacy values.
 - Google Calendar (events, free/busy, calendar holds), Google Drive OAuth foundation (not yet injected into drafts), and optional MindBody connector.
 

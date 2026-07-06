@@ -6,6 +6,8 @@ import { checkAiBudgetForTokens } from "@/lib/ai/budget"
 import { buildDraftReplyPrompt } from "@/lib/ai/prompts/draft-reply"
 import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import { sendConversationMessage, ConversationSendError } from "@/lib/conversations/send-message"
+import { resolveDraftApprovalRequests } from "@/lib/agent/approvals"
+import { isActionAllowedAtLevel } from "@/lib/agent/automation-level"
 import type { ClassifyResult } from "@/lib/ai/prompts/classify"
 import type { PolicyDecision } from "@/lib/agent/policy"
 import { summarizeConversation } from "@/lib/ai/summarize"
@@ -29,6 +31,15 @@ export async function checkAutopilotEligibility(
     return { eligible: false, reason: "Autopilot is not enabled" }
   }
 
+  // Trust-ladder ceiling: auto-send requires Level 5 on top of every other
+  // gate. A missing/unknown level fails closed.
+  if (!isActionAllowedAtLevel(setting.automationLevel ?? 0, "auto_send")) {
+    return {
+      eligible: false,
+      reason: `Automation level ${setting.automationLevel ?? 0} is below Level 5 (auto-send)`,
+    }
+  }
+
   if (setting.disabledAt) {
     return { eligible: false, reason: "Autopilot is disabled due to repeated failures" }
   }
@@ -40,17 +51,45 @@ export async function checkAutopilotEligibility(
     }
   }
 
-  // Per-intent threshold override — case-insensitive key lookup, consistent with allowedIntentsJson
+  // Per-intent policy override — case-insensitive key lookup, consistent with
+  // allowedIntentsJson. Supports the legacy bare-number threshold format and
+  // the newer CategoryPolicy object saved by the settings UI.
   if (setting.categoryThresholdsJson) {
-    const categoryThresholds = setting.categoryThresholdsJson as Record<string, number>
+    const categoryThresholds = setting.categoryThresholdsJson as Record<string, unknown>
     const intentLower = classification.intent.toLowerCase()
     const matchedKey = Object.keys(categoryThresholds).find((k) => k.toLowerCase() === intentLower)
     if (matchedKey !== undefined) {
-      const categoryThreshold = categoryThresholds[matchedKey]
-      if (typeof categoryThreshold === "number" && classification.confidence < categoryThreshold) {
+      const categoryPolicy = categoryThresholds[matchedKey]
+      if (typeof categoryPolicy === "number" && classification.confidence < categoryPolicy) {
         return {
           eligible: false,
-          reason: `Confidence ${classification.confidence.toFixed(2)} is below per-category threshold ${categoryThreshold} for intent "${classification.intent}"`,
+          reason: `Confidence ${classification.confidence.toFixed(2)} is below per-category threshold ${categoryPolicy} for intent "${classification.intent}"`,
+        }
+      }
+      if (categoryPolicy && typeof categoryPolicy === "object" && !Array.isArray(categoryPolicy)) {
+        const action = (categoryPolicy as Record<string, unknown>).action
+        const threshold = (categoryPolicy as Record<string, unknown>).threshold
+        if (action === "require_approval") {
+          return {
+            eligible: false,
+            reason: `Intent "${classification.intent}" requires approval by per-category policy`,
+          }
+        }
+        if (action === "never") {
+          return {
+            eligible: false,
+            reason: `Intent "${classification.intent}" disallows auto-send by per-category policy`,
+          }
+        }
+        if (
+          action === "auto_send" &&
+          typeof threshold === "number" &&
+          classification.confidence < threshold
+        ) {
+          return {
+            eligible: false,
+            reason: `Confidence ${classification.confidence.toFixed(2)} is below per-category threshold ${threshold} for intent "${classification.intent}"`,
+          }
         }
       }
     }
@@ -169,6 +208,7 @@ export async function attemptAutopilotSend(
     accountType: context.accountType,
     hasLearnedProfile: !!context.learnedProfile,
     autopilotEnabled: setting.enabled,
+    automationLevel: setting.automationLevel ?? 0,
     confidence: classification.confidence,
     confidenceThreshold: setting.confidenceThreshold,
     riskLevel: classification.riskLevel,
@@ -311,6 +351,15 @@ export async function attemptAutopilotSend(
     await prisma.draft.update({
       where: { conversationId: job.conversationId },
       data: { status: "sent" },
+    })
+
+    // Close out any pending approval for this draft so the unified queue
+    // never shows work autopilot already completed.
+    await resolveDraftApprovalRequests({
+      tenantId: job.tenantId,
+      draftId: draft.id,
+      resolution: "approved",
+      note: "autopilot_send",
     })
 
     await recordAutopilotSuccess(job.tenantId)

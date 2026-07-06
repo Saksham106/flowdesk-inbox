@@ -683,14 +683,13 @@ export default async function SettingsPage({ searchParams }: Props) {
           </section>
         )}
 
-        {/* Autopilot / Auto-Send */}
+        {/* Automation level / Autopilot */}
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">
-            <h2 className="font-semibold">{isPersonal ? "Auto-Send" : "Autopilot"}</h2>
+            <h2 className="font-semibold">Automation Level</h2>
             <p className="mt-0.5 text-sm text-slate-500">
-              {isPersonal
-                ? "Allow FlowDesk to send replies automatically when it is highly confident the draft matches your style."
-                : "Allow the AI to send replies automatically for low-risk, high-confidence categories. Requires trust to be earned first."}
+              Choose how much FlowDesk is allowed to do on its own. Each level includes
+              everything below it; you can move up or down at any time.
             </p>
           </div>
           <div className="px-6 py-5">
@@ -700,6 +699,7 @@ export default async function SettingsPage({ searchParams }: Props) {
               initial={
                 autopilotSetting
                   ? {
+                      automationLevel: autopilotSetting.automationLevel,
                       enabled: autopilotSetting.enabled,
                       confidenceThreshold: autopilotSetting.confidenceThreshold,
                       maxAutoSendsPerDay: autopilotSetting.maxAutoSendsPerDay,

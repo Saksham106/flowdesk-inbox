@@ -5,13 +5,13 @@ Last updated: 2026-07-06
 ## Near term
 
 - [ ] Preserve user-edited `InboxTask` fields (due date, title) across work-item sync — the sync upsert currently overwrites them on the same deterministic key, violating the "user intent wins" invariant. Design decision: flip `source: "user"` on edit vs a `userEditedFields` metadata flag — match how `Lead` preserves `stage`/`score`.
-- [ ] Unify draft approvals onto `ApprovalRequest` — today only meeting follow-up creates one; the primary draft flow runs entirely on `Draft.status`. Precondition for tiered approvals and the Phase D approval queue (audit §9 refactor-before-build).
+- [x] Unify draft approvals onto `ApprovalRequest` — done: all draft-propose paths create a pending request, approve/send/clear/autopilot resolve it, and /approvals decisions project onto `Draft.status` (`lib/agent/approvals.ts`).
 - [x] Gmail writeback cron hardening (done with Phase C): exponential backoff + fail-out after max attempts, atomic pending → processing claim, and empty label sets now project as "remove all FlowDesk labels" for previously-labeled threads.
 - [ ] Record Outlook renewal/sync failure causes (`OutlookCredential.subscriptionError`, `OutlookSyncEvent.lastError`, audit log) instead of bare catch blocks, and stop adding failed channels to `processedChannels` so the stale-mailbox fallback doesn't skip them.
 - [ ] Fix `FlowDesk/Handle First` label mapping — `handle_first` is not an attention category the classifier or corrections can produce; map it from the command-center top-action selection or drop it from the vocabulary.
 - [ ] Implement or remove the `create_draft` automation step type — declared in the step union but falls through to "Unknown step type" at runtime.
 - [ ] Schedule FlowDesk Gmail label bootstrap as recurring maintenance (bootstrap on OAuth connect and manual sync is done).
-- [ ] Add automation level settings for Gmail-native actions before expanding auto-read/archive/send behavior.
+- [x] Add automation level settings for Gmail-native actions — done: per-tenant Level 0–5 trust ladder (`lib/agent/automation-level.ts`) gates label projection (≥2), Gmail drafts (≥3), and auto-send (5), with a confirm-to-change settings selector. Auto mark-read/archive (Level 4) is gated but has no automatic callers yet.
 - [x] Track sent threads waiting for replies and apply `Waiting On` / `Follow Up` Gmail labels (Phase C: deterministic expects-reply detection on FlowDesk and Gmail-native sends, self-healing on inbound reply, follow-up-due label after the tenant's business-day delay, dashboard due dates).
 - [ ] Update dashboard/settings copy and indicators so the website reads as the agent control room.
 - [ ] Finish heuristic consolidation: the `{"quiet","fyi_done"}` attention set is duplicated across command-center, inbox-fyi, gmail-labels, and workflow-status, and the isIgnorable/isFyi decision logic is implemented independently in command-center and inbox-fyi — extract shared sets plus a single helper (regex constants are already shared via `lib/inbox-fyi.ts`).

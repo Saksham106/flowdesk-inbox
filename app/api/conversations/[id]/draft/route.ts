@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidateInboxViews } from "@/lib/cache-tags"
 import { conversationUpdateForDraftReady } from "@/lib/workflow-status-transitions"
+import { ensureDraftApprovalRequest, resolveDraftApprovalRequests } from "@/lib/agent/approvals"
 
 export const runtime = "nodejs"
 
@@ -48,6 +49,13 @@ export async function PATCH(
     const draft = await prisma.draft.update({
       where: { conversationId: conversation.id },
       data: { text, status: "proposed" },
+    })
+
+    await ensureDraftApprovalRequest({
+      tenantId: session.user.tenantId,
+      conversationId: conversation.id,
+      draftId: draft.id,
+      source: "draft_edit",
     })
 
     await prisma.conversation.update({
@@ -94,6 +102,32 @@ export async function PATCH(
     where: { conversationId: conversation.id },
     data,
   })
+
+  // Keep the unified approval queue in sync with the draft decision:
+  // approve resolves the pending request, clear cancels it, and setting a
+  // draft back to proposed re-opens one.
+  if (status === "approved") {
+    await resolveDraftApprovalRequests({
+      tenantId: session.user.tenantId,
+      draftId: draft.id,
+      resolution: "approved",
+      reviewerUserId: session.user.id,
+    })
+  } else if (status === "none") {
+    await resolveDraftApprovalRequests({
+      tenantId: session.user.tenantId,
+      draftId: draft.id,
+      resolution: "cancelled",
+      note: "draft_cleared",
+    })
+  } else if (status === "proposed") {
+    await ensureDraftApprovalRequest({
+      tenantId: session.user.tenantId,
+      conversationId: conversation.id,
+      draftId: draft.id,
+      source: "draft_reproposed",
+    })
+  }
 
   await prisma.auditLog.create({
     data: {

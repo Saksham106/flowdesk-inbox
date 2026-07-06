@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { projectDecisionOntoDraft } from "@/lib/agent/approvals"
 
 const ALLOWED_DECISIONS = ["approved", "rejected"] as const
 type Decision = (typeof ALLOWED_DECISIONS)[number]
@@ -53,6 +54,15 @@ export async function POST(
       conversationId: true,
     },
   })
+
+  if (approval.draftId) {
+    await projectDecisionOntoDraft({
+      tenantId: session.user.tenantId,
+      draftId: approval.draftId,
+      conversationId: approval.conversationId,
+      decision: decision as Decision,
+    })
+  }
 
   await prisma.auditLog.create({
     data: {

@@ -43,9 +43,11 @@ exists instead of re-specifying it:
    now calls `users.drafts.create`; a `create_draft`/`withdraw_draft` writeback
    lane pushes proposed drafts into Gmail with dedup (recorded `gmailDraftId`),
    manual-reply detection, `Autodrafted` labeling, and withdrawal on draft clear.
-3. **Automation is binary, not a ladder.** The doc's Level 0–5 model does not
-   exist as a first-class user-facing control; today it's `enabled` + a
-   confidence threshold. *(post-MVP)*
+3. ~~**Automation is binary, not a ladder.**~~ **DONE (Phase D foundation).**
+   `AutopilotSetting.automationLevel` (0–5) is a first-class user-facing
+   control mapped onto the existing autonomy/policy gates
+   (`lib/agent/automation-level.ts`) with a confirm-to-change settings
+   selector; approvals are unified onto `ApprovalRequest`.
 4. ~~**Labels are hardcoded.**~~ **PARTIAL (Phase A).** A `GmailLabelMapping`
    table + settings panel now let users **hide** labels; in-Gmail **renaming**
    is deferred (needs safe reconciliation of already-created labels).
@@ -295,6 +297,11 @@ Reframe UI language; ship the Level 0–5 automation selector wired to
 autonomy/policy; approval queue; audit-log viewer; daily brief; training center.
 *Outcome: the dashboard feels like supervising an employee.*
 
+> **Status:** foundation shipped on `feat/automation-trust-ladder` — approvals
+> unified onto `ApprovalRequest` (single queue primitive) and the Level 0–5
+> selector wired into the existing gate chain. The control-room reframe,
+> audit-log viewer, and daily brief remain.
+
 **Phase E — In-Gmail surface (Milestone 5).**
 Decision gate → Gmail Workspace **add-on** first (trust, marketplace,
 cross-platform) with contextual panel + quick actions calling the backend; then
@@ -331,9 +338,9 @@ A–C existing. E is explicitly gated on A–C validating the API-first model.
 
 - **Waiting-on/follow-up label lifecycle**, self-healing on inbound reply +
   delayed `Follow Up` (extend `follow-up.ts` + follow-up cron).
-- **Automation Level 0–5 model.** A per-tenant enum mapped onto
-  `evaluateAutonomy`/`checkPolicy` gates; migrate `AutopilotSetting` to express
-  it; default new users to Level 2–3.
+- ~~**Automation Level 0–5 model.**~~ **DONE.** `AutopilotSetting.automationLevel`
+  mapped onto the existing gates; new tenants default to Level 2, existing
+  tenants derived without increasing autonomy (enabled → 5, else 3).
 - **Control-room dashboard reframe.** Copy/IA changes: "agent control room,"
   daily brief, agent activity feed, approval queue, automation-level selector,
   label-config UI, audit-log viewer.
