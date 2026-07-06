@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-07-06 (post-merge docs refresh)
+Last updated: 2026-07-06 (audit drift fixes)
 
 FlowDesk is a Gmail-native AI email operator for individuals and small businesses. Gmail is the primary daily workspace; the FlowDesk web app is the agent control room for setup, preferences, approvals, audit history, training, and power-user review.
 
@@ -20,8 +20,10 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 - Pub/Sub push notifications via renewable watches. Each notification is persisted in `GmailPushEvent` with idempotency on the Pub/Sub message ID; duplicate deliveries are no-ops.
 - Per-channel sync lock via `updateMany` on `syncLockExpiresAt`. Parallel sync attempts skip and return 202 without duplicating work. Lock owner is implicit (row-level); lock expires after 2 minutes.
 - Local read/archive/trash/unsubscribe writeback to Gmail. Failed mark-read writes queue into `GmailWritebackQueue` and are retried by cron with exponential backoff.
-- Gmail-native label projection is implemented for manual workflow/status changes. `lib/gmail-labels.ts` maps FlowDesk state to user-facing labels under the `FlowDesk/` namespace (`Needs Reply`, `Waiting On`, `Read Later`, `Handled`, `Autodrafted`, etc.), queues `apply_labels` jobs in `GmailWritebackQueue`, and records `gmail.labels.queued` audit entries.
-- `GET /api/cron/gmail-writeback` now processes both `mark_read` and `apply_labels` jobs. Label jobs create missing Gmail labels, apply the current FlowDesk labels to the thread, remove stale labels from the FlowDesk namespace, and record `gmail.labels.applied`.
+- Gmail-native label projection runs on manual workflow/status changes and automatically after classification and draft creation (`projectFlowDeskLabelsForConversation` in `lib/agent/work-item-sync.ts`, skipped when the user has manually overridden state). `lib/gmail-labels.ts` maps FlowDesk state to user-facing labels under the `FlowDesk/` namespace (`Needs Reply`, `Waiting On`, `Read Later`, `Handled`, `Autodrafted`, etc.), queues `apply_labels` jobs in `GmailWritebackQueue`, and records `gmail.labels.queued` audit entries.
+- FlowDesk labels are bootstrapped in Gmail on OAuth connect and manual sync (`ensureFlowDeskLabels`); per-label enable/disable and rename settings persist in `GmailLabelMapping` via `/api/gmail-label-settings` and the settings page.
+- Gmail-native drafts: proposed FlowDesk reply drafts are written to Gmail as real drafts through `create_draft` writeback jobs (`lib/gmail-drafts.ts`). Creation dedupes by deleting the prior Gmail draft, skips when the user already replied manually, and stores the provider draft ID in draft metadata; `withdraw_draft` jobs remove the Gmail draft when the conversation leaves Draft Ready.
+- `GET /api/cron/gmail-writeback` processes `mark_read`, `apply_labels`, `create_draft`, and `withdraw_draft` jobs. Label jobs create missing Gmail labels, apply the current FlowDesk labels to the thread, remove stale labels from the FlowDesk namespace, and record `gmail.labels.applied`.
 - Gmail cron routes reject bearer-token auth when `CRON_SECRET` is unset, preventing accidental `Authorization: Bearer undefined` access in misconfigured deployments.
 - Local user intent (read state, conversation status, attention category) is stored separately from raw Gmail state (`gmailUnread`, `gmailLabelIds`, `gmailRawState`) so provider syncs cannot overwrite explicit user choices.
 - `GmailStateReconcile` cron detects local-read/Gmail-unread drift; auto-reconciles non-user reads and queues writeback for user-initiated reads.
@@ -41,7 +43,7 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 - Gmail MIME tree walker collects `text/html` and `text/plain` parts at up to 12 levels of nesting. HTML is preferred for rendering; plain text is used for AI prompts and snippet generation.
 - HTML is sanitized with a strict allow-list and rendered in a sandboxed iframe. Remote images and other external network fetches are blocked by default. Users can explicitly load HTTPS images per message; the choice is not persisted (privacy-preserving by design).
 - A forced light-mode color scheme prevents dark-mode email templates from rendering black in the iframe.
-- Plain-text bodies are auto-linked; `cid:` inline images are not yet resolved from MIME attachments.
+- Plain-text bodies are auto-linked. Gmail `cid:` inline images are resolved from MIME attachments into size-capped safe `data:` URIs at sync time (`resolveInlineCids` in `lib/google.ts`); messages synced before that fix keep unresolved `cid:` references.
 
 ### Inbox intelligence
 
@@ -60,16 +62,16 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 
 - The dashboard is the FlowDesk control room, not the intended daily workspace. It supervises Gmail-native behavior: review important threads, inspect agent reasoning, approve drafts/actions, tune settings, train the agent, and inspect audit history.
 - Home view sections: Handle First (top-priority conversations with Draft Reply / Mark Done actions), Needs Action, Bills & Deadlines, Read Later, Waiting On, Agent Activity, and Quietly Handled banner. Mark Done uses the workflow-status endpoint, queues Gmail label projection for Google-backed threads, and done conversations are excluded from Handle First even when a fresh persisted AI state still says they need a reply.
-- **Bills & Deadlines**: items sourced from `inboxTask` records with due dates ≤ 7 days out, plus conversations with `review_soon` attention. Per-item dismiss button: tasks close via `PATCH /api/tasks/:id/status`; billing alerts reclassify to `fyi_done` via `PATCH /api/conversations/:id/attention`.
-- **Read Later**: per-card ✓ (mark FYI/Done) and ✕ (mark Quiet) buttons, both persisted via `PATCH /api/conversations/:id/attention`. Dismissals are optimistic; page refreshes on success.
-- **Quietly Handled**: "Review all" links to `/inbox?attention=fyi_done` so users see the actual quietly-handled emails, not an unfiltered inbox.
+- **Bills & Deadlines**: items sourced from `inboxTask` records with due dates ≤ 7 days out, plus conversations with `review_soon` attention. Per-item dismiss button: tasks close via `PATCH /api/tasks/:id/status`; billing alerts mark done via `PATCH /api/conversations/:id/workflow-status`.
+- **Read Later**: per-card "Done" (with a 5-second undo that restores Read Later) and "Not interested" buttons, both persisted via `PATCH /api/conversations/:id/workflow-status`. Dismissals are optimistic; page refreshes on success.
+- **Quietly Handled**: "Review all" links to `/inbox?status=closed` so users see the closed/quietly-handled conversations, not an unfiltered inbox.
 - Stat pills (Handle First, Waiting On, Read Later, Quietly Handled) pull counts from the `DailyCommandCenter` built by `lib/agent/command-center.ts`. Handle First count equals `topActions.length` so it always matches the items shown.
 - Support and Scheduling panel request loading states clear through `finally` blocks, so failed `fetch`/JSON parsing paths no longer leave buttons stuck in a loading state.
 
 ### Work items and classification persistence
 
 - `lib/agent/work-items.ts` extracts task and lead candidates from conversation analysis. `lib/agent/work-item-sync.ts` persists them with tenant-scoped upserts and audit logs.
-- Persistence never overwrites records with source `"user"`; only `"deterministic"` source records are updated by sync. This preserves explicit user edits across provider syncs.
+- Conversation-state persistence never overwrites records with source `"user_override"`; only deterministic-source state records are updated by sync. `InboxTask` field edits (e.g. a user-corrected due date) are **not** yet protected — the sync upsert overwrites `title`/`dueAt`/`source` on the same deterministic key (tracked in TODO).
 - Fire-and-forget work-item sync calls catch and log async rejections, preventing background extraction failures from becoming unhandled promise rejections.
 - `ConversationState.metadataJson` is a free-form JSON blob — all classification metadata (attention category, reason, confidence, email type, action code, expiry) lives here without dedicated schema columns. Existing rows without a field fall through to current default behavior.
 
@@ -100,7 +102,7 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 ## Important limitations
 
 - Outlook does not yet have archive/trash writeback (Gmail equivalent exists).
-- Gmail label projection currently runs from manual workflow/status changes. Label bootstrap on connect, automatic projection after classification, configurable label names, and Gmail-native draft creation remain unfinished.
+- Gmail label writeback skips empty label sets, so a thread that transitions to a no-label state keeps its stale FlowDesk labels; scheduled label-maintenance re-bootstrap is also unfinished, and the `FlowDesk/Handle First` label is defined but never applied (nothing produces the `handle_first` attention category).
 - Gmail `cid:` inline images are only partially supported through size-capped embedding and still need broader safe rendering coverage.
 - CC/BCC sending is not supported; the compose UI hides these fields until the send APIs support them.
 - Bills & Deadlines items dismiss optimistically client-side but reappear on hard refresh until the server cache invalidates (60 s TTL).
