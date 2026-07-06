@@ -296,6 +296,7 @@ describe('runFollowUpLabelSweep', () => {
     mockWritebackFindMany.mockResolvedValue([
       {
         conversationId: CONV_1,
+        status: 'pending',
         providerMessageIdsJson: {
           threadId: 'thread-abc',
           labels: ['FlowDesk/Waiting On', 'FlowDesk/Follow Up'],
@@ -307,6 +308,27 @@ describe('runFollowUpLabelSweep', () => {
 
     expect(result).toEqual({ projected: 0, skipped: 1, failed: 0 })
     expect(mockProjectLabels).not.toHaveBeenCalled()
+  })
+
+  it('re-projects conversations whose Follow Up label writeback previously failed', async () => {
+    mockWritebackFindMany.mockResolvedValue([
+      {
+        conversationId: CONV_1,
+        status: 'failed',
+        providerMessageIdsJson: {
+          threadId: 'thread-abc',
+          labels: ['FlowDesk/Waiting On', 'FlowDesk/Follow Up'],
+        },
+      },
+    ])
+
+    const result = await runFollowUpLabelSweep(now)
+
+    expect(result).toEqual({ projected: 1, skipped: 0, failed: 0 })
+    expect(mockProjectLabels).toHaveBeenCalledWith({
+      tenantId: TENANT,
+      conversationId: CONV_1,
+    })
   })
 
   it('only sweeps waiting-on conversations on Google channels', async () => {

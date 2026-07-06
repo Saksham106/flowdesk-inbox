@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status"
-import { DEFAULT_FOLLOW_UP_BUSINESS_DAYS, followUpDueAt } from "@/lib/agent/follow-up"
+import { DEFAULT_FOLLOW_UP_BUSINESS_DAYS, followUpDueAt } from "@/lib/business-days"
 
 const LABEL_PREFIX = "FlowDesk/"
 
@@ -149,6 +149,7 @@ export async function queueFlowDeskLabelWriteback(input: {
     },
     update: {
       providerMessageIdsJson: payload,
+      attempts: 0,
       lastError: null,
       status: "pending",
       nextAttemptAt: new Date(),

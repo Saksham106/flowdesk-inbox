@@ -98,6 +98,25 @@ describe("projectFlowDeskLabelsForConversation", () => {
     expect(upsertArg.create.providerMessageIdsJson.threadId).toBe("thread-1")
   })
 
+  it("resets retry state when refreshing an existing label writeback", async () => {
+    mockConversationFindFirst.mockResolvedValue(GOOGLE_CONVERSATION)
+
+    await projectFlowDeskLabelsForConversation({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+    })
+
+    const upsertArg = mockWritebackUpsert.mock.calls[0][0]
+    expect(upsertArg.update).toEqual(
+      expect.objectContaining({
+        attempts: 0,
+        lastError: null,
+        status: "pending",
+        nextAttemptAt: expect.any(Date),
+      })
+    )
+  })
+
   it("no-ops for non-Google channels", async () => {
     mockConversationFindFirst.mockResolvedValue({
       ...GOOGLE_CONVERSATION,

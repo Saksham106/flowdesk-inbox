@@ -257,11 +257,12 @@ export async function runFollowUpLabelSweep(now = new Date()): Promise<FollowUpL
       conversationId: { in: candidates.map((c) => c.id) },
       action: "apply_labels",
     },
-    select: { conversationId: true, providerMessageIdsJson: true },
+    select: { conversationId: true, providerMessageIdsJson: true, status: true },
   })
   const alreadyQueued = new Set(
     queuedRows
       .filter((row) => {
+        if (row.status === "failed") return false
         const payload = row.providerMessageIdsJson
         if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false
         const labels = (payload as Record<string, unknown>).labels

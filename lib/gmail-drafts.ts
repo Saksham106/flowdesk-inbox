@@ -54,6 +54,7 @@ export async function queueGmailDraftWriteback(input: {
     },
     update: {
       providerMessageIdsJson: payload,
+      attempts: 0,
       lastError: null,
       status: "pending",
       nextAttemptAt: new Date(),
@@ -108,6 +109,7 @@ export async function queueGmailDraftWithdrawal(input: {
       nextAttemptAt: new Date(),
     },
     update: {
+      attempts: 0,
       lastError: null,
       status: "pending",
       nextAttemptAt: new Date(),
