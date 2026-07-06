@@ -6,6 +6,7 @@ const {
   mockStateUpdate,
   mockStateFindUnique,
   mockTaskUpsert,
+  mockTaskFindMany,
   mockLeadUpsert,
   mockLeadFindFirst,
   mockAuditCreate,
@@ -22,6 +23,7 @@ const {
   mockStateUpdate: vi.fn(),
   mockStateFindUnique: vi.fn(),
   mockTaskUpsert: vi.fn(),
+  mockTaskFindMany: vi.fn(),
   mockLeadUpsert: vi.fn(),
   mockLeadFindFirst: vi.fn(),
   mockAuditCreate: vi.fn(),
@@ -40,7 +42,7 @@ vi.mock("@/lib/prisma", () => ({
     message: { findFirst: mockMessageFindFirst },
     agentJob: { updateMany: mockAgentJobUpdateMany },
     conversationState: { upsert: mockStateUpsert, update: mockStateUpdate, findUnique: mockStateFindUnique },
-    inboxTask: { upsert: mockTaskUpsert },
+    inboxTask: { upsert: mockTaskUpsert, findMany: mockTaskFindMany },
     lead: { upsert: mockLeadUpsert, findFirst: mockLeadFindFirst },
     auditLog: { create: mockAuditCreate },
     knowledgeDocument: { findMany: mockKbDocFindMany },
@@ -90,6 +92,7 @@ describe("syncConversationWorkItems", () => {
     mockStateUpdate.mockResolvedValue({ id: "state-1" })
     mockStateFindUnique.mockResolvedValue(null)
     mockTaskUpsert.mockResolvedValue({ id: "task-1" })
+    mockTaskFindMany.mockResolvedValue([])
     mockLeadUpsert.mockResolvedValue({ id: "lead-1" })
     mockLeadFindFirst.mockResolvedValue({ id: "lead-1" })
     mockAuditCreate.mockResolvedValue({})
@@ -330,6 +333,54 @@ describe("syncConversationWorkItems", () => {
         data: expect.objectContaining({ action: "conversation.waiting_on_cleared" }),
       })
     )
+  })
+
+  it("preserves user-edited task fields across a sync refresh (P1-5)", async () => {
+    // The user corrected the due date; the sync's refreshed task would set a
+    // different one. The user's dueAt must survive, source must stay "user",
+    // and the ownership marker must be carried into the merged metadata.
+    mockTaskFindMany.mockResolvedValue([
+      {
+        deterministicKey: "conv-1:msg-1:deadline",
+        source: "user",
+        metadataJson: { userEditedFields: ["dueAt"] },
+      },
+    ])
+
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    const upsertArg = mockTaskUpsert.mock.calls[0][0]
+    expect(upsertArg.update).not.toHaveProperty("dueAt")
+    expect(upsertArg.update).not.toHaveProperty("source")
+    expect(upsertArg.update.metadataJson.userEditedFields).toEqual(["dueAt"])
+    // Fields the user never touched still refresh
+    expect(upsertArg.update.title).toEqual(expect.any(String))
+  })
+
+  it("still refreshes all task fields when the user has not edited any", async () => {
+    mockTaskFindMany.mockResolvedValue([
+      {
+        deterministicKey: "conv-1:msg-1:deadline",
+        source: "deterministic",
+        metadataJson: {},
+      },
+    ])
+
+    await syncConversationWorkItems({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+      now,
+    })
+
+    const upsertArg = mockTaskUpsert.mock.calls[0][0]
+    expect(upsertArg.update).toHaveProperty("dueAt")
+    expect(upsertArg.update).toHaveProperty("title")
+    expect(upsertArg.update).toHaveProperty("source")
+    expect(upsertArg.update.metadataJson).not.toHaveProperty("userEditedFields")
   })
 
   it("throws when the conversation does not belong to the tenant", async () => {

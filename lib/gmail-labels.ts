@@ -229,6 +229,7 @@ export async function projectFlowDeskLabelsForConversation(input: {
       externalThreadId: true,
       label: true,
       status: true,
+      userState: true,
       lastMessageAt: true,
       channel: { select: { provider: true } },
       draft: { select: { status: true } },
@@ -242,6 +243,7 @@ export async function projectFlowDeskLabelsForConversation(input: {
 
   const workflowStatus = deriveWorkflowStatus({
     status: conversation.status,
+    userState: conversation.userState,
     draftStatus: conversation.draft?.status,
     attentionCategory: conversation.stateRecord?.attentionCategory,
     emailType: conversation.stateRecord?.emailType,

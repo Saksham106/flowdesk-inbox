@@ -172,6 +172,25 @@ describe("projectFlowDeskLabelsForConversation", () => {
     expect(mockWritebackUpsert).not.toHaveBeenCalled()
   })
 
+  it("honors a manual user workflow choice over AI signals when re-projecting", async () => {
+    // The user set Read Later by hand (userState is set with source "user" by
+    // the workflow-status route); the automatic re-projection after the next
+    // sync must not revert their choice to the AI-derived Needs Reply/Action.
+    mockConversationFindFirst.mockResolvedValue({
+      ...GOOGLE_CONVERSATION,
+      userState: "read_later",
+    })
+
+    await projectFlowDeskLabelsForConversation({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+    })
+
+    const upsertArg = mockWritebackUpsert.mock.calls[0][0]
+    expect(upsertArg.create.providerMessageIdsJson.labels).toContain("FlowDesk/Read Later")
+    expect(upsertArg.create.providerMessageIdsJson.labels).not.toContain("FlowDesk/Needs Reply")
+  })
+
   it("adds Follow Up for a waiting-on conversation past the tenant delay", async () => {
     mockConversationFindFirst.mockResolvedValue({
       ...GOOGLE_CONVERSATION,

@@ -118,7 +118,13 @@ describe("PATCH /api/tasks/[id]/status", () => {
     expect(res.status).toBe(200)
     expect(res._body.ok).toBe(true)
     expect(mockTaskUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: "closed" }) })
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "closed",
+          source: "user",
+          metadataJson: expect.objectContaining({ userEditedFields: ["status"] }),
+        }),
+      })
     )
     expect(mockAuditCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -188,7 +194,11 @@ describe("PATCH /api/tasks/[id]/due", () => {
     expect(mockTaskUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "t1" },
-        data: { dueAt: expect.any(Date) },
+        data: {
+          dueAt: expect.any(Date),
+          source: "user",
+          metadataJson: expect.objectContaining({ userEditedFields: ["dueAt"] }),
+        },
       })
     )
     expect(mockAuditCreate).toHaveBeenCalledWith(
