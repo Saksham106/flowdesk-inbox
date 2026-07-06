@@ -651,13 +651,13 @@ export async function deleteGmailDraft(channelId: string, draftId: string): Prom
   await gmail.users.drafts.delete({ userId: "me", id: draftId });
 }
 
-const GMAIL_WRITEBACK_MAX_ATTEMPTS = 3;
+export const GMAIL_WRITEBACK_MAX_ATTEMPTS = 3;
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : "Unknown Gmail error";
 }
 
-function nextWritebackAttemptDate(attempts: number): Date {
+export function nextWritebackAttemptDate(attempts: number): Date {
   const delayMinutes = Math.min(60, 2 ** Math.max(0, attempts - 1));
   return new Date(Date.now() + delayMinutes * 60 * 1000);
 }
@@ -773,13 +773,14 @@ async function getOrCreateFlowDeskLabelIds(
   return ids
 }
 
+// An empty `labels` array is a valid input meaning "remove every FlowDesk label
+// from this thread" — used when a conversation transitions to a no-label state.
 export async function applyFlowDeskLabelsToGmailThread(
   channelId: string,
   gmailThreadId: string,
   labels: FlowDeskGmailLabelName[]
 ): Promise<void> {
   const requestedLabels = Array.from(new Set(labels.filter(isFlowDeskGmailLabelName)))
-  if (requestedLabels.length === 0) return
 
   const gmail = await getGmailClient(channelId)
   const existingLabelIdsByName = await listGmailLabels(gmail)
@@ -792,6 +793,9 @@ export async function applyFlowDeskLabelsToGmailThread(
     .filter((label) => !requestedLabels.includes(label))
     .map((label) => existingLabelIdsByName.get(label))
     .filter((id): id is string => Boolean(id))
+
+  // Nothing to add and none of our labels exist in the account — no mutation needed.
+  if (addLabelIds.length === 0 && removeLabelIds.length === 0) return
 
   await gmail.users.threads.modify({
     userId: "me",

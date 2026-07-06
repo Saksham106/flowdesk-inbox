@@ -4,11 +4,13 @@ const {
   mockConversationFindFirst,
   mockLabelMappingFindMany,
   mockWritebackUpsert,
+  mockWritebackFindUnique,
   mockAuditCreate,
 } = vi.hoisted(() => ({
   mockConversationFindFirst: vi.fn(),
   mockLabelMappingFindMany: vi.fn(),
   mockWritebackUpsert: vi.fn(),
+  mockWritebackFindUnique: vi.fn(),
   mockAuditCreate: vi.fn(),
 }))
 
@@ -16,7 +18,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     conversation: { findFirst: mockConversationFindFirst },
     gmailLabelMapping: { findMany: mockLabelMappingFindMany },
-    gmailWritebackQueue: { upsert: mockWritebackUpsert },
+    gmailWritebackQueue: { upsert: mockWritebackUpsert, findUnique: mockWritebackFindUnique },
     auditLog: { create: mockAuditCreate },
   },
 }))
@@ -117,17 +119,40 @@ describe("projectFlowDeskLabelsForConversation", () => {
     expect(mockWritebackUpsert).not.toHaveBeenCalled()
   })
 
-  it("does not queue when every applicable label is disabled", async () => {
+  it("does not queue an empty label set for a thread that was never labeled", async () => {
     mockConversationFindFirst.mockResolvedValue(GOOGLE_CONVERSATION)
     mockLabelMappingFindMany.mockResolvedValue([
       { canonical: "FlowDesk/Needs Reply", enabled: false },
       { canonical: "FlowDesk/Needs Action", enabled: false },
     ])
+    mockWritebackFindUnique.mockResolvedValue(null)
+
     const job = await projectFlowDeskLabelsForConversation({
       tenantId: "tenant-1",
       conversationId: "conv-1",
     })
+
     expect(job).toBeNull()
     expect(mockWritebackUpsert).not.toHaveBeenCalled()
+  })
+
+  it("queues an empty label set (remove all) for a previously labeled thread", async () => {
+    mockConversationFindFirst.mockResolvedValue(GOOGLE_CONVERSATION)
+    mockLabelMappingFindMany.mockResolvedValue([
+      { canonical: "FlowDesk/Needs Reply", enabled: false },
+      { canonical: "FlowDesk/Needs Action", enabled: false },
+    ])
+    mockWritebackFindUnique.mockResolvedValue({ id: "job-prior" })
+
+    const job = await projectFlowDeskLabelsForConversation({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+    })
+
+    expect(job).toEqual({ id: "job-1" })
+    expect(mockWritebackUpsert).toHaveBeenCalledTimes(1)
+    const upsertArg = mockWritebackUpsert.mock.calls[0][0]
+    expect(upsertArg.create.providerMessageIdsJson.labels).toEqual([])
+    expect(upsertArg.update.providerMessageIdsJson.labels).toEqual([])
   })
 })

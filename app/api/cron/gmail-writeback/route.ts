@@ -8,10 +8,12 @@ import {
   gmailDraftIdFromMetadata,
 } from "@/lib/gmail-drafts"
 import {
+  GMAIL_WRITEBACK_MAX_ATTEMPTS,
   applyFlowDeskLabelsToGmailThread,
   createGmailDraftForThread,
   deleteGmailDraft,
   markGmailThreadRead,
+  nextWritebackAttemptDate,
 } from "@/lib/google"
 import { prisma } from "@/lib/prisma"
 
@@ -140,6 +142,14 @@ export async function GET(request: Request) {
   let errors = 0
 
   for (const job of jobs) {
+    // Atomic pending → processing claim so overlapping cron runs never
+    // double-process a job (same lease pattern as lib/agent/job-executor.ts).
+    const claim = await prisma.gmailWritebackQueue.updateMany({
+      where: { id: job.id, status: "pending" },
+      data: { status: "processing" },
+    })
+    if (claim.count !== 1) continue
+
     try {
       if (job.action === "mark_read") {
         const providerMessageIds = asStringArray(job.providerMessageIdsJson)
@@ -179,6 +189,17 @@ export async function GET(request: Request) {
       } else if (job.action === GMAIL_DRAFT_WITHDRAW_ACTION) {
         await handleWithdrawDraft(job)
       } else {
+        // Retrying can never make an unknown action succeed; fail it out so it
+        // doesn't sit claimed (or hot-loop as pending) forever.
+        await prisma.gmailWritebackQueue.update({
+          where: { id: job.id },
+          data: {
+            status: "failed",
+            attempts: { increment: 1 },
+            lastError: `Unknown Gmail writeback action: ${job.action}`,
+          },
+        })
+        errors++
         continue
       }
 
@@ -191,11 +212,17 @@ export async function GET(request: Request) {
       })
       processed++
     } catch (err) {
+      // Exponential backoff between retries; fail out permanently once the
+      // attempt budget is spent so a broken job can't hot-loop every cron run.
+      const attempts = job.attempts + 1
+      const failedOut = attempts >= GMAIL_WRITEBACK_MAX_ATTEMPTS
       await prisma.gmailWritebackQueue.update({
         where: { id: job.id },
         data: {
-          attempts: { increment: 1 },
+          attempts,
           lastError: err instanceof Error ? err.message : "Unknown Gmail writeback error",
+          status: failedOut ? "failed" : "pending",
+          ...(failedOut ? {} : { nextAttemptAt: nextWritebackAttemptDate(attempts) }),
         },
       }).catch(() => {})
       errors++

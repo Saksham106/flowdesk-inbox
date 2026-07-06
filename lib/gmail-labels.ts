@@ -77,6 +77,9 @@ export function flowDeskLabelsForConversationState(input: {
   return Array.from(new Set(labels))
 }
 
+// An empty `labels` array is a valid payload meaning "remove all FlowDesk
+// labels from the thread"; only a missing threadId or non-array labels field
+// makes the payload invalid.
 export function normalizeFlowDeskLabelPayload(value: unknown): {
   threadId: string
   labels: FlowDeskGmailLabelName[]
@@ -84,13 +87,11 @@ export function normalizeFlowDeskLabelPayload(value: unknown): {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null
   const payload = value as Record<string, unknown>
   const threadId = typeof payload.threadId === "string" ? payload.threadId : ""
-  const labels = Array.isArray(payload.labels)
-    ? payload.labels.filter((label): label is FlowDeskGmailLabelName =>
-        typeof label === "string" && isFlowDeskGmailLabelName(label)
-      )
-    : []
+  if (!threadId || !Array.isArray(payload.labels)) return null
 
-  if (!threadId || labels.length === 0) return null
+  const labels = payload.labels.filter((label): label is FlowDeskGmailLabelName =>
+    typeof label === "string" && isFlowDeskGmailLabelName(label)
+  )
   return { threadId, labels: Array.from(new Set(labels)) }
 }
 
@@ -103,7 +104,23 @@ export async function queueFlowDeskLabelWriteback(input: {
   reason: string
 }) {
   const labels = Array.from(new Set(input.labels))
-  if (labels.length === 0) return null
+
+  // An empty set means "remove all FlowDesk labels". Only queue that removal
+  // for threads we have labeled (or tried to label) before — a prior
+  // apply_labels queue row is the cheap proxy — so we don't spam Gmail with
+  // removals for threads FlowDesk never touched.
+  if (labels.length === 0) {
+    const prior = await prisma.gmailWritebackQueue.findUnique({
+      where: {
+        conversationId_action: {
+          conversationId: input.conversationId,
+          action: "apply_labels",
+        },
+      },
+      select: { id: true },
+    })
+    if (!prior) return null
+  }
 
   const payload = {
     threadId: input.threadId,
@@ -185,8 +202,10 @@ export async function filterEnabledFlowDeskLabels(
  * queues them for writeback. This is the automatic projection path invoked after
  * classification / work-item sync — the counterpart to the manual status routes.
  *
- * No-ops (returns null) for non-Google channels, conversations without a Gmail
- * thread id, or when every applicable label has been disabled by the tenant.
+ * No-ops (returns null) for non-Google channels and conversations without a
+ * Gmail thread id. An empty computed label set is projected as a removal of all
+ * FlowDesk labels — but only for threads that were labeled before (see
+ * queueFlowDeskLabelWriteback).
  */
 export async function projectFlowDeskLabelsForConversation(input: {
   tenantId: string
@@ -225,7 +244,6 @@ export async function projectFlowDeskLabelsForConversation(input: {
   })
 
   const enabledLabels = await filterEnabledFlowDeskLabels(input.tenantId, labels)
-  if (enabledLabels.length === 0) return null
 
   return queueFlowDeskLabelWriteback({
     tenantId: input.tenantId,
