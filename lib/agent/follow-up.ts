@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
 import type { MessageDirection, Prisma } from "@prisma/client"
 
 export type StaleConversation = {
@@ -78,6 +79,29 @@ export function outboundMessageExpectsReply(body: string): boolean {
 }
 
 export const WAITING_ON_STATE_SOURCE = "flowdesk_lifecycle"
+
+/** Default follow-up delay when a tenant has no FollowUpSetting row. */
+export const DEFAULT_FOLLOW_UP_BUSINESS_DAYS = 3
+
+export function addBusinessDays(start: Date, businessDays: number): Date {
+  const result = new Date(start)
+  let remaining = businessDays
+  while (remaining > 0) {
+    result.setUTCDate(result.getUTCDate() + 1)
+    const day = result.getUTCDay()
+    if (day !== 0 && day !== 6) remaining--
+  }
+  return result
+}
+
+/**
+ * When a waiting-on conversation becomes follow-up due. The delay is the
+ * tenant's FollowUpSetting.staleAfterDays (interpreted as business days,
+ * minimum 1), defaulting to DEFAULT_FOLLOW_UP_BUSINESS_DAYS.
+ */
+export function followUpDueAt(waitingSince: Date, staleAfterBusinessDays: number): Date {
+  return addBusinessDays(waitingSince, Math.max(1, staleAfterBusinessDays))
+}
 
 /**
  * Transitions a conversation into waiting-on after an outbound reply that
@@ -196,6 +220,108 @@ export async function countFollowUpJobs(conversationId: string): Promise<number>
   return prisma.agentJob.count({
     where: { conversationId, trigger: "follow_up" },
   })
+}
+
+export type FollowUpLabelSweepResult = {
+  projected: number
+  skipped: number
+  failed: number
+}
+
+/**
+ * Marks overdue waiting-on conversations as follow-up due by re-projecting
+ * their Gmail labels (the projection itself derives `followUpDue`, adding
+ * "FlowDesk/Follow Up"). Nothing else triggers a projection when time passes,
+ * so the follow-up cron runs this sweep.
+ *
+ * Runs for every tenant — deliberately NOT gated on FollowUpSetting.enabled,
+ * which only opts a tenant into automated follow-up *jobs* (draft nudges).
+ * Labels + surfacing are part of the base lifecycle for personal and business
+ * accounts alike. No auto-send here.
+ */
+export async function runFollowUpLabelSweep(now = new Date()): Promise<FollowUpLabelSweepResult> {
+  // Coarse prefilter: the smallest configurable delay is 1 business day, so
+  // anything younger than 24h can't be due. Precise per-tenant check below.
+  const coarseCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+
+  const candidates = await prisma.conversation.findMany({
+    where: {
+      OR: [{ status: "in_progress" }, { userState: "waiting_on" }],
+      lastMessageAt: { lt: coarseCutoff },
+      externalThreadId: { not: "" },
+      channel: { provider: "google" },
+    },
+    select: { id: true, tenantId: true, lastMessageAt: true },
+    orderBy: { lastMessageAt: "asc" },
+    take: 200,
+  })
+
+  if (candidates.length === 0) return { projected: 0, skipped: 0, failed: 0 }
+
+  const settings = await prisma.followUpSetting.findMany({
+    where: { tenantId: { in: Array.from(new Set(candidates.map((c) => c.tenantId))) } },
+    select: { tenantId: true, staleAfterDays: true },
+  })
+  const staleDaysByTenant = new Map(settings.map((s) => [s.tenantId, s.staleAfterDays]))
+
+  // Skip conversations whose queued label payload already carries Follow Up —
+  // re-queuing them every cron run would spam Gmail with no-op writebacks.
+  const queuedRows = await prisma.gmailWritebackQueue.findMany({
+    where: {
+      conversationId: { in: candidates.map((c) => c.id) },
+      action: "apply_labels",
+    },
+    select: { conversationId: true, providerMessageIdsJson: true },
+  })
+  const alreadyQueued = new Set(
+    queuedRows
+      .filter((row) => {
+        const payload = row.providerMessageIdsJson
+        if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false
+        const labels = (payload as Record<string, unknown>).labels
+        return Array.isArray(labels) && labels.includes("FlowDesk/Follow Up")
+      })
+      .map((row) => row.conversationId)
+  )
+
+  let projected = 0
+  let skipped = 0
+  let failed = 0
+
+  for (const conv of candidates) {
+    const staleDays = staleDaysByTenant.get(conv.tenantId) ?? DEFAULT_FOLLOW_UP_BUSINESS_DAYS
+    if (now < followUpDueAt(conv.lastMessageAt, staleDays) || alreadyQueued.has(conv.id)) {
+      skipped++
+      continue
+    }
+
+    try {
+      const job = await projectFlowDeskLabelsForConversation({
+        tenantId: conv.tenantId,
+        conversationId: conv.id,
+      })
+      if (!job) {
+        skipped++
+        continue
+      }
+      await prisma.auditLog.create({
+        data: {
+          tenantId: conv.tenantId,
+          action: "follow_up.due_labeled",
+          payloadJson: {
+            conversationId: conv.id,
+            waitingSince: conv.lastMessageAt.toISOString(),
+            staleAfterBusinessDays: staleDays,
+          },
+        },
+      })
+      projected++
+    } catch {
+      failed++
+    }
+  }
+
+  return { projected, skipped, failed }
 }
 
 export type FollowUpBatchResult = {

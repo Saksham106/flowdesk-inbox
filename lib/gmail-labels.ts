@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status"
+import { DEFAULT_FOLLOW_UP_BUSINESS_DAYS, followUpDueAt } from "@/lib/agent/follow-up"
 
 const LABEL_PREFIX = "FlowDesk/"
 
@@ -219,6 +220,7 @@ export async function projectFlowDeskLabelsForConversation(input: {
       externalThreadId: true,
       label: true,
       status: true,
+      lastMessageAt: true,
       channel: { select: { provider: true } },
       draft: { select: { status: true } },
       stateRecord: { select: { attentionCategory: true, emailType: true } },
@@ -236,11 +238,26 @@ export async function projectFlowDeskLabelsForConversation(input: {
     emailType: conversation.stateRecord?.emailType,
   })
 
+  // A waiting-on conversation past the tenant's follow-up delay also gets
+  // "FlowDesk/Follow Up". staleAfterDays doubles as the delay (business days);
+  // deliberately independent of FollowUpSetting.enabled, which only gates
+  // automated follow-up jobs.
+  let followUpDue = false
+  if (workflowStatus === "waiting_on" && conversation.lastMessageAt) {
+    const setting = await prisma.followUpSetting.findUnique({
+      where: { tenantId: input.tenantId },
+      select: { staleAfterDays: true },
+    })
+    const staleDays = setting?.staleAfterDays ?? DEFAULT_FOLLOW_UP_BUSINESS_DAYS
+    followUpDue = new Date() >= followUpDueAt(conversation.lastMessageAt, staleDays)
+  }
+
   const labels = flowDeskLabelsForConversationState({
     workflowStatus,
     localLabel: conversation.label,
     draftStatus: conversation.draft?.status,
     attentionCategory: conversation.stateRecord?.attentionCategory,
+    followUpDue,
   })
 
   const enabledLabels = await filterEnabledFlowDeskLabels(input.tenantId, labels)

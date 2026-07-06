@@ -6,12 +6,14 @@ const {
   mockWritebackUpsert,
   mockWritebackFindUnique,
   mockAuditCreate,
+  mockFollowUpSettingFindUnique,
 } = vi.hoisted(() => ({
   mockConversationFindFirst: vi.fn(),
   mockLabelMappingFindMany: vi.fn(),
   mockWritebackUpsert: vi.fn(),
   mockWritebackFindUnique: vi.fn(),
   mockAuditCreate: vi.fn(),
+  mockFollowUpSettingFindUnique: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -20,6 +22,7 @@ vi.mock("@/lib/prisma", () => ({
     gmailLabelMapping: { findMany: mockLabelMappingFindMany },
     gmailWritebackQueue: { upsert: mockWritebackUpsert, findUnique: mockWritebackFindUnique },
     auditLog: { create: mockAuditCreate },
+    followUpSetting: { findUnique: mockFollowUpSettingFindUnique },
   },
 }))
 
@@ -34,6 +37,7 @@ const GOOGLE_CONVERSATION = {
   externalThreadId: "thread-1",
   label: null,
   status: "needs_reply",
+  lastMessageAt: new Date(),
   channel: { provider: "google" },
   draft: null,
   stateRecord: { attentionCategory: "needs_action", emailType: null },
@@ -70,6 +74,7 @@ describe("projectFlowDeskLabelsForConversation", () => {
     mockLabelMappingFindMany.mockResolvedValue([])
     mockWritebackUpsert.mockResolvedValue({ id: "job-1" })
     mockAuditCreate.mockResolvedValue({})
+    mockFollowUpSettingFindUnique.mockResolvedValue(null)
   })
 
   it("queues an apply_labels writeback for a Google conversation", async () => {
@@ -117,6 +122,43 @@ describe("projectFlowDeskLabelsForConversation", () => {
     })
     expect(job).toBeNull()
     expect(mockWritebackUpsert).not.toHaveBeenCalled()
+  })
+
+  it("adds Follow Up for a waiting-on conversation past the tenant delay", async () => {
+    mockConversationFindFirst.mockResolvedValue({
+      ...GOOGLE_CONVERSATION,
+      status: "in_progress",
+      stateRecord: null,
+      // two weeks ago — past any small business-day delay
+      lastMessageAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+    })
+
+    await projectFlowDeskLabelsForConversation({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+    })
+
+    const upsertArg = mockWritebackUpsert.mock.calls[0][0]
+    expect(upsertArg.create.providerMessageIdsJson.labels).toEqual(
+      expect.arrayContaining(["FlowDesk/Waiting On", "FlowDesk/Follow Up"])
+    )
+  })
+
+  it("does not add Follow Up before the delay elapses", async () => {
+    mockConversationFindFirst.mockResolvedValue({
+      ...GOOGLE_CONVERSATION,
+      status: "in_progress",
+      stateRecord: null,
+      lastMessageAt: new Date(Date.now() - 60 * 60 * 1000), // an hour ago
+    })
+
+    await projectFlowDeskLabelsForConversation({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+    })
+
+    const upsertArg = mockWritebackUpsert.mock.calls[0][0]
+    expect(upsertArg.create.providerMessageIdsJson.labels).toEqual(["FlowDesk/Waiting On"])
   })
 
   it("does not queue an empty label set for a thread that was never labeled", async () => {

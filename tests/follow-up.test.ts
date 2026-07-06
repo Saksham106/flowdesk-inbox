@@ -14,6 +14,8 @@ const {
   mockJobUpdateMany,
   mockStateFindUnique,
   mockStateUpdate,
+  mockWritebackFindMany,
+  mockProjectLabels,
 } = vi.hoisted(() => ({
   mockFollowUpSettingFindMany: vi.fn(),
   mockConvFindMany:            vi.fn(),
@@ -25,25 +27,35 @@ const {
   mockJobUpdateMany:           vi.fn(),
   mockStateFindUnique:         vi.fn(),
   mockStateUpdate:             vi.fn(),
+  mockWritebackFindMany:       vi.fn(),
+  mockProjectLabels:           vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    followUpSetting:   { findMany: mockFollowUpSettingFindMany },
-    conversation:      { findMany: mockConvFindMany, update: mockConvUpdate },
-    conversationState: { findUnique: mockStateFindUnique, update: mockStateUpdate },
-    agentJob:          { findFirst: mockJobFindFirst, count: mockJobCount, create: mockJobCreate, updateMany: mockJobUpdateMany },
-    auditLog:          { create: mockAuditCreate },
+    followUpSetting:    { findMany: mockFollowUpSettingFindMany },
+    conversation:       { findMany: mockConvFindMany, update: mockConvUpdate },
+    conversationState:  { findUnique: mockStateFindUnique, update: mockStateUpdate },
+    agentJob:           { findFirst: mockJobFindFirst, count: mockJobCount, create: mockJobCreate, updateMany: mockJobUpdateMany },
+    auditLog:           { create: mockAuditCreate },
+    gmailWritebackQueue: { findMany: mockWritebackFindMany },
   },
 }))
 
+vi.mock('@/lib/gmail-labels', () => ({
+  projectFlowDeskLabelsForConversation: mockProjectLabels,
+}))
+
 import {
+  addBusinessDays,
   clearWaitingOnForInboundReply,
+  followUpDueAt,
   getStaleConversations,
   hasRecentFollowUpJob,
   markConversationWaitingOn,
   outboundMessageExpectsReply,
   runFollowUpBatch,
+  runFollowUpLabelSweep,
 } from '@/lib/agent/follow-up'
 
 // ---------------------------------------------------------------------------
@@ -202,6 +214,121 @@ describe('markConversationWaitingOn', () => {
         }),
       })
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Business-day math
+// ---------------------------------------------------------------------------
+
+describe('addBusinessDays / followUpDueAt', () => {
+  it('skips weekends', () => {
+    // Thursday 2026-07-02 + 3 business days = Tuesday 2026-07-07
+    const thursday = new Date('2026-07-02T10:00:00.000Z')
+    expect(addBusinessDays(thursday, 3).toISOString()).toBe('2026-07-07T10:00:00.000Z')
+  })
+
+  it('adds plain days mid-week', () => {
+    // Monday 2026-07-06 + 2 business days = Wednesday 2026-07-08
+    const monday = new Date('2026-07-06T09:00:00.000Z')
+    expect(addBusinessDays(monday, 2).toISOString()).toBe('2026-07-08T09:00:00.000Z')
+  })
+
+  it('enforces a minimum delay of one business day', () => {
+    const monday = new Date('2026-07-06T09:00:00.000Z')
+    expect(followUpDueAt(monday, 0).toISOString()).toBe('2026-07-07T09:00:00.000Z')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// runFollowUpLabelSweep
+// ---------------------------------------------------------------------------
+
+describe('runFollowUpLabelSweep', () => {
+  const now = new Date('2026-07-06T12:00:00.000Z') // Monday
+  const overdue = new Date('2026-06-29T12:00:00.000Z') // previous Monday — well past 3 business days
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockConvFindMany.mockResolvedValue([
+      { id: CONV_1, tenantId: TENANT, lastMessageAt: overdue },
+    ])
+    mockFollowUpSettingFindMany.mockResolvedValue([])
+    mockWritebackFindMany.mockResolvedValue([])
+    mockProjectLabels.mockResolvedValue({ id: 'job-1' })
+    mockAuditCreate.mockResolvedValue({})
+  })
+
+  it('re-projects labels for overdue waiting-on conversations and audits', async () => {
+    const result = await runFollowUpLabelSweep(now)
+
+    expect(result).toEqual({ projected: 1, skipped: 0, failed: 0 })
+    expect(mockProjectLabels).toHaveBeenCalledWith({
+      tenantId: TENANT,
+      conversationId: CONV_1,
+    })
+    expect(mockAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tenantId: TENANT,
+          action: 'follow_up.due_labeled',
+          payloadJson: expect.objectContaining({
+            conversationId: CONV_1,
+            staleAfterBusinessDays: 3,
+          }),
+        }),
+      })
+    )
+  })
+
+  it('respects a longer tenant-configured delay', async () => {
+    mockFollowUpSettingFindMany.mockResolvedValue([
+      { tenantId: TENANT, staleAfterDays: 10 },
+    ])
+
+    const result = await runFollowUpLabelSweep(now)
+
+    expect(result).toEqual({ projected: 0, skipped: 1, failed: 0 })
+    expect(mockProjectLabels).not.toHaveBeenCalled()
+  })
+
+  it('skips conversations whose queued labels already include Follow Up', async () => {
+    mockWritebackFindMany.mockResolvedValue([
+      {
+        conversationId: CONV_1,
+        providerMessageIdsJson: {
+          threadId: 'thread-abc',
+          labels: ['FlowDesk/Waiting On', 'FlowDesk/Follow Up'],
+        },
+      },
+    ])
+
+    const result = await runFollowUpLabelSweep(now)
+
+    expect(result).toEqual({ projected: 0, skipped: 1, failed: 0 })
+    expect(mockProjectLabels).not.toHaveBeenCalled()
+  })
+
+  it('only sweeps waiting-on conversations on Google channels', async () => {
+    await runFollowUpLabelSweep(now)
+
+    const where = mockConvFindMany.mock.calls[0][0].where
+    expect(where.OR).toEqual([{ status: 'in_progress' }, { userState: 'waiting_on' }])
+    expect(where.channel).toEqual({ provider: 'google' })
+  })
+
+  it('counts projection failures without aborting the sweep', async () => {
+    mockConvFindMany.mockResolvedValue([
+      { id: CONV_1, tenantId: TENANT, lastMessageAt: overdue },
+      { id: CONV_2, tenantId: TENANT, lastMessageAt: overdue },
+    ])
+    mockProjectLabels
+      .mockRejectedValueOnce(new Error('gmail down'))
+      .mockResolvedValueOnce({ id: 'job-2' })
+
+    const result = await runFollowUpLabelSweep(now)
+
+    expect(result).toEqual({ projected: 1, skipped: 0, failed: 1 })
   })
 })
 
