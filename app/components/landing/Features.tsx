@@ -1,6 +1,12 @@
 import Link from "next/link";
+import ScrollReveal from "@/app/components/ScrollReveal";
 
-const features = [
+const features: Array<{
+  title: string;
+  description: string;
+  cta: string;
+  imageLeft: boolean;
+}> = [
   {
     title: "Automatic follow-up",
     description:
@@ -26,7 +32,7 @@ const features = [
 
 function ProductImageCard() {
   return (
-    <div className="flex-1 min-w-0 relative rounded-xl overflow-hidden bg-[#e0e1ec]" style={{ minHeight: 340 }}>
+    <div className="flex-1 min-w-0 relative rounded-xl overflow-hidden self-stretch bg-[#e0e1ec]" style={{ minHeight: 360 }}>
       <img
         src="/images/landing/feature-image.png"
         alt=""
@@ -46,51 +52,12 @@ function ProductImageCard() {
   );
 }
 
-export default function Features() {
-  return (
-    <section id="features" className="py-10 px-5 sm:px-8">
-      <div className="max-w-6xl mx-auto flex flex-col gap-8">
-        {/* Section heading */}
-        <div className="flex flex-col gap-1">
-          <p className="text-sm text-black font-normal">{"// How it works"}</p>
-          <h2 className="text-[40px] leading-[1] font-normal text-black">
-            Never let a conversation die again
-          </h2>
-        </div>
-
-        {/* Feature rows */}
-        {features.map((feature, i) => (
-          <div
-            key={i}
-            className={`flex flex-col lg:flex-row gap-16 items-center bg-[#f5f5f4] rounded-lg p-8 overflow-hidden`}
-            style={{ minHeight: 340 }}
-          >
-            {feature.imageLeft ? (
-              <>
-                <ProductImageCard />
-                <FeatureContent feature={feature} />
-              </>
-            ) : (
-              <>
-                <FeatureContent feature={feature} />
-                <ProductImageCard />
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function FeatureContent({ feature }: { feature: typeof features[number] }) {
   return (
-    <div className="flex-1 min-w-0 flex flex-col gap-4 justify-center">
+    <div className="flex-1 min-w-0 flex flex-col gap-6 justify-center">
       <div className="flex flex-col gap-2">
         <h3 className="text-xl font-semibold text-black">{feature.title}</h3>
-        <p className="text-lg font-normal text-[#6b6f76] leading-snug">
-          {feature.description}
-        </p>
+        <p className="text-lg font-normal text-[#6b6f76] leading-snug">{feature.description}</p>
       </div>
       <div>
         <Link
@@ -101,5 +68,43 @@ function FeatureContent({ feature }: { feature: typeof features[number] }) {
         </Link>
       </div>
     </div>
+  );
+}
+
+export default function Features() {
+  return (
+    <section id="features" className="py-20 px-5 sm:px-8">
+      <div className="max-w-6xl mx-auto flex flex-col gap-10">
+        <ScrollReveal>
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-black font-normal">{"// How it works"}</p>
+            <h2 className="text-[36px] leading-[1] font-normal text-black">
+              Never let a conversation die again
+            </h2>
+          </div>
+        </ScrollReveal>
+
+        {features.map((feature, i) => (
+          <ScrollReveal key={i} delay={i * 80}>
+            <div
+              className="flex flex-col lg:flex-row gap-16 items-stretch bg-[#f5f5f4] rounded-lg p-4 overflow-hidden"
+              style={{ minHeight: 500 }}
+            >
+              {feature.imageLeft ? (
+                <>
+                  <ProductImageCard />
+                  <FeatureContent feature={feature} />
+                </>
+              ) : (
+                <>
+                  <FeatureContent feature={feature} />
+                  <ProductImageCard />
+                </>
+              )}
+            </div>
+          </ScrollReveal>
+        ))}
+      </div>
+    </section>
   );
 }

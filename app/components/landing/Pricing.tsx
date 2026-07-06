@@ -1,9 +1,11 @@
 import Link from "next/link";
+import ScrollReveal from "@/app/components/ScrollReveal";
 
 function CheckIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-black" aria-hidden="true">
-      <polyline points="20 6 9 17 4 12" />
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0" aria-hidden="true">
+      <circle cx="8" cy="8" r="8" fill="#1a1a1a" />
+      <polyline points="4.5,8.5 7,11 11.5,5.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
     </svg>
   );
 }
@@ -64,27 +66,29 @@ const plans = [
 
 export default function Pricing() {
   return (
-    <section id="pricing" className="py-10 px-5 sm:px-8">
-      <div className="max-w-6xl mx-auto flex flex-col gap-4">
+    <section id="pricing" className="py-[160px] px-5 sm:px-8">
+      <div className="max-w-6xl mx-auto flex flex-col gap-10">
         {/* Section heading */}
-        <div className="flex flex-col gap-1">
-          <p className="text-sm text-black font-normal">{"// Pricing"}</p>
-          <h2 className="text-[40px] leading-[1] font-normal text-black">
-            Start with conversations you already have
-          </h2>
-        </div>
+        <ScrollReveal>
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-black font-normal">{"// Pricing"}</p>
+            <h2 className="text-[36px] leading-[1] font-normal text-black">
+              Start with conversations you already have
+            </h2>
+          </div>
+        </ScrollReveal>
 
         {/* Pricing cards */}
-        <div className="flex flex-col lg:flex-row gap-4">
-          {plans.map((plan) => (
+        <div className="flex flex-col lg:flex-row gap-6">
+          {plans.map((plan, i) => (
+            <ScrollReveal key={plan.name} delay={i * 100} className="flex-1 min-w-0">
             <div
-              key={plan.name}
-              className="flex-1 min-w-0 bg-[#f5f5f4] rounded-lg p-8 flex flex-col gap-2"
+              className="bg-[#f5f5f4] rounded-lg p-8 flex flex-col gap-2 h-full"
             >
               {/* Plan info */}
-              <div className="flex flex-col gap-1 mb-2">
-                <p className="text-lg font-semibold text-black">{plan.name}</p>
-                <p className="text-[32px] font-semibold text-black leading-none">
+              <div className="flex flex-col gap-1">
+                <p className="text-lg font-medium text-black">{plan.name}</p>
+                <p className="text-[32px] font-medium text-black leading-none">
                   {plan.price}
                   {plan.period && (
                     <span className="text-base font-normal text-black">{plan.period}</span>
@@ -96,15 +100,15 @@ export default function Pricing() {
               {/* CTA */}
               <Link
                 href={plan.ctaHref}
-                className="inline-flex items-center justify-center w-full rounded-lg bg-black text-white text-sm font-medium py-2.5 hover:opacity-85 transition-opacity mb-2"
+                className="text-lg font-medium text-black hover:opacity-70 transition-opacity"
               >
                 {plan.cta}
               </Link>
 
               {/* Divider with label */}
-              <div className="flex items-center gap-3 my-2">
+              <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-black/10" />
-                <p className="text-xs font-medium text-[#6b6f76]">Features</p>
+                <p className="text-sm text-[#6b6f76]">Features</p>
                 <div className="flex-1 h-px bg-black/10" />
               </div>
 
@@ -113,11 +117,12 @@ export default function Pricing() {
                 {plan.features.map((feature) => (
                   <li key={feature} className="flex items-start gap-2">
                     <CheckIcon />
-                    <span className="text-xs text-black">{feature}</span>
+                    <span className="text-sm text-black">{feature}</span>
                   </li>
                 ))}
               </ul>
             </div>
+            </ScrollReveal>
           ))}
         </div>
       </div>

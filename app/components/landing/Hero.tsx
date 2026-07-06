@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ScrollReveal from "@/app/components/ScrollReveal";
 
 export default function Hero() {
   return (
@@ -17,33 +18,39 @@ export default function Hero() {
 
       <div className="relative max-w-6xl mx-auto px-5 sm:px-8 flex flex-col items-center">
         {/* Headline block */}
-        <div className="pt-16 pb-10 flex flex-col items-center gap-8 w-full max-w-2xl mx-auto text-center">
-          <h1 className="text-[40px] sm:text-[56px] leading-[1.1] sm:leading-[60px] font-normal text-black w-full">
-            Your inbox, on autopilot
-          </h1>
+        <div className="pt-24 pb-16 flex flex-col items-center gap-8 w-full max-w-2xl mx-auto text-center">
+          <ScrollReveal delay={0}>
+            <h1 className="text-[40px] sm:text-[56px] leading-[1.1] sm:leading-[60px] font-normal text-black w-full">
+              Your inbox, on autopilot
+            </h1>
+          </ScrollReveal>
 
-          <p className="text-base font-medium text-[#404040] max-w-lg leading-relaxed">
-            Automatically manages conversations, drafts responses, and keeps follow-ups moving without lifting a finger.
-          </p>
+          <ScrollReveal delay={120}>
+            <p className="text-base font-medium text-[#404040] max-w-lg leading-relaxed">
+              Automatically manages conversations, drafts responses, and keeps follow-ups moving without lifting a finger.
+            </p>
+          </ScrollReveal>
 
-          <div className="flex flex-wrap gap-1 justify-center">
-            <Link
-              href="/login?signup=1"
-              className="inline-flex items-center justify-center rounded-lg bg-black px-6 py-2 text-sm text-white hover:opacity-85 transition-opacity"
-            >
-              Get Started
-            </Link>
-            <a
-              href="#how-it-works"
-              className="inline-flex items-center justify-center rounded-lg border border-black px-6 py-2 text-sm text-black hover:bg-neutral-50 transition-colors"
-            >
-              See how it works
-            </a>
-          </div>
+          <ScrollReveal delay={240}>
+            <div className="flex flex-wrap gap-1 justify-center">
+              <Link
+                href="/login?signup=1"
+                className="inline-flex items-center justify-center rounded-lg bg-black px-6 py-2 text-sm text-white hover:opacity-85 transition-opacity"
+              >
+                Get Started
+              </Link>
+              <a
+                href="#how-it-works"
+                className="inline-flex items-center justify-center rounded-lg border border-black px-6 py-2 text-sm text-black hover:bg-neutral-50 transition-colors"
+              >
+                See how it works
+              </a>
+            </div>
+          </ScrollReveal>
         </div>
 
         {/* Product screenshot */}
-        <div className="w-full flex items-start justify-center pb-0">
+        <ScrollReveal delay={360} className="w-full flex items-start justify-center pb-0">
           <div className="border border-[#e0e1ec] shadow-[0px_8px_0px_0px_rgba(0,0,0,0.25)] rounded-t-xl overflow-hidden w-full max-w-4xl">
             <img
               src="/images/landing/product-screenshot.png"
@@ -54,7 +61,7 @@ export default function Hero() {
               style={{ display: "block" }}
             />
           </div>
-        </div>
+        </ScrollReveal>
       </div>
     </section>
   );
