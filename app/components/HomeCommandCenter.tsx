@@ -18,6 +18,7 @@ interface Props {
   date: Date
   gmailChannels?: unknown[]
   billsSection: BillsSection
+  followUpDelayBusinessDays?: number
 }
 
 export default function HomeCommandCenter({
@@ -25,6 +26,7 @@ export default function HomeCommandCenter({
   agentSummary,
   date,
   billsSection,
+  followUpDelayBusinessDays,
 }: Props) {
   const { counts, topActions, sections, quietlyHandledBreakdown } = commandCenter
 
@@ -79,7 +81,10 @@ export default function HomeCommandCenter({
           {/* Right 40%: Read Later + Waiting On + Agent Activity */}
           <div className="flex flex-col gap-5">
             <ReadLaterSection items={sections.readLater} />
-            <WaitingOnSection items={sections.waitingOnThem} />
+            <WaitingOnSection
+              items={sections.waitingOnThem}
+              staleAfterBusinessDays={followUpDelayBusinessDays}
+            />
             <AgentActivitySection
               agentSummary={agentSummary}
               quietlyHandledBreakdown={quietlyHandledBreakdown}

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
+import { DEFAULT_FOLLOW_UP_BUSINESS_DAYS, followUpDueAt } from "@/lib/business-days"
 import type { MessageDirection, Prisma } from "@prisma/client"
 
 export type StaleConversation = {
@@ -80,28 +81,13 @@ export function outboundMessageExpectsReply(body: string): boolean {
 
 export const WAITING_ON_STATE_SOURCE = "flowdesk_lifecycle"
 
-/** Default follow-up delay when a tenant has no FollowUpSetting row. */
-export const DEFAULT_FOLLOW_UP_BUSINESS_DAYS = 3
-
-export function addBusinessDays(start: Date, businessDays: number): Date {
-  const result = new Date(start)
-  let remaining = businessDays
-  while (remaining > 0) {
-    result.setUTCDate(result.getUTCDate() + 1)
-    const day = result.getUTCDay()
-    if (day !== 0 && day !== 6) remaining--
-  }
-  return result
-}
-
-/**
- * When a waiting-on conversation becomes follow-up due. The delay is the
- * tenant's FollowUpSetting.staleAfterDays (interpreted as business days,
- * minimum 1), defaulting to DEFAULT_FOLLOW_UP_BUSINESS_DAYS.
- */
-export function followUpDueAt(waitingSince: Date, staleAfterBusinessDays: number): Date {
-  return addBusinessDays(waitingSince, Math.max(1, staleAfterBusinessDays))
-}
+// Pure business-day math lives in lib/business-days.ts (shared with UI
+// components); re-exported here so lifecycle callers have one import surface.
+export {
+  DEFAULT_FOLLOW_UP_BUSINESS_DAYS,
+  addBusinessDays,
+  followUpDueAt,
+} from "@/lib/business-days"
 
 /**
  * Transitions a conversation into waiting-on after an outbound reply that
