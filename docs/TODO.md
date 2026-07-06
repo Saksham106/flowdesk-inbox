@@ -1,6 +1,6 @@
 # Remaining Work
 
-Last updated: 2026-06-25
+Last updated: 2026-07-06
 
 ## Near term
 
@@ -15,8 +15,8 @@ Last updated: 2026-06-25
 - [ ] Show classification source, confidence, evidence, and correction history.
 - [ ] Add manual sender/domain rule creation, editing, and conflict handling.
 - [ ] Decide and implement Outlook archive/trash/unsubscribe parity.
-- [ ] Forward reply-composer CC/BCC fields through send APIs.
-- [ ] Resolve Gmail inline `cid:` images safely.
+- [ ] Implement CC/BCC send support and re-enable compose fields once the APIs persist those recipients end-to-end.
+- [ ] Broaden Gmail inline `cid:` image support beyond the current size-capped safe embedding path.
 
 ## Finish existing foundations
 
@@ -25,6 +25,7 @@ Last updated: 2026-06-25
 - [ ] Inject connected Google Drive context into draft generation.
 - [ ] Add semantic knowledge/search retrieval and scheduled website recrawling.
 - [ ] Make lead-sequence timing configurable and visible.
+- [ ] Add user-visible AI budget/usage visibility for inbox chat and agent-rule compilation.
 
 ## Later
 

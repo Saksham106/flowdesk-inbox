@@ -1,6 +1,6 @@
 # Product Plan
 
-Last updated: 2026-06-25
+Last updated: 2026-07-06
 
 ## Product thesis
 
@@ -101,14 +101,14 @@ Shared inboxes, assignments, comments, collision detection, roles, permissions, 
 | 24 | Auto-Unsubscribe | `Partial` | Safe unsubscribe, Gmail archive/trash, Clean Inbox shipped; broader provider cleanup remains. |
 | 25 | What Can I Ignore | `Partial` | Safely-ignored section, attention reasons, bulk close, archive/trash shipped; broader cleanup later. |
 | 26 | Outcome-Based Automation | `Partial` | AutomationRun trace, step executor (create_task, update_attention, archive), rollback. Trigger conditions not user-configurable yet. |
-| 27 | Train My Agent | `Shipped` | AgentRule model, NL compiler, preview endpoint, conflict detection, settings UI. |
+| 27 | Train My Agent | `Shipped` | AgentRule model, budget-metered NL compiler, preview endpoint, conflict detection, settings UI. |
 | 28 | Approval Queue | `Partial` | Inline approve/reject, batch actions, draft preview; edit-before-send and teach-the-agent remain. |
 | 29 | Confidence Before Sending | `Partial` | Draft confidence, sensitive warnings, per-category autopilot thresholds; clearer user-facing policy education remains. |
 | 30 | Auto-Draft on Intent | `Partial` | AI draft panel accepts rough instructions and produces approval-gated local drafts. Gmail-native draft creation remains. |
 | 31 | Multi-Step Workflows | `Partial` | WorkflowTemplate + WorkflowRun, runner, cron, 3 seeded templates, settings panel. Builder UI not yet implemented. |
 | 32 | Email Analytics / ROI | `Shipped` | 4-week trend bars, pipeline value, revenue opportunities on `/reports`; `ValueSnapshot` with weekly cron. |
 | 33 | VIP Protection | `Shipped` | VipContact model, detector, urgent priority, inbox badge, conversation banner, settings form. |
-| 34 | Reply Later / Snooze | `Partial` | SnoozeReminder model, API, cron, modal, Snoozed tab, resurfaced banner; smarter suggestions remain. |
+| 34 | Reply Later / Snooze | `Partial` | SnoozeReminder model, API, cron, modal, Snoozed tab, valid priority restore, resurfaced banner; smarter suggestions remain. |
 | 35 | Context From Connected Apps | `Partial` | Google Drive OAuth, searchDriveForContext; not yet injected into draft generation. |
 | 36 | AI Concierge Templates | `Partial` | Local-business templates, seed route, reply-composer picker; deeper vertical workflows remain. |
 | 37 | Snippets and Playbooks | `Shipped` | Snippet model, weekly miner, API, settings panel, picker in reply composer. |
@@ -117,7 +117,7 @@ Shared inboxes, assignments, comments, collision detection, roles, permissions, 
 | 40 | Email Triage by Money Impact | `Shipped` | Revenue-weighted score bonus in command center; Revenue at Risk subsection for stale high-value leads. |
 | 41 | Clean My Inbox | `Shipped` | /clean-inbox page, batch archive/unsubscribe, 1-hour undo via AuditLog. |
 | 42 | Gmail-Native Smart Labels | `Partial` | Canonical `FlowDesk/*` label vocabulary, state mapping, queued Gmail label writeback, and audit events shipped. Label bootstrap, classification-triggered projection, settings, and explainability remain. |
-| 43 | Ask My Inbox Chat | `Partial` | Streaming RAG pipeline, /chat page, SSE route; action-taking answers remain later. |
+| 43 | Ask My Inbox Chat | `Partial` | Budget-metered streaming RAG pipeline, /chat page, SSE route; action-taking answers remain later. |
 | 44 | Trust, Privacy, and Audit Log | `Partial` | Audit log and undo for reversible autopilot approvals; broader coverage remains. |
 | 45 | Paid Packaging | `Discovery` | Use as product packaging decision, not an engineering feature. |
 
@@ -164,6 +164,10 @@ Shared inboxes, assignments, comments, collision detection, roles, permissions, 
 | 2026-06-24 | `invalid_grant` sets `lastSyncStatus: "needs_reauth"` and stops auto-polling. | Silent retry loop was burning background requests every 15 minutes while showing a stale "synced 5 days ago" timestamp. |
 | 2026-06-25 | Reposition FlowDesk as a Gmail-native AI email operator, with the website as the control room. | Users already live in Gmail; projecting labels/drafts/actions into Gmail reduces switching cost while keeping FlowDesk trustworthy and configurable. |
 | 2026-06-25 | Add canonical `FlowDesk/*` Gmail labels and queue label projection through `GmailWritebackQueue`. | User-facing Gmail labels are the visible projection of FlowDesk state; queueing keeps writes retryable, auditable, and safe. |
+| 2026-07-06 | Execute queued agent jobs through a bounded cron worker without loosening autopilot gates. | Follow-up and lead-sequence work needs to drain reliably, but sending must stay opt-in, policy-gated, budget-gated, and auditable. |
+| 2026-07-06 | Hide unsupported reply CC/BCC fields until the send APIs can honor them. | Showing controls that are silently dropped creates trust debt; re-enable them only with end-to-end send support. |
+| 2026-07-06 | Treat AI budget and metering as required at every OpenAI entry point. | Inbox chat, rule compilation, drafts, scoring, memory, and summaries should fail predictably and respect tenant limits. |
+| 2026-07-06 | Keep landing-page assets local and committed. | Expiring design-tool URLs made the site brittle; committed assets keep production rendering stable. |
 
 ## Open product questions
 

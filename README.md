@@ -87,7 +87,7 @@ Required variables:
 - `NEXTAUTH_SECRET` — generate with `openssl rand -base64 32`
 - `ENCRYPTION_SECRET` — generate with `openssl rand -base64 32`
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — see Google OAuth setup below
-- `OPENAI_API_KEY` — required for AI draft suggestions, explanations, lead scoring, meeting prep/follow-up, reply-learning, and gated relationship-memory extraction
+- `OPENAI_API_KEY` — required for AI draft suggestions, explanations, lead scoring, meeting prep/follow-up, reply-learning, inbox chat, agent-rule compilation, and gated relationship-memory extraction
 - `OPENAI_MODEL` — defaults/recommended value: `gpt-5.4-mini`
 
 ### 3. Start Postgres
@@ -220,17 +220,30 @@ Credentials are verified live against MindBody's API before being saved. Use Sit
 | `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth client secret |
 | `MICROSOFT_CLIENT_ID` | For Outlook | Microsoft Entra application (client) ID |
 | `MICROSOFT_CLIENT_SECRET` | For Outlook | Microsoft Entra application client secret |
-| `OPENAI_API_KEY` | Yes | OpenAI API key for AI draft suggestions |
-| `OPENAI_MODEL` | Yes | OpenAI model used for draft suggestions |
+| `OPENAI_API_KEY` | Yes | OpenAI API key for AI draft suggestions, explanations, lead scoring, meeting prep/follow-up, reply-learning, inbox chat, agent-rule compilation, and gated relationship memory |
+| `OPENAI_MODEL` | Yes | OpenAI model used for AI features; defaults/recommended value: `gpt-5.4-mini` |
 | `GMAIL_PUSH_TOPIC` | Optional | Google Pub/Sub topic name for Gmail watch notifications, e.g. `projects/<project>/topics/<topic>` |
 | `GMAIL_PUSH_SECRET` | Optional | Shared secret for the Pub/Sub push endpoint at `/api/connectors/gmail/push?secret=...` |
-| `CRON_SECRET` | Required for cron | Bearer token for scheduled endpoints, including Gmail and Outlook renewal/sync |
+| `CRON_SECRET` | Required for cron | Bearer token for scheduled endpoints, including Gmail, Outlook, and agent jobs. Cron routes reject requests when this is unset; never configure schedulers with `Bearer undefined`. |
 | `MINDBODY_API_KEY` | Optional | MindBody source password from developer portal |
 | `SEED_EMAIL` | No | Override default login email |
 | `SEED_PASSWORD` | No | Override default login password |
 | `SEED_TENANT_NAME` | No | Override default tenant name |
 
 Seeded tenants default to the schema default account type unless changed by code or database update. Signup requires an explicit `accountType` of `personal` or `business`.
+
+---
+
+## Encryption Key Rotation
+
+`POST /api/admin/rekey` re-encrypts stored connector credentials after rotating `ENCRYPTION_SECRET`.
+
+1. Back up the production database.
+2. Set `ENCRYPTION_SECRET_PREVIOUS` to the old key and `ENCRYPTION_SECRET` to the new key.
+3. Deploy the app, sign in as the target tenant/admin, then call `POST /api/admin/rekey`.
+4. Confirm the response has `errors: 0`, then unset `ENCRYPTION_SECRET_PREVIOUS` in production.
+
+The rekey route covers Gmail, Google Calendar, Google Drive, Outlook access/refresh tokens, Outlook encrypted delta links and subscription client state, and MindBody credential fields. Monitor the response error count and app logs before removing the previous key.
 
 ---
 
