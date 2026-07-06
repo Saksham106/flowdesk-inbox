@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 
 import { prisma } from "@/lib/prisma";
+import { AUTOMATION_LEVEL_DEFAULT } from "@/lib/agent/automation-level";
 
 export const runtime = "nodejs";
 
@@ -64,10 +65,15 @@ export async function POST(request: Request) {
         },
       });
 
+      // Explicit rather than relying on the schema default: a tenant missing
+      // its AutopilotSetting row falls back to legacy Level 3 (Gmail drafts)
+      // in getAutomationLevel, so signup must always create the row at the
+      // new-tenant default Level 2 (labels only).
       await tx.autopilotSetting.create({
         data: {
           tenantId: tenant.id,
           enabled: false,
+          automationLevel: AUTOMATION_LEVEL_DEFAULT,
         },
       });
 
