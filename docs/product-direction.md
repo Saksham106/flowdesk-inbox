@@ -252,19 +252,20 @@ Never start users at auto-send.
 
 Goal: FlowDesk directly organizes Gmail.
 
-Current state:
+Current state (Milestone 1 shipped — Phase A):
 
-- First slice shipped: canonical `FlowDesk/*` label vocabulary, workflow/status-to-label mapping, queued `apply_labels` writebacks, Gmail label creation/application, stale FlowDesk label removal, and audit events for queued/applied label mutations.
-- Still needed: label bootstrap on connect, automatic projection after classification/draft creation, settings UI, custom mappings, and fuller status indicators.
+- Shipped earlier: canonical `FlowDesk/*` label vocabulary, workflow/status-to-label mapping, queued `apply_labels` writebacks, Gmail label creation/application, stale FlowDesk label removal, and audit events for queued/applied label mutations.
+- Shipped in Phase A: label bootstrap on Gmail connect (`ensureFlowDeskLabels` now wired into the OAuth callback) with a backfill on manual sync for pre-existing connections; automatic label projection after classification (`projectFlowDeskLabelsForConversation`, invoked from `work-item-sync`); a `GmailLabelMapping` table plus a Gmail Labels settings panel to enable/disable each label; and audit events for bootstrap and label-setting changes.
+- Still needed (deferred, post-MVP): in-Gmail label renaming (safe reconciliation of existing labels), custom user-defined categories, and fuller dashboard status indicators.
 
 Build:
 
-- Create FlowDesk label namespace. First slice shipped.
-- Map internal statuses to Gmail labels. First slice shipped for manual workflow/status changes.
-- Apply/remove labels after classification.
-- Keep label state synced with internal conversation/work item state.
-- Add setting page for label names and visibility.
-- Add audit log entries for every label change. First slice shipped for queued/applied writebacks.
+- Create FlowDesk label namespace. Shipped.
+- Map internal statuses to Gmail labels. Shipped for manual and automatic (post-classification) changes.
+- Apply/remove labels after classification. Shipped.
+- Keep label state synced with internal conversation/work item state. Shipped for the classification/work-item path.
+- Add setting page for label names and visibility. Visibility (enable/disable) shipped; renaming deferred.
+- Add audit log entries for every label change. Shipped for queued/applied writebacks, bootstrap, and label-setting updates.
 
 Success metric:
 

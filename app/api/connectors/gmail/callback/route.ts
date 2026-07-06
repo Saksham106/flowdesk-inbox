@@ -4,7 +4,7 @@ import type { Credentials } from "google-auth-library";
 
 import { prisma } from "@/lib/prisma";
 import { encryptString } from "@/lib/crypto";
-import { createOAuth2Client, verifyState } from "@/lib/google";
+import { createOAuth2Client, ensureFlowDeskLabels, verifyState } from "@/lib/google";
 import { runGmailSync } from "@/lib/gmail-sync";
 
 export const runtime = "nodejs";
@@ -96,6 +96,22 @@ export async function GET(request: Request) {
       },
     });
     channelId = channel.id;
+  }
+
+  // Bootstrap the FlowDesk/* label namespace so the mailbox is ready to be
+  // organized. Idempotent (creates only missing labels) and best-effort — a
+  // failure here must not block the connection.
+  try {
+    await ensureFlowDeskLabels(channelId);
+    await prisma.auditLog.create({
+      data: {
+        tenantId,
+        action: "gmail.labels.bootstrapped",
+        payloadJson: { channelId, source: "oauth_callback" },
+      },
+    });
+  } catch (err) {
+    console.error("[gmail/callback] label bootstrap failed:", err);
   }
 
   // Initial sync — import recent threads into inbox

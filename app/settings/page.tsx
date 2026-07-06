@@ -15,6 +15,8 @@ import KnowledgeDocumentList from "@/app/settings/KnowledgeDocumentList";
 import BusinessProfileForm from "@/app/settings/BusinessProfileForm";
 import FollowUpSettingsForm from "@/app/settings/FollowUpSettingsForm";
 import AutopilotSettingsForm from "@/app/settings/AutopilotSettingsForm";
+import GmailLabelSettingsPanel from "@/app/settings/GmailLabelSettingsPanel";
+import { FLOWDESK_GMAIL_LABEL_NAMES } from "@/lib/gmail-labels";
 import PersonalStylePanel from "@/app/settings/PersonalStylePanel"
 import ConciergeTemplateSeedButton from "./ConciergeTemplateSeedButton";
 import VipContactsForm from "@/app/settings/VipContactsForm"
@@ -131,13 +133,25 @@ export default async function SettingsPage({ searchParams }: Props) {
     }),
   ]);
 
-  const [senderRules, aiBudgetStatus] = await Promise.all([
+  const [senderRules, aiBudgetStatus, gmailLabelMappings] = await Promise.all([
     prisma.senderRule.findMany({
       where: { tenantId: session.user.tenantId, status: { in: ["suggested", "active"] } },
       orderBy: { createdAt: "desc" },
     }),
     getAiBudgetStatus(session.user.tenantId),
+    prisma.gmailLabelMapping.findMany({
+      where: { tenantId: session.user.tenantId },
+      select: { canonical: true, enabled: true },
+    }),
   ]);
+
+  const gmailLabelEnabledByCanonical = new Map(
+    gmailLabelMappings.map((m) => [m.canonical, m.enabled])
+  );
+  const gmailLabelSettings = FLOWDESK_GMAIL_LABEL_NAMES.map((canonical) => ({
+    canonical,
+    enabled: gmailLabelEnabledByCanonical.get(canonical) ?? true,
+  }));
 
   // Workflow templates — seed 3 defaults if tenant has none
   const DEFAULT_WORKFLOW_TEMPLATES = [
@@ -637,6 +651,22 @@ export default async function SettingsPage({ searchParams }: Props) {
             />
           </div>
         </section>
+
+        {/* Gmail Labels */}
+        {gmailChannels.length > 0 && (
+          <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="font-semibold">Gmail Labels</h2>
+              <p className="mt-0.5 text-sm text-slate-500">
+                FlowDesk organizes your inbox with these labels directly in Gmail,
+                so it&apos;s already sorted when you open it.
+              </p>
+            </div>
+            <div className="px-6 py-5">
+              <GmailLabelSettingsPanel initial={gmailLabelSettings} />
+            </div>
+          </section>
+        )}
 
         {/* Attention Rules */}
         {senderRules.length > 0 && (

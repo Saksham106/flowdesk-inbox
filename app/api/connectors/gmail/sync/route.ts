@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { GmailAuthError, runGmailSync } from "@/lib/gmail-sync"
+import { ensureFlowDeskLabels } from "@/lib/google"
 import { revalidateInboxViews } from "@/lib/cache-tags"
 
 export const runtime = "nodejs"
@@ -25,6 +26,14 @@ export async function POST(request: Request) {
 
   if (!channel) {
     return NextResponse.json({ error: "Channel not found" }, { status: 404 })
+  }
+
+  // Backfill the FlowDesk/* label namespace for mailboxes connected before
+  // bootstrap-on-connect existed. Idempotent and best-effort; never blocks sync.
+  try {
+    await ensureFlowDeskLabels(channelId)
+  } catch (err) {
+    console.error("[gmail/sync] label backfill failed:", err)
   }
 
   try {

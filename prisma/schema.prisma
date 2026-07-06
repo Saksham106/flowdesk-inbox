@@ -109,6 +109,7 @@ model Tenant {
   workflowTemplates         WorkflowTemplate[]
   workflowRuns              WorkflowRun[]
   googleDriveCredential     GoogleDriveCredential?
+  gmailLabelMappings        GmailLabelMapping[]
 }
 
 model User {
@@ -195,6 +196,23 @@ model GmailWritebackQueue {
 
   @@unique([conversationId, action])
   @@index([tenantId, status, nextAttemptAt])
+}
+
+// Per-tenant configuration for the canonical FlowDesk/* Gmail labels.
+// A row exists only when the tenant has customized a label; absence means
+// "enabled with the default (canonical) name".
+model GmailLabelMapping {
+  id          String   @id @default(cuid())
+  tenantId    String
+  canonical   String   // one of FLOWDESK_GMAIL_LABEL_NAMES
+  displayName String?  // reserved for future in-Gmail rename; null = use canonical
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, canonical])
+  @@index([tenantId])
 }
 
 model OutlookCredential {

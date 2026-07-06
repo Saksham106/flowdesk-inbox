@@ -19,6 +19,7 @@ import { extractFacts, mergeFacts } from "@/lib/agent/second-brain"
 import { applyActiveRule } from "@/lib/agent/preference-learning"
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
 import { detectSchedulingRequest } from "@/lib/agent/scheduling"
+import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
@@ -135,6 +136,21 @@ export async function syncConversationWorkItems(
       },
     },
   })
+
+  // Project FlowDesk state onto Gmail labels automatically after classification.
+  // Self-guards for non-Google channels; best-effort so a Gmail hiccup never
+  // fails the sync. Skipped when the user has overridden state manually — their
+  // explicit choice is already projected by the status routes.
+  if (!hasUserOverride) {
+    try {
+      await projectFlowDeskLabelsForConversation({
+        tenantId: conversation.tenantId,
+        conversationId: conversation.id,
+      })
+    } catch (err) {
+      console.error("[work-item-sync] Gmail label projection failed:", err)
+    }
+  }
 
   // Auto-close automated/FYI conversations that were never engaged with
   const hasOutboundMessages = conversation.messages.some((m) => m.direction === "outbound")
