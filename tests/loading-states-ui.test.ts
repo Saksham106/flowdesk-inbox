@@ -22,4 +22,20 @@ describe("loading state UI resilience", () => {
     expect(source).toContain("finally {")
     expect(source).toContain("setLoading(false)")
   })
+
+  it("clears support and scheduling panel action loading states when requests fail", () => {
+    const supportSource = readFileSync(
+      join(process.cwd(), "app/conversations/[id]/SupportPanel.tsx"),
+      "utf8"
+    )
+    const schedulingSource = readFileSync(
+      join(process.cwd(), "app/conversations/[id]/SchedulingPanel.tsx"),
+      "utf8"
+    )
+
+    expect(supportSource).toContain("finally {")
+    expect(supportSource).toContain("setUseAnswerLoading(false)")
+    expect(schedulingSource).toContain("finally {")
+    expect(schedulingSource).toContain("setConfirmingSlot(null)")
+  })
 })

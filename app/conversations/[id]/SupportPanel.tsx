@@ -76,17 +76,20 @@ export default function SupportPanel({
             onClick={async () => {
               if (useAnswerLoading) return
               setUseAnswerLoading(true)
-              const res = await fetch(`/api/conversations/${conversationId}/draft`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  text: suggestedKbDoc.content,
-                  status: "proposed",
-                  kbDocId: suggestedKbDoc.id,
-                }),
-              })
-              setUseAnswerLoading(false)
-              if (res.ok) router.refresh()
+              try {
+                const res = await fetch(`/api/conversations/${conversationId}/draft`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    text: suggestedKbDoc.content,
+                    status: "proposed",
+                    kbDocId: suggestedKbDoc.id,
+                  }),
+                })
+                if (res.ok) router.refresh()
+              } finally {
+                setUseAnswerLoading(false)
+              }
             }}
             disabled={useAnswerLoading}
             className="mt-3 block rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-800 disabled:opacity-60 disabled:cursor-wait"

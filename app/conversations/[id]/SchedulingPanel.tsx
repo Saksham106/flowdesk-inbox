@@ -40,14 +40,17 @@ export default function SchedulingPanel({
   async function confirmSlot(slot: ProposedSlot, index: number) {
     if (confirmingSlot !== null) return
     setConfirmingSlot(index)
-    const res = await fetch(`/api/conversations/${conversationId}/scheduling`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ confirmedTime: slot.start }),
-    })
-    const data = await res.json()
-    setSession(data.schedulingSession)
-    setConfirmingSlot(null)
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}/scheduling`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmedTime: slot.start }),
+      })
+      const data = await res.json()
+      setSession(data.schedulingSession)
+    } finally {
+      setConfirmingSlot(null)
+    }
   }
 
   if (!session && calendarEmails.length === 0) return null
