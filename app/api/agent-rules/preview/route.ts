@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { compileRule } from "@/lib/agent/rule-compiler"
+import { compileRule, RuleCompileError, type CompiledRule } from "@/lib/agent/rule-compiler"
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions)
@@ -10,8 +10,16 @@ export async function POST(request: Request) {
   const { plainText } = await request.json()
   if (!plainText) return NextResponse.json({ error: "plainText required" }, { status: 400 })
 
-  const compiled = await compileRule(plainText)
   const tenantId = session.user.tenantId
+  let compiled: CompiledRule
+  try {
+    compiled = await compileRule(tenantId, plainText)
+  } catch (err) {
+    if (err instanceof RuleCompileError) {
+      return NextResponse.json({ error: err.message }, { status: err.status })
+    }
+    throw err
+  }
 
   // Count matching conversations from last 90 days
   const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)

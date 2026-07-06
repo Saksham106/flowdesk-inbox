@@ -111,4 +111,15 @@ describe("Gmail writeback cron label jobs", () => {
       },
     })
   })
+
+  it("rejects Bearer undefined when CRON_SECRET is unset", async () => {
+    delete process.env.CRON_SECRET
+
+    const res = await runGmailWriteback({
+      headers: new Headers({ authorization: "Bearer undefined" }),
+    } as Request)
+
+    expect(res.status).toBe(401)
+    expect(mockWritebackFindMany).not.toHaveBeenCalled()
+  })
 })

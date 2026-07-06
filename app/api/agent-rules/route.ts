@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Prisma } from "@prisma/client"
-import { compileRule } from "@/lib/agent/rule-compiler"
+import { compileRule, RuleCompileError, type CompiledRule } from "@/lib/agent/rule-compiler"
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -23,7 +23,15 @@ export async function POST(request: Request) {
   if (!plainText || typeof plainText !== "string") {
     return NextResponse.json({ error: "plainText required" }, { status: 400 })
   }
-  const compiled = await compileRule(plainText)
+  let compiled: CompiledRule
+  try {
+    compiled = await compileRule(tenantId, plainText)
+  } catch (err) {
+    if (err instanceof RuleCompileError) {
+      return NextResponse.json({ error: err.message }, { status: err.status })
+    }
+    throw err
+  }
   if (compiled.confidence < 0.4) {
     return NextResponse.json({ error: "Could not understand that rule. Try rephrasing." }, { status: 422 })
   }

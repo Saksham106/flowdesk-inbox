@@ -696,7 +696,9 @@ export async function syncConversationWorkItems(
         })
       }
     }
-  })()
+  })().catch((err) => {
+    console.error("[work-item-sync] attachment extraction failed:", err)
+  })
 
   // Second Brain — extract facts from first inbound and store in PersonMemory
   void (async () => {
@@ -731,7 +733,9 @@ export async function syncConversationWorkItems(
         },
       })
     }
-  })()
+  })().catch((err) => {
+    console.error("[work-item-sync] second-brain fact extraction failed:", err)
+  })
 
   // Second-pass auto-close: classifyEmailType runs after summarizeWorkItems, so emails classified
   // as FYI by the email classifier (but not caught by pattern matching) need a second chance here.

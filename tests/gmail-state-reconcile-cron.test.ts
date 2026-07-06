@@ -150,4 +150,15 @@ describe("GET /api/cron/gmail-state-reconcile", () => {
     })
     expect(mockWritebackUpsert).not.toHaveBeenCalled()
   })
+
+  it("rejects Bearer undefined when CRON_SECRET is unset", async () => {
+    delete process.env.CRON_SECRET
+
+    const res = await GET({
+      headers: new Headers({ authorization: "Bearer undefined" }),
+    } as Request)
+
+    expect(res.status).toBe(401)
+    expect(mockConversationFindMany).not.toHaveBeenCalled()
+  })
 })
