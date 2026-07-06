@@ -41,14 +41,10 @@ Status: Core shipped. Remaining work is hardening, reconciliation, correctness, 
 
 ### P0
 
-- Fix or remove `FlowDesk/Handle First` from canonical label projection.
-  - Areas: `lib/gmail-labels.ts`, `lib/agent/command-center.ts`, `lib/agent/work-item-sync.ts`, label settings UI.
-- Schedule and verify Gmail label bootstrap/reconciliation maintenance.
-  - Areas: `app/api/connectors/gmail/sync/route.ts`, new/existing cron route, `lib/gmail-labels.ts`, deployment cron config.
-- Link every Gmail writeback result to human-readable audit entries.
-  - Areas: `app/api/cron/gmail-writeback/route.ts`, `lib/gmail-labels.ts`, `lib/gmail-drafts.ts`, `prisma/schema.prisma` if result linkage needs schema support.
-- Preserve user-edited `InboxTask` and workflow fields during sync/classification refresh.
-  - Areas: `lib/agent/work-item-sync.ts`, `lib/workflow-status.ts`, `InboxTask` writes.
+- ~~Fix or remove `FlowDesk/Handle First` from canonical label projection.~~ Done: removed from the canonical vocabulary — `handle_first` is not producible by any classifier/rule/correction, and the dashboard's Handle First ranking is relative and per-request, not a stable per-thread state.
+- ~~Schedule and verify Gmail label bootstrap/reconciliation maintenance.~~ Done in code: `GET /api/cron/gmail-label-reconcile` (ensure labels per channel + bounded re-projection of recently-active conversations). Production scheduling remains in TODO's Ops checklist.
+- ~~Link every Gmail writeback result to human-readable audit entries.~~ Done: every writeback resolution writes `gmail.writeback.completed` / `gmail.writeback.failed` with action, conversation/thread, result detail, and error (no schema change needed).
+- ~~Preserve user-edited `InboxTask` and workflow fields during sync/classification refresh.~~ Done: user edits mark field ownership (`metadataJson.userEditedFields` + `source: "user"`), sync skips user-owned fields, and label projection honors `conversation.userState`.
 - Move dashboard/settings copy toward "Gmail workspace, FlowDesk control room."
   - Areas: `app/page.tsx`, `app/components/HomeCommandCenter.tsx`, `app/settings/page.tsx`, `lib/app-navigation.ts`.
 
