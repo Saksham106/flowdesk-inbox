@@ -20,6 +20,10 @@ import { applyActiveRule } from "@/lib/agent/preference-learning"
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
 import { detectSchedulingRequest } from "@/lib/agent/scheduling"
 import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
+import {
+  markConversationWaitingOn,
+  outboundMessageExpectsReply,
+} from "@/lib/agent/follow-up"
 
 export type SyncConversationWorkItemsInput = {
   tenantId: string
@@ -137,11 +141,40 @@ export async function syncConversationWorkItems(
     },
   })
 
+  // Waiting-on lifecycle: a reply sent directly in Gmail (outside FlowDesk)
+  // arrives here as the latest outbound message on a needs_reply conversation.
+  // If it plausibly expects a response, move to waiting_on so the label
+  // projection below picks it up. The conversation's `messages` include is
+  // capped at 40 ascending, so fetch the true latest message separately.
+  let waitingOnDetected = false
+  const latestMessage = await prisma.message.findFirst({
+    where: { conversationId: conversation.id },
+    orderBy: { createdAt: "desc" },
+    select: { direction: true, body: true },
+  })
+  if (
+    !hasUserOverride &&
+    latestMessage?.direction === "outbound" &&
+    conversation.status === "needs_reply" &&
+    outboundMessageExpectsReply(latestMessage.body)
+  ) {
+    try {
+      await markConversationWaitingOn({
+        tenantId: conversation.tenantId,
+        conversationId: conversation.id,
+        detectedFrom: "gmail_sync",
+      })
+      waitingOnDetected = true
+    } catch (err) {
+      console.error("[work-item-sync] waiting-on detection failed:", err)
+    }
+  }
+
   // Project FlowDesk state onto Gmail labels automatically after classification.
   // Self-guards for non-Google channels; best-effort so a Gmail hiccup never
   // fails the sync. Skipped when the user has overridden state manually — their
   // explicit choice is already projected by the status routes.
-  if (!hasUserOverride) {
+  if (!hasUserOverride || waitingOnDetected) {
     try {
       await projectFlowDeskLabelsForConversation({
         tenantId: conversation.tenantId,

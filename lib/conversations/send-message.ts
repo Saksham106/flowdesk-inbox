@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { extractEmail, fetchThread, getGmailClient, sendGmailReply } from "@/lib/google"
 import { sendOutlookReply } from "@/lib/microsoft"
 import { conversationUpdateForWorkflowStatus } from "@/lib/workflow-status-transitions"
+import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
 
 type ConversationForSend = NonNullable<
   Awaited<
@@ -189,6 +190,18 @@ async function sendEmailConversationMessage({
   } catch (err) {
     console.error("[send/email] DB error after Gmail send (id=%s):", gmailMessageId, err)
     throw new ConversationSendError("Email sent but failed to save - refresh the page.", 500)
+  }
+
+  // The conversation just moved to waiting_on — reflect it in Gmail right away
+  // ("Waiting On" label) instead of waiting for the next sync-driven projection.
+  // Best-effort: a labeling hiccup must not fail an already-sent message.
+  try {
+    await projectFlowDeskLabelsForConversation({
+      tenantId: conversation.tenantId,
+      conversationId: conversation.id,
+    })
+  } catch (err) {
+    console.error("[send/email] Gmail label projection failed:", err)
   }
 
   return { ok: true, providerMessageId: `gmail_${gmailMessageId}` }

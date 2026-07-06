@@ -10,6 +10,7 @@ const {
   mockJobCount,
   mockJobCreate,
   mockAuditCreate,
+  mockConvUpdate,
 } = vi.hoisted(() => ({
   mockFollowUpSettingFindMany: vi.fn(),
   mockConvFindMany:            vi.fn(),
@@ -17,12 +18,13 @@ const {
   mockJobCount:                vi.fn(),
   mockJobCreate:               vi.fn(),
   mockAuditCreate:             vi.fn(),
+  mockConvUpdate:              vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     followUpSetting: { findMany: mockFollowUpSettingFindMany },
-    conversation:    { findMany: mockConvFindMany },
+    conversation:    { findMany: mockConvFindMany, update: mockConvUpdate },
     agentJob:        { findFirst: mockJobFindFirst, count: mockJobCount, create: mockJobCreate },
     auditLog:        { create: mockAuditCreate },
   },
@@ -31,6 +33,8 @@ vi.mock('@/lib/prisma', () => ({
 import {
   getStaleConversations,
   hasRecentFollowUpJob,
+  markConversationWaitingOn,
+  outboundMessageExpectsReply,
   runFollowUpBatch,
 } from '@/lib/agent/follow-up'
 
@@ -122,6 +126,74 @@ describe('hasRecentFollowUpJob', () => {
     const where = mockJobFindFirst.mock.calls[0][0].where
     expect(where.conversationId).toBe(CONV_1)
     expect(where.trigger).toBe('follow_up')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// outboundMessageExpectsReply
+// ---------------------------------------------------------------------------
+
+describe('outboundMessageExpectsReply', () => {
+  it('detects questions and request phrases', () => {
+    expect(outboundMessageExpectsReply('Does Tuesday at 3pm work for you?')).toBe(true)
+    expect(outboundMessageExpectsReply('Let me know when the contract is signed.')).toBe(true)
+    expect(outboundMessageExpectsReply('Please confirm the delivery date.')).toBe(true)
+    expect(outboundMessageExpectsReply('Could you send over the invoice?')).toBe(true)
+    expect(outboundMessageExpectsReply('Looking forward to hearing from you.')).toBe(true)
+    expect(outboundMessageExpectsReply('Keep me posted on the rollout.')).toBe(true)
+  })
+
+  it('does not fire on closing messages with no reply expected', () => {
+    expect(outboundMessageExpectsReply('Thanks so much. All set on my end.')).toBe(false)
+    expect(outboundMessageExpectsReply('Sounds good, see you then!')).toBe(false)
+    expect(outboundMessageExpectsReply('Received, thank you.')).toBe(false)
+  })
+
+  it('ignores question marks inside quoted reply text', () => {
+    const body = [
+      'All done — payment went out this morning.',
+      '',
+      'On Mon, Jul 6, 2026 at 9:00 AM Sarah <sarah@example.com> wrote:',
+      '> Could you send the payment this week?',
+    ].join('\n')
+    expect(outboundMessageExpectsReply(body)).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// markConversationWaitingOn
+// ---------------------------------------------------------------------------
+
+describe('markConversationWaitingOn', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockConvUpdate.mockResolvedValue({})
+    mockAuditCreate.mockResolvedValue({})
+  })
+
+  it('moves the conversation to in_progress and audits the detection', async () => {
+    await markConversationWaitingOn({
+      tenantId: TENANT,
+      conversationId: CONV_1,
+      detectedFrom: 'gmail_sync',
+    })
+
+    expect(mockConvUpdate).toHaveBeenCalledWith({
+      where: { id: CONV_1, tenantId: TENANT },
+      data: { status: 'in_progress' },
+    })
+    expect(mockAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tenantId: TENANT,
+          action: 'conversation.waiting_on_detected',
+          payloadJson: expect.objectContaining({
+            conversationId: CONV_1,
+            detectedFrom: 'gmail_sync',
+          }),
+        }),
+      })
+    )
   })
 })
 

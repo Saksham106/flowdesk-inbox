@@ -44,6 +44,71 @@ export async function getStaleConversations(
   }))
 }
 
+// ─── Waiting-on lifecycle ────────────────────────────────────────────────────
+// Deterministic detection of "this outbound reply expects a response", shared by
+// the FlowDesk send path and the Gmail sync path (replies sent directly in
+// Gmail). No LLM involvement; mode-agnostic (personal and business tenants get
+// the same lifecycle).
+
+const QUOTED_LINE = /^\s*(>|On .+ wrote:)/
+
+const EXPECTS_REPLY_PATTERNS: RegExp[] = [
+  /\?/,
+  /\blet (me|us) know\b/i,
+  /\bplease\s+(confirm|advise|reply|respond|send|share|review|sign|approve)\b/i,
+  /\b(can|could|would|will)\s+you\b/i,
+  /\bget back to (me|us)\b/i,
+  /\blook(ing)? forward to (hearing|your)\b/i,
+  /\bwhen you (get|have) a (chance|moment|minute|sec)\b/i,
+  /\bawait(ing)?\s+(your|the)\b/i,
+  /\bany\s+(update|updates|thoughts|feedback)\b/i,
+  /\bkeep (me|us) (posted|updated|in the loop)\b/i,
+]
+
+/**
+ * Does an outbound message plausibly expect a response? Quoted/reply-header
+ * lines are stripped first so text quoted from the other side can't trigger it.
+ */
+export function outboundMessageExpectsReply(body: string): boolean {
+  const ownText = body
+    .split(/\r?\n/)
+    .filter((line) => !QUOTED_LINE.test(line))
+    .join("\n")
+  return EXPECTS_REPLY_PATTERNS.some((pattern) => pattern.test(ownText))
+}
+
+export const WAITING_ON_STATE_SOURCE = "flowdesk_lifecycle"
+
+/**
+ * Transitions a conversation into waiting-on after an outbound reply that
+ * expects a response was detected via sync (i.e. sent directly in Gmail, not
+ * through FlowDesk — the send routes make their own transition). Only touches
+ * `status`; `userState` stays untouched so an explicit user choice still wins.
+ */
+export async function markConversationWaitingOn(input: {
+  tenantId: string
+  conversationId: string
+  detectedFrom: string
+}): Promise<void> {
+  await prisma.conversation.update({
+    where: { id: input.conversationId, tenantId: input.tenantId },
+    // deriveWorkflowStatus maps in_progress → waiting_on
+    data: { status: "in_progress" },
+  })
+
+  await prisma.auditLog.create({
+    data: {
+      tenantId: input.tenantId,
+      action: "conversation.waiting_on_detected",
+      payloadJson: {
+        conversationId: input.conversationId,
+        detectedFrom: input.detectedFrom,
+        source: WAITING_ON_STATE_SOURCE,
+      },
+    },
+  })
+}
+
 export async function hasRecentFollowUpJob(
   conversationId: string,
   withinHours = 24
