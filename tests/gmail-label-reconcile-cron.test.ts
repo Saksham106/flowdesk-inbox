@@ -93,7 +93,7 @@ describe("GET /api/cron/gmail-label-reconcile", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           channel: { provider: "google" },
-          externalThreadId: { not: null },
+          externalThreadId: { not: "" },
         }),
         take: expect.any(Number),
       })
@@ -114,7 +114,8 @@ describe("GET /api/cron/gmail-label-reconcile", () => {
     const body = await res.json()
 
     expect(res.status).toBe(500)
-    expect(res.headers["X-Gmail-Label-Reconcile-Errors"]).toBe("1")
+    const headers = res.headers as unknown as Record<string, string>
+    expect(headers["X-Gmail-Label-Reconcile-Errors"]).toBe("1")
     expect(body.labelsEnsured).toBe(0)
     expect(mockAuditCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({

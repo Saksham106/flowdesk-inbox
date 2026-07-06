@@ -65,7 +65,7 @@ export async function GET(request: Request) {
   const conversations = await prisma.conversation.findMany({
     where: {
       channel: { provider: "google" },
-      externalThreadId: { not: null },
+      externalThreadId: { not: "" },
       lastMessageAt: { gte: cutoff },
     },
     orderBy: { lastMessageAt: "desc" },
