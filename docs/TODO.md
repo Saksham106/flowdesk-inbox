@@ -2,6 +2,8 @@
 
 Last updated: 2026-07-07
 
+Coordination rule: before starting a roadmap lane, fetch `origin/main`, branch from the latest main in a fresh worktree, and claim the active item here or in the PR description. Clear the claim when the PR merges or is abandoned so duplicate Codex branches do not linger.
+
 ## Near term
 
 - [x] Preserve user-edited `InboxTask` fields across work-item sync — done: user edits record the field in `metadataJson.userEditedFields` and flip `source: "user"`; the sync update branch skips user-owned fields (`lib/agent/user-edited-fields.ts`). Label projection now also honors a manual workflow choice (`conversation.userState`).

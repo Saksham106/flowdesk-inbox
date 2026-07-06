@@ -95,9 +95,9 @@ Verified against code; all of these are wrong in the docs **as they exist on `or
 `app/api/conversations/[id]/snooze/route.ts:77` restores `priority: "normal"`, which is not in the priority vocabulary (`urgent|high|medium|low|none` — `lib/agent/command-center.ts:21`; snooze itself sets the also-nonstandard `"snoozed"` at `:50`). A persisted state with priority `"normal"` makes `score()`'s `priorityScore[priority]` lookup `undefined` → `NaN` → broken sorting in top-actions for that conversation while the persisted state is fresh.
 **Fix:** restore the pre-snooze priority (save it in metadata at snooze time), or `"medium"` as a safe default.
 
-### P2-2. `FlowDesk/Handle First` Gmail label is unreachable (main only)
-`lib/gmail-labels.ts:58` (on main) applies the label when `attentionCategory === "handle_first"`, but `handle_first` is not a value the classifier or corrections can produce (taxonomy: `needs_reply|needs_action|review_soon|read_later|waiting_on|fyi_done|quiet` — see `lib/agent/rule-compiler.ts:77`). The label is declared in the vocabulary and in the product-direction doc but can never be applied.
-**Fix:** map it from the command-center's top-action selection instead, or drop it from the vocabulary until wired.
+### P2-2. `FlowDesk/Handle First` Gmail label is dashboard-only
+Resolved in the Gmail-native implementation follow-up: `Handle First` is intentionally a command-center ranking, not a stable provider label. The canonical `FlowDesk/*` Gmail vocabulary no longer includes `FlowDesk/Handle First`, avoiding label churn as priorities are recalculated.
+**Fix:** complete; keep `Handle First` dashboard-only unless a future product decision introduces a stable, non-churning provider label.
 
 ### P2-3. Two parallel approval mechanisms; `ApprovalRequest` is nearly vestigial
 Only **one** production site creates `ApprovalRequest`s: meeting follow-up (`app/api/meetings/follow-up/route.ts:159`). The primary draft approval flow runs entirely on `Draft.status` (`proposed → approved → sent`, `app/api/conversations/[id]/draft/route.ts`, `send-approved/route.ts`), so the `/approvals` page (`app/approvals/page.tsx:21`) sees only meeting follow-ups, and `approvals/[id]/decide` flips a status without sending anything. CURRENT_STATE's "AI drafts with … human approval gates" is true via Draft.status, but the Approval Queue feature (MASTER_PLAN #28 "Partial") supervises almost nothing. Directly relevant to Stage 1/tiered approvals — see §9d.
@@ -228,7 +228,7 @@ The precondition: **collapse the dual approval tracks first** (P2-3). Tiered app
 +- [ ] Record Outlook renewal/sync failure causes (subscriptionError, OutlookSyncEvent.lastError, audit log) and stop skipping failed channels in the stale fallback.
 +- [ ] Hide or wire the reply-composer CC/BCC fields (currently collected and silently dropped).
 +- [ ] Fix snooze-dismiss priority restore ("normal" is not a valid priority).
-+- [ ] Fix FlowDesk/Handle First label mapping — "handle_first" is not a produced attention category.
++- [x] Drop FlowDesk/Handle First from Gmail label projection — Handle First is dashboard ranking, not a stable provider label.
 +- [ ] Implement or remove the create_draft automation step type.
 +- [ ] Unify draft approvals onto ApprovalRequest (precondition for tiered approvals).
 +- [ ] Add SESSION_HANDOFF.md to .gitignore; remove retained plan files per docs policy.
