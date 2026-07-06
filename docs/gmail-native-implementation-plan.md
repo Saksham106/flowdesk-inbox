@@ -64,18 +64,18 @@ Status: Core shipped. Remaining work is hardening, reconciliation, correctness, 
 
 ## Phase 2: AI Rules And User-Controlled Automation
 
-Status: Foundations exist (`AgentRule`, `SenderRule`, classifier, rule compiler, approvals, automation level), but the user-facing rules product is the largest gap versus Inbox Zero.
+Status: P0 largely shipped 2026-07-07 (static-first evaluation, dry-run preview, rule versioning + execution history). Remaining P0: the "why this automation fired" control-room UI, which depends on the writeback audit-linking work.
 
 ### P0
 
-- Build static-first rule evaluation for sender/domain/subject/body conditions.
-  - Areas: `lib/agent/rule-compiler.ts`, `lib/agent/classify.ts`, `lib/agent/email-classifier.ts`, `app/settings/SenderRulesPanel.tsx`.
-- Add rule dry-run/preview over recent conversations before enabling.
-  - Output: matched/skipped, planned labels/status/draft/archive action, confidence, evidence, and audit preview.
-  - Areas: new API route under `app/api`, `app/settings/TrainAgentPanel.tsx`, rule compiler/classifier modules.
-- Version rules and preserve execution history.
-  - Areas: Prisma rule models or `AutomationRun`/`AuditLog` metadata, `lib/agent/automation-runner.ts`.
+- [x] Build static-first rule evaluation for sender/domain/subject/body conditions.
+  - Shipped: `lib/agent/static-rules.ts` (shared evaluator; AgentRule over SenderRule, email over domain, AND-ed conditions), gate `tryStaticClassification` in `lib/agent/classify.ts` wired into `lib/agent/jobs.ts` before the budget check — a static match makes no model call and spends no budget.
+- [x] Add rule dry-run/preview over recent conversations before enabling.
+  - Shipped: `POST /api/agent-rules/dry-run` (bounded 200-conversation sample; matched/skipped, evidence, planned attention/status/Gmail labels with automation-level applicability; zero mutations, one audit row). Draft rules cannot be enabled before a dry-run. UI in `app/settings/SenderRulesPanel.tsx`.
+- [x] Version rules and preserve execution history.
+  - Shipped: `version` on `AgentRule`/`SenderRule`; prior versions snapshotted to AuditLog (`agent_rule.version_snapshot`) on behavior-changing edits; `GET /api/agent-rules/[id]/versions`; executions record rule id/version (AgentToolCall output, `agent_job.completed` payload). Chose AuditLog metadata over a new table.
 - Show "why this automation fired" in the control room.
+  - Backend metadata now exists (rule id/version/evidence in audits); the UI surfacing remains.
   - Areas: `app/components/AgentActivitySection.tsx`, `app/conversations/[id]/ExplainThreadPanel.tsx`, `app/audit/page.tsx`.
 
 ### P1

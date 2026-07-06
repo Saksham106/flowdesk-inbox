@@ -1,6 +1,6 @@
 # Remaining Work
 
-Last updated: 2026-07-06
+Last updated: 2026-07-07
 
 ## Near term
 
@@ -17,7 +17,8 @@ Last updated: 2026-07-06
 - [ ] Finish heuristic consolidation: the `{"quiet","fyi_done"}` attention set is duplicated across command-center, inbox-fyi, gmail-labels, and workflow-status, and the isIgnorable/isFyi decision logic is implemented independently in command-center and inbox-fyi — extract shared sets plus a single helper (regex constants are already shared via `lib/inbox-fyi.ts`).
 - [ ] Persist command-center snapshots for history and explainability.
 - [ ] Show classification source, confidence, evidence, and correction history.
-- [ ] Add manual sender/domain rule creation, editing, and conflict handling.
+- [x] Add manual sender/domain rule creation and editing — done (Gmail-native Phase 2 P0): static sender/domain/subject/body rules with zero-mutation dry-run preview (`POST /api/agent-rules/dry-run`), preview-before-enable gating, versioning via `agent_rule.version_snapshot` AuditLog snapshots, and execution metadata recording which rule version fired. Static rules evaluate before any LLM classification (`lib/agent/static-rules.ts`, gate in `lib/agent/classify.ts`/`lib/agent/jobs.ts`) with no AI budget spend on a match. Remaining: conflict detection for structured rules (the plain-English preview already has it).
+- [ ] Show "why this automation fired" in the control room UI — the rule id/version/evidence now land in `agent_job.completed` audits and AgentToolCall outputs; surfacing them in AgentActivitySection/ExplainThreadPanel/audit page depends on the writeback audit-linking work.
 - [ ] Decide and implement Outlook archive/trash/unsubscribe parity.
 - [ ] Implement CC/BCC send support and re-enable compose fields once the APIs persist those recipients end-to-end.
 - [ ] Broaden Gmail inline `cid:` image support beyond the current size-capped safe embedding path; optionally backfill messages synced before the fix landed.

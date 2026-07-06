@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { extractEmail } from "@/lib/google"
+import { evaluateStaticRules } from "@/lib/agent/static-rules"
 import type { AttentionCategory } from "@/lib/agent/email-classifier"
 
 const CORRECTION_THRESHOLD = 3  // corrections needed before a rule is suggested
@@ -73,38 +74,11 @@ export async function recordAttentionCorrection({
   }
 }
 
-// Checks AgentRule table in addition to SenderRule.
-// AgentRule takes precedence over SenderRule for the same target.
-export async function applyActiveAgentRule({
-  tenantId,
-  fromEmail,
-}: {
-  tenantId: string
-  fromEmail: string
-}): Promise<AttentionCategory | null> {
-  const fromDomain = extractDomainFromEmail(fromEmail)
-  const emailLower = fromEmail.toLowerCase()
-
-  const rules = await prisma.agentRule.findMany({
-    where: { tenantId, status: "active", ruleType: "attention" },
-  })
-
-  for (const rule of rules) {
-    const cond = rule.conditionsJson as unknown as Record<string, string>
-    const action = rule.actionJson as unknown as Record<string, string>
-    if (!action.targetAttention) continue
-    if (cond.matchType === "email" && cond.matchValue?.toLowerCase() === emailLower) {
-      return action.targetAttention as AttentionCategory
-    }
-    if (cond.matchType === "domain" && fromDomain && cond.matchValue === fromDomain) {
-      return action.targetAttention as AttentionCategory
-    }
-  }
-  return null
-}
-
-// Applies active SenderRules to a candidate attention category.
-// AgentRule takes precedence over SenderRule. Exact email match takes priority over domain match.
+// Applies active AgentRules + SenderRules to a candidate attention category.
+// Delegates to the shared static evaluator (lib/agent/static-rules.ts):
+// AgentRule takes precedence over SenderRule, exact email match over domain.
+// Callers on this path only know the sender, so rules that also require
+// subject/body conditions will not match here.
 // Returns the rule-determined category, or null if no active rule matches.
 // This result can ONLY be overridden by a subsequent explicit user correction.
 export async function applyActiveRule({
@@ -114,23 +88,6 @@ export async function applyActiveRule({
   tenantId: string
   fromEmail: string
 }): Promise<AttentionCategory | null> {
-  // AgentRule takes precedence over SenderRule
-  const agentResult = await applyActiveAgentRule({ tenantId, fromEmail })
-  if (agentResult) return agentResult
-
-  const fromDomain = extractDomainFromEmail(fromEmail)
-
-  const emailRule = await prisma.senderRule.findFirst({
-    where: { tenantId, matchType: "email", matchValue: fromEmail.toLowerCase(), status: "active" },
-  })
-  if (emailRule) return emailRule.targetAttention as AttentionCategory
-
-  if (!fromDomain) return null
-
-  const domainRule = await prisma.senderRule.findFirst({
-    where: { tenantId, matchType: "domain", matchValue: fromDomain, status: "active" },
-  })
-  if (domainRule) return domainRule.targetAttention as AttentionCategory
-
-  return null
+  const match = await evaluateStaticRules({ tenantId, fromEmail, subject: "", body: "" })
+  return match?.targetAttention ?? null
 }
