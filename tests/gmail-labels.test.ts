@@ -84,7 +84,6 @@ describe("FlowDesk Gmail labels", () => {
 
   it("keeps the user-facing Gmail label vocabulary small and friendly", () => {
     expect(FLOWDESK_GMAIL_LABEL_NAMES).toEqual([
-      "FlowDesk/Handle First",
       "FlowDesk/Needs Reply",
       "FlowDesk/Needs Action",
       "FlowDesk/Waiting On",

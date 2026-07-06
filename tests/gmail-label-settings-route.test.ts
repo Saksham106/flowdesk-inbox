@@ -73,7 +73,7 @@ describe("GET /api/gmail-label-settings", () => {
     const res = (await GET()) as unknown as {
       body: { labels: Array<{ canonical: string; enabled: boolean }> }
     }
-    expect(res.body.labels).toHaveLength(10)
+    expect(res.body.labels).toHaveLength(9)
     const lowPriority = res.body.labels.find(
       (l) => l.canonical === "FlowDesk/Low Priority"
     )
