@@ -13,6 +13,7 @@ import {
   flowDeskLabelsForConversationState,
   queueFlowDeskLabelWriteback,
 } from "@/lib/gmail-labels"
+import { queueGmailDraftWithdrawal } from "@/lib/gmail-drafts"
 
 const SETTABLE_STATUSES = new Set(["needs_reply", "waiting_on", "read_later", "done"])
 
@@ -85,6 +86,16 @@ export async function PATCH(
       }),
       reason: `workflow_status.${settableWorkflowStatus}`,
     })
+
+    // If we just cleared the draft, withdraw any Gmail-native draft too so a
+    // stale reply isn't left waiting in the mailbox.
+    if (shouldClearDraftForWorkflowStatus(settableWorkflowStatus)) {
+      await queueGmailDraftWithdrawal({
+        tenantId: session.user.tenantId,
+        channelId: conversation.channelId,
+        conversationId: params.id,
+      })
+    }
   }
 
   revalidateInboxViews(session.user.tenantId, params.id)

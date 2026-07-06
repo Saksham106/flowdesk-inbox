@@ -6,6 +6,7 @@ const {
   mockDraftUpdateMany,
   mockRevalidateInboxViews,
   mockWritebackUpsert,
+  mockWritebackDeleteMany,
   mockAuditCreate,
 } = vi.hoisted(() => ({
   mockConversationFindFirst: vi.fn(),
@@ -13,6 +14,7 @@ const {
   mockDraftUpdateMany: vi.fn(),
   mockRevalidateInboxViews: vi.fn(),
   mockWritebackUpsert: vi.fn(),
+  mockWritebackDeleteMany: vi.fn(),
   mockAuditCreate: vi.fn(),
 }))
 
@@ -27,6 +29,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     gmailWritebackQueue: {
       upsert: mockWritebackUpsert,
+      deleteMany: mockWritebackDeleteMany,
     },
     auditLog: {
       create: mockAuditCreate,

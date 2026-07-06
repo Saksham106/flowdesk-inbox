@@ -275,14 +275,27 @@ Success metric:
 
 Goal: FlowDesk creates useful drafts inside Gmail.
 
+Current state (Milestone 2 shipped — Phase B):
+
+- Shipped in Phase B: a `create_draft`/`withdraw_draft` writeback lane that
+  calls `users.drafts.create` (via `createGmailDraftForThread`) so a proposed
+  FlowDesk draft appears as a real Gmail draft on the thread. Enqueued from the
+  draft-suggest route; the recorded `gmailDraftId` (on `Draft.metadataJson`)
+  drives deduplication; a manual-reply guard skips drafting when the user has
+  already replied; the `Autodrafted` label is projected alongside; drafts are
+  withdrawn when the workflow status clears the draft; every mutation is audited.
+- Still needed (deferred, post-MVP): also project drafts created by the autopilot
+  path, and withdraw drafts on manual-reply detected during background sync (not
+  just on explicit status changes).
+
 Build:
 
-- Draft replies directly in Gmail.
-- Apply `Autodrafted` label to relevant thread/message where possible.
-- Show draft preview in dashboard.
-- Allow approval/editing from dashboard.
-- Avoid duplicate draft creation.
-- Detect if user already replied manually.
+- Draft replies directly in Gmail. Shipped.
+- Apply `Autodrafted` label to relevant thread/message where possible. Shipped.
+- Show draft preview in dashboard. (Existing dashboard draft panel.)
+- Allow approval/editing from dashboard. (Existing send/approve flow.)
+- Avoid duplicate draft creation. Shipped (delete-then-recreate keyed on `gmailDraftId`).
+- Detect if user already replied manually. Shipped for the writeback path.
 
 Success metric:
 
