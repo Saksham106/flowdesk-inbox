@@ -32,8 +32,8 @@ exists instead of re-specifying it:
 **Gaps between the vision and the code (these are what this plan attacks):**
 
 > **Status:** Phase A (gaps #1, #4) is shipped on `feat/gmail-native-labels`;
-> Phase B (gap #2) on `feat/gmail-native-drafts`. Gaps #3, #5, #6 remain
-> post-MVP.
+> Phase B (gap #2) on `feat/gmail-native-drafts`; Phase C (gap #5) on
+> `feat/gmail-native-followup`. Gaps #3, #6 remain post-MVP.
 
 1. ~~**Label bootstrap is not wired.**~~ **DONE (Phase A).**
    `ensureFlowDeskLabels` is now called on Gmail connect (OAuth callback) and
@@ -49,8 +49,14 @@ exists instead of re-specifying it:
 4. ~~**Labels are hardcoded.**~~ **PARTIAL (Phase A).** A `GmailLabelMapping`
    table + settings panel now let users **hide** labels; in-Gmail **renaming**
    is deferred (needs safe reconciliation of already-created labels).
-5. **Waiting-on/follow-up** exists in internal workflow status but isn't fully
-   projected as a self-healing Gmail label lifecycle. *(post-MVP, Phase C)*
+5. ~~**Waiting-on/follow-up**~~ **DONE (Phase C).** Outbound replies that
+   expect a response (deterministic heuristic; FlowDesk sends + Gmail-native
+   sends via sync) transition to waiting_on and project `Waiting On`; an
+   inbound reply self-heals the state, cancels scheduled follow-ups, and
+   removes the label; `Follow Up` is added after a tenant-configurable
+   business-day delay by the follow-up cron's label sweep; the dashboard
+   Waiting On card shows follow-up due dates. Labels + surfacing only — no
+   auto-sent follow-ups.
 6. **Dashboard still reads as an inbox replacement**, not a control room.
    *(post-MVP, Phase D)*
 
@@ -278,11 +284,11 @@ Add a `create_draft` writeback action calling `users.drafts.create`; apply
 replies and withdraw stale drafts; preview/approve/edit from the dashboard.
 *Outcome: high-quality drafts wait in the user's Gmail for important threads.*
 
-**Phase C — Waiting-on & follow-up lifecycle (Milestone 3).**
-Detect outbound-awaiting-reply; label `Waiting On`; remove on inbound reply
-(via the history sync we already run); add `Follow Up` after a configurable
-delay; dashboard "people you're waiting on" card. *Outcome: users stop dropping
-follow-ups.*
+**Phase C — Waiting-on & follow-up lifecycle (Milestone 3).** **SHIPPED**
+(`feat/gmail-native-followup`). Detect outbound-awaiting-reply; label
+`Waiting On`; remove on inbound reply (via the history sync we already run);
+add `Follow Up` after a configurable delay; dashboard "people you're waiting
+on" card. *Outcome: users stop dropping follow-ups.*
 
 **Phase D — Control-room dashboard + trust ladder (Milestone 4).**
 Reframe UI language; ship the Level 0–5 automation selector wired to
