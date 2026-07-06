@@ -79,8 +79,8 @@ FlowDesk status:
 Adapt next:
 
 - Generalize writeback rows into a more provider-neutral `ProviderActionQueue` only when Outlook parity demands it. Until then, continue strengthening `GmailWritebackQueue`.
-- Add scheduled label reconciliation so stale/hid labels and time-based labels remain correct.
-- Fix or remove `FlowDesk/Handle First`; current code defines it but nothing reliably produces the `handle_first` input.
+- Keep scheduled label reconciliation healthy so stale/hidden labels and time-based labels remain correct.
+- Keep `Handle First` as a dashboard ranking rather than a Gmail label; it changes with command-center ordering and should not churn provider labels.
 
 Avoid:
 

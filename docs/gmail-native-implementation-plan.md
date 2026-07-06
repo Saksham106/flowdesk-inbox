@@ -180,11 +180,13 @@ Status: Not core. Do this only after backend actions, audit, and rules are relia
 
 ## Immediate Next Implementation Order
 
-1. P0 correctness: `Handle First` label, label reconciliation cron, user-edited task preservation.
-2. P0 control-room copy/IA update.
-3. P0 audit result linking for Gmail writebacks.
-4. P0 static sender/domain rule editor and dry-run preview.
-5. P0 operational health for sync/writeback/follow-up crons.
+Coordination: claim one active lane in `docs/TODO.md` or in the PR description before implementing, after pulling the latest `origin/main`.
+
+1. Done: P0 correctness (`Handle First` label removal, label reconciliation cron, user-edited task/workflow preservation).
+2. Done: P0 audit result linking for Gmail writebacks.
+3. Done: P0 static sender/domain rule editor and dry-run preview.
+4. Next P0: control-room copy/IA update.
+5. Next P0: operational health for sync/writeback/follow-up crons.
 6. P1 draft fidelity and edited-draft learning.
 7. P1 waiting-on nudge drafts and analytics.
 8. P1 cleanup proposals.

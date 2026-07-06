@@ -23,16 +23,16 @@ The biggest remaining gaps are not "can FlowDesk touch Gmail?" They are control,
 | Area | Reference Pattern | Current FlowDesk | Gap | Priority |
 | --- | --- | --- | --- | --- |
 | Gmail/Outlook auth and sync | Inbox Zero provider abstraction, Gmail history/watch, Outlook subscriptions, provider health | Gmail strong; Outlook sync exists | Outlook provider issue UX and writeback parity incomplete | P0/P1 |
-| Gmail-native labels | Inbox Zero/SaneBox/Fyxer labels/folders as main UX | `FlowDesk/*` labels shipped with mapping/hide settings | Scheduled reconciliation and `Handle First` mapping need cleanup | P0 |
+| Gmail-native labels | Inbox Zero/SaneBox/Fyxer labels/folders as main UX | `FlowDesk/*` labels shipped with mapping/hide settings; `Handle First` is dashboard-only | Production scheduling/ops confirmation for reconciliation remains | P0 |
 | Gmail-native drafts | GmailDraft/Fyxer/Exo native drafts | `create_draft` and `withdraw_draft` shipped | Need stronger dedup, CC/BCC/body fidelity, edited-draft learning | P1 |
 | Thread actions | Inbox Zero provider action vocabulary | Gmail writeback supports key actions | Outlook archive/trash/unsubscribe parity missing | P1 |
-| AI rules | Inbox Zero conditions + actions + dry-run | Agent/sender rules exist | Natural-language rule UI, static-first evaluator, dry-run, versions, execution history lacking | P0 |
+| AI rules | Inbox Zero conditions + actions + dry-run | Static sender/domain/subject/body rules, dry-run preview, version snapshots, and execution metadata shipped | Need control-room "why fired" UI, structured conflict detection, and rule-aware approval/teaching flows | P0/P1 |
 | Reply tracking | Inbox Zero Reply Zero; Superhuman reminders | Waiting On and Follow Up shipped | Nudge draft, analytics, and evidence display missing | P1 |
 | Triage | SaneBox quiet sorting, Fyxer categories, Exo priority | Command center + classifications | Need evidence/confidence/correction history and preserve user-edited fields | P0 |
 | Cleanup | Inbox Zero bulk unsubscribe/archive; SaneBox blackhole | Unsubscribe/writeback and Clean Inbox foundations | Grouped cleanup proposals and safe bulk archive not mature | P1 |
 | Queues/jobs | Agentic Inbox durable actions; Inbox Zero queues | `GmailWritebackQueue`, agent jobs, crons | Cron health, stale job UI, provider failure dashboard missing | P0 |
-| Data model | Inbox Zero Rule/Action/ExecutedRule/RuleHistory | FlowDesk has several rule/job/run models | Rule versioning and action execution visibility less explicit | P0/P1 |
-| Audit/safety | Executed actions + audit + undo | Audit log, approvals, rollback foundations | Need human-readable audit timeline and every provider result linked | P0 |
+| Data model | Inbox Zero Rule/Action/ExecutedRule/RuleHistory | FlowDesk has rule versions, AuditLog snapshots, AgentToolCall outputs, and provider queues | Need clearer UI surfacing of rule/action history | P1 |
+| Audit/safety | Executed actions + audit + undo | Audit log, approvals, rollback foundations, and Gmail writeback result audits shipped | Need human-readable timeline and undo visibility | P0/P1 |
 | Human approvals | Draft review, explicit confirmations | Unified approvals shipped | Need rule-aware approvals and "one-off vs teach rule" choices | P1 |
 | Onboarding | Fyxer/GmailDraft quick connect + immediate value | Connect/sync settings exist | First-run preview and permission/health checklist need polish | P0 |
 | Control-room UX | Dashboard supervises actions | Dashboard still has inbox-dashboard DNA | Copy/IA should move to setup, supervision, analytics, approvals, training | P0 |
@@ -133,7 +133,7 @@ Likely areas:
 Needed:
 
 - Preserve user-edited `InboxTask` fields across sync/classification refresh.
-- Fix `FlowDesk/Handle First` mapping or remove it from canonical labels.
+- Keep `Handle First` dashboard-only; do not project it as a Gmail label.
 - Implement or remove the `create_draft` automation step type if still referenced separately from Gmail writeback.
 - Schedule label bootstrap/reconciliation maintenance.
 - Consolidate duplicate heuristics.
