@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const { mockDeleteMany, mockUpsert, mockAuditCreate } = vi.hoisted(() => ({
+const { mockDeleteMany, mockUpsert, mockAuditCreate, mockAutopilotSettingFindUnique } = vi.hoisted(() => ({
   mockDeleteMany: vi.fn(),
   mockUpsert: vi.fn(),
   mockAuditCreate: vi.fn(),
+  mockAutopilotSettingFindUnique: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     gmailWritebackQueue: { deleteMany: mockDeleteMany, upsert: mockUpsert },
     auditLog: { create: mockAuditCreate },
+    autopilotSetting: { findUnique: mockAutopilotSettingFindUnique },
   },
 }))
 
@@ -39,6 +41,22 @@ describe("queueGmailDraftWriteback", () => {
     mockUpsert.mockResolvedValue({ id: "job-1" })
     mockDeleteMany.mockResolvedValue({ count: 0 })
     mockAuditCreate.mockResolvedValue({})
+    mockAutopilotSettingFindUnique.mockResolvedValue({ automationLevel: 3, enabled: false })
+  })
+
+  it("no-ops below automation Level 3 (draft stays dashboard-only)", async () => {
+    mockAutopilotSettingFindUnique.mockResolvedValue({ automationLevel: 2, enabled: false })
+
+    const job = await queueGmailDraftWriteback({
+      tenantId: "t1",
+      channelId: "c1",
+      conversationId: "conv-1",
+      threadId: "thread-1",
+    })
+
+    expect(job).toBeNull()
+    expect(mockUpsert).not.toHaveBeenCalled()
+    expect(mockDeleteMany).not.toHaveBeenCalled()
   })
 
   it("drops any pending withdrawal, upserts a create_draft job, and audits", async () => {
@@ -70,6 +88,8 @@ describe("queueGmailDraftWithdrawal", () => {
     mockUpsert.mockResolvedValue({ id: "job-2" })
     mockDeleteMany.mockResolvedValue({ count: 0 })
     mockAuditCreate.mockResolvedValue({})
+    // Withdrawal must work at any level — cleanup is never level-gated.
+    mockAutopilotSettingFindUnique.mockResolvedValue({ automationLevel: 0, enabled: false })
   })
 
   it("drops any pending create, upserts a withdraw_draft job, and audits", async () => {

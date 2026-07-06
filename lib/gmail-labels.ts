@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status"
 import { DEFAULT_FOLLOW_UP_BUSINESS_DAYS, followUpDueAt } from "@/lib/business-days"
+import { getAutomationLevel, isActionAllowedAtLevel } from "@/lib/agent/automation-level"
 
 const LABEL_PREFIX = "FlowDesk/"
 
@@ -204,15 +205,20 @@ export async function filterEnabledFlowDeskLabels(
  * queues them for writeback. This is the automatic projection path invoked after
  * classification / work-item sync — the counterpart to the manual status routes.
  *
- * No-ops (returns null) for non-Google channels and conversations without a
- * Gmail thread id. An empty computed label set is projected as a removal of all
- * FlowDesk labels — but only for threads that were labeled before (see
- * queueFlowDeskLabelWriteback).
+ * No-ops (returns null) when the tenant's automation level is below 2 (labels
+ * are the first rung of the trust ladder that touches Gmail), for non-Google
+ * channels, and for conversations without a Gmail thread id. An empty computed
+ * label set — including when the tenant has disabled every applicable label — is
+ * projected as a removal of all FlowDesk labels, but only for threads that were
+ * labeled before (see queueFlowDeskLabelWriteback).
  */
 export async function projectFlowDeskLabelsForConversation(input: {
   tenantId: string
   conversationId: string
 }) {
+  const automationLevel = await getAutomationLevel(input.tenantId)
+  if (!isActionAllowedAtLevel(automationLevel, "apply_gmail_labels")) return null
+
   const conversation = await prisma.conversation.findFirst({
     where: { id: input.conversationId, tenantId: input.tenantId },
     select: {

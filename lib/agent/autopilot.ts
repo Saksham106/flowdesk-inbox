@@ -7,6 +7,7 @@ import { buildDraftReplyPrompt } from "@/lib/ai/prompts/draft-reply"
 import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import { sendConversationMessage, ConversationSendError } from "@/lib/conversations/send-message"
 import { resolveDraftApprovalRequests } from "@/lib/agent/approvals"
+import { isActionAllowedAtLevel } from "@/lib/agent/automation-level"
 import type { ClassifyResult } from "@/lib/ai/prompts/classify"
 import type { PolicyDecision } from "@/lib/agent/policy"
 import { summarizeConversation } from "@/lib/ai/summarize"
@@ -28,6 +29,15 @@ export async function checkAutopilotEligibility(
   const setting = await prisma.autopilotSetting.findUnique({ where: { tenantId } })
   if (!setting?.enabled) {
     return { eligible: false, reason: "Autopilot is not enabled" }
+  }
+
+  // Trust-ladder ceiling: auto-send requires Level 5 on top of every other
+  // gate. A missing/unknown level fails closed.
+  if (!isActionAllowedAtLevel(setting.automationLevel ?? 0, "auto_send")) {
+    return {
+      eligible: false,
+      reason: `Automation level ${setting.automationLevel ?? 0} is below Level 5 (auto-send)`,
+    }
   }
 
   if (setting.disabledAt) {
@@ -170,6 +180,7 @@ export async function attemptAutopilotSend(
     accountType: context.accountType,
     hasLearnedProfile: !!context.learnedProfile,
     autopilotEnabled: setting.enabled,
+    automationLevel: setting.automationLevel ?? 0,
     confidence: classification.confidence,
     confidenceThreshold: setting.confidenceThreshold,
     riskLevel: classification.riskLevel,

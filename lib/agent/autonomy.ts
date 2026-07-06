@@ -1,6 +1,8 @@
 import type { RiskLevel } from "@/lib/ai/prompts/draft-reply"
+import { isActionAllowedAtLevel } from "@/lib/agent/automation-level"
 
 export type AutonomyReason =
+  | "automation_level_below_auto_send"
   | "autopilot_disabled"
   | "learned_profile_required"
   | "high_or_medium_risk"
@@ -21,6 +23,7 @@ export function evaluateAutonomy(input: {
   accountType: "personal" | "business"
   hasLearnedProfile: boolean
   autopilotEnabled: boolean
+  automationLevel: number
   confidence: number
   confidenceThreshold: number
   riskLevel: RiskLevel
@@ -31,6 +34,12 @@ export function evaluateAutonomy(input: {
   currentFailures: number
   disableAfterFailures: number
 }): AutonomyDecision {
+  // Trust-ladder ceiling: auto-send is a Level 5 action. This is an AND on
+  // top of every other gate — Levels 0-4 can never auto-send.
+  if (!isActionAllowedAtLevel(input.automationLevel, "auto_send")) {
+    return { eligible: false, reason: "automation_level_below_auto_send" }
+  }
+
   if (!input.autopilotEnabled) {
     return { eligible: false, reason: "autopilot_disabled" }
   }

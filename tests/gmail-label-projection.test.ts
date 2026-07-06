@@ -7,6 +7,7 @@ const {
   mockWritebackFindUnique,
   mockAuditCreate,
   mockFollowUpSettingFindUnique,
+  mockAutopilotSettingFindUnique,
 } = vi.hoisted(() => ({
   mockConversationFindFirst: vi.fn(),
   mockLabelMappingFindMany: vi.fn(),
@@ -14,6 +15,7 @@ const {
   mockWritebackFindUnique: vi.fn(),
   mockAuditCreate: vi.fn(),
   mockFollowUpSettingFindUnique: vi.fn(),
+  mockAutopilotSettingFindUnique: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -23,6 +25,7 @@ vi.mock("@/lib/prisma", () => ({
     gmailWritebackQueue: { upsert: mockWritebackUpsert, findUnique: mockWritebackFindUnique },
     auditLog: { create: mockAuditCreate },
     followUpSetting: { findUnique: mockFollowUpSettingFindUnique },
+    autopilotSetting: { findUnique: mockAutopilotSettingFindUnique },
   },
 }))
 
@@ -75,6 +78,32 @@ describe("projectFlowDeskLabelsForConversation", () => {
     mockWritebackUpsert.mockResolvedValue({ id: "job-1" })
     mockAuditCreate.mockResolvedValue({})
     mockFollowUpSettingFindUnique.mockResolvedValue(null)
+    mockAutopilotSettingFindUnique.mockResolvedValue({ automationLevel: 2, enabled: false })
+  })
+
+  it("no-ops below automation Level 2 (labels are the first Gmail-touching rung)", async () => {
+    mockConversationFindFirst.mockResolvedValue(GOOGLE_CONVERSATION)
+    mockAutopilotSettingFindUnique.mockResolvedValue({ automationLevel: 1, enabled: false })
+
+    const job = await projectFlowDeskLabelsForConversation({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+    })
+
+    expect(job).toBeNull()
+    expect(mockWritebackUpsert).not.toHaveBeenCalled()
+  })
+
+  it("treats a tenant without an AutopilotSetting row as legacy Level 3 (labels still project)", async () => {
+    mockConversationFindFirst.mockResolvedValue(GOOGLE_CONVERSATION)
+    mockAutopilotSettingFindUnique.mockResolvedValue(null)
+
+    const job = await projectFlowDeskLabelsForConversation({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+    })
+
+    expect(job).toEqual({ id: "job-1" })
   })
 
   it("queues an apply_labels writeback for a Google conversation", async () => {

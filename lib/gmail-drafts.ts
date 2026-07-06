@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { getAutomationLevel, isActionAllowedAtLevel } from "@/lib/agent/automation-level"
 
 export const GMAIL_DRAFT_CREATE_ACTION = "create_draft"
 export const GMAIL_DRAFT_WITHDRAW_ACTION = "withdraw_draft"
@@ -21,6 +22,11 @@ export function gmailDraftIdFromMetadata(metadataJson: unknown): string | null {
  * (conversationId, action) unique key — re-queuing just refreshes the job. Any
  * pending withdrawal for the same conversation is dropped, since we now want a
  * draft to exist.
+ *
+ * No-ops below automation Level 3: the draft still exists in the dashboard,
+ * but FlowDesk does not write into the user's Gmail drafts folder. Withdrawal
+ * (queueGmailDraftWithdrawal) is deliberately NOT level-gated — cleanup must
+ * keep working after a tenant lowers their level.
  */
 export async function queueGmailDraftWriteback(input: {
   tenantId: string
@@ -28,6 +34,9 @@ export async function queueGmailDraftWriteback(input: {
   conversationId: string
   threadId: string
 }) {
+  const automationLevel = await getAutomationLevel(input.tenantId)
+  if (!isActionAllowedAtLevel(automationLevel, "create_gmail_drafts")) return null
+
   await prisma.gmailWritebackQueue.deleteMany({
     where: { conversationId: input.conversationId, action: GMAIL_DRAFT_WITHDRAW_ACTION },
   })

@@ -6,6 +6,7 @@ const baseInput = {
   accountType: 'personal' as const,
   hasLearnedProfile: true,
   autopilotEnabled: true,
+  automationLevel: 5,
   confidence: 0.94,
   confidenceThreshold: 0.85,
   riskLevel: 'low' as const,
@@ -41,5 +42,20 @@ describe('evaluateAutonomy', () => {
       eligible: false,
       reason: 'daily_cap_reached',
     })
+  })
+
+  it('never auto-sends below Level 5, even with every other gate passing', () => {
+    // Regression guard for the trust ladder: Levels 0-4 are a hard ceiling on
+    // auto-send regardless of confidence, thresholds, or autopilot settings.
+    for (const automationLevel of [0, 1, 2, 3, 4]) {
+      expect(
+        evaluateAutonomy({
+          ...baseInput,
+          automationLevel,
+          confidence: 1,
+          confidenceThreshold: 0.5,
+        })
+      ).toEqual({ eligible: false, reason: 'automation_level_below_auto_send' })
+    }
   })
 })

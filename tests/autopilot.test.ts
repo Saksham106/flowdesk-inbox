@@ -114,6 +114,7 @@ const policyRequires: PolicyDecision = { requiresApproval: true, escalate: false
 const enabledSetting = {
   tenantId: TENANT,
   enabled: true,
+  automationLevel: 5,
   confidenceThreshold: 0.85,
   allowedIntentsJson: null,
   disableAfterFailures: 3,
@@ -195,6 +196,24 @@ describe('checkAutopilotEligibility', () => {
     mockAutopilotSettingFindUnique.mockResolvedValue(enabledSetting)
     const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
     expect(result.eligible).toBe(true)
+  })
+
+  it('returns ineligible below automation Level 5 even with autopilot enabled', async () => {
+    for (const automationLevel of [0, 1, 2, 3, 4]) {
+      mockAutopilotSettingFindUnique.mockResolvedValue({ ...enabledSetting, automationLevel })
+      const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
+      expect(result.eligible).toBe(false)
+      if (!result.eligible) {
+        expect(result.reason).toContain('Automation level')
+      }
+    }
+  })
+
+  it('fails closed when automationLevel is missing from the setting row', async () => {
+    const { automationLevel: _omitted, ...withoutLevel } = enabledSetting
+    mockAutopilotSettingFindUnique.mockResolvedValue(withoutLevel)
+    const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
+    expect(result.eligible).toBe(false)
   })
 
   it('returns eligible when allowedIntentsJson matches the intent', async () => {

@@ -34,6 +34,7 @@ export async function PATCH(request: Request) {
     disableAfterFailures,
     resetFailures,
     categoryThresholds,
+    automationLevel,
   } = body as {
     enabled?: boolean
     confidenceThreshold?: number
@@ -42,9 +43,25 @@ export async function PATCH(request: Request) {
     disableAfterFailures?: number
     resetFailures?: boolean
     categoryThresholds?: Record<string, unknown>
+    automationLevel?: number
   }
 
   const updateData: Record<string, unknown> = {}
+
+  if (automationLevel !== undefined) {
+    if (
+      typeof automationLevel !== "number" ||
+      !Number.isInteger(automationLevel) ||
+      automationLevel < 0 ||
+      automationLevel > 5
+    ) {
+      return NextResponse.json(
+        { error: "automationLevel must be an integer between 0 and 5" },
+        { status: 400 }
+      )
+    }
+    updateData.automationLevel = automationLevel
+  }
 
   if (typeof enabled === "boolean") {
     updateData.enabled = enabled
@@ -121,13 +138,20 @@ export async function PATCH(request: Request) {
     updateData.categoryThresholdsJson = categoryThresholds
   }
 
+  const existing = await prisma.autopilotSetting.findUnique({
+    where: { tenantId: session.user.tenantId },
+    select: { automationLevel: true },
+  })
+
   const [setting] = await prisma.$transaction([
     prisma.autopilotSetting.upsert({
       where: { tenantId: session.user.tenantId },
       update: updateData,
+      // Apply the patched values on first save too, not just defaults.
       create: {
         tenantId: session.user.tenantId,
         enabled: false,
+        ...updateData,
       },
     }),
     prisma.auditLog.create({
@@ -137,6 +161,23 @@ export async function PATCH(request: Request) {
         payloadJson: updateData as Prisma.InputJsonValue,
       },
     }),
+    // Level changes get their own audit trail: the trust ladder is the
+    // primary user-facing control and takes effect immediately in the gates.
+    ...(automationLevel !== undefined && existing?.automationLevel !== automationLevel
+      ? [
+          prisma.auditLog.create({
+            data: {
+              tenantId: session.user.tenantId,
+              userId: session.user.id ?? null,
+              action: "automation_level.changed",
+              payloadJson: {
+                from: existing?.automationLevel ?? null,
+                to: automationLevel,
+              },
+            },
+          }),
+        ]
+      : []),
   ])
 
   return NextResponse.json({ setting })
