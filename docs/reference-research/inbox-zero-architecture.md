@@ -72,7 +72,7 @@ Inbox Zero treats provider labels/folders as native output. It creates or resolv
 
 FlowDesk status:
 
-- Already has canonical `FlowDesk/*` labels and `GmailLabelMapping`.
+- Already has canonical flat FlowDesk labels and `GmailLabelMapping`.
 - Already queues `apply_labels`, `mark_read`, `archive`, `trash`, `unsubscribe`, `create_draft`, and `withdraw_draft` through `GmailWritebackQueue`.
 - Already creates Gmail-native drafts and withdraws them when a draft is cleared/rejected.
 
@@ -125,7 +125,7 @@ Inbox Zero's Reply Zero maps two user-visible ideas to provider labels:
 FlowDesk status:
 
 - Already ships deterministic waiting-on detection for FlowDesk sends and Gmail-native sends detected during history sync.
-- Already self-heals on inbound reply and applies `FlowDesk/Waiting On` and time-based `FlowDesk/Follow Up`.
+- Already self-heals on inbound reply and applies `Waiting On` and time-based `Follow Up`.
 - Already keeps follow-up automation conservative: labels and dashboard surfacing only, no auto-sent follow-ups.
 
 Adapt next:

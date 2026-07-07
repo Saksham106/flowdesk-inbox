@@ -8,7 +8,7 @@ FlowDesk is no longer just an AI inbox dashboard. The current codebase already c
 
 - Gmail OAuth, full/incremental history sync, Pub/Sub watch/push, sync locks, and invalid-token reauth.
 - Gmail writeback for read/archive/trash/unsubscribe plus retry queue.
-- Canonical `FlowDesk/*` Gmail labels and user label visibility settings.
+- Canonical flat, colored Gmail labels and user label visibility settings.
 - Gmail-native draft create/withdraw.
 - Waiting-on/follow-up lifecycle with Gmail-native labels.
 - Unified `ApprovalRequest` approval primitive.
@@ -23,7 +23,7 @@ The biggest remaining gaps are not "can FlowDesk touch Gmail?" They are control,
 | Area | Reference Pattern | Current FlowDesk | Gap | Priority |
 | --- | --- | --- | --- | --- |
 | Gmail/Outlook auth and sync | Inbox Zero provider abstraction, Gmail history/watch, Outlook subscriptions, provider health | Gmail strong; Outlook sync exists | Outlook provider issue UX and writeback parity incomplete | P0/P1 |
-| Gmail-native labels | Inbox Zero/SaneBox/Fyxer labels/folders as main UX | `FlowDesk/*` labels shipped with mapping/hide settings; `Handle First` is dashboard-only | Production scheduling/ops confirmation for reconciliation remains | P0 |
+| Gmail-native labels | Inbox Zero/SaneBox/Fyxer labels/folders as main UX | Flat labels shipped with mapping/hide settings; `Handle First` is dashboard-only | Production scheduling/ops confirmation for reconciliation remains | P0 |
 | Gmail-native drafts | GmailDraft/Fyxer/Exo native drafts | `create_draft` and `withdraw_draft` shipped | Need stronger dedup, CC/BCC/body fidelity, edited-draft learning | P1 |
 | Thread actions | Inbox Zero provider action vocabulary | Gmail writeback supports key actions | Outlook archive/trash/unsubscribe parity missing | P1 |
 | AI rules | Inbox Zero conditions + actions + dry-run | Static sender/domain/subject/body rules, dry-run preview, version snapshots, and execution metadata shipped | Need control-room "why fired" UI, structured conflict detection, and rule-aware approval/teaching flows | P0/P1 |

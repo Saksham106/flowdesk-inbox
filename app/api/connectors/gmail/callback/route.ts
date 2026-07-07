@@ -98,9 +98,10 @@ export async function GET(request: Request) {
     channelId = channel.id;
   }
 
-  // Bootstrap the FlowDesk/* label namespace so the mailbox is ready to be
-  // organized. Idempotent (creates only missing labels) and best-effort — a
-  // failure here must not block the connection.
+  // Bootstrap the flat FlowDesk label set so the mailbox is ready to be
+  // organized. Idempotent (creates only missing labels, colors existing ones,
+  // and cleans up legacy nested duplicates) and best-effort — a failure here
+  // must not block the connection.
   try {
     await ensureFlowDeskLabels(channelId);
     await prisma.auditLog.create({
