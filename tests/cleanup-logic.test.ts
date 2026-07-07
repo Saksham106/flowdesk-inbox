@@ -4,6 +4,7 @@ import {
   groupCleanupBySender,
   type CleanupCandidate,
 } from "@/lib/agent/sender-cleanup"
+import { archivableInGmail } from "@/lib/clean-inbox-gmail"
 
 function candidate(overrides: Partial<CleanupCandidate> = {}): CleanupCandidate {
   return {
@@ -21,8 +22,18 @@ function candidate(overrides: Partial<CleanupCandidate> = {}): CleanupCandidate 
   }
 }
 
-describe("groupCleanupBySender", () => {
-  it("groups conversations by sender email with a count and conversation ids", () => {
+function archivable(overrides: Partial<Parameters<typeof archivableInGmail>[0][number]> = {}) {
+  return {
+    id: "c1",
+    channelId: "ch1",
+    externalThreadId: "thread-1",
+    channel: { provider: "google" },
+    ...overrides,
+  }
+}
+
+describe("Clean Inbox grouping and Gmail targeting", () => {
+  it("groups conversations by sender email with count, ids, and domain", () => {
     const groups = groupCleanupBySender([
       candidate({ id: "a", subject: "Sale 1", lastReceivedAt: new Date("2026-07-01") }),
       candidate({ id: "b", subject: "Sale 2", lastReceivedAt: new Date("2026-07-03") }),
@@ -78,7 +89,7 @@ describe("groupCleanupBySender", () => {
     expect(groups[0].count).toBe(2)
   })
 
-  it("never includes protected conversations (needs reply, waiting, important, receipts)", () => {
+  it("never includes protected conversations", () => {
     const groups = groupCleanupBySender([
       candidate({ id: "keep-safe", status: "needs_reply" }),
       candidate({ id: "waiting", userState: "waiting_on" }),
@@ -87,8 +98,7 @@ describe("groupCleanupBySender", () => {
       candidate({ id: "ok" }),
     ])
 
-    const ids = groups.flatMap((g) => g.conversationIds)
-    expect(ids).toEqual(["ok"])
+    expect(groups.flatMap((g) => g.conversationIds)).toEqual(["ok"])
   })
 
   it("skips conversations without a usable sender email", () => {
@@ -99,9 +109,18 @@ describe("groupCleanupBySender", () => {
     ])
 
     expect(groups).toEqual([])
-  })
-
-  it("returns an empty array for no candidates", () => {
     expect(groupCleanupBySender([])).toEqual([])
   })
+
+  it("keeps only Google-backed conversations with a thread id for Gmail archive", () => {
+    const result = archivableInGmail([
+      archivable({ id: "gmail" }),
+      archivable({ id: "outlook", channel: { provider: "microsoft" } }),
+      archivable({ id: "no-thread", externalThreadId: null }),
+      archivable({ id: "no-channel", channel: null }),
+    ])
+
+    expect(result.map((c) => c.id)).toEqual(["gmail"])
+  })
 })
+
