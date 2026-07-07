@@ -46,7 +46,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           tenantId: user.tenantId,
           // Session carries the derived internal mode (B2C: sourced from the
-          // salesCrm capability, not the deprecated accountType identity).
+          // Sales & CRM capability, not a stored account identity).
           accountType: accountModeFor(user.tenant),
         };
       },

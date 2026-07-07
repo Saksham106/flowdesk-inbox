@@ -127,7 +127,7 @@ beforeEach(() => {
     messages: [newsletterMessage],
   })
   mockGetFullBusinessContext.mockResolvedValue({ profile: null, documents: [] })
-  mockTenantFindUnique.mockResolvedValue({ accountType: "business" })
+  mockTenantFindUnique.mockResolvedValue({ salesCrmEnabled: true })
   mockToolCallCreate.mockResolvedValue({ id: "tc-1" })
   mockToolCallUpdate.mockResolvedValue({})
   mockAuditCreate.mockResolvedValue({})

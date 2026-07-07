@@ -229,7 +229,7 @@ describe('runAgentJob', () => {
       messages: [{ direction: 'inbound', body: 'Hello', createdAt: new Date() }],
     })
     mockGetFullBusinessContext.mockResolvedValue({ profile: null, documents: [] })
-    mockTenantFindUnique.mockResolvedValue({ accountType: 'business' })
+    mockTenantFindUnique.mockResolvedValue({ salesCrmEnabled: true })
     mockToolCallCreate.mockResolvedValue({ id: 'tc-1' })
     mockToolCallUpdate.mockResolvedValue({})
     mockAuditCreate.mockResolvedValue({})
@@ -364,7 +364,7 @@ describe('runAgentJob', () => {
       messages: [{ direction: 'inbound', body: 'Hello', createdAt: new Date() }],
     })
     mockGetFullBusinessContext.mockResolvedValue({ profile: null, documents: [] })
-    mockTenantFindUnique.mockResolvedValue({ accountType: 'business' })
+    mockTenantFindUnique.mockResolvedValue({ salesCrmEnabled: true })
     mockToolCallCreate.mockResolvedValue({ id: 'tc-1' })
     mockToolCallUpdate.mockResolvedValue({})
     mockAuditCreate.mockResolvedValue({})

@@ -7,11 +7,6 @@ generator client {
   provider = "prisma-client-js"
 }
 
-enum AccountType {
-  personal
-  business
-}
-
 enum ReplyProfileType {
   personal
   business
@@ -70,13 +65,9 @@ enum ConversationStatus {
 model Tenant {
   id                        String                      @id @default(cuid())
   name                      String                      @unique
-  // Deprecated identity (B2C pivot): no longer read for gating. Behavior is
-  // driven by the `salesCrmEnabled` capability below. Column kept until a
-  // follow-up migration drops it and the AccountType enum.
-  accountType               AccountType                 @default(business)
   // Opt-in "Sales & CRM mode" capability. Off by default (clean B2C baseline);
   // when on, leads, sales/support signals, revenue-at-risk, reports, and the
-  // business prompt framing turn on. Replaces the personal/business identity.
+  // business prompt framing turn on.
   salesCrmEnabled           Boolean                     @default(false)
   createdAt                 DateTime                    @default(now())
   users                     User[]

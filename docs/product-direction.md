@@ -243,12 +243,11 @@ Implications:
   classification, CRM framing) are now a single **opt-in "Sales & CRM mode"**
   capability any user can enable in Settings → Features, default off, rather than
   gated behind an account type.
-- The `Tenant.accountType` identity is replaced by the `Tenant.salesCrmEnabled`
-  capability flag. Phase 1 unified navigation and the home control room; Phase 2
-  moved every read (AI prompts, sync layer, page gates, signup/auth) onto the
-  capability and flipped the default to the clean baseline. `accountType` is
-  deprecated and unread; a follow-up migration drops the column and the
-  `AccountType` enum, and finer-grained capability toggles can split out later.
+- The old `Tenant.accountType` identity has been dropped. Phase 1 unified
+  navigation and the home control room; Phase 2 moved every read (AI prompts,
+  sync layer, page gates, signup/auth) onto `Tenant.salesCrmEnabled` and flipped
+  the default to the clean baseline. Finer-grained capability toggles can split
+  out later.
 
 ## Automation levels
 
