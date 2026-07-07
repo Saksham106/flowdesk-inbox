@@ -1,10 +1,12 @@
 # Product Plan
 
-Last updated: 2026-07-06
+Last updated: 2026-07-07
 
 ## Product thesis
 
-FlowDesk is the Gmail-native AI email operator. It works inside the user's existing Gmail to label, prioritize, draft, follow up, and organize email automatically. The website remains important, but its job is the agent control room: setup, rules, training, approvals, audit logs, daily brief, and power-user review.
+FlowDesk is the Gmail-native AI email operator with a polished companion web app. It works inside the user's existing Gmail to label, prioritize, draft, follow up, and organize email automatically. **Gmail is the primary surface** — most users interact with FlowDesk almost entirely through Gmail's labels, drafts, and follow-up nudges, so the Gmail-native side must work *really well*. **The web app is a secondary but genuinely polished surface** — setup, rules, training, approvals, audit logs, daily brief, and deeper review — held to the same quality bar even though users won't live there. We take direct design and implementation inspiration (and code) from Inbox Zero, Tom Shaw's AI agent inbox, and the other reference projects.
+
+> **Current focus (2026-07-07): the trustworthy core loop.** Correctness before features. The loop *classify → act in Gmail → reflect state truthfully in the UI* must be reliable — see `docs/product-direction.md` → Roadmap (Phase 1) and `docs/CURRENT_STATE.md` → "Known-broken".
 
 The product should consistently do five things:
 
@@ -43,17 +45,25 @@ Users do not trust an AI that replies to everything. They trust an assistant wit
 
 ## Phases
 
-### Gmail-native labels and safe mailbox actions — active priority
+### Phase 1 — Trustworthy core loop — active priority
 
-FlowDesk now has the first slice of Gmail label projection: local workflow/status changes queue `FlowDesk/*` Gmail labels through the writeback queue. Next work should bootstrap labels on connect, apply labels after classification, add label settings, and make the Gmail inbox itself the visible proof of value.
+The Gmail-native foundations (label projection, native drafts, waiting-on/follow-up) are **built**, but the end-to-end loop is not reliable: labels get created without being applied to threads, and explicit user state changes ("Mark done") don't stick on refresh. Phase 1 fixes correctness first — make label projection a reliable consequence of sync/classification, make persisted user state the single source of truth in the dashboard, and verify the loop end-to-end in the real app. Nothing new ships until this holds. See `docs/CURRENT_STATE.md` → "Known-broken" and `docs/TODO.md` → Phase 1.
 
-### Gmail-native drafts and follow-up tracking — next
+### Phase 2 — Web-app polish — next
 
-Create real Gmail drafts, dedupe them aggressively, mark threads `Autodrafted`, detect manual replies, track outbound threads waiting for replies, and apply `Waiting On` / `Follow Up` labels in Gmail.
+The companion web app must look and feel like a real product: split the oversized settings page, rebuild the dashboard/inbox shell Inbox-Zero-style, and clean up navigation. Secondary surface, but a high quality bar.
+
+### Phase 3 — Capability parity — after polish
+
+Port marquee capabilities from the reference repos (bulk unsubscribe depth, smart categories, reply-tracking UX, richer rule authoring), copying code where it helps. See `docs/flowdesk-vs-reference-gap-analysis.md`.
+
+### Gmail-native drafts and follow-up tracking — built
+
+Real Gmail drafts (deduped, `Autodrafted`-labeled, manual-reply-aware), outbound waiting-on detection, and `Waiting On` / `Follow Up` labels in Gmail all ship today. Remaining reliability work is folded into Phase 1.
 
 ### Control room dashboard — implemented, repositioning
 
-Command center, attention categories, tasks, follow-ups, approval queue, relationship memory, sensitive detection, local drafts, risk radar, and value reporting are available. Current work should make the dashboard feel like supervising an employee, not replacing Gmail.
+Command center, attention categories, tasks, follow-ups, approval queue, relationship memory, sensitive detection, local drafts, risk radar, and value reporting are available. Repositioning and polish are folded into Phase 2; correctness of its state handling is folded into Phase 1.
 
 ### Revenue inbox — implemented first slices
 
@@ -168,6 +178,10 @@ Shared inboxes, assignments, comments, collision detection, roles, permissions, 
 | 2026-07-06 | Hide unsupported reply CC/BCC fields until the send APIs can honor them. | Showing controls that are silently dropped creates trust debt; re-enable them only with end-to-end send support. |
 | 2026-07-06 | Treat AI budget and metering as required at every OpenAI entry point. | Inbox chat, rule compilation, drafts, scoring, memory, and summaries should fail predictably and respect tenant limits. |
 | 2026-07-06 | Keep landing-page assets local and committed. | Expiring design-tool URLs made the site brittle; committed assets keep production rendering stable. |
+| 2026-07-07 | Refocus the roadmap on the trustworthy core loop before new features. | The Gmail-native foundations are built but the loop isn't reliable end-to-end: labels are created without being applied to threads, and "Mark done" doesn't stick on refresh. Correctness is the gate for everything else. |
+| 2026-07-07 | Reaffirm the dual-surface framing: Gmail primary, web app secondary but held to a high quality bar. | Most users interact through Gmail, so the Gmail-native side must work really well; the web app is where users configure and supervise and must still look and work like a real product, not a bare control room. |
+| 2026-07-07 | The "Mark Done resurrection" class of bug reappeared via the command-center recompute path. | The 2026-06-15 fix separated local intent from provider state, but the home view still re-derives priority every render with draft-ready/re-classification evaluated before the explicit user state. Persisted user state must be the highest-priority signal, not one input among many. |
+| 2026-07-07 | De-scope Outlook, CC/BCC, inline-image backfill, and add-on/extension work until Phases 1–2 land. | These are distractions from the core loop and web-app polish; parked under `docs/TODO.md` → "Later / de-scoped". |
 
 ## Open product questions
 
