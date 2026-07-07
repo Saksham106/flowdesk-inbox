@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client"
 import { buildBatchToken } from "@/lib/clean-inbox-token"
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
 import { revalidateInboxViews } from "@/lib/cache-tags"
+import { archiveConversationsInGmail } from "@/lib/clean-inbox-gmail"
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions)
@@ -21,6 +22,9 @@ export async function POST(request: Request) {
     select: {
       id: true,
       status: true,
+      channelId: true,
+      externalThreadId: true,
+      channel: { select: { provider: true } },
       stateRecord: { select: { metadataJson: true } },
     },
   })
@@ -86,6 +90,11 @@ export async function POST(request: Request) {
     }),
   ])
 
+  // Actually archive in Gmail (remove INBOX) so cleanup leaves the user's real
+  // inbox, not just the FlowDesk row. Best-effort and per-thread isolated: a
+  // provider failure on one thread never fails the whole batch.
+  const gmailArchive = await archiveConversationsInGmail(convs)
+
   const batchToken = buildBatchToken(validIds)
 
   await prisma.auditLog.create({
@@ -97,6 +106,8 @@ export async function POST(request: Request) {
         conversationIds: validIds,
         previousStatuses: Object.fromEntries(convs.map((c) => [c.id, c.status])),
         count: validIds.length,
+        gmailArchived: gmailArchive.archived,
+        gmailArchiveFailed: gmailArchive.failed,
       } as Prisma.InputJsonValue,
     },
   })

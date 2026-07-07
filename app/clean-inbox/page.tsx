@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { groupCleanupBySender, type CleanupCandidate } from "@/lib/agent/sender-cleanup"
 import CleanInboxClient from "./CleanInboxClient"
 
 export const dynamic = "force-dynamic"
@@ -11,68 +12,63 @@ export default async function CleanInboxPage() {
   if (!session?.user?.tenantId) redirect("/login")
   const tenantId = session.user.tenantId
 
-  // Newsletters & marketing
-  const newsletters = await prisma.conversation.findMany({
+  // Cleanable candidates: newsletters/marketing plus quietly-handled and FYI
+  // mail. The grouping helper applies the safety skip rules (never needs-reply,
+  // waiting-on, important, or receipts), so this query stays permissive.
+  const conversations = await prisma.conversation.findMany({
     where: {
-      tenantId, status: { not: "closed" },
-      stateRecord: { emailType: { in: ["newsletter", "marketing"] } },
+      tenantId,
+      status: { not: "closed" },
+      OR: [
+        { stateRecord: { emailType: { in: ["newsletter", "marketing"] } } },
+        { stateRecord: { attentionCategory: { in: ["quiet", "fyi_done"] } } },
+      ],
     },
     select: {
       id: true,
+      status: true,
+      userState: true,
+      lastMessageAt: true,
       contact: { select: { name: true, phoneE164: true } },
       messages: { take: 1, orderBy: { createdAt: "asc" }, select: { subject: true } },
-      stateRecord: { select: { metadataJson: true } },
+      stateRecord: {
+        select: { emailType: true, attentionCategory: true, metadataJson: true },
+      },
     },
-    take: 100,
+    take: 400,
     orderBy: { lastMessageAt: "desc" },
   })
 
-  // Quiet emails
-  const quietEmails = await prisma.conversation.findMany({
-    where: {
-      tenantId, status: { not: "closed" },
-      stateRecord: { attentionCategory: "quiet" },
-    },
-    select: {
-      id: true,
-      contact: { select: { name: true, phoneE164: true } },
-      messages: { take: 1, orderBy: { createdAt: "asc" }, select: { subject: true } },
-    },
-    take: 100,
+  const candidates: CleanupCandidate[] = conversations.map((c) => {
+    const meta =
+      c.stateRecord?.metadataJson &&
+      typeof c.stateRecord.metadataJson === "object" &&
+      !Array.isArray(c.stateRecord.metadataJson)
+        ? (c.stateRecord.metadataJson as Record<string, unknown>)
+        : null
+    return {
+      id: c.id,
+      senderEmail: c.contact?.phoneE164 ?? null,
+      senderName: c.contact?.name ?? null,
+      subject: c.messages[0]?.subject ?? null,
+      emailType: c.stateRecord?.emailType ?? null,
+      attentionCategory: c.stateRecord?.attentionCategory ?? null,
+      status: c.status,
+      userState: c.userState,
+      hasUnsubscribe: typeof meta?.unsubscribeUrl === "string" && meta.unsubscribeUrl.length > 0,
+      lastReceivedAt: c.lastMessageAt ?? new Date(0),
+    }
   })
 
-  // FYI done
-  const fyiDone = await prisma.conversation.findMany({
-    where: {
-      tenantId, status: { not: "closed" },
-      stateRecord: { attentionCategory: "fyi_done" },
-    },
-    select: {
-      id: true,
-      contact: { select: { name: true, phoneE164: true } },
-      messages: { take: 1, orderBy: { createdAt: "asc" }, select: { subject: true } },
-    },
-    take: 100,
-  })
+  const groups = groupCleanupBySender(candidates).map((g) => ({
+    senderEmail: g.senderEmail,
+    senderName: g.senderName,
+    domain: g.domain,
+    count: g.count,
+    sampleSubjects: g.sampleSubjects,
+    conversationIds: g.conversationIds,
+    hasUnsubscribe: g.hasUnsubscribe,
+  }))
 
-  return (
-    <CleanInboxClient
-      newsletters={newsletters.map((c) => ({
-        id: c.id,
-        subject: c.messages[0]?.subject ?? "(no subject)",
-        sender: c.contact?.name ?? c.contact?.phoneE164 ?? "Unknown",
-        hasUnsubscribeUrl: !!(c.stateRecord?.metadataJson as Record<string, unknown> | null)?.unsubscribeUrl,
-      }))}
-      quietEmails={quietEmails.map((c) => ({
-        id: c.id,
-        subject: c.messages[0]?.subject ?? "(no subject)",
-        sender: c.contact?.name ?? c.contact?.phoneE164 ?? "Unknown",
-      }))}
-      fyiDone={fyiDone.map((c) => ({
-        id: c.id,
-        subject: c.messages[0]?.subject ?? "(no subject)",
-        sender: c.contact?.name ?? c.contact?.phoneE164 ?? "Unknown",
-      }))}
-    />
-  )
+  return <CleanInboxClient groups={groups} />
 }
