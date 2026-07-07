@@ -6,6 +6,7 @@ import WarmingUp from "@/app/components/WarmingUp";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { salesCrmEnabled, accountModeFor } from "@/lib/tenant-capabilities";
 import SignOutButton from "@/app/inbox/SignOutButton";
 import SearchInput from "@/app/inbox/SearchInput";
 import AutoRefresh from "@/app/components/AutoRefresh";
@@ -89,7 +90,7 @@ async function renderInboxPage(
   const [tenant, statusCounts, gmailChannels] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { accountType: true },
+      select: { salesCrmEnabled: true },
     }),
     prisma.conversation.groupBy({
       by: ["status"],
@@ -117,8 +118,8 @@ async function renderInboxPage(
     }),
   ]);
 
-  const isBusiness = tenant?.accountType === "business";
-  const accountType = tenant?.accountType ?? "personal";
+  const isBusiness = salesCrmEnabled(tenant);
+  const accountType = accountModeFor(tenant);
 
   const countByStatus = Object.fromEntries(
     statusCounts.map((r) => [r.status, r._count.status])
@@ -403,7 +404,7 @@ async function renderInboxPage(
     ...ALL_STATUSES.map((s) => ({ label: STATUS_LABELS[s], status: s, count: countByStatus[s] ?? 0 })),
   ];
 
-  const appNavigation = getInboxNavigation(tenant?.accountType);
+  const appNavigation = getInboxNavigation({ salesCrm: isBusiness });
 
   function navLink(item: AppNavigationItem, className = "") {
     return (

@@ -240,11 +240,15 @@ Implications:
 - One universal experience. Navigation, the home control room, and copy are the
   same for everyone — no `personal` vs `business` account branching in the UI.
 - Formerly business-only capabilities (Leads, Risk Radar, Reports, sales-signal
-  classification, CRM framing) become **opt-in features any user can enable**,
-  default off, rather than gated behind an account type.
-- The `Tenant.accountType` split is being removed. Phase 1 (this milestone)
-  unifies navigation and the home view; a follow-up removes `accountType` from
-  the AI prompts, sync layer, schema, and the lead/sales modules.
+  classification, CRM framing) are now a single **opt-in "Sales & CRM mode"**
+  capability any user can enable in Settings → Features, default off, rather than
+  gated behind an account type.
+- The `Tenant.accountType` identity is replaced by the `Tenant.salesCrmEnabled`
+  capability flag. Phase 1 unified navigation and the home control room; Phase 2
+  moved every read (AI prompts, sync layer, page gates, signup/auth) onto the
+  capability and flipped the default to the clean baseline. `accountType` is
+  deprecated and unread; a follow-up migration drops the column and the
+  `AccountType` enum, and finer-grained capability toggles can split out later.
 
 ## Automation levels
 

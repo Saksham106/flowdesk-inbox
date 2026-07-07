@@ -85,7 +85,7 @@ export function buildConversationStateDraft(
   now = new Date(),
   options: WorkItemSummaryOptions = {}
 ): ConversationStateDraft {
-  const accountMode = resolveAccountMode(options.accountType ?? "business")
+  const accountMode = resolveAccountMode(options.accountType ?? "personal")
   const analysis = analyzeConversationForCommandCenter(conversation, now, accountMode)
 
   return {
@@ -210,7 +210,7 @@ export function summarizeWorkItems(
   now = new Date(),
   options: WorkItemSummaryOptions = {}
 ): WorkItemSummary {
-  const accountMode: AccountMode = resolveAccountMode(options.accountType ?? "business")
+  const accountMode: AccountMode = resolveAccountMode(options.accountType ?? "personal")
   return {
     state: buildConversationStateDraft(conversation, now, { accountType: accountMode }),
     tasks: extractInboxTaskDrafts(conversation, now),

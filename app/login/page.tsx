@@ -54,7 +54,6 @@ function LoginForm() {
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [accountType, setAccountType] = useState<"personal" | "business">("personal");
   const [signupError, setSignupError] = useState<string | null>(null);
   const [isSigningUp, setIsSigningUp] = useState(false);
 
@@ -98,7 +97,7 @@ function LoginForm() {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: signupEmail, password: signupPassword, accountType }),
+        body: JSON.stringify({ email: signupEmail, password: signupPassword }),
       });
 
       if (res.status === 409) {
@@ -654,73 +653,6 @@ function LoginForm() {
                 placeholder="••••••••"
                 className="fd-input"
               />
-            </div>
-
-            <div>
-              <label style={{ ...labelStyle, marginBottom: "9px" }}>
-                Account type
-              </label>
-              <div
-                style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}
-              >
-                {(
-                  [
-                    {
-                      value: "personal",
-                      label: "Personal",
-                      desc: "Personal inbox & replies",
-                    },
-                    {
-                      value: "business",
-                      label: "Business",
-                      desc: "Team features & booking",
-                    },
-                  ] as const
-                ).map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    className="fd-acct"
-                    data-active={accountType === opt.value ? "true" : "false"}
-                    onClick={() => setAccountType(opt.value)}
-                    style={{
-                      padding: "12px 11px",
-                      borderRadius: "10px",
-                      textAlign: "left",
-                      border:
-                        accountType === opt.value
-                          ? "1px solid #6366f1"
-                          : "1px solid #e5e7eb",
-                      background:
-                        accountType === opt.value ? "#f9fafb" : "#ffffff",
-                      cursor: "pointer",
-                      transition: "all 0.18s ease",
-                      fontFamily: "inherit",
-                    }}
-                  >
-                    <p
-                      style={{
-                        fontSize: "13px",
-                        fontWeight: "600",
-                        color: "#111827",
-                        margin: 0,
-                      }}
-                    >
-                      {opt.label}
-                    </p>
-                    <p
-                      style={{
-                        fontSize: "11px",
-                        color: "#9ca3af",
-                        margin: "3px 0 0",
-                        lineHeight: "1.4",
-                      }}
-                    >
-                      {opt.desc}
-                    </p>
-                  </button>
-                ))}
-              </div>
             </div>
 
             {signupError && (

@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { getCalendarClient, listEvents } from "@/lib/google"
+import { salesCrmEnabled } from "@/lib/tenant-capabilities"
 import MeetingCard from "@/app/meetings/MeetingCard"
 import type { CalendarEvent } from "@/lib/google"
 
@@ -17,9 +18,9 @@ export default async function MeetingsPage() {
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { accountType: true },
+    select: { salesCrmEnabled: true },
   })
-  if (tenant?.accountType === "personal") redirect("/inbox")
+  if (!salesCrmEnabled(tenant)) redirect("/inbox")
 
   const credential = await prisma.googleCalendarCredential.findFirst({
     where: { tenantId },

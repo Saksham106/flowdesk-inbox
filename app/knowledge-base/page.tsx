@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth"
 
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { salesCrmEnabled } from "@/lib/tenant-capabilities"
 import KbUrlImport from "@/app/knowledge-base/KbUrlImport"
 import KbDocList from "@/app/knowledge-base/KbDocList"
 
@@ -15,9 +16,9 @@ export default async function KnowledgeBasePage() {
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: session.user.tenantId },
-    select: { accountType: true },
+    select: { salesCrmEnabled: true },
   })
-  if (tenant?.accountType === "personal") redirect("/inbox")
+  if (!salesCrmEnabled(tenant)) redirect("/inbox")
 
   const docs = await prisma.knowledgeDocument.findMany({
     where: { tenantId: session.user.tenantId },

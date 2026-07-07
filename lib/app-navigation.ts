@@ -1,5 +1,3 @@
-export type AccountTypeValue = "personal" | "business" | string | null | undefined
-
 export type AppNavigationItem = {
   label: string
   href: string
@@ -10,10 +8,16 @@ export type InboxNavigation = {
   secondary: AppNavigationItem[]
 }
 
+export type NavCapabilities = {
+  /** Sales & CRM mode — surfaces Leads, Reports, Risk Radar, Meetings, KB. */
+  salesCrm?: boolean
+}
+
 /**
  * B2C: one control room for everyone. There is no "business account" — every
- * user gets the same navigation and can later opt into extra capabilities
- * (Leads, Risk Radar, Reports) rather than being locked into an account type.
+ * user gets the same baseline navigation. The sales/CRM cluster (Leads, Reports,
+ * Risk Radar, Meetings, Knowledge Base) is an opt-in capability that resurfaces
+ * in the "More" menu only when the tenant has Sales & CRM mode enabled.
  *
  * `primary` items always render; `secondary` items collapse into a "More" menu.
  * Supervision surfaces (Approvals, Activity) are first-class for all users.
@@ -27,19 +31,23 @@ const CONTROL_ROOM_PRIMARY: AppNavigationItem[] = [
 const CONTROL_ROOM_SECONDARY: AppNavigationItem[] = [
   { label: "Approvals", href: "/approvals" },
   { label: "Activity", href: "/audit" },
+]
+
+/** Opt-in Sales & CRM surfaces, shown only when the capability is enabled. */
+const SALES_CRM_SECONDARY: AppNavigationItem[] = [
+  { label: "Leads", href: "/leads" },
+  { label: "Reports", href: "/reports" },
+  { label: "Risk Radar", href: "/risk-radar" },
   { label: "Meetings", href: "/meetings" },
   { label: "Knowledge Base", href: "/knowledge-base" },
 ]
 
-/**
- * Navigation for the control room. The `accountType` argument is retained so
- * callers don't have to change during the B2C transition, but it no longer
- * affects the result — the full removal happens in the accountType pivot PR.
- */
-export function getInboxNavigation(accountType?: AccountTypeValue): InboxNavigation {
-  void accountType // B2C: intentionally ignored; one control room for everyone.
+export function getInboxNavigation(capabilities?: NavCapabilities): InboxNavigation {
+  const secondary = capabilities?.salesCrm
+    ? [...CONTROL_ROOM_SECONDARY, ...SALES_CRM_SECONDARY]
+    : CONTROL_ROOM_SECONDARY
   return {
     primary: CONTROL_ROOM_PRIMARY,
-    secondary: CONTROL_ROOM_SECONDARY,
+    secondary,
   }
 }

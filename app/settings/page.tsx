@@ -4,6 +4,8 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { salesCrmEnabled } from "@/lib/tenant-capabilities";
+import SalesCrmModeToggle from "@/app/settings/SalesCrmModeToggle";
 import DisconnectGmailButton from "@/app/settings/DisconnectGmailButton";
 import SyncGmailButton from "@/app/settings/SyncGmailButton";
 import DisconnectOutlookButton from "@/app/settings/DisconnectOutlookButton";
@@ -104,7 +106,7 @@ export default async function SettingsPage({ searchParams }: Props) {
     }),
     prisma.tenant.findUnique({
       where: { id: session.user.tenantId },
-      select: { accountType: true },
+      select: { salesCrmEnabled: true },
     }),
     prisma.learnedReplyProfile.findFirst({
       where: { tenantId: session.user.tenantId },
@@ -222,7 +224,8 @@ export default async function SettingsPage({ searchParams }: Props) {
   const staticRules = agentRules.filter((r) => r.source === "manual")
   const plainEnglishRules = agentRules.filter((r) => r.source !== "manual")
 
-  const isPersonal = tenant?.accountType === "personal";
+  const isSalesCrmEnabled = salesCrmEnabled(tenant);
+  const isPersonal = !isSalesCrmEnabled;
 
   const templateCount = !isPersonal
     ? await prisma.knowledgeDocument.count({ where: { tenantId: session.user.tenantId, sourceType: "concierge_template" } })
@@ -297,6 +300,16 @@ export default async function SettingsPage({ searchParams }: Props) {
             <span className="font-medium">{decodeURIComponent(searchParams.drive_connected)}</span>.
           </div>
         )}
+
+        {/* Features / capabilities */}
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="font-semibold">Features</h2>
+          </div>
+          <div className="px-6 py-4">
+            <SalesCrmModeToggle enabled={isSalesCrmEnabled} />
+          </div>
+        </section>
 
         {/* Connectors */}
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">

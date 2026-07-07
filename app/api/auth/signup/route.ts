@@ -20,10 +20,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { email, password, accountType, tenantName } = body as {
+  const { email, password, tenantName } = body as {
     email?: string;
     password?: string;
-    accountType?: string;
     tenantName?: string;
   };
 
@@ -35,12 +34,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
   }
 
-  if (accountType !== "personal" && accountType !== "business") {
-    return NextResponse.json(
-      { error: "accountType must be 'personal' or 'business'." },
-      { status: 400 }
-    );
-  }
+  // B2C: no account-type choice at signup. Everyone starts on the clean baseline
+  // (Sales & CRM mode off); it can be enabled later in Settings.
 
   const localPart = email.split("@")[0].replace(/[^a-z0-9_-]/gi, "").toLowerCase();
   const resolvedTenantName =
@@ -53,7 +48,7 @@ export async function POST(request: Request) {
       const tenant = await tx.tenant.create({
         data: {
           name: resolvedTenantName,
-          accountType: accountType as "personal" | "business",
+          salesCrmEnabled: false,
         },
       });
 
@@ -84,7 +79,7 @@ export async function POST(request: Request) {
         },
       });
 
-      return { userId: user.id, tenantId: tenant.id, accountType: tenant.accountType };
+      return { userId: user.id, tenantId: tenant.id, salesCrmEnabled: tenant.salesCrmEnabled };
     });
 
     return NextResponse.json(result, { status: 201 });

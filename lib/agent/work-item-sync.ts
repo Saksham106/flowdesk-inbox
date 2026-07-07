@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client"
 
 import { prisma } from "@/lib/prisma"
+import { accountModeFor } from "@/lib/tenant-capabilities"
 import { summarizeWorkItems, type WorkItemConversationInput } from "@/lib/agent/work-items"
 import { syncPersonMemoryWithLLM } from "@/lib/agent/person-memory"
 import { scoreLeadForConversation } from "@/lib/agent/lead-scoring"
@@ -71,9 +72,10 @@ export async function syncConversationWorkItems(
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: input.tenantId },
-    select: { accountType: true },
+    select: { salesCrmEnabled: true },
   })
-  const isPersonal = tenant?.accountType === "personal"
+  const accountMode = accountModeFor(tenant)
+  const isPersonal = accountMode === "personal"
 
   const kbDocs = isPersonal
     ? []
@@ -84,7 +86,7 @@ export async function syncConversationWorkItems(
       })) ?? [])
 
   const summary = summarizeWorkItems(conversation as WorkItemConversationInput, input.now, {
-    accountType: tenant?.accountType,
+    accountType: accountMode,
   })
 
   const initialState = await prisma.conversationState.findUnique({
@@ -860,7 +862,7 @@ export async function syncConversationWorkItems(
           body: message.body,
         })),
       },
-      accountType: tenant?.accountType,
+      accountType: accountMode,
       emailClassification,
       isSalesLead: salesClassified,
       isSupport: supportSignals.isSupport,

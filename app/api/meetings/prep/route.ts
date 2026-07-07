@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { salesCrmEnabled } from "@/lib/tenant-capabilities"
 import { generateMeetingPrep } from "@/lib/ai/provider"
 import { buildMeetingPrepPrompt } from "@/lib/ai/prompts/meeting-prep"
 import { checkAiBudgetForTokens } from "@/lib/ai/budget"
@@ -20,10 +21,10 @@ export async function POST(request: Request) {
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { accountType: true },
+    select: { salesCrmEnabled: true },
   })
-  if (tenant?.accountType === "personal") {
-    return NextResponse.json({ error: "Meeting prep is only available for business accounts" }, { status: 403 })
+  if (!salesCrmEnabled(tenant)) {
+    return NextResponse.json({ error: "Meeting prep requires Sales & CRM mode" }, { status: 403 })
   }
 
   let body: unknown

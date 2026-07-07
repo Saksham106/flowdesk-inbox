@@ -166,7 +166,9 @@ describe("summarizeWorkItems", () => {
           },
         ],
       }),
-      now
+      now,
+      // Leads are a Sales & CRM capability; extraction requires business mode.
+      { accountType: "business" }
     )
 
     expect(summary.tasks).toHaveLength(1)

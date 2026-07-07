@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { accountModeFor } from "@/lib/tenant-capabilities";
 import { trainLearnedReplyProfile } from "@/lib/agent/reply-learning";
 
 export const runtime = "nodejs";
@@ -18,7 +19,7 @@ export async function POST() {
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { accountType: true },
+    select: { salesCrmEnabled: true },
   });
 
   const channel = await prisma.channel.findFirst({
@@ -37,7 +38,7 @@ export async function POST() {
     training = await trainLearnedReplyProfile({
       tenantId,
       channelId: channel.id,
-      profileType: tenant?.accountType === "personal" ? "personal" : "business",
+      profileType: accountModeFor(tenant),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to train reply style";
@@ -57,7 +58,7 @@ export async function POST() {
       payloadJson: {
         sampleCount: training.sampleCount,
         profileId: training.profileId,
-        accountType: tenant?.accountType ?? "business",
+        accountType: accountModeFor(tenant),
       },
     },
   });

@@ -2,45 +2,36 @@ import { describe, expect, it } from "vitest"
 
 import { getInboxNavigation } from "@/lib/app-navigation"
 
-describe("getInboxNavigation (B2C: one control room for everyone)", () => {
-  it("returns the same navigation regardless of account type", () => {
-    const personal = getInboxNavigation("personal")
-    const business = getInboxNavigation("business")
-    const missing = getInboxNavigation(null)
-
-    expect(business).toEqual(personal)
-    expect(missing).toEqual(personal)
-  })
-
-  it("surfaces Approvals for every user", () => {
-    for (const accountType of ["personal", "business", null, undefined]) {
-      const nav = getInboxNavigation(accountType)
+describe("getInboxNavigation (B2C: baseline + opt-in Sales & CRM)", () => {
+  it("surfaces Approvals and Activity for every user by default", () => {
+    for (const caps of [undefined, {}, { salesCrm: false }]) {
+      const nav = getInboxNavigation(caps)
       const labels = [...nav.primary, ...nav.secondary].map((i) => i.label)
       expect(labels).toContain("Approvals")
+      expect(labels).toContain("Activity")
     }
   })
 
   it("keeps Settings reachable", () => {
-    const nav = getInboxNavigation("personal")
-    const hrefs = [...nav.primary, ...nav.secondary].map((i) => i.href)
+    const hrefs = getInboxNavigation().primary.map((i) => i.href)
     expect(hrefs).toContain("/settings")
   })
 
-  it("does not gate any item behind a business account", () => {
-    // Under B2C there is no business-only surface; the personal experience is
-    // the universal baseline, so nothing appears only for "business".
-    const personalHrefs = new Set(
-      [...getInboxNavigation("personal").primary, ...getInboxNavigation("personal").secondary].map(
-        (i) => i.href
-      )
-    )
-    const businessHrefs = [
-      ...getInboxNavigation("business").primary,
-      ...getInboxNavigation("business").secondary,
-    ].map((i) => i.href)
+  it("hides the Sales & CRM cluster when the capability is off", () => {
+    const hrefs = getInboxNavigation({ salesCrm: false }).secondary.map((i) => i.href)
+    expect(hrefs).not.toContain("/leads")
+    expect(hrefs).not.toContain("/reports")
+    expect(hrefs).not.toContain("/risk-radar")
+  })
 
-    for (const href of businessHrefs) {
-      expect(personalHrefs.has(href)).toBe(true)
-    }
+  it("resurfaces the Sales & CRM cluster when the capability is on", () => {
+    const hrefs = getInboxNavigation({ salesCrm: true }).secondary.map((i) => i.href)
+    expect(hrefs).toContain("/leads")
+    expect(hrefs).toContain("/reports")
+    expect(hrefs).toContain("/risk-radar")
+    expect(hrefs).toContain("/meetings")
+    expect(hrefs).toContain("/knowledge-base")
+    // Baseline supervision surfaces stay present too.
+    expect(hrefs).toContain("/approvals")
   })
 })

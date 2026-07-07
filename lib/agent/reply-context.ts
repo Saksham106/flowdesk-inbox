@@ -7,6 +7,7 @@ import type {
 } from "@prisma/client"
 
 import { prisma } from "@/lib/prisma"
+import { accountModeFor } from "@/lib/tenant-capabilities"
 
 export type AccountTypeValue = "personal" | "business"
 
@@ -27,10 +28,10 @@ export async function getReplyGenerationContext(input: {
 }): Promise<ReplyGenerationContext> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: input.tenantId },
-    select: { accountType: true },
+    select: { salesCrmEnabled: true },
   })
 
-  const accountType = tenant?.accountType === "personal" ? "personal" : "business"
+  const accountType = accountModeFor(tenant)
   const profileType = accountType
 
   const learnedProfilePromise = prisma.learnedReplyProfile.findFirst({
