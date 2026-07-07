@@ -47,7 +47,7 @@ function makeRequest(body: unknown): Request {
 describe("POST /api/auth/signup", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockTenantCreate.mockResolvedValue({ id: "tenant-1", accountType: "personal" })
+    mockTenantCreate.mockResolvedValue({ id: "tenant-1", salesCrmEnabled: false })
     mockUserCreate.mockResolvedValue({ id: "user-1" })
     mockAutopilotCreate.mockResolvedValue({})
     mockFollowUpCreate.mockResolvedValue({})
@@ -59,7 +59,7 @@ describe("POST /api/auth/signup", () => {
     // creating the row (or creates it at another level), new tenants would
     // silently escalate from "labels only" to "Gmail drafts".
     const res = (await POST(
-      makeRequest({ email: "new@example.com", password: "password123", accountType: "personal" })
+      makeRequest({ email: "new@example.com", password: "password123" })
     )) as { status: number }
 
     expect(res.status).toBe(201)

@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-07-07 (Phase 1 correctness: user-edit preservation, label reconciliation cron, writeback audit linking)
+Last updated: 2026-07-07 (B2C capability cleanup: dropped deprecated tenant account type)
 
 FlowDesk is a Gmail-native AI email operator for individuals and small businesses. Gmail is the primary daily workspace; the FlowDesk web app is the agent control room for setup, preferences, approvals, audit history, training, and power-user review.
 
@@ -9,7 +9,7 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 ### Platform
 
 - NextAuth credentials authentication with tenant-scoped data isolation.
-- **B2C, one universal experience.** There is no personal/business account identity. An opt-in **Sales & CRM mode** capability (`Tenant.salesCrmEnabled`, off by default) enables lead scoring, sales/support signal classification, revenue-at-risk, reports, meeting prep, and business-tone AI framing; when off (the default baseline) all of that is suppressed at the prompt and sync layers. The capability is the source of truth — the legacy internal `personal`/`business` mode threaded through prompts/sync is derived from it via `accountModeFor` (`lib/tenant-capabilities.ts`), and it toggles in Settings → Features. `Tenant.accountType` is deprecated and no longer read (dropped in a follow-up migration).
+- **B2C, one universal experience.** There is no personal/business account identity in storage. An opt-in **Sales & CRM mode** capability (`Tenant.salesCrmEnabled`, off by default) enables lead scoring, sales/support signal classification, revenue-at-risk, reports, meeting prep, and business-tone AI framing; when off (the default baseline) all of that is suppressed at the prompt and sync layers. The capability is the source of truth — the legacy internal `personal`/`business` mode threaded through prompts/sync is derived from it via `accountModeFor` (`lib/tenant-capabilities.ts`), and it toggles in Settings → Features. The deprecated `Tenant.accountType` column and `AccountType` enum have been removed.
 - Audit logs, approval requests, automation run traces, and undo for selected reversible actions.
 - Unified approvals: `ApprovalRequest` is the single approval primitive (`step: "send"`, source in `metadataJson`). Every draft that reaches `proposed` (suggest, manual edit, meeting follow-up) gets one pending request; approve/send/clear/autopilot-send resolve it (`lib/agent/approvals.ts`), and `/approvals` decisions project back onto `Draft.status` — approve marks the draft approved, reject clears it and withdraws any Gmail-native draft. Cleared drafts cancel their request (`cancelled` status).
 
