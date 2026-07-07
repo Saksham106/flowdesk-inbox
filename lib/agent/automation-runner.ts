@@ -1,8 +1,14 @@
 import { prisma } from "@/lib/prisma"
 import { Prisma, ConversationStatus } from "@prisma/client"
 
+// "create_draft" was previously declared here but never implemented — no
+// trigger, template, or builder ever constructed a step with that type, so it
+// always fell through to "Unknown step type" at runtime. Draft creation is a
+// separate, working system: the Gmail-native create_draft *writeback* lane
+// (lib/gmail-drafts.ts + lib/agent/gmail-writeback-processor.ts), triggered
+// via the draft-suggest route — unrelated to this automation-step vocabulary.
 export type AutomationStep = {
-  type: "create_task" | "update_attention" | "create_draft" | "archive"
+  type: "create_task" | "update_attention" | "archive"
   payload: Record<string, unknown>
   status?: "pending" | "completed" | "failed"
   output?: unknown

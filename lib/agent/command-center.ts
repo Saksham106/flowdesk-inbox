@@ -457,12 +457,12 @@ export function analyzeConversationForCommandCenter(
   let reason = "Safely ignored for now."
   let nextAction = "No action needed."
 
-  if (conversation.draft?.status === "proposed" || conversation.draft?.status === "approved") {
-    state = "waiting_on_you"
-    priority = "high"
-    reason = "Draft is ready for review."
-    nextAction = "Review and send the draft."
-  } else if (conversation.userState === "done") {
+  // An explicit user decision (Mark Done / Waiting On / Read Later) is the
+  // highest-priority signal and must be checked before anything derived —
+  // a re-created draft or fresh AI classification must never resurrect a
+  // conversation the user already resolved. See docs/CURRENT_STATE.md ->
+  // "Known-broken" for the bug this ordering fixes.
+  if (conversation.userState === "done") {
     state = "done"
     priority = "none"
     reason = "Conversation is done."
@@ -477,6 +477,11 @@ export function analyzeConversationForCommandCenter(
     priority = "low"
     reason = "Saved to read later."
     nextAction = "Read later if relevant."
+  } else if (conversation.draft?.status === "proposed" || conversation.draft?.status === "approved") {
+    state = "waiting_on_you"
+    priority = "high"
+    reason = "Draft is ready for review."
+    nextAction = "Review and send the draft."
   } else if (expiredAction) {
     state = "fyi_only"
     priority = "none"
@@ -587,8 +592,8 @@ export function analyzeConversationForCommandCenter(
       !expiredAction &&
       !safelyIgnored &&
       (!attentionCategory || attentionCategory === "needs_reply"),
-    needsAction: attentionCategory === "needs_action" && !expiredAction,
-    readLater: attentionCategory === "read_later",
+    needsAction: attentionCategory === "needs_action" && !expiredAction && !conversation.userState,
+    readLater: attentionCategory === "read_later" || conversation.userState === "read_later",
     opportunity,
     leadScore: opportunity && conversation.lead ? conversation.lead.score : null,
     estimatedValue: conversation.lead?.estimatedValue ?? null,
@@ -665,8 +670,8 @@ export function persistedStateToCommandCenterConversation(
       !expiredAction &&
       persisted.state !== "fyi_only" &&
       (!meta?.attentionCategory || meta.attentionCategory === "needs_reply"),
-    needsAction: meta?.attentionCategory === "needs_action" && !expiredAction,
-    readLater: meta?.attentionCategory === "read_later",
+    needsAction: meta?.attentionCategory === "needs_action" && !expiredAction && !conversation.userState,
+    readLater: meta?.attentionCategory === "read_later" || userReadLater,
     opportunity,
     leadScore: opportunity && lead ? lead.score : null,
     estimatedValue: lead?.estimatedValue ?? null,

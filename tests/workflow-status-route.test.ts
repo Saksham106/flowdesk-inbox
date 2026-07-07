@@ -50,6 +50,13 @@ vi.mock("@/lib/cache-tags", () => ({
   revalidateInboxViews: mockRevalidateInboxViews,
 }))
 
+// The inline writeback drain (lib/agent/gmail-writeback-processor.ts) is a
+// separate concern from this route's own status-transition logic — stub it
+// out so these tests aren't exercising real Gmail-API-adjacent code.
+vi.mock("@/lib/agent/gmail-writeback-processor", () => ({
+  processGmailWritebackJobById: vi.fn().mockResolvedValue({ ok: true }),
+}))
+
 vi.mock("next/server", () => {
   class NextResponse {
     status: number

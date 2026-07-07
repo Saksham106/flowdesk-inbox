@@ -173,6 +173,18 @@ export async function queueFlowDeskLabelWriteback(input: {
     },
   })
 
+  // Best-effort inline drain: apply this job to Gmail right away instead of
+  // waiting for the next gmail-writeback cron tick. This is what makes label
+  // changes actually show up in Gmail promptly rather than depending entirely
+  // on a cron being scheduled — the cron remains the reliability backstop for
+  // whatever this inline attempt can't finish (Gmail hiccup, etc). Dynamic
+  // import avoids a static circular dependency: the processor depends on
+  // lib/google.ts, which itself depends on this file for label constants.
+  const { processGmailWritebackJobById } = await import("@/lib/agent/gmail-writeback-processor")
+  await processGmailWritebackJobById(job.id).catch((err) => {
+    console.error("[gmail-labels] inline writeback drain failed, will retry via cron:", err)
+  })
+
   return job
 }
 
