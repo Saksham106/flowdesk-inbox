@@ -3,29 +3,43 @@ import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status
 import { DEFAULT_FOLLOW_UP_BUSINESS_DAYS, followUpDueAt } from "@/lib/business-days"
 import { getAutomationLevel, isActionAllowedAtLevel } from "@/lib/agent/automation-level"
 
-const LABEL_PREFIX = "FlowDesk/"
-
-// "FlowDesk/Handle First" was removed from this vocabulary: no classifier,
-// rule, or correction can produce a "handle_first" attention category (the
-// dashboard's Handle First section is a relative ranking computed per request
-// by the command center, not a persisted per-conversation state), so the label
-// could never be applied. Accounts connected before the removal may still have
-// the empty label in Gmail; it is never created or applied anymore.
+// Labels are flat, top-level Gmail labels named exactly for what they mean
+// ("Needs Reply", "Waiting On", …) with no "FlowDesk/" namespace prefix.
+//
+// "Handle First" was removed from this vocabulary: no classifier, rule, or
+// correction can produce a "handle_first" attention category (the dashboard's
+// Handle First section is a relative ranking computed per request by the command
+// center, not a persisted per-conversation state), so the label could never be
+// applied. It is never created or applied anymore.
 export const FLOWDESK_GMAIL_LABEL_NAMES = [
-  "FlowDesk/Needs Reply",
-  "FlowDesk/Needs Action",
-  "FlowDesk/Waiting On",
-  "FlowDesk/Follow Up",
-  "FlowDesk/Read Later",
-  "FlowDesk/Important",
-  "FlowDesk/Handled",
-  "FlowDesk/Autodrafted",
-  "FlowDesk/Low Priority",
+  "Needs Reply",
+  "Needs Action",
+  "Waiting On",
+  "Follow Up",
+  "Read Later",
+  "Important",
+  "Handled",
+  "Autodrafted",
+  "Low Priority",
 ] as const
 
 export type FlowDeskGmailLabelName = (typeof FLOWDESK_GMAIL_LABEL_NAMES)[number]
 
 const FLOWDESK_GMAIL_LABEL_SET = new Set<string>(FLOWDESK_GMAIL_LABEL_NAMES)
+
+// The labels were previously created under a "FlowDesk/" namespace. Accounts
+// connected before the flattening still have those nested labels in Gmail, so
+// the ensure/apply paths rename them in place (see reconcileLegacyFlowDeskLabels
+// in lib/google.ts) — old name → new flat name — preserving each label's Gmail
+// id and thread associations. Kept as an explicit map so a future vocabulary
+// change can't silently drop a legacy label from migration.
+export const LEGACY_FLOWDESK_LABEL_PREFIX = "FlowDesk/"
+
+export const LEGACY_FLOWDESK_LABEL_RENAMES: ReadonlyArray<
+  readonly [legacyName: string, newName: FlowDeskGmailLabelName]
+> = FLOWDESK_GMAIL_LABEL_NAMES.map(
+  (name) => [`${LEGACY_FLOWDESK_LABEL_PREFIX}${name}`, name] as const
+)
 
 const IMPORTANT_LOCAL_LABELS = new Set(["Lead", "Pricing", "Complaint"])
 const LOW_PRIORITY_ATTENTION = new Set(["quiet", "fyi_done"])
@@ -46,36 +60,36 @@ export function flowDeskLabelsForConversationState(input: {
 
   switch (input.workflowStatus) {
     case "needs_reply":
-      labels.push("FlowDesk/Needs Reply")
+      labels.push("Needs Reply")
       break
     case "draft_ready":
-      labels.push("FlowDesk/Needs Reply", "FlowDesk/Autodrafted")
+      labels.push("Needs Reply", "Autodrafted")
       break
     case "waiting_on":
-      labels.push("FlowDesk/Waiting On")
+      labels.push("Waiting On")
       break
     case "read_later":
-      labels.push("FlowDesk/Read Later")
+      labels.push("Read Later")
       break
     case "done":
-      labels.push("FlowDesk/Handled")
+      labels.push("Handled")
       break
   }
 
   if (NEEDS_ACTION_ATTENTION.has(input.attentionCategory ?? "")) {
-    labels.push("FlowDesk/Needs Action")
+    labels.push("Needs Action")
   }
   if (LOW_PRIORITY_ATTENTION.has(input.attentionCategory ?? "")) {
-    labels.push("FlowDesk/Low Priority")
+    labels.push("Low Priority")
   }
   if (input.followUpDue) {
-    labels.push("FlowDesk/Follow Up")
+    labels.push("Follow Up")
   }
   if (input.draftStatus === "proposed" || input.draftStatus === "approved") {
-    labels.push("FlowDesk/Autodrafted")
+    labels.push("Autodrafted")
   }
   if (input.localLabel && IMPORTANT_LOCAL_LABELS.has(input.localLabel)) {
-    labels.push("FlowDesk/Important")
+    labels.push("Important")
   }
 
   return Array.from(new Set(labels))
@@ -174,10 +188,6 @@ export async function queueFlowDeskLabelWriteback(input: {
   })
 
   return job
-}
-
-export function flowDeskLabelPrefix() {
-  return LABEL_PREFIX
 }
 
 /**

@@ -166,7 +166,7 @@ describe("POST /api/agent-rules/dry-run", () => {
 
     const planned = body.plannedAction as Record<string, unknown>
     expect(planned.targetAttention).toBe("read_later")
-    expect(planned.gmailLabels).toContain("FlowDesk/Read Later")
+    expect(planned.gmailLabels).toContain("Read Later")
     expect(body.automationLevel).toBe(2)
     expect(body.wouldApplyGmailLabels).toBe(true)
   })

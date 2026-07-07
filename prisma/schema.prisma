@@ -203,7 +203,7 @@ model GmailWritebackQueue {
 model GmailLabelMapping {
   id          String   @id @default(cuid())
   tenantId    String
-  canonical   String   // one of FLOWDESK_GMAIL_LABEL_NAMES
+  canonical   String   // one of FLOWDESK_GMAIL_LABEL_NAMES (flat, e.g. "Needs Reply")
   displayName String?  // reserved for future in-Gmail rename; null = use canonical
   enabled     Boolean  @default(true)
   createdAt   DateTime @default(now())

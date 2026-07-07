@@ -299,7 +299,7 @@ describe('runFollowUpLabelSweep', () => {
         status: 'pending',
         providerMessageIdsJson: {
           threadId: 'thread-abc',
-          labels: ['FlowDesk/Waiting On', 'FlowDesk/Follow Up'],
+          labels: ['Waiting On', 'Follow Up'],
         },
       },
     ])
@@ -317,7 +317,7 @@ describe('runFollowUpLabelSweep', () => {
         status: 'failed',
         providerMessageIdsJson: {
           threadId: 'thread-abc',
-          labels: ['FlowDesk/Waiting On', 'FlowDesk/Follow Up'],
+          labels: ['Waiting On', 'Follow Up'],
         },
       },
     ])

@@ -15,7 +15,7 @@ Shipped foundations:
 - Gmail OAuth connect/callback, encrypted tokens, invalid-token reauth CTA.
 - Gmail full and incremental history sync, Pub/Sub push/watch, sync locks.
 - Gmail read/archive/trash/unsubscribe writeback and retry queue.
-- Canonical `FlowDesk/*` Gmail labels, `GmailLabelMapping`, and label projection gated by automation level.
+- Canonical flat Gmail labels (`Needs Reply`, `Waiting On`, …; no `FlowDesk/` prefix), `GmailLabelMapping`, and label projection gated by automation level. Legacy `FlowDesk/*` labels are renamed in place on the next ensure/apply.
 - Gmail-native draft creation and withdrawal through writeback.
 - Waiting-on/follow-up lifecycle: outbound expected-reply detection, inbound self-healing, `Waiting On` and `Follow Up` labels, follow-up cron sweep, and no auto-sent follow-ups.
 - Unified approvals: `ApprovalRequest` is the single approval primitive for proposed drafts and future approval surfaces.
