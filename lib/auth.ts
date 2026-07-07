@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 
 import { prisma } from "@/lib/prisma";
+import { accountModeFor } from "@/lib/tenant-capabilities";
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
@@ -24,7 +25,7 @@ export const authOptions: NextAuthOptions = {
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
-          include: { tenant: { select: { accountType: true } } },
+          include: { tenant: { select: { salesCrmEnabled: true } } },
         });
 
         if (!user) {
@@ -44,7 +45,9 @@ export const authOptions: NextAuthOptions = {
           id: user.id,
           email: user.email,
           tenantId: user.tenantId,
-          accountType: user.tenant.accountType as string,
+          // Session carries the derived internal mode (B2C: sourced from the
+          // salesCrm capability, not the deprecated accountType identity).
+          accountType: accountModeFor(user.tenant),
         };
       },
     }),

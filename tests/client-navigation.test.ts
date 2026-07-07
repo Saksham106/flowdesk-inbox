@@ -54,9 +54,9 @@ describe("conversation inbox return links", () => {
   });
 });
 
-describe("getInboxNavigation (B2C: one control room)", () => {
-  it("returns the universal control-room navigation with Approvals surfaced", () => {
-    expect(getInboxNavigation("personal")).toEqual({
+describe("getInboxNavigation (B2C: baseline + opt-in Sales & CRM)", () => {
+  it("returns the baseline control-room navigation when Sales & CRM is off", () => {
+    expect(getInboxNavigation({ salesCrm: false })).toEqual({
       primary: [
         { label: "Digest", href: "/digest" },
         { label: "Tasks", href: "/tasks" },
@@ -65,15 +65,20 @@ describe("getInboxNavigation (B2C: one control room)", () => {
       secondary: [
         { label: "Approvals", href: "/approvals" },
         { label: "Activity", href: "/audit" },
-        { label: "Meetings", href: "/meetings" },
-        { label: "Knowledge Base", href: "/knowledge-base" },
       ],
     });
   });
 
-  it("ignores account type — the same nav for everyone", () => {
-    const personal = getInboxNavigation("personal");
-    expect(getInboxNavigation("business")).toEqual(personal);
-    expect(getInboxNavigation("unknown")).toEqual(personal);
+  it("adds the Sales & CRM cluster when the capability is enabled", () => {
+    const secondary = getInboxNavigation({ salesCrm: true }).secondary.map((i) => i.href);
+    expect(secondary).toEqual([
+      "/approvals",
+      "/audit",
+      "/leads",
+      "/reports",
+      "/risk-radar",
+      "/meetings",
+      "/knowledge-base",
+    ]);
   });
 });

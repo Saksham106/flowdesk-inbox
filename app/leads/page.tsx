@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { LEAD_SEQUENCE_STEPS, readSequenceState } from "@/lib/agent/lead-sequence"
+import { salesCrmEnabled } from "@/lib/tenant-capabilities"
 import { RescoreButton } from "@/app/leads/RescoreButton"
 
 export const dynamic = "force-dynamic"
@@ -41,9 +42,9 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: session.user.tenantId },
-    select: { accountType: true },
+    select: { salesCrmEnabled: true },
   })
-  if (tenant?.accountType === "personal") redirect("/inbox")
+  if (!salesCrmEnabled(tenant)) redirect("/inbox")
 
   const minScore = Number.isFinite(parseInt(searchParams.minScore ?? "", 10))
     ? parseInt(searchParams.minScore!, 10)

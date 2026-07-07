@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { DEFAULT_CONCIERGE_TEMPLATES, buildTemplateDocument } from "@/lib/agent/concierge-templates"
+import { salesCrmEnabled } from "@/lib/tenant-capabilities"
 
 export async function POST() {
   const session = await getServerSession(authOptions)
@@ -10,13 +11,13 @@ export async function POST() {
 
   const tenantId = session.user.tenantId
 
-  // Only seed for business accounts
+  // Concierge templates are part of the Sales & CRM capability.
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { accountType: true },
+    select: { salesCrmEnabled: true },
   })
-  if (tenant?.accountType === "personal") {
-    return NextResponse.json({ error: "Concierge templates are for business accounts" }, { status: 403 })
+  if (!salesCrmEnabled(tenant)) {
+    return NextResponse.json({ error: "Concierge templates require Sales & CRM mode" }, { status: 403 })
   }
 
   // Only seed if no templates already exist

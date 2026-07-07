@@ -31,6 +31,7 @@ import SalesPanel from "@/app/conversations/[id]/SalesPanel";
 import { SALES_SUGGESTED_ACTIONS } from "@/lib/agent/sales-classifier";
 import EmailBody from "@/app/components/EmailBody";
 import { resolveAccountMode } from "@/lib/account-mode";
+import { accountModeFor } from "@/lib/tenant-capabilities";
 import { getSafeInboxReturnPath } from "@/lib/client-navigation";
 import { markGmailThreadRead } from "@/lib/google"
 import PhishingWarningBanner from "@/app/conversations/[id]/PhishingWarningBanner";
@@ -78,7 +79,7 @@ export default async function ConversationPage({
   ] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: session.user.tenantId },
-      select: { accountType: true },
+      select: { salesCrmEnabled: true },
     }),
     prisma.conversation.findFirst({
       where: {
@@ -205,7 +206,7 @@ export default async function ConversationPage({
     })
   }
 
-  const accountType = tenant?.accountType ?? sessionAccountType ?? "personal";
+  const accountType = tenant ? accountModeFor(tenant) : (sessionAccountType ?? "personal");
   const accountMode = resolveAccountMode(accountType);
   const isPersonal = accountMode === "personal";
   const inboxReturnPath = getSafeInboxReturnPath(searchParams.returnTo);

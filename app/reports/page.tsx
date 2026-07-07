@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { buildWeeklyValueReport, getWeeklyTrend } from "@/lib/agent/value-report"
 import { prisma } from "@/lib/prisma"
+import { salesCrmEnabled } from "@/lib/tenant-capabilities"
 
 export const dynamic = "force-dynamic"
 
@@ -33,9 +34,9 @@ export default async function ReportsPage() {
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { accountType: true },
+    select: { salesCrmEnabled: true },
   })
-  if (tenant?.accountType === "personal") redirect("/inbox")
+  if (!salesCrmEnabled(tenant)) redirect("/inbox")
 
   const report = await buildWeeklyValueReport(tenantId)
 

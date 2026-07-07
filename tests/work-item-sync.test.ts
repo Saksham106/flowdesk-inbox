@@ -97,7 +97,7 @@ describe("syncConversationWorkItems", () => {
     mockLeadFindFirst.mockResolvedValue({ id: "lead-1" })
     mockAuditCreate.mockResolvedValue({})
     mockKbDocFindMany.mockResolvedValue([])
-    mockTenantFindUnique.mockResolvedValue({ accountType: "business" })
+    mockTenantFindUnique.mockResolvedValue({ salesCrmEnabled: true })
     mockConversationUpdate.mockResolvedValue({})
     mockSyncPersonMemoryWithLLM.mockResolvedValue({ status: "llm_completed" })
     mockVipContactFindFirst.mockResolvedValue(null)
@@ -162,7 +162,7 @@ describe("syncConversationWorkItems", () => {
   })
 
   it("does not create lead records for personal accounts", async () => {
-    mockTenantFindUnique.mockResolvedValue({ accountType: "personal" })
+    mockTenantFindUnique.mockResolvedValue({ salesCrmEnabled: false })
 
     const result = await syncConversationWorkItems({
       tenantId: "tenant-1",
@@ -478,7 +478,7 @@ describe("syncConversationWorkItems", () => {
   })
 
   it("persists detectedCode in action metadata when the email contains an OTP", async () => {
-    mockTenantFindUnique.mockResolvedValue({ accountType: "personal" })
+    mockTenantFindUnique.mockResolvedValue({ salesCrmEnabled: false })
     mockConversationFindFirst.mockResolvedValue({
       ...conversation,
       messages: [
@@ -512,7 +512,7 @@ describe("syncConversationWorkItems", () => {
   })
 
   it("skips relationship-memory LLM for OTP emails", async () => {
-    mockTenantFindUnique.mockResolvedValue({ accountType: "personal" })
+    mockTenantFindUnique.mockResolvedValue({ salesCrmEnabled: false })
     mockConversationFindFirst.mockResolvedValue({
       ...conversation,
       label: null,

@@ -27,7 +27,7 @@ describe('getReplyGenerationContext', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('loads business context plus learned style for business tenants', async () => {
-    mockTenantFindUnique.mockResolvedValue({ id: 'tenant-A', accountType: 'business' })
+    mockTenantFindUnique.mockResolvedValue({ id: 'tenant-A', salesCrmEnabled: true })
     mockBusinessProfileFindUnique.mockResolvedValue({ businessName: 'Glow Studio' })
     mockKnowledgeFindMany.mockResolvedValue([{ id: 'doc-1', title: 'Pricing', content: 'Facials start at $199.' }])
     mockProfileFindFirst.mockResolvedValue({ id: 'profile-1', styleSummaryJson: { tone: 'warm' } })
@@ -46,7 +46,7 @@ describe('getReplyGenerationContext', () => {
   })
 
   it('loads learned style without business facts for personal tenants', async () => {
-    mockTenantFindUnique.mockResolvedValue({ id: 'tenant-A', accountType: 'personal' })
+    mockTenantFindUnique.mockResolvedValue({ id: 'tenant-A', salesCrmEnabled: false })
     mockProfileFindFirst.mockResolvedValue({ id: 'profile-2', styleSummaryJson: { tone: 'casual' } })
 
     const context = await getReplyGenerationContext({ tenantId: 'tenant-A', channelId: 'channel-1' })

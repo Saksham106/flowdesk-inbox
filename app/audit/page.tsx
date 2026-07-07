@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { salesCrmEnabled } from "@/lib/tenant-capabilities"
 
 export const dynamic = "force-dynamic"
 
@@ -87,9 +88,9 @@ export default async function AuditPage({ searchParams }: Props) {
   const tenantId = session.user.tenantId
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { accountType: true },
+    select: { salesCrmEnabled: true },
   })
-  const isPersonal = tenant?.accountType === "personal"
+  const isPersonal = !salesCrmEnabled(tenant)
   const auditActionsForPersonal = [
     "conversation.attention_corrected",
     "person_memory.synced",

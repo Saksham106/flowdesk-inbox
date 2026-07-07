@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { accountModeFor } from "@/lib/tenant-capabilities"
 import { getFullBusinessContext } from "@/lib/agent/context"
 import { classifyConversation, tryStaticClassification } from "@/lib/agent/classify"
 import { extractEmail } from "@/lib/google"
@@ -148,7 +149,7 @@ async function _executeJob(
     getFullBusinessContext(job.tenantId),
     prisma.tenant.findUnique({
       where: { id: job.tenantId },
-      select: { accountType: true },
+      select: { salesCrmEnabled: true },
     }),
   ])
 
@@ -216,7 +217,7 @@ async function _executeJob(
     const classifyInput = {
       messages: conversation.messages,
       businessProfile: businessContext.profile,
-      accountType: tenant?.accountType === "personal" ? "personal" as const : "business" as const,
+      accountType: accountModeFor(tenant),
     }
     const classifyPrompt = buildClassifyPrompt(classifyInput)
     const classifyModel = process.env.OPENAI_MODEL || "gpt-4o-mini"
