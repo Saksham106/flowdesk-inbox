@@ -77,7 +77,7 @@ describe("Gmail writeback cron label jobs", () => {
         attempts: 0,
         providerMessageIdsJson: {
           threadId: "thread-1",
-          labels: ["FlowDesk/Needs Reply"],
+          labels: ["Needs Reply"],
         },
       },
     ])
@@ -96,7 +96,7 @@ describe("Gmail writeback cron label jobs", () => {
     expect(mockApplyFlowDeskLabelsToGmailThread).toHaveBeenCalledWith(
       "channel-1",
       "thread-1",
-      ["FlowDesk/Needs Reply"]
+      ["Needs Reply"]
     )
     expect(mockAuditCreate).toHaveBeenCalledWith({
       data: {
@@ -109,7 +109,7 @@ describe("Gmail writeback cron label jobs", () => {
           channelId: "channel-1",
           result: "labels_applied",
           threadId: "thread-1",
-          labels: ["FlowDesk/Needs Reply"],
+          labels: ["Needs Reply"],
         },
       },
     })
@@ -176,7 +176,7 @@ describe("Gmail writeback cron label jobs", () => {
         conversationId: "conv-1",
         action: "apply_labels",
         attempts: 2,
-        providerMessageIdsJson: { threadId: "thread-1", labels: ["FlowDesk/Needs Reply"] },
+        providerMessageIdsJson: { threadId: "thread-1", labels: ["Needs Reply"] },
       },
     ])
     mockApplyFlowDeskLabelsToGmailThread.mockRejectedValue(new Error("still broken"))
@@ -286,7 +286,7 @@ describe("Gmail writeback cron label jobs", () => {
         conversationId: "conv-1",
         action: "apply_labels",
         attempts: 0,
-        providerMessageIdsJson: { labels: ["FlowDesk/Needs Reply"] },
+        providerMessageIdsJson: { labels: ["Needs Reply"] },
       },
     ])
 

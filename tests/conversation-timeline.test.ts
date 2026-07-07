@@ -87,13 +87,13 @@ describe("buildConversationTimeline", () => {
           conversationId: "conv-1",
           action: "apply_labels",
           result: "applied 2 labels",
-          labels: ["FlowDesk/Needs Reply", "FlowDesk/Waiting On"],
+          labels: ["Needs Reply", "Waiting On"],
         },
       }),
     ])
 
     expect(entry.tone).toBe("success")
-    expect(entry.detail).toContain("FlowDesk/Needs Reply")
+    expect(entry.detail).toContain("Needs Reply")
   })
 
   it("marks a failed writeback as danger and surfaces the error", () => {

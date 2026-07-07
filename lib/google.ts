@@ -6,6 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { syncConversationWorkItems } from "@/lib/agent/work-item-sync";
 import {
   FLOWDESK_GMAIL_LABEL_NAMES,
+  LEGACY_FLOWDESK_LABEL_PREFIX,
+  LEGACY_FLOWDESK_LABEL_RENAMES,
   isFlowDeskGmailLabelName,
   type FlowDeskGmailLabelName,
 } from "@/lib/gmail-labels";
@@ -773,6 +775,50 @@ async function getOrCreateFlowDeskLabelIds(
   return ids
 }
 
+// Migrates the pre-flattening "FlowDesk/<name>" nested labels to their new flat
+// names in place: renaming a Gmail label keeps its id and every thread already
+// tagged with it, so users don't lose labels or end up with duplicates. Mutates
+// `existingLabelIdsByName` so callers that computed it can keep using it.
+//
+// If both the legacy and the new label already exist (e.g. the account was
+// partially migrated), the legacy one is left untouched — merging two label ids
+// onto every thread is not worth the extra API cost, and the new one wins going
+// forward. After all children are renamed, an empty "FlowDesk" parent label is
+// removed so it doesn't linger in the label list.
+async function reconcileLegacyFlowDeskLabels(
+  gmail: ReturnType<typeof google.gmail>,
+  existingLabelIdsByName: Map<string, string>
+): Promise<void> {
+  for (const [legacyName, newName] of LEGACY_FLOWDESK_LABEL_RENAMES) {
+    const legacyId = existingLabelIdsByName.get(legacyName)
+    if (!legacyId) continue
+    if (existingLabelIdsByName.has(newName)) continue
+
+    await gmail.users.labels.patch({
+      userId: "me",
+      id: legacyId,
+      requestBody: { name: newName },
+    })
+    existingLabelIdsByName.delete(legacyName)
+    existingLabelIdsByName.set(newName, legacyId)
+  }
+
+  // Remove the now-childless "FlowDesk" parent label. Gmail auto-created it when
+  // the first "FlowDesk/<name>" child was made; only delete it once nothing else
+  // lives under the namespace.
+  const parentName = LEGACY_FLOWDESK_LABEL_PREFIX.replace(/\/$/, "")
+  const parentId = existingLabelIdsByName.get(parentName)
+  if (parentId) {
+    const hasRemainingChildren = Array.from(existingLabelIdsByName.keys()).some(
+      (name) => name.startsWith(LEGACY_FLOWDESK_LABEL_PREFIX)
+    )
+    if (!hasRemainingChildren) {
+      await gmail.users.labels.delete({ userId: "me", id: parentId })
+      existingLabelIdsByName.delete(parentName)
+    }
+  }
+}
+
 // An empty `labels` array is a valid input meaning "remove every FlowDesk label
 // from this thread" — used when a conversation transitions to a no-label state.
 export async function applyFlowDeskLabelsToGmailThread(
@@ -784,6 +830,7 @@ export async function applyFlowDeskLabelsToGmailThread(
 
   const gmail = await getGmailClient(channelId)
   const existingLabelIdsByName = await listGmailLabels(gmail)
+  await reconcileLegacyFlowDeskLabels(gmail, existingLabelIdsByName)
   const labelIds = await getOrCreateFlowDeskLabelIds(gmail, existingLabelIdsByName, requestedLabels)
 
   const addLabelIds = requestedLabels
@@ -810,6 +857,7 @@ export async function applyFlowDeskLabelsToGmailThread(
 export async function ensureFlowDeskLabels(channelId: string): Promise<void> {
   const gmail = await getGmailClient(channelId)
   const existingLabelIdsByName = await listGmailLabels(gmail)
+  await reconcileLegacyFlowDeskLabels(gmail, existingLabelIdsByName)
   await getOrCreateFlowDeskLabelIds(gmail, existingLabelIdsByName, [...FLOWDESK_GMAIL_LABEL_NAMES])
 }
 

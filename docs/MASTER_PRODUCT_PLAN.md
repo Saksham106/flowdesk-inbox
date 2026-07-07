@@ -126,7 +126,7 @@ Shared inboxes, assignments, comments, collision detection, roles, permissions, 
 | 39 | Auto-Personalized Outreach | `Later` | Valuable, but avoid spam positioning. |
 | 40 | Email Triage by Money Impact | `Shipped` | Revenue-weighted score bonus in command center; Revenue at Risk subsection for stale high-value leads. |
 | 41 | Clean My Inbox | `Shipped` | /clean-inbox page, batch archive/unsubscribe, 1-hour undo via AuditLog. |
-| 42 | Gmail-Native Smart Labels | `Partial` | Canonical `FlowDesk/*` label vocabulary, state mapping, queued Gmail label writeback, and audit events shipped. Label bootstrap, classification-triggered projection, settings, and explainability remain. |
+| 42 | Gmail-Native Smart Labels | `Partial` | Canonical flat label vocabulary (`Needs Reply`, `Waiting On`, …; no `FlowDesk/` prefix, legacy labels renamed in place), state mapping, queued Gmail label writeback, and audit events shipped. Label bootstrap, classification-triggered projection, settings, and explainability remain. |
 | 43 | Ask My Inbox Chat | `Partial` | Budget-metered streaming RAG pipeline, /chat page, SSE route; action-taking answers remain later. |
 | 44 | Trust, Privacy, and Audit Log | `Partial` | Audit log and undo for reversible autopilot approvals; broader coverage remains. |
 | 45 | Paid Packaging | `Discovery` | Use as product packaging decision, not an engineering feature. |

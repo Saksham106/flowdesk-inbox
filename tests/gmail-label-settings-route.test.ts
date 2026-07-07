@@ -68,17 +68,17 @@ describe("GET /api/gmail-label-settings", () => {
 
   it("returns all canonical labels, defaulting missing ones to enabled", async () => {
     mockLabelMappingFindMany.mockResolvedValue([
-      { canonical: "FlowDesk/Low Priority", enabled: false },
+      { canonical: "Low Priority", enabled: false },
     ])
     const res = (await GET()) as unknown as {
       body: { labels: Array<{ canonical: string; enabled: boolean }> }
     }
     expect(res.body.labels).toHaveLength(9)
     const lowPriority = res.body.labels.find(
-      (l) => l.canonical === "FlowDesk/Low Priority"
+      (l) => l.canonical === "Low Priority"
     )
     const needsReply = res.body.labels.find(
-      (l) => l.canonical === "FlowDesk/Needs Reply"
+      (l) => l.canonical === "Needs Reply"
     )
     expect(lowPriority?.enabled).toBe(false)
     expect(needsReply?.enabled).toBe(true)
@@ -94,7 +94,7 @@ describe("PATCH /api/gmail-label-settings", () => {
 
   it("rejects an unknown label", async () => {
     const res = (await PATCH(
-      makeReq({ canonical: "FlowDesk/Nope", enabled: false })
+      makeReq({ canonical: "Nope", enabled: false })
     )) as unknown as { status: number }
     expect(res.status).toBe(400)
     expect(mockTransaction).not.toHaveBeenCalled()
@@ -102,14 +102,14 @@ describe("PATCH /api/gmail-label-settings", () => {
 
   it("rejects a non-boolean enabled", async () => {
     const res = (await PATCH(
-      makeReq({ canonical: "FlowDesk/Needs Reply", enabled: "yes" })
+      makeReq({ canonical: "Needs Reply", enabled: "yes" })
     )) as unknown as { status: number }
     expect(res.status).toBe(400)
   })
 
   it("upserts the mapping and writes an audit event", async () => {
     const res = (await PATCH(
-      makeReq({ canonical: "FlowDesk/Low Priority", enabled: false })
+      makeReq({ canonical: "Low Priority", enabled: false })
     )) as unknown as { status: number; body: { ok: boolean } }
     expect(res.status).toBe(200)
     expect(res.body.ok).toBe(true)
@@ -117,12 +117,12 @@ describe("PATCH /api/gmail-label-settings", () => {
       where: {
         tenantId_canonical: {
           tenantId: "tenant-1",
-          canonical: "FlowDesk/Low Priority",
+          canonical: "Low Priority",
         },
       },
       create: {
         tenantId: "tenant-1",
-        canonical: "FlowDesk/Low Priority",
+        canonical: "Low Priority",
         enabled: false,
       },
       update: { enabled: false },

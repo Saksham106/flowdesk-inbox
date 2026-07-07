@@ -59,22 +59,22 @@ describe("filterEnabledFlowDeskLabels", () => {
   it("keeps all labels when the tenant has no mapping rows", async () => {
     mockLabelMappingFindMany.mockResolvedValue([])
     const result = await filterEnabledFlowDeskLabels("tenant-1", [
-      "FlowDesk/Needs Reply",
-      "FlowDesk/Needs Action",
+      "Needs Reply",
+      "Needs Action",
     ])
-    expect(result).toEqual(["FlowDesk/Needs Reply", "FlowDesk/Needs Action"])
+    expect(result).toEqual(["Needs Reply", "Needs Action"])
   })
 
   it("drops labels the tenant has explicitly disabled", async () => {
     mockLabelMappingFindMany.mockResolvedValue([
-      { canonical: "FlowDesk/Needs Action", enabled: false },
-      { canonical: "FlowDesk/Needs Reply", enabled: true },
+      { canonical: "Needs Action", enabled: false },
+      { canonical: "Needs Reply", enabled: true },
     ])
     const result = await filterEnabledFlowDeskLabels("tenant-1", [
-      "FlowDesk/Needs Reply",
-      "FlowDesk/Needs Action",
+      "Needs Reply",
+      "Needs Action",
     ])
-    expect(result).toEqual(["FlowDesk/Needs Reply"])
+    expect(result).toEqual(["Needs Reply"])
   })
 })
 
@@ -129,7 +129,7 @@ describe("projectFlowDeskLabelsForConversation", () => {
       action: "apply_labels",
     })
     expect(upsertArg.create.providerMessageIdsJson.labels).toEqual(
-      expect.arrayContaining(["FlowDesk/Needs Reply", "FlowDesk/Needs Action"])
+      expect.arrayContaining(["Needs Reply", "Needs Action"])
     )
     expect(upsertArg.create.providerMessageIdsJson.threadId).toBe("thread-1")
   })
@@ -206,8 +206,8 @@ describe("projectFlowDeskLabelsForConversation", () => {
     })
 
     const upsertArg = mockWritebackUpsert.mock.calls[0][0]
-    expect(upsertArg.create.providerMessageIdsJson.labels).toContain("FlowDesk/Read Later")
-    expect(upsertArg.create.providerMessageIdsJson.labels).not.toContain("FlowDesk/Needs Reply")
+    expect(upsertArg.create.providerMessageIdsJson.labels).toContain("Read Later")
+    expect(upsertArg.create.providerMessageIdsJson.labels).not.toContain("Needs Reply")
   })
 
   it("adds Follow Up for a waiting-on conversation past the tenant delay", async () => {
@@ -226,7 +226,7 @@ describe("projectFlowDeskLabelsForConversation", () => {
 
     const upsertArg = mockWritebackUpsert.mock.calls[0][0]
     expect(upsertArg.create.providerMessageIdsJson.labels).toEqual(
-      expect.arrayContaining(["FlowDesk/Waiting On", "FlowDesk/Follow Up"])
+      expect.arrayContaining(["Waiting On", "Follow Up"])
     )
   })
 
@@ -244,14 +244,14 @@ describe("projectFlowDeskLabelsForConversation", () => {
     })
 
     const upsertArg = mockWritebackUpsert.mock.calls[0][0]
-    expect(upsertArg.create.providerMessageIdsJson.labels).toEqual(["FlowDesk/Waiting On"])
+    expect(upsertArg.create.providerMessageIdsJson.labels).toEqual(["Waiting On"])
   })
 
   it("does not queue an empty label set for a thread that was never labeled", async () => {
     mockConversationFindFirst.mockResolvedValue(GOOGLE_CONVERSATION)
     mockLabelMappingFindMany.mockResolvedValue([
-      { canonical: "FlowDesk/Needs Reply", enabled: false },
-      { canonical: "FlowDesk/Needs Action", enabled: false },
+      { canonical: "Needs Reply", enabled: false },
+      { canonical: "Needs Action", enabled: false },
     ])
     mockWritebackFindUnique.mockResolvedValue(null)
 
@@ -267,8 +267,8 @@ describe("projectFlowDeskLabelsForConversation", () => {
   it("queues an empty label set (remove all) for a previously labeled thread", async () => {
     mockConversationFindFirst.mockResolvedValue(GOOGLE_CONVERSATION)
     mockLabelMappingFindMany.mockResolvedValue([
-      { canonical: "FlowDesk/Needs Reply", enabled: false },
-      { canonical: "FlowDesk/Needs Action", enabled: false },
+      { canonical: "Needs Reply", enabled: false },
+      { canonical: "Needs Action", enabled: false },
     ])
     mockWritebackFindUnique.mockResolvedValue({ id: "job-prior" })
 

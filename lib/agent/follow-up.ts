@@ -217,7 +217,7 @@ export type FollowUpLabelSweepResult = {
 /**
  * Marks overdue waiting-on conversations as follow-up due by re-projecting
  * their Gmail labels (the projection itself derives `followUpDue`, adding
- * "FlowDesk/Follow Up"). Nothing else triggers a projection when time passes,
+ * the "Follow Up" label). Nothing else triggers a projection when time passes,
  * so the follow-up cron runs this sweep.
  *
  * Runs for every tenant — deliberately NOT gated on FollowUpSetting.enabled,
@@ -266,7 +266,7 @@ export async function runFollowUpLabelSweep(now = new Date()): Promise<FollowUpL
         const payload = row.providerMessageIdsJson
         if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false
         const labels = (payload as Record<string, unknown>).labels
-        return Array.isArray(labels) && labels.includes("FlowDesk/Follow Up")
+        return Array.isArray(labels) && labels.includes("Follow Up")
       })
       .map((row) => row.conversationId)
   )

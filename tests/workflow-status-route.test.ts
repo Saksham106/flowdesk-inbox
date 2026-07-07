@@ -139,13 +139,13 @@ describe("PATCH /api/conversations/[id]/workflow-status", () => {
         action: "apply_labels",
         providerMessageIdsJson: expect.objectContaining({
           threadId: "thread-1",
-          labels: ["FlowDesk/Handled"],
+          labels: ["Handled"],
         }),
       }),
       update: expect.objectContaining({
         providerMessageIdsJson: expect.objectContaining({
           threadId: "thread-1",
-          labels: ["FlowDesk/Handled"],
+          labels: ["Handled"],
         }),
       }),
     })
@@ -163,7 +163,7 @@ describe("PATCH /api/conversations/[id]/workflow-status", () => {
       userState: "waiting_on",
     })
     expect(mockWritebackUpsert.mock.calls[0][0].create.providerMessageIdsJson.labels).toEqual([
-      "FlowDesk/Waiting On",
+      "Waiting On",
     ])
   })
 
