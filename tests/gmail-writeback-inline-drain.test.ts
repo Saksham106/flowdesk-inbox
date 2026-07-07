@@ -44,7 +44,7 @@ const JOB = {
   conversationId: "conv-1",
   action: "apply_labels",
   attempts: 0,
-  providerMessageIdsJson: { threadId: "thread-1", labels: ["FlowDesk/Needs Reply"] },
+  providerMessageIdsJson: { threadId: "thread-1", labels: ["Needs Reply"] },
 }
 
 describe("processGmailWritebackJobById (inline drain)", () => {
@@ -68,7 +68,7 @@ describe("processGmailWritebackJobById (inline drain)", () => {
     expect(mockApplyFlowDeskLabelsToGmailThread).toHaveBeenCalledWith(
       "channel-1",
       "thread-1",
-      ["FlowDesk/Needs Reply"]
+      ["Needs Reply"]
     )
     expect(mockWritebackUpdate).toHaveBeenCalledWith({
       where: { id: "job-1" },
