@@ -74,6 +74,7 @@ export default async function ConversationPage({
     pendingApprovals,
     needsReplyCount,
     gmailChannels,
+    railPendingApprovals,
   ] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: session.user.tenantId },
@@ -131,6 +132,9 @@ export default async function ConversationPage({
         },
       },
       orderBy: { createdAt: "asc" },
+    }),
+    prisma.approvalRequest.count({
+      where: { tenantId: session.user.tenantId, status: "pending" },
     }),
   ]);
 
@@ -646,7 +650,7 @@ export default async function ConversationPage({
 
       {/* ── DESKTOP SHELL (lg+) ── */}
       <div className="hidden lg:flex h-screen overflow-hidden bg-slate-50">
-        <AppRail needsReplyCount={needsReplyCount} accountType={accountType} />
+        <AppRail needsReplyCount={needsReplyCount} pendingApprovals={railPendingApprovals} />
         <DesktopResizablePanels
           storageKey="flowdesk.conversation.desktopPanels"
           left={

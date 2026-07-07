@@ -2,35 +2,24 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useState } from "react"
 
 interface Props {
   needsReplyCount: number
-  accountType: string | null
+  pendingApprovals: number
 }
 
-const BUSINESS_OVERFLOW = [
-  { label: "Leads", href: "/leads" },
-  { label: "Approvals", href: "/approvals" },
-  { label: "Risk Radar", href: "/risk-radar" },
-  { label: "Reports", href: "/reports" },
-  { label: "Meetings", href: "/meetings" },
-  { label: "Knowledge Base", href: "/knowledge-base" },
-  { label: "Audit", href: "/audit" },
-]
-
-export default function AppRail({ needsReplyCount, accountType }: Props) {
+export default function AppRail({ needsReplyCount, pendingApprovals }: Props) {
   const pathname = usePathname()
-  const [overflowOpen, setOverflowOpen] = useState(false)
 
   const isEmailSection =
     pathname === "/inbox" || pathname.startsWith("/conversations/")
+  const isApprovals = pathname === "/approvals"
+  const isActivity = pathname === "/audit"
   const isTasks = pathname === "/tasks"
   const isSearch = pathname === "/search"
   const isChat = pathname === "/chat"
   const isCleanInbox = pathname === "/clean-inbox"
   const isSettings = pathname === "/settings"
-  const isBusiness = accountType === "business"
 
   return (
     <nav className="flex h-full w-14 shrink-0 flex-col items-center bg-slate-900 py-3 gap-1">
@@ -44,7 +33,7 @@ export default function AppRail({ needsReplyCount, accountType }: Props) {
         F
       </Link>
 
-      {/* Home / email section */}
+      {/* Control room / home */}
       <RailLink
         href="/inbox"
         active={isEmailSection}
@@ -52,6 +41,21 @@ export default function AppRail({ needsReplyCount, accountType }: Props) {
         label="Home"
       >
         <HomeIcon />
+      </RailLink>
+
+      {/* Approvals — first-class supervision surface for every user */}
+      <RailLink
+        href="/approvals"
+        active={isApprovals}
+        badge={pendingApprovals > 0 ? pendingApprovals : undefined}
+        label="Approve"
+      >
+        <ApprovalsIcon />
+      </RailLink>
+
+      {/* Activity / audit timeline */}
+      <RailLink href="/audit" active={isActivity} label="Activity">
+        <ActivityIcon />
       </RailLink>
 
       {/* Tasks */}
@@ -75,36 +79,6 @@ export default function AppRail({ needsReplyCount, accountType }: Props) {
       </RailLink>
 
       <div className="flex-1" />
-
-      {/* Business overflow */}
-      {isBusiness && (
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setOverflowOpen((v) => !v)}
-            className={`flex h-9 w-10 flex-col items-center justify-center gap-0.5 rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 ${overflowOpen ? "bg-slate-800 text-slate-200" : ""}`}
-            aria-label="More"
-          >
-            <span className="block h-1 w-1 rounded-full bg-current" />
-            <span className="block h-1 w-1 rounded-full bg-current" />
-            <span className="block h-1 w-1 rounded-full bg-current" />
-          </button>
-          {overflowOpen && (
-            <div className="absolute bottom-full left-full z-50 mb-1 ml-1 min-w-40 overflow-hidden rounded-lg border border-slate-700 bg-slate-800 py-1 shadow-xl">
-              {BUSINESS_OVERFLOW.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setOverflowOpen(false)}
-                  className="block px-3 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white"
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Settings */}
       <RailLink href="/settings" active={isSettings} label="Settings">
@@ -153,6 +127,23 @@ function HomeIcon() {
     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
       <polyline strokeLinecap="round" strokeLinejoin="round" points="9,22 9,12 15,12 15,22" />
+    </svg>
+  )
+}
+
+function ApprovalsIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
+      <circle cx="12" cy="12" r="9" />
+    </svg>
+  )
+}
+
+function ActivityIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M22 12h-4l-3 9L9 3l-3 9H2" />
     </svg>
   )
 }

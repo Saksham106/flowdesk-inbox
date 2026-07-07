@@ -54,38 +54,26 @@ describe("conversation inbox return links", () => {
   });
 });
 
-describe("getInboxNavigation", () => {
-  it("keeps personal account navigation focused on personal inbox work", () => {
+describe("getInboxNavigation (B2C: one control room)", () => {
+  it("returns the universal control-room navigation with Approvals surfaced", () => {
     expect(getInboxNavigation("personal")).toEqual({
       primary: [
         { label: "Digest", href: "/digest" },
         { label: "Tasks", href: "/tasks" },
         { label: "Settings", href: "/settings" },
       ],
-      secondary: [],
-    });
-  });
-
-  it("groups business-only tools behind secondary navigation", () => {
-    expect(getInboxNavigation("business")).toEqual({
-      primary: [
-        { label: "Digest", href: "/digest" },
-        { label: "Tasks", href: "/tasks" },
-      ],
       secondary: [
-        { label: "Leads", href: "/leads" },
         { label: "Approvals", href: "/approvals" },
-        { label: "Risk Radar", href: "/risk-radar" },
-        { label: "Reports", href: "/reports" },
+        { label: "Activity", href: "/audit" },
         { label: "Meetings", href: "/meetings" },
         { label: "Knowledge Base", href: "/knowledge-base" },
-        { label: "Audit", href: "/audit" },
-        { label: "Settings", href: "/settings" },
       ],
     });
   });
 
-  it("defaults unknown account types to the personal-safe navigation", () => {
-    expect(getInboxNavigation("unknown")).toEqual(getInboxNavigation("personal"));
+  it("ignores account type — the same nav for everyone", () => {
+    const personal = getInboxNavigation("personal");
+    expect(getInboxNavigation("business")).toEqual(personal);
+    expect(getInboxNavigation("unknown")).toEqual(personal);
   });
 });

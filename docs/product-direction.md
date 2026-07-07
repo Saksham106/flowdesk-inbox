@@ -227,7 +227,24 @@ FlowDesk should win by being the controllable AI operator layer on top of Gmail:
 - Tracks waiting-on/follow-up states.
 - Gives a transparent audit trail.
 - Has automation levels so users can gradually increase trust.
-- Supports both personal and business workflows.
+- Adapts to each individual's use case (see Audience below).
+
+## Audience: B2C (individuals)
+
+FlowDesk is a B2C product: we sell to individual people, not organizations.
+There is no "business account" as a distinct mode. Every user gets the same
+control room and can customize it to their own use case.
+
+Implications:
+
+- One universal experience. Navigation, the home control room, and copy are the
+  same for everyone — no `personal` vs `business` account branching in the UI.
+- Formerly business-only capabilities (Leads, Risk Radar, Reports, sales-signal
+  classification, CRM framing) become **opt-in features any user can enable**,
+  default off, rather than gated behind an account type.
+- The `Tenant.accountType` split is being removed. Phase 1 (this milestone)
+  unifies navigation and the home view; a follow-up removes `accountType` from
+  the AI prompts, sync layer, schema, and the lead/sales modules.
 
 ## Automation levels
 
@@ -408,7 +425,8 @@ Recommended order:
 
 ## Open questions
 
-- Are we targeting individuals first, small businesses first, or shared/team inboxes first?
+- Resolved: targeting individuals (B2C). See "Audience: B2C" above. Team/shared
+  inboxes are out of scope.
 - Should FlowDesk support Outlook soon or stay Gmail-only until PMF?
 - Should the Chrome extension be part of MVP or wait until Gmail-native API actions are validated?
 - What automation level should be default for first-time users?
