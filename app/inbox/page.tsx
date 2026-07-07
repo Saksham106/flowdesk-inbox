@@ -19,6 +19,7 @@ import GmailSyncControl from "@/app/components/GmailSyncControl";
 import { buildDailyCommandCenter, buildBillsSection, CommandCenterInputConversation, PersistedCommandCenterState, CommandCenterState, CommandCenterPriority, type AgentSummary, type BillsSection } from "@/lib/agent/command-center";
 import { analyzeRevenueAtRisk } from "@/lib/agent/revenue-at-risk";
 import { AppNavigationItem, getInboxNavigation } from "@/lib/app-navigation";
+import { getAutomationLevel, AUTOMATION_LEVEL_DEFAULT } from "@/lib/agent/automation-level";
 import { buildConversationHref } from "@/lib/client-navigation";
 import { stripHtmlToText } from "@/lib/email-body";
 import { isFyiConversation } from "@/lib/inbox-fyi";
@@ -323,6 +324,18 @@ async function renderInboxPage(
     learnedRecentlyUpdated: learnedProfile !== null,
   }
 
+  // Control-room supervision counts. Pending approvals badges the rail on every
+  // view; the automation level and active-rule count drive the home pillars.
+  const pendingApprovals = await prisma.approvalRequest.count({
+    where: { tenantId, status: "pending" },
+  })
+  const [automationLevel, activeRulesCount] = isHomeView
+    ? await Promise.all([
+        getAutomationLevel(tenantId),
+        prisma.agentRule.count({ where: { tenantId, status: "active" } }),
+      ])
+    : ([AUTOMATION_LEVEL_DEFAULT, 0] as const)
+
 
 
   const displayConversations = salesFilter
@@ -442,7 +455,7 @@ async function renderInboxPage(
 
       {/* ── DESKTOP SHELL (lg+) ── */}
       <div className="hidden lg:flex h-screen overflow-hidden bg-slate-50">
-        <AppRail needsReplyCount={needsReplyCount} accountType={accountType} />
+        <AppRail needsReplyCount={needsReplyCount} pendingApprovals={pendingApprovals} />
         <DesktopResizablePanels
           storageKey="flowdesk.inbox.desktopPanels"
           left={
@@ -468,6 +481,10 @@ async function renderInboxPage(
                 gmailChannels={gmailSyncChannels}
                 billsSection={billsSection}
                 followUpDelayBusinessDays={followUpSetting?.staleAfterDays}
+                automationLevel={automationLevel}
+                pendingApprovals={pendingApprovals}
+                activeRulesCount={activeRulesCount}
+                hasGmail={gmailSyncChannels.length > 0}
               />
             ) : (
               <div className="flex h-full items-center justify-center">
@@ -492,11 +509,11 @@ async function renderInboxPage(
           <div className="mx-auto max-w-5xl px-4 sm:px-6">
             <div className="flex items-center justify-between py-4">
               <div className="min-w-0">
-                <h1 className="text-xl font-semibold">Inbox</h1>
+                <h1 className="text-xl font-semibold">Control room</h1>
                 <p className="text-sm text-slate-500">
                   {needsReplyCount > 0 ? (
                     <span className="font-medium text-red-600">
-                      {needsReplyCount} need{needsReplyCount === 1 ? "s" : ""} reply
+                      {needsReplyCount} to handle
                     </span>
                   ) : (
                     "All caught up"
@@ -615,6 +632,10 @@ async function renderInboxPage(
                   gmailChannels={gmailSyncChannels}
                   billsSection={billsSection}
                   followUpDelayBusinessDays={followUpSetting?.staleAfterDays}
+                  automationLevel={automationLevel}
+                  pendingApprovals={pendingApprovals}
+                  activeRulesCount={activeRulesCount}
+                  hasGmail={gmailSyncChannels.length > 0}
                 />
               )}
               <BulkCloseButton />
