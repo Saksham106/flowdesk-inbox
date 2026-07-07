@@ -7,6 +7,7 @@ import { buildBatchToken } from "@/lib/clean-inbox-token"
 import { isSafeUnsubscribeUrl } from "@/lib/agent/unsubscribe"
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
 import { revalidateInboxViews } from "@/lib/cache-tags"
+import { archiveConversationsInGmail } from "@/lib/clean-inbox-gmail"
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions)
@@ -19,7 +20,10 @@ export async function POST(request: Request) {
 
   const convs = await prisma.conversation.findMany({
     where: { id: { in: conversationIds }, tenantId },
-    include: { stateRecord: { select: { metadataJson: true } } },
+    include: {
+      stateRecord: { select: { metadataJson: true } },
+      channel: { select: { provider: true } },
+    },
   })
 
   let unsubscribed = 0
@@ -99,6 +103,10 @@ export async function POST(request: Request) {
     }),
   ])
 
+  // Archive the threads in Gmail too (best-effort), so "unsubscribe + archive"
+  // clears the real inbox rather than only closing the FlowDesk row.
+  const gmailArchive = await archiveConversationsInGmail(convs)
+
   const batchToken = buildBatchToken(ids)
   await prisma.auditLog.create({
     data: {
@@ -109,6 +117,8 @@ export async function POST(request: Request) {
         conversationIds: ids,
         previousStatuses: Object.fromEntries(convs.map((c) => [c.id, c.status])),
         unsubscribed,
+        gmailArchived: gmailArchive.archived,
+        gmailArchiveFailed: gmailArchive.failed,
       } as Prisma.InputJsonValue,
     },
   })

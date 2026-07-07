@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client"
 import { parseBatchToken } from "@/lib/clean-inbox-token"
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
 import { revalidateInboxViews } from "@/lib/cache-tags"
+import { restoreConversationsInGmail } from "@/lib/clean-inbox-gmail"
 
 export async function POST(
   _request: Request,
@@ -38,7 +39,13 @@ export async function POST(
       : {}
   const conversations = await prisma.conversation.findMany({
     where: { id: { in: ids }, tenantId },
-    select: { id: true, stateRecord: { select: { metadataJson: true } } },
+    select: {
+      id: true,
+      channelId: true,
+      externalThreadId: true,
+      channel: { select: { provider: true } },
+      stateRecord: { select: { metadataJson: true } },
+    },
   })
   const now = new Date()
 
@@ -102,11 +109,19 @@ export async function POST(
     })
   )
 
+  // Bring the threads back into the Gmail inbox (re-add INBOX). Best-effort.
+  const gmailRestore = await restoreConversationsInGmail(conversations)
+
   await prisma.auditLog.create({
     data: {
       tenantId,
       action: "clean_inbox.undo",
-      payloadJson: { batchToken: params.batchToken, restoredCount: conversations.length } as Prisma.InputJsonValue,
+      payloadJson: {
+        batchToken: params.batchToken,
+        restoredCount: conversations.length,
+        gmailRestored: gmailRestore.archived,
+        gmailRestoreFailed: gmailRestore.failed,
+      } as Prisma.InputJsonValue,
     },
   })
 
