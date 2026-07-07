@@ -64,7 +64,7 @@ Status: Core shipped. Remaining work is hardening, reconciliation, correctness, 
 
 ## Phase 2: AI Rules And User-Controlled Automation
 
-Status: P0 largely shipped 2026-07-07 (static-first evaluation, dry-run preview, rule versioning + execution history). Remaining P0: the "why this automation fired" control-room UI, which depends on the writeback audit-linking work.
+Status: P0 shipped 2026-07-07 (static-first evaluation, dry-run preview, rule versioning + execution history, and the "why this automation fired" control-room UI — per-conversation timeline plus audit-page surfacing).
 
 ### P0
 
@@ -74,9 +74,9 @@ Status: P0 largely shipped 2026-07-07 (static-first evaluation, dry-run preview,
   - Shipped: `POST /api/agent-rules/dry-run` (bounded 200-conversation sample; matched/skipped, evidence, planned attention/status/Gmail labels with automation-level applicability; zero mutations, one audit row). Draft rules cannot be enabled before a dry-run. UI in `app/settings/SenderRulesPanel.tsx`.
 - [x] Version rules and preserve execution history.
   - Shipped: `version` on `AgentRule`/`SenderRule`; prior versions snapshotted to AuditLog (`agent_rule.version_snapshot`) on behavior-changing edits; `GET /api/agent-rules/[id]/versions`; executions record rule id/version (AgentToolCall output, `agent_job.completed` payload). Chose AuditLog metadata over a new table.
-- Show "why this automation fired" in the control room.
-  - Backend metadata now exists (rule id/version/evidence in audits); the UI surfacing remains.
-  - Areas: `app/components/AgentActivitySection.tsx`, `app/conversations/[id]/ExplainThreadPanel.tsx`, `app/audit/page.tsx`.
+- [x] Show "why this automation fired" in the control room.
+  - Shipped: per-conversation **"What FlowDesk did"** timeline (`lib/agent/conversation-timeline.ts` — pure/unit-tested; `app/conversations/[id]/ConversationTimeline.tsx`) reads the thread's audit rows (`payloadJson.conversationId`) and renders each action's "why": static rule id/version/evidence, AI confidence, or the acting user. The global `/audit` page now lists the writeback/label/waiting-on/automation-level actions and renders the rule/AI "why" in its Why column. Unmapped/noise actions are omitted so the timeline stays trustworthy.
+  - Remaining: draft-source/prompt-input evidence lives with P1 draft-learning; correction-history as its own view is still open.
 
 ### P1
 
