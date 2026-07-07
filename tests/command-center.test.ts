@@ -133,6 +133,63 @@ describe("analyzeConversationForCommandCenter", () => {
     expect(result.state).toBe("done")
     expect(result.safelyIgnored).toBe(true)
   })
+
+  it("keeps a user-done conversation done even if a draft is resurrected", () => {
+    // Regression: draft-ready used to be checked before userState, so a
+    // re-created draft could resurface a conversation the user marked done.
+    const result = analyzeConversationForCommandCenter(
+      conversation({
+        status: "closed",
+        userState: "done",
+        draft: { status: "proposed" },
+      }),
+      now
+    )
+
+    expect(result.state).toBe("done")
+    expect(result.priority).toBe("none")
+    expect(result.safelyIgnored).toBe(true)
+    expect(result.needsAction).toBe(false)
+  })
+
+  it("keeps a user-waiting-on conversation from being outranked by a resurrected draft", () => {
+    const result = analyzeConversationForCommandCenter(
+      conversation({
+        status: "in_progress",
+        userState: "waiting_on",
+        draft: { status: "proposed" },
+      }),
+      now
+    )
+
+    expect(result.state).toBe("waiting_on_them")
+    expect(result.priority).toBe("low")
+  })
+
+  it("suppresses needsAction for a done conversation even with stale needs_action metadata", () => {
+    const result = analyzeConversationForCommandCenter(
+      conversation({
+        status: "closed",
+        userState: "done",
+        conversationState: { metadataJson: { attentionCategory: "needs_action" } },
+      }),
+      now
+    )
+
+    expect(result.needsAction).toBe(false)
+  })
+
+  it("treats an explicit read_later userState as readLater even without matching metadata", () => {
+    const result = analyzeConversationForCommandCenter(
+      conversation({
+        status: "in_progress",
+        userState: "read_later",
+      }),
+      now
+    )
+
+    expect(result.readLater).toBe(true)
+  })
 })
 
 describe("buildDailyCommandCenter", () => {

@@ -29,6 +29,13 @@ vi.mock("@/lib/prisma", () => ({
   },
 }))
 
+// The inline writeback drain (lib/agent/gmail-writeback-processor.ts) is a
+// separate concern from label projection/queueing — stub it out so these
+// tests aren't exercising real Gmail-API-adjacent code.
+vi.mock("@/lib/agent/gmail-writeback-processor", () => ({
+  processGmailWritebackJobById: vi.fn().mockResolvedValue({ ok: true }),
+}))
+
 import {
   filterEnabledFlowDeskLabels,
   projectFlowDeskLabelsForConversation,
@@ -125,6 +132,18 @@ describe("projectFlowDeskLabelsForConversation", () => {
       expect.arrayContaining(["FlowDesk/Needs Reply", "FlowDesk/Needs Action"])
     )
     expect(upsertArg.create.providerMessageIdsJson.threadId).toBe("thread-1")
+  })
+
+  it("drains the queued job inline instead of waiting for the next cron tick", async () => {
+    const { processGmailWritebackJobById } = await import("@/lib/agent/gmail-writeback-processor")
+    mockConversationFindFirst.mockResolvedValue(GOOGLE_CONVERSATION)
+
+    await projectFlowDeskLabelsForConversation({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+    })
+
+    expect(processGmailWritebackJobById).toHaveBeenCalledWith("job-1")
   })
 
   it("resets retry state when refreshing an existing label writeback", async () => {
