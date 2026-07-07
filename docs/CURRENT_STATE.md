@@ -84,6 +84,7 @@ A per-tenant automation level (`AutopilotSetting.automationLevel`, 0–5) is the
 - **Quietly Handled**: "Review all" links to `/inbox?status=closed` so users see the closed/quietly-handled conversations, not an unfiltered inbox.
 - Stat pills (Handle First, Waiting On, Read Later, Quietly Handled) pull counts from the `DailyCommandCenter` built by `lib/agent/command-center.ts`. Handle First count equals `topActions.length` so it always matches the items shown.
 - Support and Scheduling panel request loading states clear through `finally` blocks, so failed `fetch`/JSON parsing paths no longer leave buttons stuck in a loading state.
+- **"What FlowDesk did" timeline** (`app/conversations/[id]/ConversationTimeline.tsx`): each conversation's right rail shows a newest-first timeline of what the agent did to that thread — classified/labeled/drafted/sent, Gmail writeback results, waiting-on/follow-up transitions, and user corrections — each with its "why": static rule id/version/evidence, AI confidence, or the acting user. Built by the pure, unit-tested `buildConversationTimeline` (`lib/agent/conversation-timeline.ts`), which maps the thread's audit rows (queried by `payloadJson.conversationId`); unmapped/noise audit actions are omitted so the timeline stays trustworthy rather than a raw audit dump. The global `/audit` page lists the same writeback/label/waiting-on/automation-level actions and renders the rule/AI "why" in its Why column.
 
 ### Work items and classification persistence
 

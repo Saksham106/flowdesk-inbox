@@ -42,6 +42,8 @@ import SchedulingPanel from "@/app/conversations/[id]/SchedulingPanel";
 import AutomationRunHistory from "@/app/conversations/[id]/AutomationRunHistory";
 import type { ProposedSlot } from "@/lib/agent/scheduling";
 import type { AutomationStep } from "@/lib/agent/automation-runner";
+import { buildConversationTimeline } from "@/lib/agent/conversation-timeline";
+import ConversationTimeline from "@/app/conversations/[id]/ConversationTimeline";
 
 export const revalidate = 60;
 
@@ -136,7 +138,7 @@ export default async function ConversationPage({
     notFound();
   }
 
-  const [schedulingSession, automationRuns, calendarCredentials] = await Promise.all([
+  const [schedulingSession, automationRuns, calendarCredentials, timelineAuditLogs] = await Promise.all([
     prisma.schedulingSession.findFirst({ where: { conversationId: conversation.id, tenantId: session.user.tenantId } }),
     prisma.automationRun.findMany({
       where: { conversationId: conversation.id, tenantId: session.user.tenantId },
@@ -147,7 +149,28 @@ export default async function ConversationPage({
       where: { tenantId: session.user.tenantId },
       select: { email: true },
     }),
+    // Audit rows scoped to this thread via the conversationId embedded in each
+    // payload; feeds the "What FlowDesk did" timeline (see conversation-timeline.ts).
+    prisma.auditLog.findMany({
+      where: {
+        tenantId: session.user.tenantId,
+        payloadJson: { path: ["conversationId"], equals: conversation.id },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+      include: { user: { select: { email: true } } },
+    }),
   ]);
+
+  const timelineEntries = buildConversationTimeline(
+    timelineAuditLogs.map((log) => ({
+      id: log.id,
+      action: log.action,
+      createdAt: log.createdAt,
+      payloadJson: log.payloadJson,
+      userEmail: log.user?.email ?? null,
+    }))
+  ).map((entry) => ({ ...entry, createdAt: entry.createdAt.toISOString() }));
 
   const openedAt = new Date()
   await Promise.all([
@@ -576,6 +599,7 @@ export default async function ConversationPage({
           } : null}
         />
       )}
+      <ConversationTimeline entries={timelineEntries} />
       <AutomationRunHistory
         runs={automationRuns.map((r) => ({
           id: r.id,
