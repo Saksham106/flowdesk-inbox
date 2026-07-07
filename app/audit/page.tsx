@@ -16,6 +16,7 @@ const AGENT_ACTIONS = [
   "autopilot.failure_recorded",
   "autopilot.disabled_after_failures",
   "follow_up.job_created",
+  "follow_up.due_labeled",
   "calendar_hold.created",
   "calendar_hold.confirmed",
   "calendar_hold.cancelled",
@@ -23,6 +24,12 @@ const AGENT_ACTIONS = [
   "draft.suggest",
   "draft.approve",
   "draft.sent",
+  "gmail.writeback.completed",
+  "gmail.writeback.failed",
+  "gmail.labels.queued",
+  "conversation.waiting_on_detected",
+  "conversation.waiting_on_cleared",
+  "automation_level.changed",
 ]
 
 const ACTION_COLORS: Record<string, string> = {
@@ -32,13 +39,41 @@ const ACTION_COLORS: Record<string, string> = {
   "agent_job.failed": "bg-red-100 text-red-800",
   "agent_job.completed": "bg-blue-100 text-blue-800",
   "follow_up.job_created": "bg-purple-100 text-purple-800",
+  "follow_up.due_labeled": "bg-amber-100 text-amber-800",
   "calendar_hold.confirmed": "bg-green-100 text-green-800",
   "calendar_hold.cancelled": "bg-slate-100 text-slate-600",
   "calendar_hold.expired": "bg-amber-100 text-amber-800",
+  "gmail.writeback.completed": "bg-blue-100 text-blue-800",
+  "gmail.writeback.failed": "bg-red-100 text-red-800",
+  "gmail.labels.queued": "bg-slate-100 text-slate-600",
+  "conversation.waiting_on_detected": "bg-purple-100 text-purple-800",
+  "conversation.waiting_on_cleared": "bg-green-100 text-green-800",
+  "automation_level.changed": "bg-amber-100 text-amber-800",
 }
 
 function actionColor(action: string): string {
   return ACTION_COLORS[action] ?? "bg-slate-100 text-slate-700"
+}
+
+/**
+ * Human-readable "why" for the audit row: surfaces the rule id/version/evidence
+ * that drove a static-rule classification, the AI confidence for an LLM
+ * classification, or the explicit reason when one was recorded.
+ */
+function whyText(payload: Record<string, unknown>): string | null {
+  if (payload.classificationSource === "static_rule" && payload.ruleId) {
+    const evidence = Array.isArray(payload.ruleEvidence)
+      ? (payload.ruleEvidence as unknown[]).filter((v): v is string => typeof v === "string")
+      : []
+    const rule = `Rule ${String(payload.ruleId).slice(-6)} v${payload.ruleVersion ?? 1}`
+    return evidence.length > 0 ? `${rule} — matched ${evidence.join(" and ")}` : rule
+  }
+  if (typeof payload.reason === "string" && payload.reason.trim()) return payload.reason
+  if (typeof payload.result === "string" && payload.result.trim()) return payload.result
+  if (payload.classificationSource === "llm" && typeof payload.confidence === "number") {
+    return `AI — ${Math.round(payload.confidence * 100)}% confident`
+  }
+  return null
 }
 
 interface Props {
@@ -122,7 +157,7 @@ export default async function AuditPage({ searchParams }: Props) {
           >
             All
           </Link>
-          {["autopilot.send", "autopilot.send_failed", "agent_job.completed", "agent_job.failed", "follow_up.job_created"].map(
+          {["autopilot.send", "agent_job.completed", "agent_job.failed", "gmail.writeback.completed", "gmail.writeback.failed", "follow_up.due_labeled"].map(
             (action) => (
               <Link
                 key={action}
@@ -200,7 +235,7 @@ export default async function AuditPage({ searchParams }: Props) {
                         )}
                       </td>
                       <td className="max-w-xs px-4 py-3 text-xs text-slate-500">
-                        {payload.reason ? String(payload.reason) : <span className="text-slate-300">—</span>}
+                        {whyText(payload) ?? <span className="text-slate-300">—</span>}
                       </td>
                       <td className="px-4 py-3 text-xs">
                         {log.action === "autopilot.draft_approved" && (
