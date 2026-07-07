@@ -823,6 +823,16 @@ export async function archiveGmailThread(channelId: string, gmailThreadId: strin
   });
 }
 
+// Re-adds the INBOX label to a thread (undo archive), bringing it back to the inbox.
+export async function unarchiveGmailThread(channelId: string, gmailThreadId: string): Promise<void> {
+  const gmail = await getGmailClient(channelId);
+  await gmail.users.threads.modify({
+    userId: "me",
+    id: gmailThreadId,
+    requestBody: { addLabelIds: ["INBOX"] },
+  });
+}
+
 // Moves a thread to Gmail Trash. The thread is NOT permanently deleted.
 export async function trashGmailThread(channelId: string, gmailThreadId: string): Promise<void> {
   const gmail = await getGmailClient(channelId);

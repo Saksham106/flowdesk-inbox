@@ -29,7 +29,7 @@ The biggest remaining gaps are not "can FlowDesk touch Gmail?" They are control,
 | AI rules | Inbox Zero conditions + actions + dry-run | Static sender/domain/subject/body rules, dry-run preview, version snapshots, and execution metadata shipped | Need control-room "why fired" UI, structured conflict detection, and rule-aware approval/teaching flows | P0/P1 |
 | Reply tracking | Inbox Zero Reply Zero; Superhuman reminders | Waiting On and Follow Up shipped | Nudge draft, analytics, and evidence display missing | P1 |
 | Triage | SaneBox quiet sorting, Fyxer categories, Exo priority | Command center + classifications | Need evidence/confidence/correction history and preserve user-edited fields | P0 |
-| Cleanup | Inbox Zero bulk unsubscribe/archive; SaneBox blackhole | Unsubscribe/writeback and Clean Inbox foundations | Grouped cleanup proposals and safe bulk archive not mature | P1 |
+| Cleanup | Inbox Zero bulk unsubscribe/archive; SaneBox blackhole | Sender-grouped cleanup shipped: group-by-sender proposals, real Gmail archive (INBOX removal) + undo, safe skip rules | Future-filter creation and open-rate signals still missing | P1 (mostly done) |
 | Queues/jobs | Agentic Inbox durable actions; Inbox Zero queues | `GmailWritebackQueue`, agent jobs, crons | Cron health, stale job UI, provider failure dashboard missing | P0 |
 | Data model | Inbox Zero Rule/Action/ExecutedRule/RuleHistory | FlowDesk has rule versions, AuditLog snapshots, AgentToolCall outputs, and provider queues | Need clearer UI surfacing of rule/action history | P1 |
 | Audit/safety | Executed actions + audit + undo | Audit log, approvals, rollback foundations, and Gmail writeback result audits shipped | Need human-readable timeline and undo visibility | P0/P1 |
