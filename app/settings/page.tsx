@@ -55,6 +55,15 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_callback: "Invalid callback. Please try connecting again.",
 };
 
+const SETTINGS_SECTIONS = [
+  { id: "connect", label: "Connect", description: "Gmail, Outlook, Calendar, Drive" },
+  { id: "gmail", label: "Gmail behavior", description: "Native labels and sync" },
+  { id: "automation", label: "Automation", description: "Follow-ups, trust level, workflows" },
+  { id: "training", label: "Training", description: "Rules, voice, snippets" },
+  { id: "profile", label: "Profile", description: "Capabilities, VIPs, business facts" },
+  { id: "data", label: "Data", description: "Knowledge, apps, AI budget" },
+];
+
 export default async function SettingsPage({ searchParams }: Props) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.tenantId) redirect("/login");
@@ -341,7 +350,7 @@ export default async function SettingsPage({ searchParams }: Props) {
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 sm:px-6 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 py-4">
           <div>
             <Link href="/inbox" className="text-sm text-slate-500 hover:text-slate-700">
               &larr; Back to control room
@@ -354,7 +363,10 @@ export default async function SettingsPage({ searchParams }: Props) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl space-y-6 px-4 sm:px-6 py-8">
+      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <SettingsNavigation />
+
+        <div className="space-y-6">
         {/* Success / error banners */}
         {gmailError && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -391,7 +403,7 @@ export default async function SettingsPage({ searchParams }: Props) {
         )}
 
         {/* Features / capabilities */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <section id="profile" className="scroll-mt-24 rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">
             <h2 className="font-semibold">Features</h2>
           </div>
@@ -401,7 +413,7 @@ export default async function SettingsPage({ searchParams }: Props) {
         </section>
 
         {/* Connectors */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <section id="connect" className="scroll-mt-24 rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">
             <h2 className="font-semibold">Connectors</h2>
             <p className="mt-0.5 text-sm text-slate-500">
@@ -410,7 +422,7 @@ export default async function SettingsPage({ searchParams }: Props) {
           </div>
 
           {/* Gmail */}
-          <div className="border-b border-slate-100 px-6 py-5">
+          <div id="gmail" className="scroll-mt-24 border-b border-slate-100 px-6 py-5">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white">
@@ -663,7 +675,7 @@ export default async function SettingsPage({ searchParams }: Props) {
         </section>
 
         {/* Connected Apps */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <section id="data" className="scroll-mt-24 rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">
             <h2 className="font-semibold">Connected Apps</h2>
             <p className="mt-0.5 text-sm text-slate-500">
@@ -722,7 +734,7 @@ export default async function SettingsPage({ searchParams }: Props) {
         )}
 
         {/* Reply Learning */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <section id="training" className="scroll-mt-24 rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">
             <h2 className="font-semibold">Reply Learning</h2>
             <p className="mt-0.5 text-sm text-slate-500">
@@ -739,7 +751,7 @@ export default async function SettingsPage({ searchParams }: Props) {
         </section>
 
         {/* Follow-Up Automation */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <section id="automation" className="scroll-mt-24 rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">
             <h2 className="font-semibold">Follow-Up Automation</h2>
             <p className="mt-0.5 text-sm text-slate-500">
@@ -902,8 +914,36 @@ export default async function SettingsPage({ searchParams }: Props) {
             <AiBudgetPanel initial={aiBudgetStatus} />
           </div>
         </section>
+        </div>
       </main>
     </div>
+  );
+}
+
+function SettingsNavigation() {
+  return (
+    <aside className="lg:sticky lg:top-4 lg:self-start">
+      <nav
+        aria-label={`Settings sections (${SETTINGS_SECTIONS.length})`}
+        className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm"
+      >
+        <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Settings
+        </p>
+        <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-1">
+          {SETTINGS_SECTIONS.map((section) => (
+            <a
+              key={section.id}
+              href={`#${section.id}`}
+              className="rounded-lg px-3 py-2 text-sm hover:bg-slate-50"
+            >
+              <span className="block font-medium text-slate-900">{section.label}</span>
+              <span className="block text-xs text-slate-500">{section.description}</span>
+            </a>
+          ))}
+        </div>
+      </nav>
+    </aside>
   );
 }
 
