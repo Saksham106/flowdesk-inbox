@@ -128,17 +128,48 @@ describe("FlowDesk Gmail labels", () => {
       "Waiting On",
     ])
 
+    // Creation never bundles color in the same request — color is a separate
+    // best-effort call so a rejected color pair can never block the label
+    // from existing (see the resilience test below).
     expect(mockLabelsCreate).toHaveBeenCalledWith({
       userId: "me",
-      requestBody: expect.objectContaining({
+      requestBody: {
         name: "Waiting On",
         labelListVisibility: "labelShow",
         messageListVisibility: "show",
-        color: expect.objectContaining({
-          backgroundColor: expect.any(String),
-          textColor: expect.any(String),
-        }),
-      }),
+      },
+    })
+    expect(mockLabelsPatch).toHaveBeenCalledWith({
+      userId: "me",
+      id: "created:Waiting On",
+      requestBody: { color: { backgroundColor: "#b6cff5", textColor: "#000000" } },
+    })
+    expect(mockThreadsModify).toHaveBeenCalledWith({
+      userId: "me",
+      id: "thread-1",
+      requestBody: {
+        addLabelIds: ["Label_1", "created:Waiting On"],
+        removeLabelIds: ["Label_2"],
+      },
+    })
+  })
+
+  it("still creates the label and applies it to the thread even when coloring it fails", async () => {
+    // Regression: a rejected color pair used to abort the whole pipeline
+    // (label.create/patch bundled color inline) before the thread was ever
+    // labeled — matching a real "labels created but nothing gets labeled"
+    // report. Color-setting is now isolated and allowed to fail silently.
+    mockLabelsPatch.mockRejectedValue(new Error("Invalid color value"))
+
+    await applyFlowDeskLabelsToGmailThread("channel-1", "thread-1", ["Needs Reply", "Waiting On"])
+
+    expect(mockLabelsCreate).toHaveBeenCalledWith({
+      userId: "me",
+      requestBody: {
+        name: "Waiting On",
+        labelListVisibility: "labelShow",
+        messageListVisibility: "show",
+      },
     })
     expect(mockThreadsModify).toHaveBeenCalledWith({
       userId: "me",
@@ -187,21 +218,27 @@ describe("FlowDesk Gmail labels", () => {
     await applyFlowDeskLabelsToGmailThread("channel-1", "thread-1", ["Needs Reply"])
 
     // Legacy labels are renamed in place (keeping their ids), not recreated.
+    // The rename itself never bundles color — that's a separate best-effort
+    // call — so a rejected color pair can't block the rename.
     expect(mockLabelsPatch).toHaveBeenCalledWith({
       userId: "me",
       id: "Legacy_1",
-      requestBody: expect.objectContaining({
-        name: "Needs Reply",
-        color: expect.objectContaining({ backgroundColor: "#fb4c2f" }),
-      }),
+      requestBody: { name: "Needs Reply" },
+    })
+    expect(mockLabelsPatch).toHaveBeenCalledWith({
+      userId: "me",
+      id: "Legacy_1",
+      requestBody: { color: { backgroundColor: "#ffc8af", textColor: "#000000" } },
     })
     expect(mockLabelsPatch).toHaveBeenCalledWith({
       userId: "me",
       id: "Legacy_2",
-      requestBody: expect.objectContaining({
-        name: "Handled",
-        color: expect.objectContaining({ backgroundColor: "#16a765" }),
-      }),
+      requestBody: { name: "Handled" },
+    })
+    expect(mockLabelsPatch).toHaveBeenCalledWith({
+      userId: "me",
+      id: "Legacy_2",
+      requestBody: { color: { backgroundColor: "#c2c2c2", textColor: "#000000" } },
     })
     // The now-childless "FlowDesk" parent is removed.
     expect(mockLabelsDelete).toHaveBeenCalledWith({ userId: "me", id: "Legacy_Parent" })
@@ -237,9 +274,7 @@ describe("FlowDesk Gmail labels", () => {
     expect(mockLabelsPatch).toHaveBeenCalledWith({
       userId: "me",
       id: "Flat_1",
-      requestBody: expect.objectContaining({
-        color: expect.objectContaining({ backgroundColor: "#fb4c2f" }),
-      }),
+      requestBody: { color: { backgroundColor: "#ffc8af", textColor: "#000000" } },
     })
     expect(mockLabelsDelete).toHaveBeenCalledWith({ userId: "me", id: "Legacy_1" })
     expect(mockThreadsModify).toHaveBeenCalledWith({
