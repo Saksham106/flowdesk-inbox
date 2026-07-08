@@ -10,10 +10,13 @@ import { resolveDraftApprovalRequests } from "@/lib/agent/approvals"
 export const runtime = "nodejs"
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   const session = await getServerSession(authOptions)
+
+  // Body is optional (older callers POST with none); cc/bcc ride along when present.
+  const payload = await request.json().catch(() => null)
 
   if (!session?.user?.tenantId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -65,6 +68,8 @@ export async function POST(
       tenantId: session.user.tenantId,
       userId: session.user.id,
       text,
+      cc: Array.isArray(payload?.cc) ? payload.cc : undefined,
+      bcc: Array.isArray(payload?.bcc) ? payload.bcc : undefined,
       auditAction: "conversation.send",
     })
   } catch (err) {

@@ -537,21 +537,27 @@ type ReplyMimeInput = {
   from: string;
   subject: string;
   body: string;
+  cc?: string[];
+  bcc?: string[];
   inReplyTo?: string;
   references?: string;
 };
 
 // Builds a base64url-encoded RFC 822 reply message, forcing an "Re:" subject and
 // threading headers. Shared by immediate sends and Gmail-native draft creation.
-function buildReplyMimeRaw({ to, from, subject, body, inReplyTo, references }: ReplyMimeInput): string {
+// The Bcc header drives delivery to those recipients; Gmail strips it from the
+// copies delivered to To/Cc recipients (only the sender's Sent copy keeps it).
+// Exported for tests.
+export function buildReplyMimeRaw({ to, from, subject, body, cc, bcc, inReplyTo, references }: ReplyMimeInput): string {
   const reSubject = subject.toLowerCase().startsWith("re:") ? subject : `Re: ${subject}`;
-  const lines = [
-    `From: ${from}`,
-    `To: ${to}`,
+  const lines = [`From: ${from}`, `To: ${to}`];
+  if (cc && cc.length > 0) lines.push(`Cc: ${cc.join(", ")}`);
+  if (bcc && bcc.length > 0) lines.push(`Bcc: ${bcc.join(", ")}`);
+  lines.push(
     `Subject: ${reSubject}`,
     `MIME-Version: 1.0`,
     `Content-Type: text/plain; charset=UTF-8`,
-  ];
+  );
   if (inReplyTo) lines.push(`In-Reply-To: ${inReplyTo}`);
   if (references) lines.push(`References: ${references}`);
   lines.push("", body);
@@ -593,6 +599,8 @@ export async function sendGmailReply(
     from,
     subject,
     body,
+    cc,
+    bcc,
     threadId,
     inReplyTo,
     references,
@@ -601,12 +609,14 @@ export async function sendGmailReply(
     from: string;
     subject: string;
     body: string;
+    cc?: string[];
+    bcc?: string[];
     threadId: string;
     inReplyTo?: string;
     references?: string;
   }
 ): Promise<string> {
-  const raw = buildReplyMimeRaw({ to, from, subject, body, inReplyTo, references });
+  const raw = buildReplyMimeRaw({ to, from, subject, body, cc, bcc, inReplyTo, references });
 
   const res = await gmail.users.messages.send({
     userId: "me",

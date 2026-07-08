@@ -70,7 +70,7 @@ Deliberately parked so they don't distract from the core loop and polish:
 
 - [ ] Record Outlook renewal/sync failure causes (`OutlookCredential.subscriptionError`, `OutlookSyncEvent.lastError`, audit) instead of bare catch blocks, and stop adding failed channels to `processedChannels`.
 - [ ] Decide and implement Outlook archive/trash/unsubscribe parity.
-- [ ] Implement CC/BCC send support and re-enable the compose fields once the APIs persist those recipients end-to-end.
+- [x] Implement CC/BCC send support and re-enable the compose fields once the APIs persist those recipients end-to-end — done (pulled forward: hiding CC/BCC broke the "keep using Gmail like normal" promise). Compose has a Gmail-style collapsed Cc/Bcc toggle; recipients are validated (format, header-injection, size cap) in `lib/conversations/recipients.ts`, persisted on the outbound `Message` row (`ccEmails`/`bccEmails`), included in the send audit payload, and carried through both providers (Gmail raw-MIME `Cc:`/`Bcc:` headers — Gmail strips `Bcc:` from recipients' copies; Outlook Graph `ccRecipients`/`bccRecipients`).
 - [ ] Broaden Gmail inline `cid:` image support beyond the current size-capped path; optionally backfill older messages.
 - [ ] Gmail add-on / Chrome extension (waits until the Gmail-native core loop is validated).
 - [ ] Design the team/shared-inbox data and permission model.

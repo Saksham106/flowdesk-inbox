@@ -30,6 +30,8 @@ export async function POST(
       tenantId: session.user.tenantId,
       userId: session.user.id,
       text,
+      cc: Array.isArray(payload?.cc) ? payload.cc : undefined,
+      bcc: Array.isArray(payload?.bcc) ? payload.bcc : undefined,
       auditAction: "conversation.send",
     });
   } catch (err) {

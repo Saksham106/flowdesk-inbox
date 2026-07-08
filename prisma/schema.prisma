@@ -367,6 +367,8 @@ model Message {
   toE164            String
   body              String
   subject           String?
+  ccEmails          Json?
+  bccEmails         Json?
   providerMessageId String
   isRead            Boolean          @default(false)
   gmailLabelIds     Json?

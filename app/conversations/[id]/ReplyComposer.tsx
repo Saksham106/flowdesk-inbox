@@ -54,6 +54,9 @@ export default function ReplyComposer({
   const [showSnippets, setShowSnippets] = useState(false)
   const [snippetsLoaded, setSnippetsLoaded] = useState(false)
   const [showNextStep, setShowNextStep] = useState(false)
+  const [showCcBcc, setShowCcBcc] = useState(false)
+  const [ccInput, setCcInput] = useState("")
+  const [bccInput, setBccInput] = useState("")
 
   const isEmail = channelType === "email";
   const canAI = isEmail && canSuggest;
@@ -118,6 +121,26 @@ export default function ReplyComposer({
     throw new Error(typeof body?.error === "string" ? body.error : fallback);
   }
 
+  function parseRecipients(input: string): string[] {
+    return input
+      .split(/[,;]/)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  // Client-side pre-check mirroring the server's validation, so obvious typos
+  // fail before the draft-approve/send sequence starts.
+  function validateRecipients(): { cc: string[]; bcc: string[] } {
+    const cc = parseRecipients(ccInput);
+    const bcc = parseRecipients(bccInput);
+    const emailPattern = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
+    for (const [label, list] of [["Cc", cc], ["Bcc", bcc]] as const) {
+      const bad = list.find((address) => !emailPattern.test(address));
+      if (bad) throw new Error(`Invalid ${label} address: ${bad}`);
+    }
+    return { cc, bcc };
+  }
+
   async function suggestReply() {
     if (!canAI || isBusy) return;
     setAction("suggesting");
@@ -151,6 +174,11 @@ export default function ReplyComposer({
     setError(null);
     setNotice(null);
     try {
+      const { cc, bcc } = validateRecipients();
+      const recipientFields = {
+        ...(cc.length > 0 ? { cc } : {}),
+        ...(bcc.length > 0 ? { bcc } : {}),
+      };
       if (draft && draft.status !== "none") {
         // AI draft path: update text if edited, approve, then send
         const isDirty = trimmedText !== draft.text;
@@ -168,7 +196,11 @@ export default function ReplyComposer({
           body: JSON.stringify({ status: "approved" }),
         });
         await assertOk(approveRes, "Failed to approve draft.");
-        const sendRes = await fetch(`/api/conversations/${conversationId}/draft/send-approved`, { method: "POST" });
+        const sendRes = await fetch(`/api/conversations/${conversationId}/draft/send-approved`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(recipientFields),
+        });
         await assertOk(sendRes, "Failed to send.");
         setDraft(null);
         setText("");
@@ -177,12 +209,15 @@ export default function ReplyComposer({
         const sendRes = await fetch(`/api/conversations/${conversationId}/send`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: trimmedText }),
+          body: JSON.stringify({ text: trimmedText, ...recipientFields }),
         });
         await assertOk(sendRes, "Failed to send.");
         setDraft(null);
         setText("");
       }
+      setCcInput("");
+      setBccInput("");
+      setShowCcBcc(false);
       setInstruction("");
       setShowNextStep(true);
       setNotice("Sent. What should happen next?");
@@ -230,6 +265,9 @@ export default function ReplyComposer({
     setDraft(null);
     setText("");
     setInstruction("");
+    setCcInput("");
+    setBccInput("");
+    setShowCcBcc(false);
     setError(null);
     setNotice(null);
     router.refresh();
@@ -273,13 +311,49 @@ export default function ReplyComposer({
     <div className="space-y-0 rounded-xl border border-slate-300 overflow-hidden bg-white shadow-sm">
       {/* Email header fields */}
       <div className="border-b border-slate-100">
-        {/* To field. CC/BCC are hidden until the send API supports them. */}
+        {/* To field, with a Gmail-style collapsed Cc/Bcc toggle */}
         <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100">
           <span className="text-[11px] font-semibold text-slate-400 w-6 shrink-0">To</span>
           <span className="flex-1 text-sm text-slate-700 truncate">
             {senderAddress ?? "—"}
           </span>
+          {!showCcBcc && (
+            <button
+              type="button"
+              onClick={() => setShowCcBcc(true)}
+              className="text-[11px] text-slate-400 hover:text-slate-600 shrink-0"
+            >
+              Cc/Bcc
+            </button>
+          )}
         </div>
+
+        {showCcBcc && (
+          <>
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100">
+              <span className="text-[11px] font-semibold text-slate-400 w-6 shrink-0">Cc</span>
+              <input
+                type="text"
+                value={ccInput}
+                onChange={(e) => setCcInput(e.target.value)}
+                placeholder="cc@example.com, another@example.com"
+                className="flex-1 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none disabled:bg-slate-50"
+                disabled={isBusy}
+              />
+            </div>
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100">
+              <span className="text-[11px] font-semibold text-slate-400 w-6 shrink-0">Bcc</span>
+              <input
+                type="text"
+                value={bccInput}
+                onChange={(e) => setBccInput(e.target.value)}
+                placeholder="bcc@example.com"
+                className="flex-1 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none disabled:bg-slate-50"
+                disabled={isBusy}
+              />
+            </div>
+          </>
+        )}
 
         {/* Subject (read-only) */}
         <div className="flex items-center gap-2 px-3 py-2">
