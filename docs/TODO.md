@@ -1,8 +1,8 @@
 # Remaining Work
 
-Last updated: 2026-07-08 (in-process background job scheduler)
+Last updated: 2026-07-08 (MVP refocus)
 
-Reprioritized around the refocused product vision (`docs/product-direction.md` → Roadmap): **Gmail is the primary surface and must work really well; the web app is a polished secondary surface.** Order of work is **correctness → polish → capability**. Small correctness items and Outlook are de-scoped until Phases 1–2 land.
+Reprioritized around shipping a **tight MVP** (`docs/product-direction.md` → MVP definition): the trustworthy core loop is done and reliable; the blocker to a shippable product is that ~45 features are almost all half-built. Order of work is now **complete the core loop (the first-run organize moment) → make it fast → tighten the default path → then polish and breadth.** The Sales & CRM cluster and all half-built peripheral surfaces stay deferred (opt-in / off the default path) until the MVP ships.
 
 Coordination rule: before starting a lane, fetch `origin/main`, branch from the latest main in a fresh worktree, and claim the active item here or in the PR description. Clear the claim when the PR merges or is abandoned so duplicate branches do not linger.
 
@@ -27,7 +27,16 @@ Kept for reference / as a fallback interface, not because anything still needs s
 - [x] ~~Schedule `GET /api/cron/follow-up`~~ — now runs every 30 minutes in-process.
 - [x] ~~Schedule `GET /api/cron/gmail-label-reconcile`~~ — now runs every 6 hours in-process.
 
-## Phase 2 — Web-app polish (secondary surface, high quality bar)
+## Phase 2 — MVP: first-run organize moment + speed — current focus
+
+The core loop only acts on *new* mail today, so a new user connects Gmail and sees an unchanged inbox. This phase closes that gap and makes the loop fast. See `docs/flowdesk-vs-reference-gap-analysis.md` → "Top MVP gap" for the Inbox Zero comparison.
+
+- [ ] **Retroactive first-pass on connect (flagship).** On Gmail connect, sync a bounded batch of existing inbox threads, run the deterministic classifier over them, and project labels (label-only, no archive) — so the user's real inbox visibly organizes in the first session. Reuse `reconcileGmailLabelsForChannel` / the `/api/connectors/gmail/relabel` machinery. Deterministic = zero LLM cost, so we can go deeper than Inbox Zero's 20-message LLM pass.
+- [ ] **Proof screen.** After the first-pass, show "here's what we just organized" — the labeled + autodrafted threads, read from existing audit-log rows — before dropping the user into the dashboard.
+- [ ] **Performance + correctness pass on hot paths** (from the 2026-07-08 perf audit): parallelize the ~6 serialized home-page DB round-trips into one `Promise.all`; wrap the command-center fetch in `unstable_cache` like `AppListColumn` already does; fix the latest-message correctness bug (home over-fetches the *oldest* 5 messages then picks newest among them — wrong for threads >5 messages; switch to `orderBy: desc` and stop loading full bodies for list rows); add `@@index([tenantId, status, lastMessageAt])`; guard the write-on-read (`isRead: false`) that rewrites every message row on each thread open; parallelize the conversation-page query groups.
+- [ ] **Tighten the default path.** Remove the dead `/digest` route from nav (it's a bare `redirect("/inbox")`). Confirm nothing half-built is reachable from the default (non-Sales-CRM) navigation.
+
+## Phase 3 — Web-app polish (after MVP)
 
 Take layout and interaction cues from Inbox Zero, Tom Shaw's AI agent inbox, and the other references (`docs/reference-research/`).
 
@@ -35,9 +44,9 @@ Take layout and interaction cues from Inbox Zero, Tom Shaw's AI agent inbox, and
 - [ ] Rebuild the dashboard/inbox shell and navigation so the secondary surface is clean and coherent (Inbox-Zero-style layout) — shipped: the home view's `HomeCommandCenter` went from 3 top-level headers plus 2 differently-styled ad-hoc sub-headings down to 2 consistently-accented pillars ("What needs you" / "The agent") with a single neutral `SubHeading` style. The desktop nav rail (`AppRail`) went from 8 icons to 6: removed the standalone `/search` page (its message-body search is now built into Home's existing search box, so nothing was lost — `/search` redirects to `/inbox` preserving the query) and demoted Activity from a permanent rail icon to a "Full activity log →" link inside Home's "What it did" section. The automation-level status line in `ControlRoomHeader` is now a link to `/settings#automation`, surfacing the single most important trust setting directly from Home instead of requiring a trip through Settings. Mobile's separate header nav (`lib/app-navigation.ts`, `Digest`/`Tasks`/`Settings`/More) is untouched — it's a different surface from the desktop rail and wasn't part of the reported complaint.
 - [ ] Update remaining dashboard/settings copy so the web app reads as an intentional companion product.
 
-## Phase 3 — Capability parity from the reference repos
+## Phase 4 — Capability parity from the reference repos (after MVP)
 
-Close the gap with the projects we studied (`docs/flowdesk-vs-reference-gap-analysis.md`). Copy code where it helps.
+Close the gap with the projects we studied (`docs/flowdesk-vs-reference-gap-analysis.md`). Copy code where it helps. Re-enable deferred surfaces one at a time as each reaches a real quality bar.
 
 - [ ] Deepen bulk unsubscribe / cleanup (future-filter creation, open-rate signals) — the sender-grouped cleanup foundation exists.
 - [ ] Smart categories and richer triage surfacing (evidence, confidence, correction history).

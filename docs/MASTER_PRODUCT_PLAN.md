@@ -6,7 +6,7 @@ Last updated: 2026-07-08
 
 FlowDesk is the Gmail-native AI email operator with a polished companion web app. It works inside the user's existing Gmail to label, prioritize, draft, follow up, and organize email automatically. **Gmail is the primary surface** — most users interact with FlowDesk almost entirely through Gmail's labels, drafts, and follow-up nudges, so the Gmail-native side must work *really well*. **The web app is a secondary but genuinely polished surface** — setup, rules, training, approvals, audit logs, daily brief, and deeper review — held to the same quality bar even though users won't live there. We take direct design and implementation inspiration (and code) from Inbox Zero, Tom Shaw's AI agent inbox, and the other reference projects.
 
-> **Current focus (updated 2026-07-08): Phase 2, web-app polish.** Phase 1's trustworthy-core-loop work shipped — see `docs/product-direction.md` → Roadmap (Phase 1) and `docs/TODO.md` for what landed. Now correctness-before-features has given way to making the secondary web-app surface genuinely polished.
+> **Current focus (updated 2026-07-08): ship a tight MVP.** The trustworthy core loop shipped and is reliable in production (inline label writeback, user-state-wins, and an in-process scheduler that runs every background job without external cron infra). The blocker to an MVP is no longer capability — it is that ~45 features are almost all half-built (`Partial` in the index below). The MVP is one core loop made excellent, everything peripheral deferred. Its one missing piece is the first-run "organize my existing inbox" moment (deterministic retroactive first-pass + proof screen). See `docs/product-direction.md` → MVP definition and `docs/TODO.md`.
 
 The product should consistently do five things:
 
@@ -29,7 +29,7 @@ The product should consistently do five things:
 
 ### Gmail-native organization
 
-When a user opens Gmail, the inbox should already be organized with stable FlowDesk labels such as Needs Reply, Waiting On, Follow Up, Read Later, Handled, Autodrafted, and Low Priority. Handle First remains a FlowDesk dashboard ranking so Gmail labels do not churn as priorities are recalculated. The user should see value before visiting the FlowDesk website.
+When a user opens Gmail, the inbox should already be organized with stable FlowDesk labels: the six workflow-state labels (Needs Reply, Needs Action, Waiting On, Read Later, Handled, Autodrafted) plus the four content-type labels (Newsletter, Marketing, Notification, Calendar). Handle First remains a FlowDesk dashboard ranking so Gmail labels do not churn as priorities are recalculated. The user should see value before visiting the FlowDesk website — including on **existing** mail, via the retroactive first-pass at onboarding, not only on new mail as it arrives.
 
 ### Control room brief
 
@@ -49,13 +49,13 @@ Users do not trust an AI that replies to everything. They trust an assistant wit
 
 The Gmail-native foundations (label projection, native drafts, waiting-on/follow-up) are **built**, and the end-to-end loop is now reliable: label projection best-effort drains inline right after a job is queued instead of depending purely on the writeback cron, and an explicit user state change ("Mark done", waiting-on, read-later) always wins over draft-ready/AI-derived signals in the command center. Also fixed: task-dismiss (Bills & Deadlines) now invalidates the inbox cache immediately instead of waiting out the 60s TTL, and the Read Later "+N more" badge/backfill stay in sync with dismissals without a page refresh. See `docs/TODO.md` → Phase 1 / "Recently shipped".
 
-### Phase 2 — Web-app polish — active priority
+### Phase 2 — MVP: the first-run organize moment — active priority
 
-The companion web app must look and feel like a real product: settings is being split into focused, fully-reachable sections (shipped: every panel now lives under the nav anchor it's supposed to); still remaining: true route/tab decomposition, rebuild the dashboard/inbox shell Inbox-Zero-style, and clean up navigation. Secondary surface, but a high quality bar.
+Close the last gap in the core loop: a deterministic **retroactive first-pass** that, on Gmail connect, classifies and labels a batch of the user's *existing* threads (label-only, no archive) and shows a proof screen of what it just did — so a new user sees their real inbox organized in the first session instead of an unchanged inbox. Ship the concrete performance wins alongside it (parallelized + cached home-page data, correct latest-message selection) so the core loop is fast. Keep the default control-room path tight by deferring half-built peripheral surfaces (Sales & CRM stays opt-in/off; remove the dead `/digest` route). Secondary web-app surface stays at a high quality bar but is not the priority until the core loop is complete.
 
-### Phase 3 — Capability parity — after polish
+### Phase 3 — Polish and selective capability parity — after MVP
 
-Port marquee capabilities from the reference repos (bulk unsubscribe depth, smart categories, reply-tracking UX, richer rule authoring), copying code where it helps. See `docs/flowdesk-vs-reference-gap-analysis.md`.
+Once the core loop ships and is in real use, polish the web app and port only the reference-repo capabilities users actually reach for (bulk unsubscribe depth, reply-tracking nudges, richer rule authoring), re-enabling deferred surfaces one at a time as each reaches a real quality bar. See `docs/flowdesk-vs-reference-gap-analysis.md`.
 
 ### Gmail-native drafts and follow-up tracking — built
 
@@ -126,7 +126,7 @@ Shared inboxes, assignments, comments, collision detection, roles, permissions, 
 | 39 | Auto-Personalized Outreach | `Later` | Valuable, but avoid spam positioning. |
 | 40 | Email Triage by Money Impact | `Shipped` | Revenue-weighted score bonus in command center; Revenue at Risk subsection for stale high-value leads. |
 | 41 | Clean My Inbox | `Shipped` | /clean-inbox page, batch archive/unsubscribe, 1-hour undo via AuditLog. |
-| 42 | Gmail-Native Smart Labels | `Partial` | Canonical flat label vocabulary (`Needs Reply`, `Waiting On`, …; no `FlowDesk/` prefix, legacy labels renamed in place), state mapping, queued Gmail label writeback, and audit events shipped. Label bootstrap, classification-triggered projection, settings, and explainability remain. |
+| 42 | Gmail-Native Smart Labels | `Shipped` | 10-label taxonomy (6 workflow-state + 4 content-type: Newsletter/Marketing/Notification/Calendar; no `FlowDesk/` prefix, legacy labels renamed in place), colored via Inbox-Zero palette, state+emailType mapping, queued+inline-drained writeback, bootstrap on connect, classification-triggered projection, per-label settings, deterministic fallback for unclassified threads, and the in-app inbox UI synced to the same taxonomy. Per-thread "why this label" explainability remains (Phase 3). |
 | 43 | Ask My Inbox Chat | `Partial` | Budget-metered streaming RAG pipeline, /chat page, SSE route; action-taking answers remain later. |
 | 44 | Trust, Privacy, and Audit Log | `Partial` | Audit log and undo for reversible autopilot approvals; broader coverage remains. |
 | 45 | Paid Packaging | `Discovery` | Use as product packaging decision, not an engineering feature. |
@@ -184,6 +184,10 @@ Shared inboxes, assignments, comments, collision detection, roles, permissions, 
 | 2026-07-07 | De-scope Outlook, CC/BCC, inline-image backfill, and add-on/extension work until Phases 1–2 land. | These are distractions from the core loop and web-app polish; parked under `docs/TODO.md` → "Later / de-scoped". |
 | 2026-07-08 | Made Gmail label writeback drain inline right after queuing, with the cron as a retry backstop rather than the only path to Gmail. | Labels were being created but never applied to threads whenever the `gmail-writeback` cron wasn't scheduled/running; the inline attempt makes the common case work without depending on cron infrastructure being correctly configured. |
 | 2026-07-08 | Task dismiss (`/api/tasks/[id]/status`) and Read Later's preview/overflow count now update immediately instead of waiting on a cache TTL or full page refresh. | Both were reported as "reappears on refresh" trust-breaking bugs — the task route never called `revalidateInboxViews`, and Read Later's "+N more" badge was computed from a static prop instead of the currently-visible set. |
+| 2026-07-08 | Redesigned the Gmail label taxonomy to 10 flat labels (6 workflow-state + 4 content-type: Newsletter/Marketing/Notification/Calendar), taking cues from Inbox Zero's `SystemType`; retired `Follow Up`/`Important`/`Low Priority`. Synced the in-app inbox UI to the same taxonomy. | The old vocabulary exposed internal-feeling states and lacked the content-type buckets users expect; classification stays deterministic (no LLM), so the richer taxonomy adds no cost. |
+| 2026-07-08 | Added an in-process background job scheduler (`lib/scheduler/`, booted via `instrumentation.ts`) rather than relying on external cron calls to `/api/cron/*`. | FlowDesk deploys as a single `next start` process on Railway with nothing configured to call the cron routes; the classification pipeline, writeback retries, follow-ups, and reconciliation were all silently dead in production. |
+| 2026-07-08 | Refocus the roadmap on shipping a tight MVP: make one core loop excellent, defer the ~40 half-built peripheral features out of the default experience. | Breadth (45 features, almost all `Partial`) is now the thing blocking a shippable product. The core Gmail-native loop is reliable; the MVP gap is the first-run "organize my existing inbox" moment, not more features. |
+| 2026-07-08 | The MVP's missing piece is a deterministic retroactive first-pass over existing mail + a proof screen at onboarding. | FlowDesk's pipeline only acts on new incoming mail, so a new user's backlog stays unorganized until fresh mail arrives — the exact anti-pattern Inbox Zero's onboarding avoids. FlowDesk's deterministic classifier makes a backlog pass free of LLM cost, so it can do this better than Inbox Zero. |
 
 ## Open product questions
 

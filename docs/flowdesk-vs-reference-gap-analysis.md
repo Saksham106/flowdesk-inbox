@@ -16,7 +16,9 @@ FlowDesk is no longer just an AI inbox dashboard. The current codebase already c
 - Audit log and rollback/undo foundations.
 - Outlook OAuth/delta/webhooks, though not full writeback parity.
 
-The biggest remaining gaps are not "can FlowDesk touch Gmail?" They are control, visibility, rule authoring, operational reliability, and polish.
+The biggest remaining gaps are not "can FlowDesk touch Gmail?" They are control, visibility, rule authoring, and polish. Operational reliability — previously the top P0 — is now solved: an in-process scheduler (`lib/scheduler/`, booted via `instrumentation.ts`) runs every background job in production without external cron infrastructure.
+
+> **Top MVP gap (identified 2026-07-08, from a fresh read of Inbox Zero's onboarding):** FlowDesk's classification/labeling pipeline only acts on **new incoming** mail, so a brand-new user connects Gmail and stares at an **unchanged** inbox until fresh mail arrives. Inbox Zero closes this with a retroactive first-pass: on connect it runs its rules over the last ~20 inbox threads (label-only, `skipArchive: true`) and shows a proof screen of what it just did before the user reaches their inbox (`apps/web/utils/ai/choose-rule/bulk-process-emails.ts`, `StepInboxProcessed.tsx`). FlowDesk should build the equivalent — and can do it **better and cheaper**, because its classifier is deterministic (a backlog pass costs zero LLM spend, vs. Inbox Zero's per-message LLM call). Most of the machinery already exists (`reconcileGmailLabelsForChannel`, the `/api/connectors/gmail/relabel` route). This is the single highest-leverage build toward a usable MVP.
 
 ## Gap Matrix
 
@@ -109,34 +111,33 @@ Likely areas:
 - `app/api/cron/gmail-writeback/route.ts`
 - Prisma `AuditLog`, `GmailWritebackQueue`, `ApprovalRequest`
 
-### 4. Operational Health
+### 4. Operational Health — mostly shipped
 
-Problem: Gmail-native behavior depends on crons and push/watch health. Users and operators need visibility.
+Problem: Gmail-native behavior depends on background jobs and push/watch health.
 
-Needed:
+Shipped:
 
-- Confirm `agent-jobs`, `gmail-writeback`, and `follow-up` crons in deployment.
-- Expose stale queues and failed writebacks.
-- Show Gmail watch expiration/renewal state.
-- Show Outlook subscription/renewal failures.
+- **Every background job now runs in production** via the in-process scheduler (`lib/scheduler/`), removing the dependence on externally-scheduled crons that previously left `agent-jobs`, `gmail-writeback`, and `follow-up` dead in deployment. Status is exposed at `GET /api/admin/scheduler-status`.
+- Gmail operator-health panel (`lib/gmail-operator-health.ts`) surfaces auth/sync, push/watch, writeback backlog/failures, and agent-job state.
+- Gmail watch expiration/renewal state is tracked and shown.
 
-Likely areas:
+Remaining:
 
-- `app/api/cron/*`
-- `lib/gmail-sync.ts`
-- `lib/outlook-sync.ts`
-- `lib/outlook-subscriptions.ts`
-- `app/settings/ConnectedAppsPanel.tsx`
+- Outlook subscription/renewal failure causes (deferred with the rest of Outlook — see P1).
 
 ### 5. Current Known Correctness Gaps
 
-Needed:
+Shipped since this analysis was written:
+
+- `create_draft` automation step type removed (was unreachable dead code).
+- Label bootstrap on connect + scheduled reconciliation maintenance (`gmail-label-reconcile`, now scheduler-driven).
+- Deterministic classification fallback so never-classified threads still get correct labels.
+
+Remaining:
 
 - Preserve user-edited `InboxTask` fields across sync/classification refresh.
-- Keep `Handle First` dashboard-only; do not project it as a Gmail label.
-- Implement or remove the `create_draft` automation step type if still referenced separately from Gmail writeback.
-- Schedule label bootstrap/reconciliation maintenance.
-- Consolidate duplicate heuristics.
+- Keep `Handle First` dashboard-only; do not project it as a Gmail label. (Holds today.)
+- Consolidate duplicate heuristics (the `{"quiet","fyi_done"}` set is repeated across command-center, inbox-fyi, gmail-labels, and workflow-status).
 
 Likely areas:
 
