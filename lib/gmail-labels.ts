@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status"
 import { DEFAULT_FOLLOW_UP_BUSINESS_DAYS, followUpDueAt } from "@/lib/business-days"
 import { getAutomationLevel, isActionAllowedAtLevel } from "@/lib/agent/automation-level"
+import { classifyEmailType } from "@/lib/agent/email-classifier"
 
 // Labels are flat, top-level Gmail labels named exactly for what they mean
 // ("Needs Reply", "Waiting On", …) with no "FlowDesk/" namespace prefix.
@@ -256,6 +257,12 @@ export async function projectFlowDeskLabelsForConversation(input: {
       channel: { select: { provider: true } },
       draft: { select: { status: true } },
       stateRecord: { select: { attentionCategory: true, emailType: true } },
+      messages: {
+        where: { direction: "inbound" },
+        orderBy: { createdAt: "asc" },
+        take: 1,
+        select: { fromE164: true, subject: true, body: true },
+      },
     },
   })
 
@@ -263,12 +270,33 @@ export async function projectFlowDeskLabelsForConversation(input: {
   if (conversation.channel?.provider !== "google") return null
   if (!conversation.externalThreadId) return null
 
+  // The AI classification job populates ConversationState.attentionCategory /
+  // emailType, but for a conversation it has never run for (e.g. the job
+  // pipeline wasn't wired up yet when the account connected), both are null —
+  // and deriveWorkflowStatus falls all the way through to "needs_reply" for
+  // everything, even obvious newsletters/notifications. Fall back to the
+  // deterministic (no AI, no DB) classifier used elsewhere in the pipeline so
+  // an unclassified conversation still gets a reasonable label instead of a
+  // uniform, wrong "Needs Reply".
+  let attentionCategory = conversation.stateRecord?.attentionCategory ?? null
+  let emailType = conversation.stateRecord?.emailType ?? null
+  const firstInbound = conversation.messages[0]
+  if (!attentionCategory && !emailType && firstInbound) {
+    const fallback = classifyEmailType({
+      fromEmail: firstInbound.fromE164,
+      subject: firstInbound.subject ?? "",
+      body: firstInbound.body,
+    })
+    attentionCategory = fallback.attentionCategory
+    emailType = fallback.emailType
+  }
+
   const workflowStatus = deriveWorkflowStatus({
     status: conversation.status,
     userState: conversation.userState,
     draftStatus: conversation.draft?.status,
-    attentionCategory: conversation.stateRecord?.attentionCategory,
-    emailType: conversation.stateRecord?.emailType,
+    attentionCategory,
+    emailType,
   })
 
   // A waiting-on conversation past the tenant's follow-up delay also gets
@@ -289,7 +317,7 @@ export async function projectFlowDeskLabelsForConversation(input: {
     workflowStatus,
     localLabel: conversation.label,
     draftStatus: conversation.draft?.status,
-    attentionCategory: conversation.stateRecord?.attentionCategory,
+    attentionCategory,
     followUpDue,
   })
 
