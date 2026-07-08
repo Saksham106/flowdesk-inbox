@@ -57,8 +57,10 @@ function PillarHeading({
 
 /** Neutral sub-heading for a group within a pillar (e.g. "Handle first"
  *  inside "What needs you"). Deliberately un-colored so it doesn't compete
- *  with the pillar's accent color above it. */
-function SubHeading({ label, badge }: { label: string; badge?: string }) {
+ *  with the pillar's accent color above it. An optional `href` (e.g. the full
+ *  audit log) keeps deeper power-user views one click away without needing a
+ *  permanent nav rail icon. */
+function SubHeading({ label, badge, href, hrefLabel }: { label: string; badge?: string; href?: string; hrefLabel?: string }) {
   return (
     <div className="flex items-center justify-between">
       <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
@@ -66,6 +68,11 @@ function SubHeading({ label, badge }: { label: string; badge?: string }) {
         <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-50 text-slate-500 border border-slate-200">
           {badge}
         </span>
+      )}
+      {href && (
+        <Link href={href} className="text-[10px] font-medium text-blue-500 hover:underline">
+          {hrefLabel ?? "View all →"}
+        </Link>
       )}
     </div>
   )
@@ -145,7 +152,7 @@ export default function HomeCommandCenter({
             <PillarHeading icon="✦" label="The agent" tone="accent" />
 
             <div className="flex flex-col gap-2">
-              <SubHeading label="What it did" />
+              <SubHeading label="What it did" href="/audit" hrefLabel="Full activity log →" />
               <AgentActivitySection
                 agentSummary={agentSummary}
                 quietlyHandledBreakdown={quietlyHandledBreakdown}

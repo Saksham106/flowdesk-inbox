@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { buildControlRoomStatus } from "@/lib/control-room-status"
 
 interface Props {
@@ -43,7 +44,13 @@ export default function ControlRoomHeader({
           <p className="text-sm font-semibold text-slate-900">Control room</p>
           <span className="text-[11px] text-slate-400">{dateLabel(date)}</span>
         </div>
-        <p className="mt-1 text-xs text-slate-500 break-words [overflow-wrap:anywhere]">{status}</p>
+        <Link
+          href="/settings#automation"
+          className="mt-1 block text-xs text-slate-500 break-words [overflow-wrap:anywhere] hover:text-slate-700 hover:underline"
+          title="Change how much FlowDesk can do on its own"
+        >
+          {status}
+        </Link>
       </div>
       {hasGmail && (
         <a

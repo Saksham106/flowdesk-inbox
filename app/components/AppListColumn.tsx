@@ -132,9 +132,13 @@ function getCachedListData(input: {
         }
       }
       if (input.q) {
+        // Matches the standalone /search page's message-body search too, so
+        // this one box covers both "find a conversation" and "find something
+        // someone said" — no separate search page needed.
         where.OR = [
           { externalThreadId: { contains: input.q, mode: "insensitive" } },
           { contact: { name: { contains: input.q, mode: "insensitive" } } },
+          { messages: { some: { body: { contains: input.q, mode: "insensitive" } } } },
         ]
       }
 
