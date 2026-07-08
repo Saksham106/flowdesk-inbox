@@ -31,28 +31,28 @@ export default function ControlRoomHeader({
   hasGmail,
   date,
 }: Props) {
-  const status = buildControlRoomStatus({ level: automationLevel, pendingReview })
+  const status = buildControlRoomStatus({ level: automationLevel, pendingReview, hasGmail })
 
   return (
     <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span
-            className="inline-block h-2 w-2 shrink-0 rounded-full bg-green-400"
+            className={`inline-block h-2 w-2 shrink-0 rounded-full ${hasGmail ? "bg-green-400" : "bg-amber-400"}`}
             aria-hidden
           />
           <p className="text-sm font-semibold text-slate-900">Control room</p>
           <span className="text-[11px] text-slate-400">{dateLabel(date)}</span>
         </div>
         <Link
-          href="/settings#automation"
+          href={hasGmail ? "/settings#automation" : "/settings#connect"}
           className="mt-1 block text-xs text-slate-500 break-words [overflow-wrap:anywhere] hover:text-slate-700 hover:underline"
-          title="Change how much FlowDesk can do on its own"
+          title={hasGmail ? "Change how much FlowDesk can do on its own" : "Connect your Gmail account"}
         >
           {status}
         </Link>
       </div>
-      {hasGmail && (
+      {hasGmail ? (
         <a
           href="https://mail.google.com"
           target="_blank"
@@ -64,6 +64,16 @@ export default function ControlRoomHeader({
           </svg>
           Open Gmail
         </a>
+      ) : (
+        <Link
+          href="/settings#connect"
+          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          Connect Gmail
+        </Link>
       )}
     </div>
   )

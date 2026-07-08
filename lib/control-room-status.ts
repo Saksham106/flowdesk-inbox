@@ -23,14 +23,24 @@ export function automationLevelLabel(level: number): string {
  * how much is waiting on the user. Pure so it can be unit-tested and rendered
  * on the server without a client boundary.
  *
- * - Always states the automation level and its plain-English meaning.
- * - Appends the pending-review count only when there is something to review, so
- *   an all-clear control room doesn't show a distracting "0 waiting".
+ * - Before any Gmail account is connected, saying "FlowDesk is working in
+ *   your Gmail" is simply false — a brand-new signup would see a confident
+ *   claim about something that hasn't happened yet, with no indication of
+ *   what to do next. Returns an honest, action-oriented line instead.
+ * - Once connected: always states the automation level and its plain-English
+ *   meaning, and appends the pending-review count only when there is
+ *   something to review, so an all-clear control room doesn't show a
+ *   distracting "0 waiting".
  */
 export function buildControlRoomStatus(input: {
   level: number
   pendingReview: number
+  hasGmail: boolean
 }): string {
+  if (!input.hasGmail) {
+    return "Connect Gmail to get FlowDesk working — takes about a minute."
+  }
+
   const level = clampAutomationLevel(input.level)
   const base = `FlowDesk is working in your Gmail · Level ${level} (${automationLevelLabel(level)})`
 
