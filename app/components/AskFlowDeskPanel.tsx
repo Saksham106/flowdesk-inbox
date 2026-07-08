@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import ChatInterface from "@/app/chat/ChatInterface"
-import { isAskFlowDeskClick } from "@/lib/ask-flowdesk"
+import { FOCUSABLE_SELECTOR, focusTrapTarget, isAskFlowDeskClick } from "@/lib/ask-flowdesk"
 
 /**
  * Global "Ask FlowDesk" slide-over. Opens when any element matching
@@ -29,11 +29,30 @@ export default function AskFlowDeskPanel() {
     return () => document.removeEventListener("click", handleClick)
   }, [])
 
-  // Escape closes the panel.
+  // Escape closes the panel; Tab/Shift+Tab is trapped inside it so keyboard
+  // focus can't wander back into the (aria-modal) page behind the dialog.
   useEffect(() => {
     if (!open) return
     function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false)
+      if (e.key === "Escape") {
+        setOpen(false)
+        return
+      }
+      if (e.key !== "Tab") return
+      const panel = panelRef.current
+      if (!panel) return
+      const focusable = Array.from(
+        panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+      ).filter((el) => el.offsetParent !== null || el === document.activeElement)
+      const next = focusTrapTarget(
+        focusable,
+        document.activeElement as HTMLElement | null,
+        e.shiftKey
+      )
+      if (next) {
+        e.preventDefault()
+        next.focus()
+      }
     }
     document.addEventListener("keydown", handleKey)
     return () => document.removeEventListener("keydown", handleKey)
