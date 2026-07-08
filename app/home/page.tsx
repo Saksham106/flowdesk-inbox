@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import SignOutButton from "@/app/inbox/SignOutButton";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import AppRail from "@/app/components/AppRail";
+import AskFlowDeskPanel from "@/app/components/AskFlowDeskPanel";
 import HomeCommandCenter from "@/app/components/HomeCommandCenter";
 import GmailSyncControl from "@/app/components/GmailSyncControl";
 import { buildDailyCommandCenter, buildBillsSection, CommandCenterInputConversation, PersistedCommandCenterState, CommandCenterState, CommandCenterPriority, type AgentSummary, type BillsSection } from "@/lib/agent/command-center";
@@ -304,6 +305,8 @@ async function renderHomePage(tenantId: string) {
           />
         </main>
       </div>
+
+      <AskFlowDeskPanel />
     </>
   );
 }

@@ -99,7 +99,7 @@ export default function AppRail(props: Props) {
 
       <div className="flex-1" />
 
-      {/* Ask FlowDesk — placeholder trigger, wired to a slide-over in Slice 4 */}
+      {/* Ask FlowDesk — opens the global slide-over (see AskFlowDeskPanel) */}
       <button
         type="button"
         data-ask-flowdesk
