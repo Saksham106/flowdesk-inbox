@@ -96,12 +96,13 @@ describe("FlowDesk Gmail labels", () => {
       "Needs Reply",
       "Needs Action",
       "Waiting On",
-      "Follow Up",
       "Read Later",
-      "Important",
       "Handled",
       "Autodrafted",
-      "Low Priority",
+      "Newsletter",
+      "Marketing",
+      "Notification",
+      "Calendar",
     ])
   })
 
@@ -109,17 +110,23 @@ describe("FlowDesk Gmail labels", () => {
     expect(
       flowDeskLabelsForConversationState({
         workflowStatus: "waiting_on",
-        localLabel: "Pricing",
         draftStatus: "proposed",
       })
-    ).toEqual(["Waiting On", "Autodrafted", "Important"])
+    ).toEqual(["Waiting On", "Autodrafted"])
 
     expect(
       flowDeskLabelsForConversationState({
         workflowStatus: "done",
-        attentionCategory: "quiet",
+        emailType: "notification",
       })
-    ).toEqual(["Handled", "Low Priority"])
+    ).toEqual(["Handled", "Notification"])
+
+    expect(
+      flowDeskLabelsForConversationState({
+        workflowStatus: "needs_reply",
+        emailType: "calendar",
+      })
+    ).toEqual(["Needs Reply", "Calendar"])
   })
 
   it("creates missing labels and applies only FlowDesk labels to a Gmail thread", async () => {

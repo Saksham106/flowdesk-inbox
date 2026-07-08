@@ -292,17 +292,11 @@ describe('runFollowUpLabelSweep', () => {
     expect(mockProjectLabels).not.toHaveBeenCalled()
   })
 
-  it('skips conversations whose queued labels already include Follow Up', async () => {
-    mockWritebackFindMany.mockResolvedValue([
-      {
-        conversationId: CONV_1,
-        status: 'pending',
-        providerMessageIdsJson: {
-          threadId: 'thread-abc',
-          labels: ['Waiting On', 'Follow Up'],
-        },
-      },
-    ])
+  it('skips conversations already re-projected recently', async () => {
+    // The recency filter (status != failed, updatedAt within the coarse
+    // window) is applied in the Prisma query itself, so a returned row means
+    // "already handled recently."
+    mockWritebackFindMany.mockResolvedValue([{ conversationId: CONV_1 }])
 
     const result = await runFollowUpLabelSweep(now)
 
@@ -310,17 +304,10 @@ describe('runFollowUpLabelSweep', () => {
     expect(mockProjectLabels).not.toHaveBeenCalled()
   })
 
-  it('re-projects conversations whose Follow Up label writeback previously failed', async () => {
-    mockWritebackFindMany.mockResolvedValue([
-      {
-        conversationId: CONV_1,
-        status: 'failed',
-        providerMessageIdsJson: {
-          threadId: 'thread-abc',
-          labels: ['Waiting On', 'Follow Up'],
-        },
-      },
-    ])
+  it('re-projects conversations whose prior writeback failed or aged out', async () => {
+    // A failed or stale row is filtered out by the Prisma query itself, so
+    // it never comes back here — the sweep re-projects normally.
+    mockWritebackFindMany.mockResolvedValue([])
 
     const result = await runFollowUpLabelSweep(now)
 

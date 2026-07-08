@@ -1,4 +1,4 @@
-export type EmailType = "needs_reply" | "notification" | "newsletter" | "marketing" | "fyi"
+export type EmailType = "needs_reply" | "notification" | "newsletter" | "marketing" | "calendar" | "fyi"
 export type AttentionCategory =
   | "needs_reply"
   | "needs_action"
@@ -118,7 +118,8 @@ const LOGIN_APPROVAL_PATTERN =
 const BILLING_PROBLEM_PATTERN =
   /\b(payment failed|failed payment|could not process your payment|billing problem|invoice overdue|past due|card declined|subscription suspended|service interruption|action required.{0,40}(billing|payment|invoice))\b/i
 const CALENDAR_INVITE_PATTERN =
-  /\b(calendar invitation|invited you to|rsvp|respond to this invitation|accepted:|declined:|tentative:|meeting invitation)\b/i
+  /\b(calendar invitation|invited you to|rsvp|respond to this invitation|accepted:|declined:|tentative:|meeting invitation|\.ics\b|google meet|zoom meeting|has been (canceled|cancelled|rescheduled)|updated invitation|new event:|event invitation)\b/i
+const CALENDAR_SENDER_DOMAIN_PATTERN = /^(calendar-notification\.google\.com|calendar\.google\.com|.*\.calendar\.google\.com)$/
 const DELIVERY_ISSUE_PATTERN =
   /\b(delivery (delayed|failed|exception|issue)|shipment (delayed|failed)|unable to deliver|package delayed|delivery attempt)\b/i
 const LINKEDIN_JOB_ALERT_PATTERN =
@@ -370,8 +371,8 @@ export function classifyEmailType(input: EmailClassifierInput): EmailClassifierR
     })
   }
 
-  if (CALENDAR_INVITE_PATTERN.test(text)) {
-    return result("notification", "needs_action", "Calendar invite or RSVP requires a user decision.", 0.9)
+  if (CALENDAR_INVITE_PATTERN.test(text) || CALENDAR_SENDER_DOMAIN_PATTERN.test(domain)) {
+    return result("calendar", "needs_action", "Calendar invite or RSVP requires a user decision.", 0.9)
   }
 
   if (SECURITY_REVIEW_PATTERN.test(text)) {

@@ -264,32 +264,16 @@ describe("projectFlowDeskLabelsForConversation", () => {
     expect(upsertArg.create.providerMessageIdsJson.labels).not.toContain("Needs Reply")
   })
 
-  it("adds Follow Up for a waiting-on conversation past the tenant delay", async () => {
+  it("stays Waiting On regardless of how long the conversation has been overdue", async () => {
+    // There's no separate "Follow Up" Gmail label — overdue tracking is
+    // app-only (see followUpDueAt / WaitingOnSection) — so the projected
+    // label set doesn't change once a conversation passes the tenant delay.
     mockConversationFindFirst.mockResolvedValue({
       ...GOOGLE_CONVERSATION,
       status: "in_progress",
       stateRecord: null,
       // two weeks ago — past any small business-day delay
       lastMessageAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
-    })
-
-    await projectFlowDeskLabelsForConversation({
-      tenantId: "tenant-1",
-      conversationId: "conv-1",
-    })
-
-    const upsertArg = mockWritebackUpsert.mock.calls[0][0]
-    expect(upsertArg.create.providerMessageIdsJson.labels).toEqual(
-      expect.arrayContaining(["Waiting On", "Follow Up"])
-    )
-  })
-
-  it("does not add Follow Up before the delay elapses", async () => {
-    mockConversationFindFirst.mockResolvedValue({
-      ...GOOGLE_CONVERSATION,
-      status: "in_progress",
-      stateRecord: null,
-      lastMessageAt: new Date(Date.now() - 60 * 60 * 1000), // an hour ago
     })
 
     await projectFlowDeskLabelsForConversation({

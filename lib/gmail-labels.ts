@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma"
 import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status"
-import { DEFAULT_FOLLOW_UP_BUSINESS_DAYS, followUpDueAt } from "@/lib/business-days"
 import { getAutomationLevel, isActionAllowedAtLevel } from "@/lib/agent/automation-level"
 import { classifyEmailType } from "@/lib/agent/email-classifier"
 
@@ -12,16 +11,25 @@ import { classifyEmailType } from "@/lib/agent/email-classifier"
 // Handle First section is a relative ranking computed per request by the command
 // center, not a persisted per-conversation state), so the label could never be
 // applied. It is never created or applied anymore.
+//
+// Vocabulary redesigned to take inspiration from Inbox Zero's content-type
+// taxonomy (Newsletter/Marketing/Notification/Calendar) alongside the existing
+// workflow-state labels. Retired: "Follow Up" (overdue tracking stays app-side
+// only, see followUpDueAt/WaitingOnSection — it no longer produces a distinct
+// Gmail label), "Important" (the underlying Lead/Pricing/Complaint signal is
+// in-app only now), "Low Priority" (superseded by the more specific content
+// labels below).
 export const FLOWDESK_GMAIL_LABEL_NAMES = [
   "Needs Reply",
   "Needs Action",
   "Waiting On",
-  "Follow Up",
   "Read Later",
-  "Important",
   "Handled",
   "Autodrafted",
-  "Low Priority",
+  "Newsletter",
+  "Marketing",
+  "Notification",
+  "Calendar",
 ] as const
 
 export type FlowDeskGmailLabelName = (typeof FLOWDESK_GMAIL_LABEL_NAMES)[number]
@@ -42,9 +50,20 @@ export const LEGACY_FLOWDESK_LABEL_RENAMES: ReadonlyArray<
   (name) => [`${LEGACY_FLOWDESK_LABEL_PREFIX}${name}`, name] as const
 )
 
-const IMPORTANT_LOCAL_LABELS = new Set(["Lead", "Pricing", "Complaint"])
-const LOW_PRIORITY_ATTENTION = new Set(["quiet", "fyi_done"])
 const NEEDS_ACTION_ATTENTION = new Set(["needs_action"])
+
+// Maps a deterministic classifier emailType to the content-type label it
+// projects, if any. "needs_reply" carries no content label of its own; "fyi"
+// (informational-but-no-clear-category) folds into "Notification" alongside
+// the classifier's own "notification" type, mirroring how Inbox Zero treats
+// receipts/automated mail as one bucket rather than a separate label.
+const EMAIL_TYPE_CONTENT_LABEL: Partial<Record<string, FlowDeskGmailLabelName>> = {
+  newsletter: "Newsletter",
+  marketing: "Marketing",
+  notification: "Notification",
+  fyi: "Notification",
+  calendar: "Calendar",
+}
 
 export function isFlowDeskGmailLabelName(label: string): label is FlowDeskGmailLabelName {
   return FLOWDESK_GMAIL_LABEL_SET.has(label)
@@ -52,10 +71,9 @@ export function isFlowDeskGmailLabelName(label: string): label is FlowDeskGmailL
 
 export function flowDeskLabelsForConversationState(input: {
   workflowStatus: WorkflowStatus
-  localLabel?: string | null
   draftStatus?: string | null
   attentionCategory?: string | null
-  followUpDue?: boolean
+  emailType?: string | null
 }): FlowDeskGmailLabelName[] {
   const labels: FlowDeskGmailLabelName[] = []
 
@@ -80,17 +98,12 @@ export function flowDeskLabelsForConversationState(input: {
   if (NEEDS_ACTION_ATTENTION.has(input.attentionCategory ?? "")) {
     labels.push("Needs Action")
   }
-  if (LOW_PRIORITY_ATTENTION.has(input.attentionCategory ?? "")) {
-    labels.push("Low Priority")
-  }
-  if (input.followUpDue) {
-    labels.push("Follow Up")
-  }
   if (input.draftStatus === "proposed" || input.draftStatus === "approved") {
     labels.push("Autodrafted")
   }
-  if (input.localLabel && IMPORTANT_LOCAL_LABELS.has(input.localLabel)) {
-    labels.push("Important")
+  const contentLabel = EMAIL_TYPE_CONTENT_LABEL[input.emailType ?? ""]
+  if (contentLabel) {
+    labels.push(contentLabel)
   }
 
   return Array.from(new Set(labels))
@@ -250,7 +263,6 @@ export async function projectFlowDeskLabelsForConversation(input: {
       id: true,
       channelId: true,
       externalThreadId: true,
-      label: true,
       status: true,
       userState: true,
       lastMessageAt: true,
@@ -299,26 +311,11 @@ export async function projectFlowDeskLabelsForConversation(input: {
     emailType,
   })
 
-  // A waiting-on conversation past the tenant's follow-up delay also gets
-  // "FlowDesk/Follow Up". staleAfterDays doubles as the delay (business days);
-  // deliberately independent of FollowUpSetting.enabled, which only gates
-  // automated follow-up jobs.
-  let followUpDue = false
-  if (workflowStatus === "waiting_on" && conversation.lastMessageAt) {
-    const setting = await prisma.followUpSetting.findUnique({
-      where: { tenantId: input.tenantId },
-      select: { staleAfterDays: true },
-    })
-    const staleDays = setting?.staleAfterDays ?? DEFAULT_FOLLOW_UP_BUSINESS_DAYS
-    followUpDue = new Date() >= followUpDueAt(conversation.lastMessageAt, staleDays)
-  }
-
   const labels = flowDeskLabelsForConversationState({
     workflowStatus,
-    localLabel: conversation.label,
     draftStatus: conversation.draft?.status,
     attentionCategory,
-    followUpDue,
+    emailType,
   })
 
   const enabledLabels = await filterEnabledFlowDeskLabels(input.tenantId, labels)

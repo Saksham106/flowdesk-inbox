@@ -41,7 +41,7 @@ export async function PATCH(
       externalThreadId: true,
       label: true,
       draft: { select: { status: true } },
-      stateRecord: { select: { attentionCategory: true } },
+      stateRecord: { select: { attentionCategory: true, emailType: true } },
       channel: { select: { provider: true } },
     },
   })
@@ -78,11 +78,11 @@ export async function PATCH(
       threadId: conversation.externalThreadId,
       labels: flowDeskLabelsForConversationState({
         workflowStatus: settableWorkflowStatus,
-        localLabel: conversation.label,
         draftStatus: shouldClearDraftForWorkflowStatus(settableWorkflowStatus)
           ? null
           : conversation.draft?.status,
         attentionCategory: conversation.stateRecord?.attentionCategory,
+        emailType: conversation.stateRecord?.emailType,
       }),
       reason: `workflow_status.${settableWorkflowStatus}`,
     })
