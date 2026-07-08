@@ -129,7 +129,6 @@ export async function PATCH(
       threadId: conversation.externalThreadId,
       labels: flowDeskLabelsForConversationState({
         workflowStatus,
-        localLabel: conversation.label,
         draftStatus: status === "closed" ? null : conversation.draft?.status,
       }),
       reason: `conversation_status.${status}`,

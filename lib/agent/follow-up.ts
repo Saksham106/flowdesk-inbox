@@ -215,10 +215,12 @@ export type FollowUpLabelSweepResult = {
 }
 
 /**
- * Marks overdue waiting-on conversations as follow-up due by re-projecting
- * their Gmail labels (the projection itself derives `followUpDue`, adding
- * the "Follow Up" label). Nothing else triggers a projection when time passes,
- * so the follow-up cron runs this sweep.
+ * Re-projects Gmail labels for overdue waiting-on conversations. There is no
+ * distinct "Follow Up" Gmail label anymore — overdue tracking is app-only
+ * (see followUpDueAt / WaitingOnSection) — but nothing else triggers a label
+ * projection purely from time passing, so this sweep still catches drift
+ * (e.g. a conversation whose classification or workflow status changed
+ * without a corresponding re-projection).
  *
  * Runs for every tenant — deliberately NOT gated on FollowUpSetting.enabled,
  * which only opts a tenant into automated follow-up *jobs* (draft nudges).
@@ -250,26 +252,19 @@ export async function runFollowUpLabelSweep(now = new Date()): Promise<FollowUpL
   })
   const staleDaysByTenant = new Map(settings.map((s) => [s.tenantId, s.staleAfterDays]))
 
-  // Skip conversations whose queued label payload already carries Follow Up —
-  // re-queuing them every cron run would spam Gmail with no-op writebacks.
+  // Skip conversations already re-projected recently — re-queuing them every
+  // cron run would spam Gmail with redundant no-op writebacks. "Recently"
+  // matches the sweep's own cadence (coarseCutoff, 24h).
   const queuedRows = await prisma.gmailWritebackQueue.findMany({
     where: {
       conversationId: { in: candidates.map((c) => c.id) },
       action: "apply_labels",
+      status: { not: "failed" },
+      updatedAt: { gte: coarseCutoff },
     },
-    select: { conversationId: true, providerMessageIdsJson: true, status: true },
+    select: { conversationId: true },
   })
-  const alreadyQueued = new Set(
-    queuedRows
-      .filter((row) => {
-        if (row.status === "failed") return false
-        const payload = row.providerMessageIdsJson
-        if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false
-        const labels = (payload as Record<string, unknown>).labels
-        return Array.isArray(labels) && labels.includes("Follow Up")
-      })
-      .map((row) => row.conversationId)
-  )
+  const alreadyQueued = new Set(queuedRows.map((row) => row.conversationId))
 
   let projected = 0
   let skipped = 0

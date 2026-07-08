@@ -11,8 +11,9 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Label sweep runs for every tenant (waiting_on → Follow Up label once the
-    // delay elapses); the job batch below stays opt-in via FollowUpSetting.
+    // Label sweep runs for every tenant, re-projecting labels for overdue
+    // waiting-on conversations to catch drift; the job batch below stays
+    // opt-in via FollowUpSetting.
     const labelSweep = await runFollowUpLabelSweep()
     const result = await runFollowUpBatch()
     return NextResponse.json({ ok: true, ...result, labelSweep })

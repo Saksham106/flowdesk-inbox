@@ -758,12 +758,13 @@ const FLOWDESK_GMAIL_LABEL_COLORS: Record<
   "Needs Reply": { backgroundColor: "#ffc8af", textColor: "#000000" }, // coral
   "Needs Action": { backgroundColor: "#ffdeb5", textColor: "#000000" }, // orange
   "Waiting On": { backgroundColor: "#b6cff5", textColor: "#000000" }, // blue
-  "Follow Up": { backgroundColor: "#fdedc1", textColor: "#000000" }, // yellow
   "Read Later": { backgroundColor: "#fbc8d9", textColor: "#000000" }, // rose
-  Important: { backgroundColor: "#f2b2a8", textColor: "#000000" }, // red
   Handled: { backgroundColor: "#c2c2c2", textColor: "#000000" }, // gray
   Autodrafted: { backgroundColor: "#e3d7ff", textColor: "#000000" }, // purple
-  "Low Priority": { backgroundColor: "#98d7e4", textColor: "#000000" }, // cyan
+  Newsletter: { backgroundColor: "#fdedc1", textColor: "#000000" }, // yellow
+  Marketing: { backgroundColor: "#f2b2a8", textColor: "#000000" }, // red
+  Notification: { backgroundColor: "#98d7e4", textColor: "#000000" }, // cyan
+  Calendar: { backgroundColor: "#b3efd3", textColor: "#000000" }, // green
 }
 
 async function listGmailLabels(

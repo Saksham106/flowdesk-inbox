@@ -227,7 +227,7 @@ const MAPPERS: Record<
   "follow_up.due_labeled": () => ({
     icon: "⏰",
     title: "Follow-up is due",
-    detail: "Added the Follow Up label",
+    detail: "Still marked Waiting On — no reply yet",
     why: null,
     tone: "warning",
   }),

@@ -68,14 +68,14 @@ describe("GET /api/gmail-label-settings", () => {
 
   it("returns all canonical labels, defaulting missing ones to enabled", async () => {
     mockLabelMappingFindMany.mockResolvedValue([
-      { canonical: "Low Priority", enabled: false },
+      { canonical: "Notification", enabled: false },
     ])
     const res = (await GET()) as unknown as {
       body: { labels: Array<{ canonical: string; enabled: boolean }> }
     }
-    expect(res.body.labels).toHaveLength(9)
+    expect(res.body.labels).toHaveLength(10)
     const lowPriority = res.body.labels.find(
-      (l) => l.canonical === "Low Priority"
+      (l) => l.canonical === "Notification"
     )
     const needsReply = res.body.labels.find(
       (l) => l.canonical === "Needs Reply"
@@ -109,7 +109,7 @@ describe("PATCH /api/gmail-label-settings", () => {
 
   it("upserts the mapping and writes an audit event", async () => {
     const res = (await PATCH(
-      makeReq({ canonical: "Low Priority", enabled: false })
+      makeReq({ canonical: "Notification", enabled: false })
     )) as unknown as { status: number; body: { ok: boolean } }
     expect(res.status).toBe(200)
     expect(res.body.ok).toBe(true)
@@ -117,12 +117,12 @@ describe("PATCH /api/gmail-label-settings", () => {
       where: {
         tenantId_canonical: {
           tenantId: "tenant-1",
-          canonical: "Low Priority",
+          canonical: "Notification",
         },
       },
       create: {
         tenantId: "tenant-1",
-        canonical: "Low Priority",
+        canonical: "Notification",
         enabled: false,
       },
       update: { enabled: false },
