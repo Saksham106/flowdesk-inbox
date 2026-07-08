@@ -55,14 +55,17 @@ describe("conversation inbox return links", () => {
 });
 
 describe("getInboxNavigation (B2C: baseline + opt-in Sales & CRM)", () => {
-  it("returns the baseline control-room navigation when Sales & CRM is off", () => {
+  it("returns the baseline navigation when Sales & CRM is off", () => {
     expect(getInboxNavigation({ salesCrm: false })).toEqual({
       primary: [
-        { label: "Tasks", href: "/tasks" },
+        { label: "Home", href: "/home" },
+        { label: "Mail", href: "/mail" },
+        { label: "Approvals", href: "/approvals" },
+        { label: "Clean", href: "/clean-inbox" },
         { label: "Settings", href: "/settings" },
       ],
       secondary: [
-        { label: "Approvals", href: "/approvals" },
+        { label: "Tasks", href: "/tasks" },
         { label: "Activity", href: "/audit" },
       ],
     });
@@ -71,7 +74,7 @@ describe("getInboxNavigation (B2C: baseline + opt-in Sales & CRM)", () => {
   it("adds the Sales & CRM cluster when the capability is enabled", () => {
     const secondary = getInboxNavigation({ salesCrm: true }).secondary.map((i) => i.href);
     expect(secondary).toEqual([
-      "/approvals",
+      "/tasks",
       "/audit",
       "/leads",
       "/reports",

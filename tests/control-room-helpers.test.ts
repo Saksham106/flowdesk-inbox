@@ -31,7 +31,7 @@ describe("control room navigation and status helpers", () => {
     expect(on).toContain("/risk-radar")
     expect(on).toContain("/meetings")
     expect(on).toContain("/knowledge-base")
-    expect(on).toContain("/approvals")
+    expect(getInboxNavigation({ salesCrm: true }).primary.map((i) => i.href)).toContain("/approvals")
   })
 
   it("labels automation levels and builds the control-room status line", () => {
