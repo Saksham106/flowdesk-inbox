@@ -3,20 +3,85 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
+import { getPrimaryNav } from "@/lib/app-navigation"
+
 interface Props {
   needsReplyCount: number
   pendingApprovals: number
 }
 
-export default function AppRail({ needsReplyCount, pendingApprovals }: Props) {
-  const pathname = usePathname()
+/**
+ * Per-destination render config, keyed by the href from the pure nav model
+ * (`getPrimaryNav`). The nav model owns the *set*, *order*, and *hrefs* of the
+ * primary destinations; this lookup only owns how each one is drawn (icon,
+ * short rail label, badge, and active-path matching). Adding or removing a
+ * primary destination happens in the model — this map just needs an entry for
+ * the new href so the rail can render it.
+ */
+type RailRenderConfig = {
+  /** Short label under the icon (may abbreviate the nav model's label). */
+  label: string
+  icon: React.ReactNode
+  /** Whether this pathname should light up the item as active. */
+  isActive: (pathname: string) => boolean
+  /** Optional badge count derived from the rail's props. */
+  badge?: (props: Props) => number | undefined
+}
 
-  const isHome = pathname === "/home"
-  const isMailSection =
-    pathname === "/mail" || pathname.startsWith("/conversations/")
-  const isApprovals = pathname === "/approvals"
-  const isCleanInbox = pathname === "/clean-inbox"
-  const isSettings = pathname === "/settings"
+const RAIL_CONFIG: Record<string, RailRenderConfig> = {
+  "/home": {
+    label: "Home",
+    icon: <HomeIcon />,
+    isActive: (p) => p === "/home",
+  },
+  "/mail": {
+    label: "Mail",
+    icon: <MailIcon />,
+    isActive: (p) => p === "/mail" || p.startsWith("/conversations/"),
+    badge: ({ needsReplyCount }) => (needsReplyCount > 0 ? needsReplyCount : undefined),
+  },
+  "/approvals": {
+    label: "Approve",
+    icon: <ApprovalsIcon />,
+    isActive: (p) => p === "/approvals",
+    badge: ({ pendingApprovals }) => (pendingApprovals > 0 ? pendingApprovals : undefined),
+  },
+  "/clean-inbox": {
+    label: "Clean",
+    icon: <BroomIcon />,
+    isActive: (p) => p === "/clean-inbox",
+  },
+  "/settings": {
+    label: "Settings",
+    icon: <SettingsIcon />,
+    isActive: (p) => p === "/settings",
+  },
+}
+
+export default function AppRail(props: Props) {
+  const pathname = usePathname()
+  const primary = getPrimaryNav()
+
+  // Settings is the last primary item and stays pinned below the spacer; the
+  // rest render above it in nav-model order.
+  const topItems = primary.slice(0, -1)
+  const bottomItems = primary.slice(-1)
+
+  const renderItem = (href: string) => {
+    const config = RAIL_CONFIG[href]
+    if (!config) return null
+    return (
+      <RailLink
+        key={href}
+        href={href}
+        active={config.isActive(pathname)}
+        badge={config.badge?.(props)}
+        label={config.label}
+      >
+        {config.icon}
+      </RailLink>
+    )
+  }
 
   return (
     <nav className="flex h-full w-14 shrink-0 flex-col items-center bg-slate-900 py-3 gap-1">
@@ -30,35 +95,7 @@ export default function AppRail({ needsReplyCount, pendingApprovals }: Props) {
         F
       </Link>
 
-      {/* Home */}
-      <RailLink href="/home" active={isHome} label="Home">
-        <HomeIcon />
-      </RailLink>
-
-      {/* Mail */}
-      <RailLink
-        href="/mail"
-        active={isMailSection}
-        badge={needsReplyCount > 0 ? needsReplyCount : undefined}
-        label="Mail"
-      >
-        <MailIcon />
-      </RailLink>
-
-      {/* Approvals — first-class supervision surface for every user */}
-      <RailLink
-        href="/approvals"
-        active={isApprovals}
-        badge={pendingApprovals > 0 ? pendingApprovals : undefined}
-        label="Approve"
-      >
-        <ApprovalsIcon />
-      </RailLink>
-
-      {/* Clean Inbox */}
-      <RailLink href="/clean-inbox" active={isCleanInbox} label="Clean">
-        <BroomIcon />
-      </RailLink>
+      {topItems.map((item) => renderItem(item.href))}
 
       <div className="flex-1" />
 
@@ -67,16 +104,13 @@ export default function AppRail({ needsReplyCount, pendingApprovals }: Props) {
         type="button"
         data-ask-flowdesk
         title="Ask FlowDesk"
-        className="relative flex h-9 w-10 flex-col items-center justify-center gap-0.5 rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+        className="relative flex h-9 w-10 flex-col items-center justify-center gap-0.5 rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-900"
       >
         <ChatIcon />
         <span className="text-[8px] font-semibold leading-none">Ask</span>
       </button>
 
-      {/* Settings */}
-      <RailLink href="/settings" active={isSettings} label="Settings">
-        <SettingsIcon />
-      </RailLink>
+      {bottomItems.map((item) => renderItem(item.href))}
     </nav>
   )
 }
@@ -98,7 +132,7 @@ function RailLink({
     <Link
       href={href}
       title={label}
-      className={`relative flex h-9 w-10 flex-col items-center justify-center gap-0.5 rounded-lg transition ${
+      className={`relative flex h-9 w-10 flex-col items-center justify-center gap-0.5 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-900 ${
         active
           ? "bg-slate-700 text-white"
           : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
