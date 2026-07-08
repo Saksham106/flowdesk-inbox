@@ -1,5 +1,31 @@
 import { prisma } from "@/lib/prisma"
 import { Prisma, ConversationStatus } from "@prisma/client"
+import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
+
+// ConversationState.attentionCategory/emailType/isSalesLead/isSupport are
+// denormalized *from* metadataJson (see conversation-state-metadata.ts) so
+// that other code — e.g. lib/gmail-labels.ts, which projects Gmail labels
+// off the dedicated column, vs. lib/agent/command-center.ts, which reads
+// metadataJson.attentionCategory for the dashboard — agree on the same
+// value. Writing the column alone (as this file used to for update_attention)
+// silently desyncs the two: Gmail shows the new label while the in-app
+// dashboard keeps showing the old one.
+async function mergeAttentionIntoMetadata(
+  conversationId: string,
+  tenantId: string,
+  attentionCategory: string
+): Promise<Prisma.InputJsonValue> {
+  const existing = await prisma.conversationState.findFirst({
+    where: { conversationId, tenantId },
+    select: { metadataJson: true },
+  })
+  const meta =
+    existing?.metadataJson && typeof existing.metadataJson === "object" && !Array.isArray(existing.metadataJson)
+      ? { ...(existing.metadataJson as Record<string, unknown>) }
+      : {}
+  meta.attentionCategory = attentionCategory
+  return meta as Prisma.InputJsonValue
+}
 
 // "create_draft" was previously declared here but never implemented — no
 // trigger, template, or builder ever constructed a step with that type, so it
@@ -63,9 +89,10 @@ export async function executeAutomationStep(step: AutomationStep, tenantId: stri
       if (!conversation) {
         return { status: "failed", error: "Conversation not found for tenant", rollbackData: {} }
       }
+      const mergedMeta = await mergeAttentionIntoMetadata(conversationId, tenantId, attentionCategory)
       const updated = await prisma.conversationState.updateMany({
         where: { conversationId, tenantId },
-        data: { attentionCategory, source: "automation" },
+        data: { metadataJson: mergedMeta, source: "automation", ...conversationStateMetadataData(mergedMeta) },
       })
       if (updated.count === 0) return { status: "failed", error: "Conversation state not found", rollbackData: {} }
       await prisma.auditLog.create({
@@ -122,9 +149,12 @@ export async function rollbackAutomationStep(
   }
   if (step.type === "update_attention") {
     if (step.rollbackData.previousAttention) {
+      const conversationId = step.rollbackData.conversationId as string
+      const previousAttention = step.rollbackData.previousAttention as string
+      const mergedMeta = await mergeAttentionIntoMetadata(conversationId, tenantId, previousAttention)
       await prisma.conversationState.updateMany({
-        where: { conversationId: step.rollbackData.conversationId as string, tenantId },
-        data: { attentionCategory: step.rollbackData.previousAttention as string },
+        where: { conversationId, tenantId },
+        data: { metadataJson: mergedMeta, ...conversationStateMetadataData(mergedMeta) },
       })
     } else {
       console.warn("[automation-runner] rollback skipped for update_attention: previousAttention not present", {
