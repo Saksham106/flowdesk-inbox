@@ -1,10 +1,10 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import WarmingUp from "@/app/components/WarmingUp";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { salesCrmEnabled, accountModeFor } from "@/lib/tenant-capabilities";
 import SignOutButton from "@/app/inbox/SignOutButton";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import AppRail from "@/app/components/AppRail";
@@ -13,23 +13,13 @@ import GmailSyncControl from "@/app/components/GmailSyncControl";
 import { buildDailyCommandCenter, buildBillsSection, CommandCenterInputConversation, PersistedCommandCenterState, CommandCenterState, CommandCenterPriority, type AgentSummary, type BillsSection } from "@/lib/agent/command-center";
 import { analyzeRevenueAtRisk } from "@/lib/agent/revenue-at-risk";
 import { getAutomationLevel } from "@/lib/agent/automation-level";
+import { AppNavigationItem, getInboxNavigation } from "@/lib/app-navigation";
+import { getAppShellContext, isDbStartingError } from "@/lib/app-shell";
 
 export const revalidate = 60;
 
 const HOME_CONVERSATION_LIMIT = 25;
 const HOME_MESSAGE_LIMIT = 5;
-
-function isDbStartingError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  const msg = err.message;
-  return (
-    msg.includes("database system is starting up") ||
-    msg.includes("database system is not yet accepting connections") ||
-    msg.includes("Can't reach database server") ||
-    msg.includes("ECONNREFUSED") ||
-    (err.constructor.name === "PrismaClientInitializationError" && msg.includes("FATAL"))
-  );
-}
 
 export default async function HomePage() {
   const session = await getServerSession(authOptions);
@@ -47,50 +37,13 @@ export default async function HomePage() {
 }
 
 async function renderHomePage(tenantId: string) {
-  const [tenant, statusCounts, gmailChannels] = await Promise.all([
-    prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { salesCrmEnabled: true },
-    }),
-    prisma.conversation.groupBy({
-      by: ["status"],
-      where: { tenantId },
-      _count: { status: true },
-    }),
-    prisma.channel.findMany({
-      where: { tenantId, type: "email", provider: "google" },
-      select: {
-        id: true,
-        emailAddress: true,
-        gmailCredential: {
-          select: {
-            lastSyncedAt: true,
-            lastSyncStatus: true,
-            lastSyncError: true,
-            watchExpiresAt: true,
-            watchLastRenewalAttempt: true,
-            watchRenewalError: true,
-            lastHistoryFallbackAt: true,
-          },
-        },
-      },
-      orderBy: { createdAt: "asc" },
-    }),
-  ]);
-
-  const isBusiness = salesCrmEnabled(tenant);
-  const accountType = accountModeFor(tenant);
-
-  const countByStatus = Object.fromEntries(
-    statusCounts.map((r) => [r.status, r._count.status])
-  ) as Record<string, number>;
-  const needsReplyCount = countByStatus["needs_reply"] ?? 0;
-
-  // pendingApprovals badges the rail, so it's kicked off here to run
-  // concurrently with the command-center data fetch below and awaited after.
-  const pendingApprovalsPromise = prisma.approvalRequest.count({
-    where: { tenantId, status: "pending" },
-  });
+  const {
+    isBusiness,
+    accountType,
+    needsReplyCount,
+    pendingApprovals,
+    gmailSyncChannels,
+  } = await getAppShellContext(tenantId);
 
   // Every query here is independent, so they run in one parallel batch
   // instead of a chain of serialized DB round-trips.
@@ -244,23 +197,41 @@ async function renderHomePage(tenantId: string) {
     learnedRecentlyUpdated: learnedProfile !== null,
   };
 
-  // Resolves immediately — it was issued before the command-center data fetch
-  // above and has been in flight the whole time.
-  const pendingApprovals = await pendingApprovalsPromise;
+  const appNavigation = getInboxNavigation({ salesCrm: isBusiness });
 
-  const gmailSyncChannels = gmailChannels
-    .filter((channel) => channel.gmailCredential)
-    .map((channel) => ({
-      id: channel.id,
-      emailAddress: channel.emailAddress,
-      lastSyncedAt: channel.gmailCredential?.lastSyncedAt ?? null,
-      lastSyncStatus: channel.gmailCredential?.lastSyncStatus ?? null,
-      lastSyncError: channel.gmailCredential?.lastSyncError ?? null,
-      watchExpiresAt: channel.gmailCredential?.watchExpiresAt ?? null,
-      watchLastRenewalAttempt: channel.gmailCredential?.watchLastRenewalAttempt ?? null,
-      watchRenewalError: channel.gmailCredential?.watchRenewalError ?? null,
-      lastHistoryFallbackAt: channel.gmailCredential?.lastHistoryFallbackAt ?? null,
-    }));
+  function navLink(item: AppNavigationItem, className = "") {
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        className={`rounded-md px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 ${className}`}
+      >
+        {item.label}
+      </Link>
+    );
+  }
+
+  function secondaryNavMenu(className = "") {
+    if (appNavigation.secondary.length === 0) return null;
+    return (
+      <details className={`relative ${className}`}>
+        <summary className="cursor-pointer list-none rounded-md px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
+          More
+        </summary>
+        <div className="absolute right-0 z-10 mt-2 min-w-36 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+          {appNavigation.secondary.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="block px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      </details>
+    );
+  }
 
   return (
     <>
@@ -299,8 +270,19 @@ async function renderHomePage(tenantId: string) {
               </div>
               <div className="flex items-center gap-2">
                 <GmailSyncControl channels={gmailSyncChannels} compact />
-                <SignOutButton />
+                <div className="hidden items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 sm:flex">
+                  {appNavigation.primary.map((item) => navLink(item))}
+                  {secondaryNavMenu()}
+                  <SignOutButton />
+                </div>
+                <div className="sm:hidden">
+                  <SignOutButton />
+                </div>
               </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1 pb-3 sm:hidden">
+              {appNavigation.primary.map((item) => navLink(item, "shrink-0"))}
+              {secondaryNavMenu("shrink-0")}
             </div>
           </div>
         </header>
