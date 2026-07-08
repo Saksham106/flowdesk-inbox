@@ -165,72 +165,121 @@ async function renderInboxPage(
   const hasMoreMobile = mobileConversations.length > MOBILE_LIST_LIMIT
   const mobileConversationsPage = mobileConversations.slice(0, MOBILE_LIST_LIMIT)
 
-  // Home view data for command center
-  const [commandCenterConversations, revenueAtRisk] =
-    isHomeView
-      ? await Promise.all([
-          prisma.conversation.findMany({
-            where: { tenantId },
-            orderBy: { lastMessageAt: "desc" },
-            take: HOME_CONVERSATION_LIMIT,
-            include: {
-              messages: { orderBy: { createdAt: "asc" }, take: HOME_MESSAGE_LIMIT },
-              channel: true,
-              contact: true,
-              draft: true,
-              agentJobs: { orderBy: { createdAt: "desc" }, take: 3 },
-              approvalRequests: {
-                where: { status: "pending" },
-                orderBy: { createdAt: "desc" },
-                take: 3,
-              },
-              calendarHolds: {
-                where: { status: "held" },
-                orderBy: { expiresAt: "asc" },
-                take: 3,
-              },
-              leads: {
-                select: { score: true, scoreExplanation: true, estimatedValue: true },
-                take: 1,
-              },
-              stateRecord: {
-                select: {
-                  state: true,
-                  priority: true,
-                  reason: true,
-                  nextAction: true,
-                  confidence: true,
-                  source: true,
-                  metadataJson: true,
-                  attentionCategory: true,
-                  emailType: true,
-                  isSalesLead: true,
-                  isSupport: true,
-                  updatedAt: true,
-                },
+  // pendingApprovals badges the rail on every view (home and list), so it's
+  // kicked off here to run concurrently with the home-data fetch below and
+  // awaited after — no serialized round-trip of its own.
+  const pendingApprovalsPromise = prisma.approvalRequest.count({
+    where: { tenantId, status: "pending" },
+  })
+
+  // Home view data for the command center — every query here is independent,
+  // so they run in one parallel batch instead of a chain of serialized DB
+  // round-trips (each `await` was ~1 RTT of stacked latency on every load).
+  const [
+    commandCenterConversations,
+    revenueAtRisk,
+    upcomingTasks,
+    followUpSetting,
+    classifiedLast24h,
+    draftedLast24h,
+    learnedProfile,
+    automationLevel,
+    activeRulesCount,
+  ] = isHomeView
+    ? await Promise.all([
+        prisma.conversation.findMany({
+          where: { tenantId },
+          orderBy: { lastMessageAt: "desc" },
+          take: HOME_CONVERSATION_LIMIT,
+          include: {
+            // Newest messages first: latestMessage() picks the most recent and
+            // the body-text classification fallback wants recent content. (Was
+            // `asc`, which fetched the OLDEST HOME_MESSAGE_LIMIT and made
+            // "latest message" wrong for any thread longer than that.)
+            messages: { orderBy: { createdAt: "desc" }, take: HOME_MESSAGE_LIMIT },
+            channel: true,
+            contact: true,
+            draft: true,
+            agentJobs: { orderBy: { createdAt: "desc" }, take: 3 },
+            approvalRequests: {
+              where: { status: "pending" },
+              orderBy: { createdAt: "desc" },
+              take: 3,
+            },
+            calendarHolds: {
+              where: { status: "held" },
+              orderBy: { expiresAt: "asc" },
+              take: 3,
+            },
+            leads: {
+              select: { score: true, scoreExplanation: true, estimatedValue: true },
+              take: 1,
+            },
+            stateRecord: {
+              select: {
+                state: true,
+                priority: true,
+                reason: true,
+                nextAction: true,
+                confidence: true,
+                source: true,
+                metadataJson: true,
+                attentionCategory: true,
+                emailType: true,
+                isSalesLead: true,
+                isSupport: true,
+                updatedAt: true,
               },
             },
-          }),
-          isBusiness ? analyzeRevenueAtRisk(tenantId) : Promise.resolve([]),
-        ])
-      : [[], [] as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>];
-
-  const upcomingTasks = isHomeView
-    ? await prisma.inboxTask.findMany({
-        where: {
-          tenantId,
-          status: "open",
-          dueAt: { lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
-        },
-        orderBy: { dueAt: "asc" },
-        take: 10,
-        include: {
-          conversation: {
-            include: { contact: { select: { name: true } } },
           },
-        },
-      })
-    : []
+        }),
+        isBusiness ? analyzeRevenueAtRisk(tenantId) : Promise.resolve([]),
+        prisma.inboxTask.findMany({
+          where: {
+            tenantId,
+            status: "open",
+            dueAt: { lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
+          },
+          orderBy: { dueAt: "asc" },
+          take: 10,
+          include: {
+            conversation: {
+              include: { contact: { select: { name: true } } },
+            },
+          },
+        }),
+        prisma.followUpSetting.findUnique({
+          where: { tenantId },
+          select: { staleAfterDays: true },
+        }),
+        prisma.conversationState.count({
+          where: { tenantId, updatedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+        }),
+        prisma.draft.count({
+          where: {
+            conversation: { tenantId },
+            status: "proposed",
+            updatedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          },
+        }),
+        prisma.learnedReplyProfile.findFirst({
+          where: { tenantId, updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+          select: { id: true },
+        }),
+        getAutomationLevel(tenantId),
+        prisma.agentRule.count({ where: { tenantId, status: "active" } }),
+      ])
+    : [
+        [],
+        [] as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>,
+        [],
+        null,
+        0,
+        0,
+        null,
+        AUTOMATION_LEVEL_DEFAULT,
+        0,
+      ]
 
   type ConversationForBrief = CommandCenterInputConversation & {
         stateRecord: ({
@@ -290,59 +339,15 @@ async function renderInboxPage(
     ? buildBillsSection(upcomingTasks, mappedConvs)
     : { items: [], count: 0 }
 
-  // Tenant follow-up delay (business days) for the Waiting On card's due dates.
-  const followUpSetting = isHomeView
-    ? await prisma.followUpSetting.findUnique({
-        where: { tenantId },
-        select: { staleAfterDays: true },
-      })
-    : null
-
-  const agentSummaryRaw = isHomeView
-    ? await Promise.all([
-        prisma.conversationState.count({
-          where: {
-            tenantId,
-            updatedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-          },
-        }),
-        prisma.draft.count({
-          where: {
-            conversation: { tenantId },
-            status: "proposed",
-            updatedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-          },
-        }),
-        prisma.learnedReplyProfile.findFirst({
-          where: {
-            tenantId,
-            updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-          },
-          select: { id: true },
-        }),
-      ])
-    : ([0, 0, null] as const)
-
-  const [classifiedLast24h, draftedLast24h, learnedProfile] = agentSummaryRaw
   const agentSummary: AgentSummary = {
-    classifiedLast24h: classifiedLast24h as number,
-    draftedLast24h: draftedLast24h as number,
+    classifiedLast24h,
+    draftedLast24h,
     learnedRecentlyUpdated: learnedProfile !== null,
   }
 
-  // Control-room supervision counts. Pending approvals badges the rail on every
-  // view; the automation level and active-rule count drive the home pillars.
-  const pendingApprovals = await prisma.approvalRequest.count({
-    where: { tenantId, status: "pending" },
-  })
-  const [automationLevel, activeRulesCount] = isHomeView
-    ? await Promise.all([
-        getAutomationLevel(tenantId),
-        prisma.agentRule.count({ where: { tenantId, status: "active" } }),
-      ])
-    : ([AUTOMATION_LEVEL_DEFAULT, 0] as const)
-
-
+  // Resolves immediately — it was issued before the home-data fetch above and
+  // has been in flight the whole time.
+  const pendingApprovals = await pendingApprovalsPromise
 
   const displayConversations = salesFilter
     ? mobileConversationsPage.filter((c) => {

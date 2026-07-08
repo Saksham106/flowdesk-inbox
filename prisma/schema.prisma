@@ -353,6 +353,10 @@ model Conversation {
 
   @@unique([tenantId, channelId, externalThreadId])
   @@index([tenantId, lastMessageAt])
+  // Status-filtered, recency-sorted list queries (inbox list, needsReplyCount,
+  // mobile list) filter on status and sort by lastMessageAt; without this
+  // composite Postgres can't satisfy filter+sort from a single index.
+  @@index([tenantId, status, lastMessageAt])
 }
 
 model Message {

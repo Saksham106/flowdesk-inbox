@@ -66,6 +66,10 @@ export default async function ConversationPage({
 
   const sessionAccountType = (session.user as Record<string, unknown>).accountType as string | null;
 
+  // One parallel batch. schedulingSession/automationRuns/calendarCredentials/
+  // timelineAuditLogs key only on params.id + tenantId (not on the fetched
+  // conversation object), so they join this batch instead of a second
+  // serialized round-trip after it.
   const [
     tenant,
     conversation,
@@ -76,6 +80,10 @@ export default async function ConversationPage({
     needsReplyCount,
     gmailChannels,
     railPendingApprovals,
+    schedulingSession,
+    automationRuns,
+    calendarCredentials,
+    timelineAuditLogs,
   ] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: session.user.tenantId },
@@ -137,16 +145,9 @@ export default async function ConversationPage({
     prisma.approvalRequest.count({
       where: { tenantId: session.user.tenantId, status: "pending" },
     }),
-  ]);
-
-  if (!conversation) {
-    notFound();
-  }
-
-  const [schedulingSession, automationRuns, calendarCredentials, timelineAuditLogs] = await Promise.all([
-    prisma.schedulingSession.findFirst({ where: { conversationId: conversation.id, tenantId: session.user.tenantId } }),
+    prisma.schedulingSession.findFirst({ where: { conversationId: params.id, tenantId: session.user.tenantId } }),
     prisma.automationRun.findMany({
-      where: { conversationId: conversation.id, tenantId: session.user.tenantId },
+      where: { conversationId: params.id, tenantId: session.user.tenantId },
       orderBy: { createdAt: "desc" },
       take: 5,
     }),
@@ -159,13 +160,17 @@ export default async function ConversationPage({
     prisma.auditLog.findMany({
       where: {
         tenantId: session.user.tenantId,
-        payloadJson: { path: ["conversationId"], equals: conversation.id },
+        payloadJson: { path: ["conversationId"], equals: params.id },
       },
       orderBy: { createdAt: "desc" },
       take: 40,
       include: { user: { select: { email: true } } },
     }),
   ]);
+
+  if (!conversation) {
+    notFound();
+  }
 
   const timelineEntries = buildConversationTimeline(
     timelineAuditLogs.map((log) => ({
@@ -188,7 +193,10 @@ export default async function ConversationPage({
       },
     }),
     prisma.message.updateMany({
-      where: { conversationId: conversation.id },
+      // Only touch rows that are actually unread — without this guard every
+      // thread open rewrites every message row (up to CONVERSATION_MESSAGE_LIMIT)
+      // even when nothing changed.
+      where: { conversationId: conversation.id, isRead: false },
       data: { isRead: true },
     }),
   ])
