@@ -237,17 +237,23 @@ export async function syncOutlookChannel(channelId: string, tenantId: string): P
 export async function sendOutlookReply({
   channelId,
   to,
+  cc,
+  bcc,
   subject,
   body,
   conversationId,
 }: {
   channelId: string
   to: string
+  cc?: string[]
+  bcc?: string[]
   subject: string
   body: string
   conversationId: string // Microsoft conversationId (= externalThreadId)
 }): Promise<string> {
   const token = await getOutlookAccessToken(channelId)
+  const ccRecipients = (cc ?? []).map((address) => ({ emailAddress: { address } }))
+  const bccRecipients = (bcc ?? []).map((address) => ({ emailAddress: { address } }))
 
   // Find the last message in this conversation to reply to
   const params = new URLSearchParams({
@@ -272,6 +278,8 @@ export async function sendOutlookReply({
         body: JSON.stringify({
           message: {
             toRecipients: [{ emailAddress: { address: to } }],
+            ...(ccRecipients.length > 0 ? { ccRecipients } : {}),
+            ...(bccRecipients.length > 0 ? { bccRecipients } : {}),
           },
           comment: body,
         }),
@@ -301,6 +309,8 @@ export async function sendOutlookReply({
           : `Re: ${subject}`,
         body: { contentType: "Text", content: body },
         toRecipients: [{ emailAddress: { address: to } }],
+        ...(ccRecipients.length > 0 ? { ccRecipients } : {}),
+        ...(bccRecipients.length > 0 ? { bccRecipients } : {}),
       },
     }),
   })

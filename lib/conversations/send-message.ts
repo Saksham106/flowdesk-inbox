@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { extractEmail, fetchThread, getGmailClient, sendGmailReply } from "@/lib/google"
+import { normalizeRecipientList, RecipientValidationError } from "@/lib/conversations/recipients"
 import { sendOutlookReply } from "@/lib/microsoft"
 import { conversationUpdateForWorkflowStatus } from "@/lib/workflow-status-transitions"
 import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
@@ -31,6 +32,8 @@ export type SendConversationMessageInput = {
   tenantId: string
   userId?: string | null
   text: string
+  cc?: string[]
+  bcc?: string[]
   auditAction?: string
 }
 
@@ -45,6 +48,18 @@ export async function sendConversationMessage(
   const text = input.text.trim()
   if (!text) {
     throw new ConversationSendError("Message text is required", 400)
+  }
+
+  let cc: string[]
+  let bcc: string[]
+  try {
+    cc = normalizeRecipientList(input.cc, "CC")
+    bcc = normalizeRecipientList(input.bcc, "BCC")
+  } catch (err) {
+    if (err instanceof RecipientValidationError) {
+      throw new ConversationSendError(err.message, 400)
+    }
+    throw err
   }
 
   const conversation = await prisma.conversation.findFirst({
@@ -69,6 +84,8 @@ export async function sendConversationMessage(
   return sendEmailConversationMessage({
     conversation,
     text,
+    cc,
+    bcc,
     userId: input.userId,
     auditAction: input.auditAction ?? "conversation.send",
   })
@@ -77,11 +94,15 @@ export async function sendConversationMessage(
 async function sendEmailConversationMessage({
   conversation,
   text,
+  cc,
+  bcc,
   userId,
   auditAction,
 }: {
   conversation: ConversationForSend
   text: string
+  cc: string[]
+  bcc: string[]
   userId?: string | null
   auditAction: string
 }): Promise<SendConversationMessageResult> {
@@ -96,7 +117,7 @@ async function sendEmailConversationMessage({
 
   // For Outlook channels, route through Microsoft Graph
   if (conversation.channel.provider === "microsoft") {
-    return sendOutlookEmailMessage({ conversation, text, userId, auditAction })
+    return sendOutlookEmailMessage({ conversation, text, cc, bcc, userId, auditAction })
   }
 
   let recipientEmail = conversation.contact?.phoneE164 ?? ""
@@ -142,6 +163,8 @@ async function sendEmailConversationMessage({
       from: channelEmail,
       subject,
       body: text,
+      cc,
+      bcc,
       threadId: conversation.externalThreadId,
       inReplyTo,
       references,
@@ -162,6 +185,8 @@ async function sendEmailConversationMessage({
           fromE164: channelEmail,
           toE164: recipientEmail,
           body: text,
+          ccEmails: cc.length > 0 ? cc : undefined,
+          bccEmails: bcc.length > 0 ? bcc : undefined,
           providerMessageId: `gmail_${gmailMessageId}`,
           createdAt: now,
         },
@@ -182,6 +207,8 @@ async function sendEmailConversationMessage({
             conversationId: conversation.id,
             gmailMessageId,
             to: recipientEmail,
+            ...(cc.length > 0 ? { cc } : {}),
+            ...(bcc.length > 0 ? { bcc } : {}),
             channel: "email",
           },
         },
@@ -210,11 +237,15 @@ async function sendEmailConversationMessage({
 async function sendOutlookEmailMessage({
   conversation,
   text,
+  cc,
+  bcc,
   userId,
   auditAction,
 }: {
   conversation: ConversationForSend
   text: string
+  cc: string[]
+  bcc: string[]
   userId?: string | null
   auditAction: string
 }): Promise<SendConversationMessageResult> {
@@ -233,6 +264,8 @@ async function sendOutlookEmailMessage({
     outlookMsgId = await sendOutlookReply({
       channelId: conversation.channelId,
       to: recipientEmail,
+      cc,
+      bcc,
       subject: "Re: message",
       body: text,
       conversationId: conversation.externalThreadId,
@@ -253,6 +286,8 @@ async function sendOutlookEmailMessage({
           fromE164: channelEmail,
           toE164: recipientEmail,
           body: text,
+          ccEmails: cc.length > 0 ? cc : undefined,
+          bccEmails: bcc.length > 0 ? bcc : undefined,
           providerMessageId: `outlook_${outlookMsgId}`,
           createdAt: now,
         },
@@ -273,6 +308,8 @@ async function sendOutlookEmailMessage({
             conversationId: conversation.id,
             outlookMsgId,
             to: recipientEmail,
+            ...(cc.length > 0 ? { cc } : {}),
+            ...(bcc.length > 0 ? { bcc } : {}),
             channel: "outlook",
           },
         },
