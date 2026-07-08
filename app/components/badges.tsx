@@ -35,3 +35,27 @@ export function LabelBadge({ label }: { label: string }) {
     </span>
   );
 }
+
+// Content-type labels mirror the Gmail-native taxonomy in lib/gmail-labels.ts
+// (FLOWDESK_GMAIL_LABEL_COLORS) so a conversation reads the same way in the
+// app as it does in Gmail. "fyi" (informational-but-uncategorized) folds into
+// "Notification" here too, matching EMAIL_TYPE_CONTENT_LABEL server-side.
+const CONTENT_TYPE_LABELS: Record<string, { label: string; className: string }> = {
+  newsletter: { label: "Newsletter", className: "bg-yellow-100 text-yellow-800" },
+  marketing: { label: "Marketing", className: "bg-red-100 text-red-700" },
+  notification: { label: "Notification", className: "bg-cyan-100 text-cyan-700" },
+  fyi: { label: "Notification", className: "bg-cyan-100 text-cyan-700" },
+  calendar: { label: "Calendar", className: "bg-green-100 text-green-700" },
+};
+
+export function ContentTypeBadge({ emailType }: { emailType: string | null | undefined }) {
+  const config = emailType ? CONTENT_TYPE_LABELS[emailType] : undefined;
+  if (!config) return null;
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${config.className}`}
+    >
+      {config.label}
+    </span>
+  );
+}

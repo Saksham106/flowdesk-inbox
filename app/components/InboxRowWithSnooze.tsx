@@ -21,6 +21,7 @@ type InboxRowWithSnoozeProps = {
   hasDraft: boolean
   initialStatus: string
   attentionCategory: string | null
+  contentType?: string | null
   isPersonal: boolean
   isGmail: boolean
   isVip?: boolean

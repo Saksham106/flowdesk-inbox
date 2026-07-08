@@ -25,6 +25,7 @@ export type InboxListItem = {
   hasDraft: boolean
   initialStatus: string
   attentionCategory: string | null
+  contentType: string | null
   isPersonal: boolean
   isGmail: boolean
   isVip?: boolean
@@ -90,6 +91,7 @@ export default function ClientFilteredInboxList({
               hasDraft={item.hasDraft}
               initialStatus={item.initialStatus}
               attentionCategory={item.attentionCategory}
+              contentType={item.contentType}
               isPersonal={item.isPersonal}
               isGmail={item.isGmail}
               isVip={item.isVip}

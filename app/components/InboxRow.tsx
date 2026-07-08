@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import type { WorkflowStatus } from "@/lib/workflow-status"
+import { ContentTypeBadge } from "@/app/components/badges"
 
 const WORKFLOW_OPTIONS: { value: string; label: string; dot: string }[] = [
   { value: "needs_reply", label: "Needs Reply", dot: "bg-red-500" },
@@ -34,6 +35,7 @@ type InboxRowProps = {
   onSnooze?: () => void
   snoozeUntil?: string | null
   attentionCategory: string | null
+  contentType?: string | null
   isPersonal: boolean
   isGmail: boolean
   workflowStatus: WorkflowStatus
@@ -57,6 +59,7 @@ export default function InboxRow({
   onSnooze,
   snoozeUntil,
   attentionCategory: initialAttention,
+  contentType,
   isPersonal,
   isGmail,
   workflowStatus: initialWorkflowStatus,
@@ -257,6 +260,7 @@ export default function InboxRow({
           {hasDraft && workflowStatus !== "done" && (
             <span className="text-[10px] font-semibold text-blue-600">✦ draft</span>
           )}
+          <ContentTypeBadge emailType={contentType} />
           {snoozeUntil && (
             <span className="text-xs text-indigo-500">
               💤 {new Date(snoozeUntil).toLocaleDateString()}
