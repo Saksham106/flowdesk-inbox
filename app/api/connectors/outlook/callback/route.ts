@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const state = searchParams.get("state")
   const error = searchParams.get("error")
 
-  const redirectBase = `${process.env.NEXTAUTH_URL}/settings`
+  const redirectBase = `${process.env.NEXTAUTH_URL}/settings/connect`
 
   if (error) return NextResponse.redirect(`${redirectBase}?error=google_denied`)
   if (!code || !state) return NextResponse.redirect(`${redirectBase}?error=invalid_callback`)

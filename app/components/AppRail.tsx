@@ -54,7 +54,7 @@ const RAIL_CONFIG: Record<string, RailRenderConfig> = {
   "/settings": {
     label: "Settings",
     icon: <SettingsIcon />,
-    isActive: (p) => p === "/settings",
+    isActive: (p) => p === "/settings" || p.startsWith("/settings/"),
   },
 }
 
