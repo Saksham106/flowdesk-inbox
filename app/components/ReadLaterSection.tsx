@@ -23,11 +23,16 @@ const EMAIL_TYPE_LABEL: Record<string, string> = {
 
 interface CardProps {
   item: CommandCenterConversation
+  // Called once dismissal is final (immediately for "Not interested", or after
+  // the undo window for "Done") so the parent can drop the item from the
+  // visible/overflow count instead of leaving a stale "+N more" badge and a
+  // vacant slot until the next full page load.
+  onDismissed: () => void
 }
 
-function ReadLaterCard({ item }: CardProps) {
+function ReadLaterCard({ item, onDismissed }: CardProps) {
   const router = useRouter()
-  const [doneState, setDoneState] = useState<"idle" | "undoable" | "done">("idle")
+  const [doneState, setDoneState] = useState<"idle" | "undoable">("idle")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -37,8 +42,6 @@ function ReadLaterCard({ item }: CardProps) {
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
     }
   }, [])
-
-  if (doneState === "done") return null
 
   async function markDone(e: React.MouseEvent, withUndo: boolean) {
     e.preventDefault()
@@ -56,11 +59,11 @@ function ReadLaterCard({ item }: CardProps) {
       if (withUndo) {
         setDoneState("undoable")
         undoTimerRef.current = setTimeout(() => {
-          setDoneState("done")
+          onDismissed()
           router.refresh()
         }, 5000)
       } else {
-        setDoneState("done")
+        onDismissed()
         router.refresh()
       }
     } catch {
@@ -137,9 +140,34 @@ interface Props {
   items: CommandCenterConversation[]
 }
 
+// Pure so it's unit-testable without React rendering infra (this repo's test
+// suite runs in a plain node environment). Filtering by `dismissedIds` rather
+// than slicing the original prop means dismissing a previewed item both
+// backfills the next hidden item into view and keeps the "+N more" badge
+// accurate immediately — no more waiting on a full page refresh for the count
+// and the visible cards to agree with each other.
+export function computeReadLaterPreview<T extends { id: string }>(
+  items: T[],
+  dismissedIds: ReadonlySet<string>,
+  previewSize = 3
+): { preview: T[]; overflow: number } {
+  const visible = items.filter((item) => !dismissedIds.has(item.id))
+  const preview = visible.slice(0, previewSize)
+  return { preview, overflow: visible.length - preview.length }
+}
+
 export default function ReadLaterSection({ items }: Props) {
-  const preview = items.slice(0, 3)
-  const overflow = items.length - preview.length
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
+
+  const { preview, overflow } = computeReadLaterPreview(items, dismissedIds)
+
+  function handleDismissed(id: string) {
+    setDismissedIds((prev) => {
+      const next = new Set(prev)
+      next.add(id)
+      return next
+    })
+  }
 
   return (
     <div>
@@ -156,7 +184,7 @@ export default function ReadLaterSection({ items }: Props) {
       ) : (
         <div className="flex flex-col gap-2">
           {preview.map((item) => (
-            <ReadLaterCard key={item.id} item={item} />
+            <ReadLaterCard key={item.id} item={item} onDismissed={() => handleDismissed(item.id)} />
           ))}
         </div>
       )}

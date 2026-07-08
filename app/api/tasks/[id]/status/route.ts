@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { metadataWithUserEditedField } from "@/lib/agent/user-edited-fields"
+import { revalidateInboxViews } from "@/lib/cache-tags"
 import type { Prisma } from "@prisma/client"
 
 const ALLOWED_STATUSES = ["open", "closed"] as const
@@ -58,6 +59,8 @@ export async function PATCH(
       },
     },
   })
+
+  revalidateInboxViews(session.user.tenantId, task.conversationId)
 
   return NextResponse.json({ ok: true, task: updated })
 }
