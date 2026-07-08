@@ -7,7 +7,9 @@ import { prisma } from "@/lib/prisma";
 import { salesCrmEnabled } from "@/lib/tenant-capabilities";
 import ConnectedAppsPanel from "@/app/settings/ConnectedAppsPanel";
 import AiBudgetPanel from "@/app/settings/AiBudgetPanel";
+import AiUsagePanel from "@/app/settings/AiUsagePanel";
 import { getAiBudgetStatus } from "@/lib/ai/budget";
+import { startOfMonthUtc, summarizeAiUsage } from "@/lib/ai/usage-summary";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +17,7 @@ export default async function DataSettingsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.tenantId) redirect("/login");
 
-  const [googleDriveCredential, aiBudgetStatus, tenant] = await Promise.all([
+  const [googleDriveCredential, aiBudgetStatus, tenant, aiUsageEvents] = await Promise.all([
     prisma.googleDriveCredential.findUnique({
       where: { tenantId: session.user.tenantId },
     }),
@@ -24,9 +26,18 @@ export default async function DataSettingsPage() {
       where: { id: session.user.tenantId },
       select: { salesCrmEnabled: true },
     }),
+    prisma.aiUsageEvent.findMany({
+      where: { tenantId: session.user.tenantId, createdAt: { gte: startOfMonthUtc(new Date()) } },
+      select: { feature: true, estimatedCostUsd: true, status: true, createdAt: true },
+    }),
   ]);
 
   const isPersonal = !salesCrmEnabled(tenant);
+
+  const aiUsageSummary = summarizeAiUsage(aiUsageEvents, {
+    dailyLimitUsd: aiBudgetStatus.dailyLimitUsd,
+    monthlyLimitUsd: aiBudgetStatus.monthlyLimitUsd,
+  });
 
   return (
     <>
@@ -95,6 +106,18 @@ export default async function DataSettingsPage() {
           </div>
         </section>
       )}
+
+      <section id="ai-usage" className="scroll-mt-24 rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 px-6 py-4">
+          <h2 className="font-semibold">AI Usage</h2>
+          <p className="mt-0.5 text-sm text-slate-500">
+            What each AI feature has spent this period, and how much budget is left.
+          </p>
+        </div>
+        <div className="px-6 py-5">
+          <AiUsagePanel summary={aiUsageSummary} />
+        </div>
+      </section>
 
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 px-6 py-4">
