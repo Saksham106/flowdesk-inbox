@@ -26,7 +26,9 @@ import ConciergeTemplateSeedButton from "./ConciergeTemplateSeedButton";
 import VipContactsForm from "@/app/settings/VipContactsForm"
 import SenderRulesPanel from "@/app/settings/SenderRulesPanel";
 import AiBudgetPanel from "@/app/settings/AiBudgetPanel";
+import AiUsagePanel from "@/app/settings/AiUsagePanel";
 import { getAiBudgetStatus } from "@/lib/ai/budget";
+import { startOfMonthUtc, summarizeAiUsage } from "@/lib/ai/usage-summary";
 import TrainAgentPanel from "@/app/settings/TrainAgentPanel"
 import SnippetsPanel from "@/app/settings/SnippetsPanel"
 import WorkflowsPanel from "@/app/settings/WorkflowsPanel"
@@ -63,7 +65,7 @@ const SETTINGS_SECTIONS = [
   { id: "automation", label: "Automation", description: "Follow-ups and trust level" },
   { id: "training", label: "Training", description: "Rules and reply voice" },
   { id: "profile", label: "Profile", description: "Capabilities, VIPs, business facts" },
-  { id: "data", label: "Data", description: "AI budget and data sources" },
+  { id: "data", label: "Data", description: "Knowledge, apps, AI usage & budget" },
 ];
 
 // Looks up a SETTINGS_SECTIONS entry by id so SettingsSectionGroup usages
@@ -183,6 +185,7 @@ export default async function SettingsPage({ searchParams }: Props) {
     failedAgentJobs,
     oldestPendingAgentJob,
     recentPushFailures,
+    aiUsageEvents,
   ] = await Promise.all([
     prisma.senderRule.findMany({
       where: { tenantId: session.user.tenantId, status: { in: ["suggested", "active"] } },
@@ -228,7 +231,16 @@ export default async function SettingsPage({ searchParams }: Props) {
         createdAt: { gte: recentPushFailureCutoff },
       },
     }),
+    prisma.aiUsageEvent.findMany({
+      where: { tenantId: session.user.tenantId, createdAt: { gte: startOfMonthUtc(new Date()) } },
+      select: { feature: true, estimatedCostUsd: true, status: true, createdAt: true },
+    }),
   ]);
+
+  const aiUsageSummary = summarizeAiUsage(aiUsageEvents, {
+    dailyLimitUsd: aiBudgetStatus.dailyLimitUsd,
+    monthlyLimitUsd: aiBudgetStatus.monthlyLimitUsd,
+  });
 
   const gmailLabelEnabledByCanonical = new Map(
     gmailLabelMappings.map((m) => [m.canonical, m.enabled])
@@ -976,6 +988,18 @@ export default async function SettingsPage({ searchParams }: Props) {
             </div>
           </section>
         )}
+
+        <section id="ai-usage" className="scroll-mt-24 rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="font-semibold">AI Usage</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              What each AI feature has spent this period, and how much budget is left.
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <AiUsagePanel summary={aiUsageSummary} />
+          </div>
+        </section>
 
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">

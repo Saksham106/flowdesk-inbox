@@ -64,14 +64,14 @@ export async function checkAiBudget(
   if (status.dailyUsedUsd + estimatedCostUsd > status.dailyLimitUsd) {
     return {
       allowed: false,
-      reason: `Daily AI spend limit reached ($${status.dailyLimitUsd.toFixed(2)}/day). Resets at midnight UTC.`,
+      reason: `Daily AI spend limit reached ($${status.dailyLimitUsd.toFixed(2)}/day). Resets at midnight UTC. See Settings → AI usage for a breakdown.`,
     }
   }
 
   if (status.monthlyUsedUsd + estimatedCostUsd > status.monthlyLimitUsd) {
     return {
       allowed: false,
-      reason: `Monthly AI spend limit reached ($${status.monthlyLimitUsd.toFixed(2)}/month). Resets at start of next month.`,
+      reason: `Monthly AI spend limit reached ($${status.monthlyLimitUsd.toFixed(2)}/month). Resets at start of next month. See Settings → AI usage for a breakdown.`,
     }
   }
 

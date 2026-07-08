@@ -62,7 +62,7 @@ Close the gap with the projects we studied (`docs/flowdesk-vs-reference-gap-anal
 - [ ] Inject connected Google Drive context into draft generation.
 - [ ] Add semantic knowledge/search retrieval and scheduled website recrawling.
 - [ ] Make lead-sequence timing configurable and visible.
-- [ ] Add user-visible AI budget/usage visibility for inbox chat and agent-rule compilation.
+- [x] Add user-visible AI budget/usage visibility for inbox chat and agent-rule compilation.
 
 ## Later / de-scoped (until Phases 1–2 land)
 
