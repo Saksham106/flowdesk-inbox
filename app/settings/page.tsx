@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+import type { ReactNode } from "react";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -63,6 +64,14 @@ const SETTINGS_SECTIONS = [
   { id: "profile", label: "Profile", description: "Capabilities, VIPs, business facts" },
   { id: "data", label: "Data", description: "Knowledge, apps, AI budget" },
 ];
+
+// Looks up a SETTINGS_SECTIONS entry by id so SettingsSectionGroup usages
+// stay in sync with the nav's labels/descriptions instead of duplicating them.
+function sectionMeta(id: string) {
+  const section = SETTINGS_SECTIONS.find((s) => s.id === id);
+  if (!section) throw new Error(`Unknown settings section id: ${id}`);
+  return section;
+}
 
 export default async function SettingsPage({ searchParams }: Props) {
   const session = await getServerSession(authOptions);
@@ -366,8 +375,9 @@ export default async function SettingsPage({ searchParams }: Props) {
       <main className="mx-auto grid max-w-6xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[240px_minmax(0,1fr)]">
         <SettingsNavigation />
 
-        <div className="space-y-6">
+        <div className="space-y-10">
         {/* Success / error banners */}
+        <div className="space-y-3 empty:hidden">
         {gmailError && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             Gmail: {gmailError}
@@ -401,19 +411,11 @@ export default async function SettingsPage({ searchParams }: Props) {
             <span className="font-medium">{decodeURIComponent(searchParams.drive_connected)}</span>.
           </div>
         )}
+        </div>
 
-        {/* Features / capabilities */}
-        <section id="profile" className="scroll-mt-24 rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-6 py-4">
-            <h2 className="font-semibold">Features</h2>
-          </div>
-          <div className="px-6 py-4">
-            <SalesCrmModeToggle enabled={isSalesCrmEnabled} />
-          </div>
-        </section>
-
-        {/* Connectors */}
-        <section id="connect" className="scroll-mt-24 rounded-xl border border-slate-200 bg-white shadow-sm">
+        {/* Connect — Gmail, Outlook, Calendar, Drive */}
+        <SettingsSectionGroup {...sectionMeta("connect")}>
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">
             <h2 className="font-semibold">Connectors</h2>
             <p className="mt-0.5 text-sm text-slate-500">
@@ -422,7 +424,7 @@ export default async function SettingsPage({ searchParams }: Props) {
           </div>
 
           {/* Gmail */}
-          <div id="gmail" className="scroll-mt-24 border-b border-slate-100 px-6 py-5">
+          <div className="border-b border-slate-100 px-6 py-5">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white">
@@ -673,85 +675,29 @@ export default async function SettingsPage({ searchParams }: Props) {
             </div>
           )}
         </section>
+        </SettingsSectionGroup>
 
-        {/* Connected Apps */}
-        <section id="data" className="scroll-mt-24 rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-6 py-4">
-            <h2 className="font-semibold">Connected Apps</h2>
-            <p className="mt-0.5 text-sm text-slate-500">
-              Choose integrations that help your workflows, not just logo counts.
-            </p>
-          </div>
-          <div className="px-6 py-5">
-            <ConnectedAppsPanel
-              driveConnected={!!googleDriveCredential}
-              driveEmail={googleDriveCredential?.email}
-            />
-          </div>
-        </section>
-
-        {/* Business Profile — business only */}
-        {!isPersonal && (
+        {/* Gmail behavior — native labels and sync */}
+        {gmailChannels.length > 0 && (
+          <SettingsSectionGroup {...sectionMeta("gmail")}>
           <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 px-6 py-4">
-              <h2 className="font-semibold">Business Profile</h2>
+              <h2 className="font-semibold">Gmail Labels</h2>
               <p className="mt-0.5 text-sm text-slate-500">
-                Configure the business facts, tone, booking rules, and escalation policy the AI will use.
+                FlowDesk organizes your inbox with these labels directly in Gmail,
+                so it&apos;s already sorted when you open it.
               </p>
             </div>
             <div className="px-6 py-5">
-              <BusinessProfileForm
-                initial={businessProfile}
-                calendarEmails={calendarCredentials.map((c) => c.email)}
-              />
+              <GmailLabelSettingsPanel initial={gmailLabelSettings} />
             </div>
           </section>
+          </SettingsSectionGroup>
         )}
 
-        {/* Knowledge Base — business only */}
-        {!isPersonal && (
-          <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-6 py-4">
-              <h2 className="font-semibold">Knowledge Base</h2>
-              <p className="mt-0.5 text-sm text-slate-500">
-                Add FAQs, service descriptions, policies, and other information the AI will use when drafting replies.
-              </p>
-            </div>
-            <div className="px-6 py-5">
-              <KnowledgeDocumentList initialDocuments={knowledgeDocuments} />
-            </div>
-          </section>
-        )}
-
-        {/* Concierge Templates — business only */}
-        {!isPersonal && (
-          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-semibold">Concierge Templates</h2>
-            <div className="mt-4">
-              <ConciergeTemplateSeedButton alreadySeeded={templateCount > 0} />
-            </div>
-          </section>
-        )}
-
-        {/* Reply Learning */}
-        <section id="training" className="scroll-mt-24 rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-6 py-4">
-            <h2 className="font-semibold">Reply Learning</h2>
-            <p className="mt-0.5 text-sm text-slate-500">
-              {isPersonal
-                ? "FlowDesk learns your writing style from sent emails to draft replies that sound like you."
-                : "FlowDesk learns from sent staff replies to make business drafts sound more like your team."}
-            </p>
-          </div>
-          <div className="px-6 py-5">
-            <PersonalStylePanel
-              initial={toLearnedPanelSnapshot(learnedReplyProfile, latestLearningUsage)}
-            />
-          </div>
-        </section>
-
-        {/* Follow-Up Automation */}
-        <section id="automation" className="scroll-mt-24 rounded-xl border border-slate-200 bg-white shadow-sm">
+        {/* Automation — follow-ups, trust level, workflows */}
+        <SettingsSectionGroup {...sectionMeta("automation")}>
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">
             <h2 className="font-semibold">Follow-Up Automation</h2>
             <p className="mt-0.5 text-sm text-slate-500">
@@ -779,37 +725,6 @@ export default async function SettingsPage({ searchParams }: Props) {
           </div>
         </section>
 
-        {/* Gmail Labels */}
-        {gmailChannels.length > 0 && (
-          <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-6 py-4">
-              <h2 className="font-semibold">Gmail Labels</h2>
-              <p className="mt-0.5 text-sm text-slate-500">
-                FlowDesk organizes your inbox with these labels directly in Gmail,
-                so it&apos;s already sorted when you open it.
-              </p>
-            </div>
-            <div className="px-6 py-5">
-              <GmailLabelSettingsPanel initial={gmailLabelSettings} />
-            </div>
-          </section>
-        )}
-
-        {/* Attention Rules */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-6 py-4">
-            <h2 className="font-semibold">Attention Rules</h2>
-            <p className="mt-0.5 text-sm text-slate-500">
-              Static rules run before any AI classification. Build one, preview it against your
-              recent mail, then enable it. Learned sender suggestions appear here too.
-            </p>
-          </div>
-          <div className="px-6 py-5">
-            <SenderRulesPanel initialRules={senderRules} initialStaticRules={staticRules} />
-          </div>
-        </section>
-
-        {/* Automation level / Autopilot */}
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">
             <h2 className="font-semibold">Automation Level</h2>
@@ -844,33 +759,6 @@ export default async function SettingsPage({ searchParams }: Props) {
           </div>
         </section>
 
-        {/* Train My Agent */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-6 py-4">
-            <h2 className="font-semibold">Train My Agent</h2>
-            <p className="mt-0.5 text-sm text-slate-500">
-              Describe rules in plain English. FlowDesk will apply them automatically.
-            </p>
-          </div>
-          <div className="px-6 py-5">
-            <TrainAgentPanel initialRules={plainEnglishRules} />
-          </div>
-        </section>
-
-        {/* Snippets & Playbooks */}
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-6 py-4">
-            <h2 className="mb-3 text-base font-semibold">Snippets &amp; Playbooks</h2>
-            <p className="mb-4 text-sm text-slate-500">
-              Reusable response templates. FlowDesk suggests these from your sent emails.
-            </p>
-          </div>
-          <div className="px-6 py-5">
-            <SnippetsPanel initialSnippets={snippets} />
-          </div>
-        </section>
-
-        {/* Workflows */}
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">
             <h2 className="font-semibold">Workflows</h2>
@@ -891,8 +779,92 @@ export default async function SettingsPage({ searchParams }: Props) {
             />
           </div>
         </section>
+        </SettingsSectionGroup>
 
-        {/* VIP Contacts */}
+        {/* Training — rules, voice, snippets */}
+        <SettingsSectionGroup {...sectionMeta("training")}>
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="font-semibold">Reply Learning</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              {isPersonal
+                ? "FlowDesk learns your writing style from sent emails to draft replies that sound like you."
+                : "FlowDesk learns from sent staff replies to make business drafts sound more like your team."}
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <PersonalStylePanel
+              initial={toLearnedPanelSnapshot(learnedReplyProfile, latestLearningUsage)}
+            />
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="font-semibold">Attention Rules</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Static rules run before any AI classification. Build one, preview it against your
+              recent mail, then enable it. Learned sender suggestions appear here too.
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <SenderRulesPanel initialRules={senderRules} initialStaticRules={staticRules} />
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="font-semibold">Train My Agent</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Describe rules in plain English. FlowDesk will apply them automatically.
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <TrainAgentPanel initialRules={plainEnglishRules} />
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="mb-3 text-base font-semibold">Snippets &amp; Playbooks</h2>
+            <p className="mb-4 text-sm text-slate-500">
+              Reusable response templates. FlowDesk suggests these from your sent emails.
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <SnippetsPanel initialSnippets={snippets} />
+          </div>
+        </section>
+        </SettingsSectionGroup>
+
+        {/* Profile — capabilities, VIPs, business facts */}
+        <SettingsSectionGroup {...sectionMeta("profile")}>
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="font-semibold">Features</h2>
+          </div>
+          <div className="px-6 py-4">
+            <SalesCrmModeToggle enabled={isSalesCrmEnabled} />
+          </div>
+        </section>
+
+        {!isPersonal && (
+          <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="font-semibold">Business Profile</h2>
+              <p className="mt-0.5 text-sm text-slate-500">
+                Configure the business facts, tone, booking rules, and escalation policy the AI will use.
+              </p>
+            </div>
+            <div className="px-6 py-5">
+              <BusinessProfileForm
+                initial={businessProfile}
+                calendarEmails={calendarCredentials.map((c) => c.email)}
+              />
+            </div>
+          </section>
+        )}
+
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="px-6 py-5">
             <div className="mt-8">
@@ -900,8 +872,48 @@ export default async function SettingsPage({ searchParams }: Props) {
             </div>
           </div>
         </section>
+        </SettingsSectionGroup>
 
-        {/* AI Spend Budget */}
+        {/* Data — knowledge, apps, AI budget */}
+        <SettingsSectionGroup {...sectionMeta("data")}>
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-4">
+            <h2 className="font-semibold">Connected Apps</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Choose integrations that help your workflows, not just logo counts.
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <ConnectedAppsPanel
+              driveConnected={!!googleDriveCredential}
+              driveEmail={googleDriveCredential?.email}
+            />
+          </div>
+        </section>
+
+        {!isPersonal && (
+          <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h2 className="font-semibold">Knowledge Base</h2>
+              <p className="mt-0.5 text-sm text-slate-500">
+                Add FAQs, service descriptions, policies, and other information the AI will use when drafting replies.
+              </p>
+            </div>
+            <div className="px-6 py-5">
+              <KnowledgeDocumentList initialDocuments={knowledgeDocuments} />
+            </div>
+          </section>
+        )}
+
+        {!isPersonal && (
+          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-base font-semibold">Concierge Templates</h2>
+            <div className="mt-4">
+              <ConciergeTemplateSeedButton alreadySeeded={templateCount > 0} />
+            </div>
+          </section>
+        )}
+
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">
             <h2 className="font-semibold">AI Spend Budget</h2>
@@ -914,8 +926,35 @@ export default async function SettingsPage({ searchParams }: Props) {
             <AiBudgetPanel initial={aiBudgetStatus} />
           </div>
         </section>
+        </SettingsSectionGroup>
         </div>
       </main>
+    </div>
+  );
+}
+
+// Groups related panels under one of the SETTINGS_SECTIONS anchors so every
+// panel is actually reachable from the sticky nav (previously only 6 of 16
+// panels carried a matching id, so most of the "sections" the nav promised
+// silently pointed at nothing below the first match).
+function SettingsSectionGroup({
+  id,
+  label,
+  description,
+  children,
+}: {
+  id: string;
+  label: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <div id={id} className="scroll-mt-24 space-y-4">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+        <p className="mt-0.5 text-sm text-slate-500">{description}</p>
+      </div>
+      <div className="space-y-6">{children}</div>
     </div>
   );
 }
