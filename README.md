@@ -149,7 +149,7 @@ Inbox sync behavior:
 - Overlapping server requests return `202 { skipped: "sync_in_progress" }`.
 - Gmail raw state (`gmailUnread`, `gmailRawState`, `gmailLabelIds`) is stored separately from local user/read state (`userState`, `readAt`, `isRead`). Sync imports Gmail read/unread, but user actions such as Mark Done and local reads are not overwritten by AI classification.
 - Sync observability is stored on `GmailCredential.lastSyncMode`, `lastSyncStatus`, `lastSyncError`, `lastSyncedAt`, `watchExpiresAt`, `watchRenewalError`, `watchLastRenewalAttempt`, and `lastHistoryFallbackAt`.
-- Workflow/status changes queue FlowDesk Gmail label projection through `GmailWritebackQueue`. The cron applies the current `FlowDesk/*` labels to the Gmail thread and removes stale FlowDesk labels from that same namespace.
+- Workflow/status changes queue FlowDesk Gmail label projection through `GmailWritebackQueue`. The cron applies the current flat, colored FlowDesk labels to the Gmail thread and removes stale FlowDesk labels from that managed label set.
 - Opening or marking a Gmail conversation read updates local state immediately, retries Gmail `UNREAD` removal, and queues failed writeback for cron retry without blocking the UI.
 - If Gmail push is configured, Pub/Sub notifications trigger incremental sync server-side; push events are persisted by Pub/Sub `messageId` for idempotency and retry.
 - Inbox auto-refresh polls `GET /api/inbox/summary` once per minute for lightweight status data instead of calling `router.refresh()` on the whole page.

@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { channelId, incremental } = await request.json()
+  const { channelId, incremental, maxThreads } = await request.json()
   if (!channelId) {
     return NextResponse.json({ error: "channelId is required" }, { status: 400 })
   }
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Channel not found" }, { status: 404 })
   }
 
-  // Backfill the FlowDesk/* label namespace for mailboxes connected before
+  // Backfill the flat FlowDesk label set for mailboxes connected before
   // bootstrap-on-connect existed. Idempotent and best-effort; never blocks sync.
   try {
     await ensureFlowDeskLabels(channelId)
@@ -43,6 +43,7 @@ export async function POST(request: Request) {
       requestedMode: "manual",
       incremental: Boolean(incremental),
       ensureWatch: true,
+      ...(typeof maxThreads === "number" ? { maxThreads } : {}),
     })
 
     revalidateInboxViews(session.user.tenantId)

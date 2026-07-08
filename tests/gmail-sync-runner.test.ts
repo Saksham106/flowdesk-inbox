@@ -44,6 +44,10 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/google", () => ({
   fetchLatestHistoryId: mockFetchLatestHistoryId,
+  normalizeGmailSyncThreadLimit: (value?: number | null) => {
+    if (!Number.isFinite(value ?? NaN)) return 25
+    return Math.max(1, Math.min(50, Math.floor(value as number)))
+  },
   syncGmailChannel: mockSyncGmailChannel,
   syncGmailChannelIncremental: mockSyncGmailChannelIncremental,
   watchGmailChannel: mockWatchGmailChannel,
@@ -111,6 +115,34 @@ describe("Gmail sync runner", () => {
         }),
       })
     )
+  })
+
+  it("passes the requested full-sync thread cap to the Gmail importer", async () => {
+    await runGmailSync({
+      channelId: "channel-1",
+      tenantId: "tenant-1",
+      requestedMode: "manual",
+      incremental: false,
+      maxThreads: 20,
+    })
+
+    expect(mockSyncGmailChannel).toHaveBeenCalledWith("channel-1", "tenant-1", {
+      maxThreads: 20,
+    })
+  })
+
+  it("caps requested full-sync thread batches at 50", async () => {
+    await runGmailSync({
+      channelId: "channel-1",
+      tenantId: "tenant-1",
+      requestedMode: "manual",
+      incremental: false,
+      maxThreads: 500,
+    })
+
+    expect(mockSyncGmailChannel).toHaveBeenCalledWith("channel-1", "tenant-1", {
+      maxThreads: 50,
+    })
   })
 
   it("skips duplicate push notifications when the account is already locked", async () => {
