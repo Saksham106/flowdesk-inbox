@@ -19,6 +19,7 @@ import BusinessProfileForm from "@/app/settings/BusinessProfileForm";
 import FollowUpSettingsForm from "@/app/settings/FollowUpSettingsForm";
 import AutopilotSettingsForm from "@/app/settings/AutopilotSettingsForm";
 import GmailLabelSettingsPanel from "@/app/settings/GmailLabelSettingsPanel";
+import FixGmailLabelsButton from "@/app/settings/FixGmailLabelsButton";
 import { FLOWDESK_GMAIL_LABEL_NAMES } from "@/lib/gmail-labels";
 import PersonalStylePanel from "@/app/settings/PersonalStylePanel"
 import ConciergeTemplateSeedButton from "./ConciergeTemplateSeedButton";
@@ -688,7 +689,8 @@ export default async function SettingsPage({ searchParams }: Props) {
                 so it&apos;s already sorted when you open it.
               </p>
             </div>
-            <div className="px-6 py-5">
+            <div className="px-6 py-5 space-y-4">
+              <FixGmailLabelsButton />
               <GmailLabelSettingsPanel initial={gmailLabelSettings} />
             </div>
           </section>
