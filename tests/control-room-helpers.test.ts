@@ -41,16 +41,27 @@ describe("control room navigation and status helpers", () => {
     expect(automationLevelLabel(5)).toBe("sends approved replies")
     expect(automationLevelLabel(-4)).toBe("read-only")
     expect(automationLevelLabel(99)).toBe("sends approved replies")
-    expect(buildControlRoomStatus({ level: 3, pendingReview: 0 })).toBe(
+    expect(buildControlRoomStatus({ level: 3, pendingReview: 0, hasGmail: true })).toBe(
       "FlowDesk is working in your Gmail · Level 3 (creates drafts)"
     )
-    expect(buildControlRoomStatus({ level: 3, pendingReview: 2 })).toBe(
+    expect(buildControlRoomStatus({ level: 3, pendingReview: 2, hasGmail: true })).toBe(
       "FlowDesk is working in your Gmail · Level 3 (creates drafts) · 2 items waiting your review"
     )
-    expect(buildControlRoomStatus({ level: 2, pendingReview: 1 })).toContain(
+    expect(buildControlRoomStatus({ level: 2, pendingReview: 1, hasGmail: true })).toContain(
       "1 item waiting your review"
     )
-    expect(buildControlRoomStatus({ level: 2, pendingReview: 0 })).not.toContain("waiting")
+    expect(buildControlRoomStatus({ level: 2, pendingReview: 0, hasGmail: true })).not.toContain("waiting")
+  })
+
+  it("tells a brand-new (no Gmail connected) user to connect instead of falsely claiming it's already working", () => {
+    // Regression: a fresh signup used to see "FlowDesk is working in your
+    // Gmail" before connecting anything, with no indication of what to do.
+    const status = buildControlRoomStatus({ level: 2, pendingReview: 0, hasGmail: false })
+    expect(status).not.toContain("is working in your Gmail")
+    expect(status.toLowerCase()).toContain("connect")
+    // Pending review / automation level are meaningless before anything is
+    // connected, so they should not leak into the message.
+    expect(buildControlRoomStatus({ level: 5, pendingReview: 3, hasGmail: false })).toBe(status)
   })
 
   it("resolves Sales & CRM capabilities and bridges to legacy account modes", () => {
