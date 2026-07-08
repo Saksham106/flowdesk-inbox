@@ -161,5 +161,22 @@ describe("dashboard and inbox UI source contracts", () => {
     expect(s).toContain("Max auto-sends per day")
     expect(s).toContain("JSON.stringify({ automationLevel: pendingLevel })")
   })
-})
 
+  it("settings page exposes a navigable control-room section index", () => {
+    const s = source("app/settings/page.tsx")
+
+    expect(s).toContain("SETTINGS_SECTIONS")
+    for (const id of ["connect", "gmail", "automation", "training", "profile", "data"]) {
+      expect(s).toContain(`id="${id}"`)
+    }
+    expect(s).toContain("SETTINGS_SECTIONS.map")
+    expect(s).toContain("href={`#${section.id}`}")
+    expect(s).toContain("SettingsNavigation")
+    expect(s).toContain("Connect")
+    expect(s).toContain("Gmail behavior")
+    expect(s).toContain("Automation")
+    expect(s).toContain("Training")
+    expect(s).toContain("Profile")
+    expect(s).toContain("Data")
+  })
+})
