@@ -27,6 +27,116 @@ export function detectSchedulingRequest(subject: string, body: string): boolean 
 
 export type ProposedSlot = { start: string; end: string; label: string }
 
+// --- Confirmation detection (deterministic, no LLM) -----------------------
+//
+// Runs against the inbound reply on a session that is `proposing`. A match
+// means "the counterparty agreed to one specific proposed slot" — anything
+// ambiguous returns null and the session stays in `proposing` for the user
+// to resolve manually. False negatives are cheap (the panel still works);
+// false positives would book real calendar events, so precision wins.
+
+const DECLINE_PATTERNS = [
+  /\b(doesn'?t|does not|won'?t|will not|wouldn'?t) work\b/i,
+  /\b(can'?t|cannot|can not|unable to) (make|do|attend)\b/i,
+  /\bnot (available|free|going to work)\b/i,
+  /\bnone of (these|those|them)\b/i,
+  /\b(reschedule|rain ?check)\b/i,
+  /\b(a|any) (different|another|other) (time|day|slot)\b/i,
+  /\bhow about\b/i,
+  /\bwhat about\b/i,
+  /\binstead\b/i,
+  /\bneither\b/i,
+]
+
+const AFFIRMATIVE_PATTERNS = [
+  /\bworks (for|great|fine|well|perfectly)\b/i,
+  /\b(that|this|it) works\b/i,
+  /\bsounds (good|great|perfect|fine)\b/i,
+  /\blet'?s (do|go with|lock in)\b/i,
+  /\b(i'?ll|i will|i can) (take|do|make)\b/i,
+  /\bsee you (then|there|at|on)\b/i,
+  /\bconfirm(ed|ing)?\b/i,
+  /\bbook it\b/i,
+  /\bperfect\b/i,
+  /\bworks\b/i,
+  /^\s*(yes|yep|yeah|sure|ok(ay)?|great)\b/i,
+]
+
+const ORDINAL_WORDS = ["first", "second", "third", "fourth", "fifth"]
+
+/**
+ * Strips quoted reply history so patterns only run against what the sender
+ * actually wrote: everything from a "On ... wrote:" attribution line or the
+ * first ">"-quoted line onward is dropped.
+ */
+export function stripQuotedReply(body: string): string {
+  const lines = body.split(/\r?\n/)
+  const cut = lines.findIndex(
+    (line) => /^\s*>/.test(line) || /^On .{0,200}wrote:\s*$/.test(line.trim())
+  )
+  return (cut === -1 ? lines : lines.slice(0, cut)).join("\n")
+}
+
+function slotMentionIndex(text: string, slots: ProposedSlot[]): number | null {
+  // Explicit ordinal / option references: "the second one", "option 2", "slot 1"
+  const optionMatch = text.match(/\b(?:option|slot|time|#)\s*([1-5])\b/i)
+  if (optionMatch) {
+    const idx = Number(optionMatch[1]) - 1
+    return idx < slots.length ? idx : null
+  }
+  for (let i = 0; i < Math.min(slots.length, ORDINAL_WORDS.length); i++) {
+    if (new RegExp(`\\b${ORDINAL_WORDS[i]}( one| option| slot| time)?\\b`, "i").test(text)) {
+      return i
+    }
+  }
+
+  // Weekday (and, when needed, time) references matched against the slot
+  // labels the counterparty was actually sent (e.g. "Monday, Jun 15 at 9:00 AM").
+  const matches: number[] = []
+  for (let i = 0; i < slots.length; i++) {
+    const labelParts = slots[i].label.match(/[A-Za-z]+|\d+(?::\d+)?/g) ?? []
+    const weekday = labelParts.find((p) =>
+      /^(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)$/i.test(p)
+    )
+    if (weekday && new RegExp(`\\b${weekday}\\b`, "i").test(text)) matches.push(i)
+  }
+  if (matches.length === 1) return matches[0]
+  if (matches.length > 1) {
+    // Same weekday appears in several slots — require a time mention to pick one.
+    const timed = matches.filter((i) => {
+      const time = slots[i].label.match(/\d{1,2}:\d{2}\s*(AM|PM)/i)?.[0]
+      if (!time) return false
+      const [, hm, ampm] = time.match(/(\d{1,2}:\d{2})\s*(AM|PM)/i) ?? []
+      const hour = hm?.split(":")[0]
+      return new RegExp(`\\b${hm}\\s*${ampm}?\\b|\\b${hour}\\s*${ampm}\\b`, "i").test(text)
+    })
+    if (timed.length === 1) return timed[0]
+  }
+  return null
+}
+
+/**
+ * Detects whether an inbound reply confirms one of the proposed slots.
+ * Returns the agreed slot, or null when there is no unambiguous confirmation.
+ */
+export function detectSchedulingConfirmation(
+  body: string,
+  proposedSlots: ProposedSlot[]
+): ProposedSlot | null {
+  if (proposedSlots.length === 0) return null
+  const text = stripQuotedReply(body)
+
+  if (DECLINE_PATTERNS.some((p) => p.test(text))) return null
+  if (!AFFIRMATIVE_PATTERNS.some((p) => p.test(text))) return null
+
+  const mentioned = slotMentionIndex(text, proposedSlots)
+  if (mentioned !== null) return proposedSlots[mentioned]
+
+  // A bare affirmative only confirms when there is exactly one slot on the
+  // table — with several, guessing which one the sender meant is unsafe.
+  return proposedSlots.length === 1 ? proposedSlots[0] : null
+}
+
 export async function proposeSchedulingSlots(
   tenantId: string,
   calendarEmail: string

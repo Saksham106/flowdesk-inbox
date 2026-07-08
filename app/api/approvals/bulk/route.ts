@@ -3,6 +3,10 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { projectDecisionOntoDraft } from "@/lib/agent/approvals"
+import {
+  bookSchedulingSession,
+  APPROVAL_STEP_BOOK_EVENT,
+} from "@/lib/agent/scheduling-booking"
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -25,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   const owned = await prisma.approvalRequest.findMany({
     where: { id: { in: ids }, tenantId: session.user.tenantId, status: "pending" },
-    select: { id: true, draftId: true, conversationId: true },
+    select: { id: true, draftId: true, conversationId: true, step: true },
   })
   const ownedIds = owned.map((r) => r.id)
 
@@ -43,13 +47,24 @@ export async function POST(req: NextRequest) {
   })
 
   for (const approval of owned) {
-    if (!approval.draftId) continue
-    await projectDecisionOntoDraft({
-      tenantId: session.user.tenantId,
-      draftId: approval.draftId,
-      conversationId: approval.conversationId,
-      decision,
-    })
+    if (approval.draftId) {
+      await projectDecisionOntoDraft({
+        tenantId: session.user.tenantId,
+        draftId: approval.draftId,
+        conversationId: approval.conversationId,
+        decision,
+      })
+    }
+    // Approved book_event requests execute the booking; failures land on the
+    // scheduling session (audited, retryable) rather than failing the batch.
+    if (approval.step === APPROVAL_STEP_BOOK_EVENT && decision === "approved") {
+      await bookSchedulingSession({
+        tenantId: session.user.tenantId,
+        conversationId: approval.conversationId,
+        trigger: "approval",
+        actorUserId: session.user.id ?? null,
+      })
+    }
   }
 
   await prisma.auditLog.create({

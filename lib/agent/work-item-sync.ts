@@ -21,6 +21,7 @@ import { applyActiveRule } from "@/lib/agent/preference-learning"
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
 import { userEditedFieldsFromMetadata } from "@/lib/agent/user-edited-fields"
 import { detectSchedulingRequest } from "@/lib/agent/scheduling"
+import { handleSchedulingConfirmationForInboundReply } from "@/lib/agent/scheduling-booking"
 import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
 import {
   clearWaitingOnForInboundReply,
@@ -685,6 +686,20 @@ export async function syncConversationWorkItems(
           },
         })
       }
+    }
+
+    // Confirmation detection: if this conversation has a session in
+    // `proposing` and the inbound reply agrees to one of the proposed slots,
+    // confirm the session and book (Level 5) or raise a book_event approval.
+    // Best-effort — a scheduling hiccup never fails the sync.
+    try {
+      await handleSchedulingConfirmationForInboundReply({
+        tenantId: input.tenantId,
+        conversationId: conversation.id,
+        inboundBody: latestInbound.body,
+      })
+    } catch (err) {
+      console.error("[work-item-sync] scheduling confirmation detection failed:", err)
     }
   }
 

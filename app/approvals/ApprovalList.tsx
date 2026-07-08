@@ -11,6 +11,7 @@ type ApprovalItem = {
   displayName: string
   lastMessageBody: string | null
   draftText: string | null
+  actionLabel: string | null
   intent: string | null
   riskLevel: string | null
   confidence: string | null
@@ -151,6 +152,12 @@ export default function ApprovalList({ items }: { items: ApprovalItem[] }) {
                           {item.lastMessageBody ?? "No recent message"}
                         </p>
                       </Link>
+
+                      {item.actionLabel ? (
+                        <p className="mt-2 inline-flex rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+                          {item.actionLabel}
+                        </p>
+                      ) : null}
 
                       <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
                         {item.intent ? <span>Intent: {item.intent}</span> : null}

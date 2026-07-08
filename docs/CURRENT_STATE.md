@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-07-08 (default path tightened — `/digest` removed, half-built surfaces gated behind Sales & CRM mode; launch readiness — honest beta pricing, privacy policy, terms)
+Last updated: 2026-07-08 (default path tightened — `/digest` removed, half-built surfaces gated behind Sales & CRM mode; launch readiness — honest beta pricing, privacy policy, terms; scheduling confirmation detection + calendar event booking end-to-end)
 
 FlowDesk is a Gmail-native AI email operator for individuals and small businesses. Gmail is the primary daily workspace; the FlowDesk web app is the agent control room for setup, preferences, approvals, audit history, training, and power-user review.
 
@@ -28,7 +28,7 @@ A per-tenant automation level (`AutopilotSetting.automationLevel`, 0–5) is the
 | 4 | Mark low-risk read / archive safe categories | yes | yes | yes | no |
 | 5 | Auto-send approved categories | yes | yes | yes | yes* |
 
-*Auto-send requires Level 5 **and** autopilot enabled **and** all existing gates (learned profile, risk, confidence + per-category thresholds, allow-list, budget, daily cap, failure auto-disable). Levels ≤ 4 can never auto-send; the gate fails closed on a missing level. No automatic mark-read/archive path exists yet — the Level 4 gate is defined for future callers. Level changes require an explicit confirm in settings, are audited (`automation_level.changed`), and take effect immediately. Existing tenants were migrated without increasing autonomy: autopilot-enabled → 5, everyone else → 3 (labels + Gmail drafts were already unconditional); tenants without a settings row derive Level 3.
+*Auto-send requires Level 5 **and** autopilot enabled **and** all existing gates (learned profile, risk, confidence + per-category thresholds, allow-list, budget, daily cap, failure auto-disable). Levels ≤ 4 can never auto-send; the gate fails closed on a missing level. Auto-booking a calendar event from a detected scheduling confirmation (`auto_book_event`) also requires Level 5 — an invite emails the counterparty, the same outward-facing tier as auto-send; below Level 5 the confirmation raises a `book_event` ApprovalRequest instead, and user-initiated booking is never level-gated. No automatic mark-read/archive path exists yet — the Level 4 gate is defined for future callers. Level changes require an explicit confirm in settings, are audited (`automation_level.changed`), and take effect immediately. Existing tenants were migrated without increasing autonomy: autopilot-enabled → 5, everyone else → 3 (labels + Gmail drafts were already unconditional); tenants without a settings row derive Level 3.
 
 ### Gmail
 
@@ -108,6 +108,7 @@ A per-tenant automation level (`AutopilotSetting.automationLevel`, 0–5) is the
 - `GET /api/cron/agent-jobs` executes pending `AgentJob`s (LLM classification, follow-up, lead-sequence) through `runAgentJob`: at most 25 jobs per run with per-tenant round-robin fairness, atomic pending → running claims so overlapping runs never double-execute, and per-job failure isolation. Pending jobs older than 7 days are bulk-failed as `stale_at_executor_launch` (200/run) rather than executed. Autopilot sends stay gated behind opt-in, learned profile, policy, budget, confidence/per-intent thresholds, daily cap, and failure limit — executing jobs does not enable sending. Auto-send additionally requires automation Level 5 (trust ladder above).
 - Snooze persists a valid pre-snooze priority, marks snoozed conversations as `none`, and restores the saved priority on resurface with a medium fallback for legacy values.
 - Google Calendar (events, free/busy, calendar holds), Google Drive OAuth foundation (not yet injected into drafts), and optional MindBody connector.
+- **Scheduling end-to-end** (`lib/agent/scheduling.ts`, `lib/agent/scheduling-booking.ts`): inbound scheduling requests create a `SchedulingSession`; the conversation Scheduling panel proposes free slots from the connected Google Calendar (`proposing`). When the counterparty replies agreeing to a slot, deterministic confirmation detection (`detectSchedulingConfirmation` — quoted history stripped, decline/counter-proposal guards, affirmative required, and the slot must be unambiguous: ordinal/weekday/time mention, or a bare yes only when a single slot was proposed; no LLM) moves the session to `confirmed` (audited `scheduling_session.confirmed`). Booking then creates the real calendar event via the existing integration — converting an active calendar hold at the agreed time in place (no duplicate event; a stale hold at another time is cancelled) and inviting the counterparty as attendee — and marks the session `booked` (audited `scheduling_session.booked`). Automated booking is trust-ladder-gated: `auto_book_event` requires Level 5 (an invite emails the counterparty — same outward tier as auto-send); below that the confirmation raises a pending `ApprovalRequest` (`step: "book_event"`, the unified primitive; audited `scheduling_session.booking_approval_requested`) and approving it — singly or in bulk — executes the booking. User-initiated booking (`POST /api/conversations/[id]/scheduling/book`, the panel's "Book calendar event" button) is never level-gated and cancels any pending book_event request. Calendar API failures never strand the session: the session stays `confirmed`, the error is recorded (`lastBookingError`/`lastBookingAttemptAt`), audited (`scheduling_session.booking_failed`), surfaced in the panel, and retryable there. All four scheduling audit actions appear in `/audit` and the per-conversation timeline.
 
 ### Landing page
 
@@ -140,7 +141,6 @@ A per-tenant automation level (`AutopilotSetting.automationLevel`, 0–5) is the
 - Classification heuristics still have edge-case overlap between command-center FYI logic and inbox list filtering.
 - Learned `SenderRule` suggestions remain accept/dismiss only; manual creation/editing happens through static `AgentRule`s in the Attention Rules panel. Structured static rules do not yet get conflict detection, and the work-item-sync path evaluates rules by sender only (subject/body-conditioned rules apply on the agent-job classification path).
 - Knowledge-base matching is keyword-based; crawling is single-page only.
-- Scheduling confirmation detection and calendar event booking are not yet wired end-to-end.
 - Google Drive context is not yet injected into draft generation.
 - Team inboxes, roles, paid-plan enforcement, and additional integrations are not implemented.
 
