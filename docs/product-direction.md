@@ -13,7 +13,7 @@ The product promise:
 - **Gmail is the primary surface.** Most users will interact with FlowDesk almost entirely *through Gmail* — its labels, its drafts, its follow-up nudges. So the Gmail-native side has to work *really well*: when FlowDesk says it labeled a thread, that label is on the thread in Gmail; when it drafts a reply, the draft is there. This is the product.
 - **The web app is the secondary surface, held to a high quality bar.** It is where users connect Gmail, supervise the agent, approve actions, train writing style, and do the occasional deeper review. Most users won't live here — but it must still *work correctly* and *look good*. "Secondary" means smaller in daily footprint, not lower in quality. We take direct design and implementation inspiration from Inbox Zero, Tom Shaw's AI agent inbox, and the other reference projects (`docs/reference-research/`), copying patterns and code where it helps.
 
-> **Current focus (set 2026-07-07): the trustworthy core loop.** Before adding features, the loop *classify → act in Gmail → reflect state truthfully in the UI* has to be reliable. Two known failures make FlowDesk feel broken today and are the top priority (see `docs/TODO.md`): (1) labels are created in Gmail but never applied to threads, and (2) "Mark done" (and other state changes) don't stick on refresh. See `docs/CURRENT_STATE.md` → "Known-broken" for the root causes.
+> **Current focus (updated 2026-07-08): web-app polish (Phase 2).** Phase 1's trustworthy-core-loop fixes shipped: labels no longer depend purely on background crons (queued jobs drain inline right after they're queued), and explicit user decisions (Mark Done, Waiting On, Read Later) always win over draft-ready/AI-derived signals — see `docs/TODO.md` → Phase 1 for what shipped. Now focused on Phase 2: making the secondary web-app surface genuinely polished, taking cues from Inbox Zero and the other reference projects.
 
 ## Why this direction
 
@@ -274,17 +274,17 @@ Never start users at auto-send.
 
 The Gmail-native foundations (labels, drafts, waiting-on/follow-up, the control-room dashboard) are **built** — see `docs/CURRENT_STATE.md` for exactly what ships today. The problem is no longer "can FlowDesk touch Gmail?" It is "does the core loop work reliably and does the product feel trustworthy and polished?" The roadmap is therefore reordered around **correctness first, then polish, then capability**. The actionable, checkbox-level backlog lives in `docs/TODO.md`; this section is the strategic framing.
 
-### Phase 1 — Trustworthy core loop (current focus)
+### Phase 1 — Trustworthy core loop — shipped
 
-Goal: the loop *classify → act in Gmail → reflect state truthfully in the UI* is reliable. Nothing new ships until the basics are rock-solid.
+Goal: the loop *classify → act in Gmail → reflect state truthfully in the UI* is reliable.
 
-- **Gmail actions actually happen.** Close the gap where labels are created but never applied to threads. Label projection must run as a reliable consequence of sync/classification (inline, with the cron as backup) rather than silently depending on a background cron that may not be scheduled. Add health visibility so a stalled queue is impossible to miss.
-- **State is the single source of truth.** An explicit user decision (Mark done / read / archive / waiting-on) persists and is never overridden by re-classification or a re-created draft. Fix the priority-resolution ordering in `lib/agent/command-center.ts` so the saved user state wins, and have the dashboard trust persisted state instead of recomputing it every render.
-- **Verify end-to-end in the real app**, not just unit tests: mark done → refresh → still gone; label a thread → see it in Gmail.
+- **Gmail actions actually happen.** Label projection now best-effort drains inline right after a job is queued (`lib/agent/gmail-writeback-processor.ts`), instead of depending entirely on the `gmail-writeback` cron; the cron remains the retry backstop.
+- **State is the single source of truth.** An explicit user decision (Mark done / waiting-on / read-later) is checked first in `analyzeConversationForCommandCenter` (`lib/agent/command-center.ts`), before any draft-ready or AI-derived signal, so it can never be overridden by a re-created draft or fresh classification.
+- **Verified end-to-end in the real app**, not just unit tests: mark done → refresh → still gone; a queued label writeback drains and audits immediately.
 
-Success metric: a user can trust that what FlowDesk says it did, it actually did — in Gmail and in the app.
+Success metric (met): a user can trust that what FlowDesk says it did, it actually did — in Gmail and in the app.
 
-### Phase 2 — Web-app polish (secondary surface, high bar)
+### Phase 2 — Web-app polish (secondary surface, high bar) — current focus
 
 Goal: the companion web app looks and feels like a real product, taking layout cues from Inbox Zero and the other references.
 

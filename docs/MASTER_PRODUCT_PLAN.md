@@ -1,12 +1,12 @@
 # Product Plan
 
-Last updated: 2026-07-07
+Last updated: 2026-07-08
 
 ## Product thesis
 
 FlowDesk is the Gmail-native AI email operator with a polished companion web app. It works inside the user's existing Gmail to label, prioritize, draft, follow up, and organize email automatically. **Gmail is the primary surface** — most users interact with FlowDesk almost entirely through Gmail's labels, drafts, and follow-up nudges, so the Gmail-native side must work *really well*. **The web app is a secondary but genuinely polished surface** — setup, rules, training, approvals, audit logs, daily brief, and deeper review — held to the same quality bar even though users won't live there. We take direct design and implementation inspiration (and code) from Inbox Zero, Tom Shaw's AI agent inbox, and the other reference projects.
 
-> **Current focus (2026-07-07): the trustworthy core loop.** Correctness before features. The loop *classify → act in Gmail → reflect state truthfully in the UI* must be reliable — see `docs/product-direction.md` → Roadmap (Phase 1) and `docs/CURRENT_STATE.md` → "Known-broken".
+> **Current focus (updated 2026-07-08): Phase 2, web-app polish.** Phase 1's trustworthy-core-loop work shipped — see `docs/product-direction.md` → Roadmap (Phase 1) and `docs/TODO.md` for what landed. Now correctness-before-features has given way to making the secondary web-app surface genuinely polished.
 
 The product should consistently do five things:
 
@@ -45,13 +45,13 @@ Users do not trust an AI that replies to everything. They trust an assistant wit
 
 ## Phases
 
-### Phase 1 — Trustworthy core loop — active priority
+### Phase 1 — Trustworthy core loop — shipped
 
-The Gmail-native foundations (label projection, native drafts, waiting-on/follow-up) are **built**, but the end-to-end loop is not reliable: labels get created without being applied to threads, and explicit user state changes ("Mark done") don't stick on refresh. Phase 1 fixes correctness first — make label projection a reliable consequence of sync/classification, make persisted user state the single source of truth in the dashboard, and verify the loop end-to-end in the real app. Nothing new ships until this holds. See `docs/CURRENT_STATE.md` → "Known-broken" and `docs/TODO.md` → Phase 1.
+The Gmail-native foundations (label projection, native drafts, waiting-on/follow-up) are **built**, and the end-to-end loop is now reliable: label projection best-effort drains inline right after a job is queued instead of depending purely on the writeback cron, and an explicit user state change ("Mark done", waiting-on, read-later) always wins over draft-ready/AI-derived signals in the command center. Also fixed: task-dismiss (Bills & Deadlines) now invalidates the inbox cache immediately instead of waiting out the 60s TTL, and the Read Later "+N more" badge/backfill stay in sync with dismissals without a page refresh. See `docs/TODO.md` → Phase 1 / "Recently shipped".
 
-### Phase 2 — Web-app polish — next
+### Phase 2 — Web-app polish — active priority
 
-The companion web app must look and feel like a real product: split the oversized settings page, rebuild the dashboard/inbox shell Inbox-Zero-style, and clean up navigation. Secondary surface, but a high quality bar.
+The companion web app must look and feel like a real product: settings is being split into focused, fully-reachable sections (shipped: every panel now lives under the nav anchor it's supposed to); still remaining: true route/tab decomposition, rebuild the dashboard/inbox shell Inbox-Zero-style, and clean up navigation. Secondary surface, but a high quality bar.
 
 ### Phase 3 — Capability parity — after polish
 
@@ -59,11 +59,11 @@ Port marquee capabilities from the reference repos (bulk unsubscribe depth, smar
 
 ### Gmail-native drafts and follow-up tracking — built
 
-Real Gmail drafts (deduped, `Autodrafted`-labeled, manual-reply-aware), outbound waiting-on detection, and `Waiting On` / `Follow Up` labels in Gmail all ship today. Remaining reliability work is folded into Phase 1.
+Real Gmail drafts (deduped, `Autodrafted`-labeled, manual-reply-aware), outbound waiting-on detection, and `Waiting On` / `Follow Up` labels in Gmail all ship today, with the Phase 1 reliability work (inline writeback drain) now folded in too.
 
 ### Control room dashboard — implemented, repositioning
 
-Command center, attention categories, tasks, follow-ups, approval queue, relationship memory, sensitive detection, local drafts, risk radar, and value reporting are available. Repositioning and polish are folded into Phase 2; correctness of its state handling is folded into Phase 1.
+Command center, attention categories, tasks, follow-ups, approval queue, relationship memory, sensitive detection, local drafts, risk radar, and value reporting are available. State-handling correctness (Phase 1) shipped; repositioning and polish continue under Phase 2.
 
 ### Revenue inbox — implemented first slices
 
@@ -182,6 +182,8 @@ Shared inboxes, assignments, comments, collision detection, roles, permissions, 
 | 2026-07-07 | Reaffirm the dual-surface framing: Gmail primary, web app secondary but held to a high quality bar. | Most users interact through Gmail, so the Gmail-native side must work really well; the web app is where users configure and supervise and must still look and work like a real product, not a bare control room. |
 | 2026-07-07 | The "Mark Done resurrection" class of bug reappeared via the command-center recompute path. | The 2026-06-15 fix separated local intent from provider state, but the home view still re-derives priority every render with draft-ready/re-classification evaluated before the explicit user state. Persisted user state must be the highest-priority signal, not one input among many. |
 | 2026-07-07 | De-scope Outlook, CC/BCC, inline-image backfill, and add-on/extension work until Phases 1–2 land. | These are distractions from the core loop and web-app polish; parked under `docs/TODO.md` → "Later / de-scoped". |
+| 2026-07-08 | Made Gmail label writeback drain inline right after queuing, with the cron as a retry backstop rather than the only path to Gmail. | Labels were being created but never applied to threads whenever the `gmail-writeback` cron wasn't scheduled/running; the inline attempt makes the common case work without depending on cron infrastructure being correctly configured. |
+| 2026-07-08 | Task dismiss (`/api/tasks/[id]/status`) and Read Later's preview/overflow count now update immediately instead of waiting on a cache TTL or full page refresh. | Both were reported as "reappears on refresh" trust-breaking bugs — the task route never called `revalidateInboxViews`, and Read Later's "+N more" badge was computed from a static prop instead of the currently-visible set. |
 
 ## Open product questions
 

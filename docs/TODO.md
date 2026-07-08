@@ -1,22 +1,24 @@
 # Remaining Work
 
-Last updated: 2026-07-07
+Last updated: 2026-07-08
 
 Reprioritized around the refocused product vision (`docs/product-direction.md` → Roadmap): **Gmail is the primary surface and must work really well; the web app is a polished secondary surface.** Order of work is **correctness → polish → capability**. Small correctness items and Outlook are de-scoped until Phases 1–2 land.
 
 Coordination rule: before starting a lane, fetch `origin/main`, branch from the latest main in a fresh worktree, and claim the active item here or in the PR description. Clear the claim when the PR merges or is abandoned so duplicate branches do not linger.
 
-## Phase 1 — Trustworthy core loop (P0, current focus)
+## Phase 1 — Trustworthy core loop — shipped
 
-The loop *classify → act in Gmail → reflect state truthfully in the UI* must be reliable before anything new ships. Root-cause detail for the first two items is in `docs/CURRENT_STATE.md` → "Known-broken".
+The loop *classify → act in Gmail → reflect state truthfully in the UI* is now reliable. Detail in `docs/MASTER_PRODUCT_PLAN.md` decision log (2026-07-08 entries) and `docs/CURRENT_STATE.md`.
 
-- [ ] **Labels are created but never applied to threads.** Make label projection a reliable consequence of sync/classification — run it inline when a conversation is classified/updated, with the cron as backup — instead of silently depending on background crons. Verify end-to-end: label a thread in the app → the label is on the thread in Gmail. (`lib/gmail-labels.ts`, `lib/agent/work-item-sync.ts`, Gmail sync path.)
-- [ ] **"Mark done" / state changes don't stick on refresh.** Make the explicit user decision (`userState`) the highest-priority signal in `analyzeConversationForCommandCenter` (`lib/agent/command-center.ts`) — it must win over draft-ready and re-classification — and have the home view trust persisted state instead of recomputing priority every render. Verify: mark done → refresh → still gone. Do the same audit for read / archive / waiting-on.
-- [ ] **Guarantee the background loop actually runs.** The label/draft/follow-up pipelines are inert if their crons aren't scheduled (see Ops checklist). Confirm scheduling AND reduce the dependence on it for the critical path (inline projection above). Surface queue/cron health in the app so a stalled pipeline is impossible to miss.
-- [ ] **Implement or remove the `create_draft` automation step type** — declared in the step union but falls through to "Unknown step type" at runtime. A half-wired action erodes trust.
-- [ ] **End-to-end verification pass** on the Gmail core loop (labels, drafts, waiting-on) in the real app, not just unit tests, before declaring Phase 1 done.
+- [x] **Labels are created but never applied to threads** — fixed: `queueFlowDeskLabelWriteback` (`lib/gmail-labels.ts`) best-effort drains the job it just queued inline via `lib/agent/gmail-writeback-processor.ts`, instead of depending entirely on the `gmail-writeback` cron. The cron remains the retry backstop for whatever the inline attempt can't finish.
+- [x] **"Mark done" / state changes don't stick on refresh** — fixed: `analyzeConversationForCommandCenter` (`lib/agent/command-center.ts`) checks the explicit user decision (`userState`) before any draft-ready/AI-derived signal, and `needsAction`/`readLater` are gated by `userState` too so a resolved conversation can't resurface in other dashboard sections. Verified live: a conversation marked done stays done even with a "proposed" draft and stale `needs_action` metadata reintroduced after the fact.
+- [x] **Implement or remove the `create_draft` automation step type** — removed: it was unreachable dead code (no trigger/template ever constructed one); the working Gmail-native draft system is unrelated writeback lane.
+- [x] **End-to-end verification pass** — done live against a running dev server + local Postgres for both the mark-done and label-writeback fixes.
+- [x] **Task dismiss (Bills & Deadlines) reappearing on refresh** — fixed: `/api/tasks/[id]/status` now calls `revalidateInboxViews` (it never did before), matching the pattern the workflow-status route already used.
+- [x] **Read Later "+N more" badge going stale after a dismiss** — fixed: preview/overflow are now computed from the currently-visible set (`computeReadLaterPreview` in `app/components/ReadLaterSection.tsx`), so dismissing a previewed item backfills the next hidden item and updates the badge immediately.
+- [ ] **Guarantee the background loop actually runs in production.** Inline draining covers the common case, but confirm the crons below are actually scheduled so retries/backfills work too, and add queue/cron health visibility in the app.
 
-### Ops checklist (human, not code — Phase 1 blocking)
+### Ops checklist (human, not code — still open)
 
 These make the difference between "the pipeline works" and "the pipeline is dead in prod":
 
@@ -31,7 +33,6 @@ Take layout and interaction cues from Inbox Zero, Tom Shaw's AI agent inbox, and
 
 - [ ] Split the oversized settings page into focused, navigable sections/tabs — shipped: a sticky section index with anchors for Connect, Gmail behavior, Automation, Training, Profile, and Data, and every one of the 16 panels is now grouped under its matching anchor (`SettingsSectionGroup`) so the nav actually reaches all of them, not just the first panel per bucket. Still needs true route/tab decomposition so heavy panels are not all loaded at once (Inbox Zero's own settings page keeps everything on one route too — the win here is data-fetching per section via client hooks, not URL splitting).
 - [ ] Rebuild the dashboard/inbox shell and navigation so the secondary surface is clean and coherent (Inbox-Zero-style layout).
-- [ ] Fix the optimistic-dismiss surfaces that reappear on hard refresh (Bills & Deadlines, Read Later overflow count) so the UI never shows stale/contradictory state.
 - [ ] Update remaining dashboard/settings copy so the web app reads as an intentional companion product.
 
 ## Phase 3 — Capability parity from the reference repos
@@ -71,6 +72,9 @@ Deliberately parked so they don't distract from the core loop and polish:
 
 Condensed history (full detail in Git log and `docs/CURRENT_STATE.md`):
 
+- Every settings panel grouped under its promised nav anchor (`SettingsSectionGroup`, styled after Inbox Zero's `SettingsGroup`) — previously only 6 of 16 panels were reachable from the sticky index.
+- Bills & Deadlines dismiss and Read Later's "+N more" badge/backfill now update immediately instead of reappearing on refresh.
+- Inline Gmail writeback draining and the command-center userState-first ordering fix (Phase 1 core loop).
 - Flat Gmail label names — dropped the `FlowDesk/` namespace; legacy labels renamed in place (branch `feat/flat-gmail-labels`).
 - B2C cleanup — dropped `Tenant.accountType`; `salesCrmEnabled` capability is the single source of truth.
 - Sender-grouped Clean Inbox with real Gmail archiving + undo.

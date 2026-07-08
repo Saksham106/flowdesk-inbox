@@ -13,6 +13,7 @@ const {
   mockApprovalUpdate,
   mockApprovalUpdateMany,
   mockAuditCreate,
+  mockRevalidateInboxViews,
 } = vi.hoisted(() => ({
   mockTaskFindFirst: vi.fn(),
   mockTaskUpdate: vi.fn(),
@@ -23,6 +24,11 @@ const {
   mockApprovalUpdate: vi.fn(),
   mockApprovalUpdateMany: vi.fn(),
   mockAuditCreate: vi.fn(),
+  mockRevalidateInboxViews: vi.fn(),
+}))
+
+vi.mock("@/lib/cache-tags", () => ({
+  revalidateInboxViews: mockRevalidateInboxViews,
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -131,6 +137,11 @@ describe("PATCH /api/tasks/[id]/status", () => {
         data: expect.objectContaining({ action: "inbox_task.status_changed" }),
       })
     )
+    // Regression: dismissing a task (e.g. Bills & Deadlines "Done") must
+    // invalidate the cached /inbox render, or the item reappears until the
+    // route's 60s revalidate window expires — this route previously never
+    // invalidated anything.
+    expect(mockRevalidateInboxViews).toHaveBeenCalledWith("ten-1", "c1")
   })
 
   it("reopens a closed task", async () => {
