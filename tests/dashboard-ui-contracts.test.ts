@@ -166,12 +166,16 @@ describe("dashboard and inbox UI source contracts", () => {
     const s = source("app/settings/page.tsx")
 
     expect(s).toContain("SETTINGS_SECTIONS")
+    // Every panel is grouped under a SettingsSectionGroup keyed by sectionMeta(id),
+    // so every nav anchor actually has matching content below it (not just the
+    // first panel in each bucket, which was the gap the anchor-only index left).
     for (const id of ["connect", "gmail", "automation", "training", "profile", "data"]) {
-      expect(s).toContain(`id="${id}"`)
+      expect(s).toContain(`sectionMeta("${id}")`)
     }
     expect(s).toContain("SETTINGS_SECTIONS.map")
     expect(s).toContain("href={`#${section.id}`}")
     expect(s).toContain("SettingsNavigation")
+    expect(s).toContain("SettingsSectionGroup")
     expect(s).toContain("Connect")
     expect(s).toContain("Gmail behavior")
     expect(s).toContain("Automation")

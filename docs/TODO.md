@@ -29,7 +29,7 @@ These make the difference between "the pipeline works" and "the pipeline is dead
 
 Take layout and interaction cues from Inbox Zero, Tom Shaw's AI agent inbox, and the other references (`docs/reference-research/`).
 
-- [ ] Split the oversized settings page into focused, navigable sections/tabs — first slice shipped a sticky section index with anchors for Connect, Gmail behavior, Automation, Training, Profile, and Data; still needs true route/tab decomposition so heavy panels are not all loaded at once.
+- [ ] Split the oversized settings page into focused, navigable sections/tabs — shipped: a sticky section index with anchors for Connect, Gmail behavior, Automation, Training, Profile, and Data, and every one of the 16 panels is now grouped under its matching anchor (`SettingsSectionGroup`) so the nav actually reaches all of them, not just the first panel per bucket. Still needs true route/tab decomposition so heavy panels are not all loaded at once (Inbox Zero's own settings page keeps everything on one route too — the win here is data-fetching per section via client hooks, not URL splitting).
 - [ ] Rebuild the dashboard/inbox shell and navigation so the secondary surface is clean and coherent (Inbox-Zero-style layout).
 - [ ] Fix the optimistic-dismiss surfaces that reappear on hard refresh (Bills & Deadlines, Read Later overflow count) so the UI never shows stale/contradictory state.
 - [ ] Update remaining dashboard/settings copy so the web app reads as an intentional companion product.
