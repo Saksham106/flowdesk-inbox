@@ -8,12 +8,14 @@ import ClientFilteredInboxList, { type InboxListItem } from "@/app/components/Cl
 import { resolveAccountMode } from "@/lib/account-mode"
 import { inboxTag } from "@/lib/cache-tags"
 import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status"
+import { CONTENT_TYPE_FILTERS, emailTypesForContentFilter } from "@/lib/content-type-filters"
 
 interface Props {
   tenantId: string
   accountType: string | null
   activeConversationId?: string
   status?: string | null
+  contentType?: string | null
   q?: string
   sales?: boolean
   statusCounts?: { status: string; _count: { status: number } }[]
@@ -109,6 +111,7 @@ async function getCachedStatusCounts(tenantId: string) {
 function getCachedListData(input: {
   tenantId: string
   status?: string | null
+  contentType?: string | null
   q?: string
   sales: boolean
 }) {
@@ -116,14 +119,24 @@ function getCachedListData(input: {
     "app-list-column",
     input.tenantId,
     input.status ?? "all",
+    input.contentType ?? "all",
     input.q ?? "",
     input.sales ? "sales" : "standard",
   ]
+
+  const contentEmailTypes = emailTypesForContentFilter(input.contentType)
 
   return unstable_cache(
     async () => {
       const where: Record<string, unknown> = { tenantId: input.tenantId }
       if (input.status) where.status = input.status
+      if (contentEmailTypes) {
+        where.stateRecord = {
+          is: {
+            emailType: { in: contentEmailTypes },
+          },
+        }
+      }
       if (input.sales) {
         where.stateRecord = {
           is: {
@@ -185,6 +198,7 @@ export default async function AppListColumn({
   accountType,
   activeConversationId,
   status,
+  contentType,
   q,
   sales = false,
   statusCounts,
@@ -196,7 +210,8 @@ export default async function AppListColumn({
 
   const [conversations, needsReplyCount] = await getCachedListData({
     tenantId,
-    status,
+    status: contentType ? null : status,
+    contentType,
     q,
     sales: sales && isBusiness,
   })
@@ -213,6 +228,14 @@ export default async function AppListColumn({
     return qs ? `/inbox?${qs}` : "/inbox"
   }
 
+  function contentTypePillHref(t: string | null): string {
+    const p = new URLSearchParams()
+    if (t) p.set("type", t)
+    if (q) p.set("q", q)
+    const qs = p.toString()
+    return qs ? `/inbox?${qs}` : "/inbox"
+  }
+
   function currentInboxHref(): string {
     const p = new URLSearchParams()
     if (sales && isBusiness) p.set("sales", "1")
@@ -223,8 +246,8 @@ export default async function AppListColumn({
   }
 
   const returnTo = currentInboxHref()
-  const scrollKey = [status ?? "all", q ?? "", sales ? "s" : ""].join("_")
-  const emptyMessage = q || status || sales ? "No results." : "No conversations yet."
+  const scrollKey = [status ?? "all", contentType ?? "all", q ?? "", sales ? "s" : ""].join("_")
+  const emptyMessage = q || status || contentType || sales ? "No results." : "No conversations yet."
   const displayConversations =
     status === "needs_reply"
       ? conversations.filter((conv) => {
@@ -276,6 +299,7 @@ export default async function AppListColumn({
       hasDraft,
       initialStatus: conv.status,
       attentionCategory: attention,
+      contentType: conv.stateRecord?.emailType ?? null,
       isPersonal,
       isGmail: conv.channel.provider === "google",
       isVip,
@@ -295,39 +319,62 @@ export default async function AppListColumn({
       className={className}
       headerEnd={<GmailSyncControl channels={gmailChannels} compact />}
       filters={
-        <div className="mt-2 flex flex-wrap gap-1">
-          {STATUS_FILTERS.map(({ label, value }) => {
-            const isActive = status === value || (value === null && !status)
-            const count = value ? (countMap[value] ?? 0) : undefined
-            return (
+        <div className="mt-2 flex flex-col gap-1.5">
+          <div className="flex flex-wrap gap-1">
+            {STATUS_FILTERS.map(({ label, value }) => {
+              const isActive = !contentType && (status === value || (value === null && !status))
+              const count = value ? (countMap[value] ?? 0) : undefined
+              return (
+                <Link
+                  key={label}
+                  href={filterPillHref(value)}
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-semibold transition ${
+                    isActive
+                      ? "bg-slate-900 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {label}
+                  {count !== undefined && count > 0 && (
+                    <span className="ml-1 opacity-70">{count}</span>
+                  )}
+                </Link>
+              )
+            })}
+            {isBusiness && (
               <Link
-                key={label}
-                href={filterPillHref(value)}
+                href={q ? `/inbox?sales=1&q=${encodeURIComponent(q)}` : "/inbox?sales=1"}
                 className={`rounded-full px-2.5 py-0.5 text-xs font-semibold transition ${
-                  isActive
-                    ? "bg-slate-900 text-white"
+                  sales
+                    ? "bg-emerald-600 text-white"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 }`}
               >
-                {label}
-                {count !== undefined && count > 0 && (
-                  <span className="ml-1 opacity-70">{count}</span>
-                )}
+                Sales
               </Link>
-            )
-          })}
-          {isBusiness && (
-            <Link
-              href={q ? `/inbox?sales=1&q=${encodeURIComponent(q)}` : "/inbox?sales=1"}
-              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold transition ${
-                sales
-                  ? "bg-emerald-600 text-white"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              Sales
-            </Link>
-          )}
+            )}
+          </div>
+          {/* Content-type pills — the same Newsletter/Marketing/Notification/Calendar
+              taxonomy applied to Gmail labels (lib/gmail-labels.ts), so the app's
+              own categorization doesn't lag behind what shows up in Gmail. */}
+          <div className="flex flex-wrap gap-1">
+            {CONTENT_TYPE_FILTERS.map(({ label, value }) => {
+              const isActive = contentType === value
+              return (
+                <Link
+                  key={value}
+                  href={contentTypePillHref(isActive ? null : value)}
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-semibold transition ${
+                    isActive
+                      ? "bg-slate-700 text-white"
+                      : "bg-slate-50 text-slate-500 hover:bg-slate-100"
+                  }`}
+                >
+                  {label}
+                </Link>
+              )
+            })}
+          </div>
         </div>
       }
     />

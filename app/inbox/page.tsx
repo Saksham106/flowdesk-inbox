@@ -25,6 +25,7 @@ import { buildConversationHref } from "@/lib/client-navigation";
 import { stripHtmlToText } from "@/lib/email-body";
 import { isFyiConversation } from "@/lib/inbox-fyi";
 import { deriveWorkflowStatus } from "@/lib/workflow-status";
+import { CONTENT_TYPE_FILTERS, emailTypesForContentFilter } from "@/lib/content-type-filters";
 
 export const revalidate = 60;
 
@@ -42,7 +43,7 @@ const HOME_MESSAGE_LIMIT = 5
 const MOBILE_LIST_LIMIT = 50
 
 interface Props {
-  searchParams: { status?: string; q?: string; sales?: string; attention?: string; page?: string };
+  searchParams: { status?: string; q?: string; sales?: string; attention?: string; type?: string; page?: string };
 }
 
 function isDbStartingError(err: unknown): boolean {
@@ -82,10 +83,12 @@ async function renderInboxPage(
   const q = searchParams.q?.trim() ?? "";
   const salesFilter = searchParams.sales === "1";
   const attentionFilter = searchParams.attention ?? "";
+  const contentTypeFilter = searchParams.type ?? "";
+  const contentEmailTypes = emailTypesForContentFilter(contentTypeFilter);
   const mobilePage = Math.max(0, parseInt(searchParams.page ?? "0", 10) || 0)
 
-  // Home view = no status param and no sales filter and no attention filter (default landing)
-  const isHomeView = !searchParams.status && !salesFilter && !q && !attentionFilter;
+  // Home view = no status param and no sales filter and no attention filter and no content-type filter (default landing)
+  const isHomeView = !searchParams.status && !salesFilter && !q && !attentionFilter && !contentTypeFilter;
 
   const [tenant, statusCounts, gmailChannels] = await Promise.all([
     prisma.tenant.findUnique({
@@ -137,6 +140,7 @@ async function renderInboxPage(
           ...(attentionFilter && attentionFilter !== "life_admin" && attentionFilter !== "snoozed"
             ? { stateRecord: { is: { attentionCategory: attentionFilter } } }
             : {}),
+          ...(contentEmailTypes ? { stateRecord: { is: { emailType: { in: contentEmailTypes } } } } : {}),
           ...(q
             ? {
                 OR: [
@@ -386,6 +390,13 @@ async function renderInboxPage(
     return `/inbox?${params.toString()}`;
   }
 
+  function contentTypeTabHref(value: string) {
+    const params = new URLSearchParams();
+    params.set("type", value);
+    if (q) params.set("q", q);
+    return `/inbox?${params.toString()}`;
+  }
+
   const gmailSyncChannels = gmailChannels
     .filter((channel) => channel.gmailCredential)
     .map((channel) => ({
@@ -447,6 +458,7 @@ async function renderInboxPage(
     if (q) p.set("q", q)
     if (salesFilter) p.set("sales", "1")
     if (attentionFilter) p.set("attention", attentionFilter)
+    if (contentTypeFilter) p.set("type", contentTypeFilter)
     p.set("page", String(mobilePage + 1))
     return `/inbox?${p.toString()}`
   })()
@@ -465,6 +477,7 @@ async function renderInboxPage(
               tenantId={tenantId}
               accountType={accountType}
               status={activeStatus}
+              contentType={contentTypeFilter || undefined}
               q={q || undefined}
               sales={salesFilter}
               statusCounts={statusCounts}
@@ -558,6 +571,7 @@ async function renderInboxPage(
                   !isHomeView &&
                   !salesFilter &&
                   !attentionFilter &&
+                  !contentTypeFilter &&
                   (status === "all" ? activeStatus === null && q === "" : activeStatus === status);
                 return (
                   <Link
@@ -614,6 +628,22 @@ async function renderInboxPage(
                     }`}
                   >
                     {labels[cat]}
+                  </Link>
+                )
+              })}
+              {CONTENT_TYPE_FILTERS.map(({ label, value }) => {
+                const isActive = contentTypeFilter === value
+                return (
+                  <Link
+                    key={value}
+                    href={contentTypeTabHref(value)}
+                    className={`whitespace-nowrap border-b-2 pb-3 pt-2 text-sm font-medium transition ${
+                      isActive
+                        ? "border-blue-600 text-blue-700"
+                        : "border-transparent text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    {label}
                   </Link>
                 )
               })}

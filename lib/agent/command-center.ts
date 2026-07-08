@@ -121,6 +121,7 @@ export type QuietlyHandledBreakdown = {
   newsletter: number
   notification: number
   marketing: number
+  calendar: number
   other: number
 }
 
@@ -731,11 +732,14 @@ export function buildDailyCommandCenter(
   const waitingOnItems = takeUnassigned(analyzed.filter((conversation) => conversation.state === "waiting_on_them"))
   const readLaterItems = takeUnassigned(analyzed.filter(c => c.readLater))
   const safelyIgnoredItems = takeUnassigned(analyzed.filter(c => c.safelyIgnored))
-  const breakdown: QuietlyHandledBreakdown = { newsletter: 0, notification: 0, marketing: 0, other: 0 }
+  // Matches EMAIL_TYPE_CONTENT_LABEL in lib/gmail-labels.ts: "fyi" folds into
+  // notification, so this breakdown agrees with the Gmail-native labels.
+  const breakdown: QuietlyHandledBreakdown = { newsletter: 0, notification: 0, marketing: 0, calendar: 0, other: 0 }
   for (const item of safelyIgnoredItems) {
     if (item.emailType === "newsletter") breakdown.newsletter++
-    else if (item.emailType === "notification") breakdown.notification++
+    else if (item.emailType === "notification" || item.emailType === "fyi") breakdown.notification++
     else if (item.emailType === "marketing") breakdown.marketing++
+    else if (item.emailType === "calendar") breakdown.calendar++
     else breakdown.other++
   }
 
