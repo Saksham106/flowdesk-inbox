@@ -301,7 +301,7 @@ Goal: once the core loop ships and is used, polish the web app and port only the
 
 ### Explicitly deferred out of the MVP
 
-Not deleted — kept off the default path so the MVP stays tight and nothing half-built is user-facing: the Sales & CRM cluster (already opt-in, stays off by default), the workflow-template builder, the scheduling/meeting agents, second brain / knowledge base / snippets / concierge templates, Outlook (failure-cause recording and writeback parity), CC/BCC send, inline-image backfill, and the Gmail add-on / browser extension. The dead `/digest` route should be removed from nav. Tracked under "Later / de-scoped" in `docs/TODO.md`.
+Not deleted — kept off the default path so the MVP stays tight and nothing half-built is user-facing: the Sales & CRM cluster (already opt-in, stays off by default), the workflow-template builder, the scheduling/meeting agents, second brain / knowledge base / snippets / concierge templates, Outlook (failure-cause recording and writeback parity), CC/BCC send, inline-image backfill, and the Gmail add-on / browser extension. The dead `/digest` route has been removed entirely (2026-07-08), and these deferred surfaces are now gated behind the Sales & CRM capability at their entry points. Tracked under "Later / de-scoped" in `docs/TODO.md`.
 
 ## Technical principles
 

@@ -23,7 +23,6 @@ export type NavCapabilities = {
  * Supervision surfaces (Approvals, Activity) are first-class for all users.
  */
 const CONTROL_ROOM_PRIMARY: AppNavigationItem[] = [
-  { label: "Digest", href: "/digest" },
   { label: "Tasks", href: "/tasks" },
   { label: "Settings", href: "/settings" },
 ]

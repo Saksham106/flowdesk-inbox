@@ -545,7 +545,8 @@ export default async function ConversationPage({
   const extraCards = isAutoEmailConversation ? null : (
     <>
       {summaryCard}
-      <SecondBrainPanel facts={secondBrainFacts} />
+      {/* Second brain is deferred out of the MVP default path */}
+      {!isPersonal && <SecondBrainPanel facts={secondBrainFacts} />}
       <ExplainThreadPanel conversationId={conversation.id} />
       <CollapsibleCard title="Work items">
         <WorkItemsPanel
@@ -598,7 +599,9 @@ export default async function ConversationPage({
 
   const phase4Panels = (
     <>
-      {calendarCredentials.length > 0 && (
+      {/* Scheduling agent is deferred out of the MVP default path — Sales & CRM
+          mode only, even if a calendar credential survives a mode toggle */}
+      {!isPersonal && calendarCredentials.length > 0 && (
         <SchedulingPanel
           conversationId={conversation.id}
           calendarEmails={calendarCredentials.map((c) => c.email)}

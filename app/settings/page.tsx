@@ -58,12 +58,12 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 const SETTINGS_SECTIONS = [
-  { id: "connect", label: "Connect", description: "Gmail, Outlook, Calendar, Drive" },
+  { id: "connect", label: "Connect", description: "Email accounts and integrations" },
   { id: "gmail", label: "Gmail behavior", description: "Native labels and sync" },
-  { id: "automation", label: "Automation", description: "Follow-ups, trust level, workflows" },
-  { id: "training", label: "Training", description: "Rules, voice, snippets" },
+  { id: "automation", label: "Automation", description: "Follow-ups and trust level" },
+  { id: "training", label: "Training", description: "Rules and reply voice" },
   { id: "profile", label: "Profile", description: "Capabilities, VIPs, business facts" },
-  { id: "data", label: "Data", description: "Knowledge, apps, AI budget" },
+  { id: "data", label: "Data", description: "AI budget and data sources" },
 ];
 
 // Looks up a SETTINGS_SECTIONS entry by id so SettingsSectionGroup usages
@@ -501,7 +501,9 @@ export default async function SettingsPage({ searchParams }: Props) {
             )}
           </div>
 
-          {/* Outlook / Microsoft 365 */}
+          {/* Outlook / Microsoft 365 — deferred out of the MVP default path; still
+              shown when already connected so existing channels stay manageable */}
+          {(!isPersonal || outlookChannels.length > 0) && (
           <div className={`border-b border-slate-100 px-6 py-5`}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -574,6 +576,7 @@ export default async function SettingsPage({ searchParams }: Props) {
               </div>
             )}
           </div>
+          )}
 
           {/* Google Calendar — business only */}
           {!isPersonal && (
@@ -704,8 +707,8 @@ export default async function SettingsPage({ searchParams }: Props) {
             <h2 className="font-semibold">Follow-Up Automation</h2>
             <p className="mt-0.5 text-sm text-slate-500">
               {isPersonal ? "Surface quiet conversations in your " : "Surface quiet leads in your "}
-              <a href="/digest" className="underline hover:text-slate-700">
-                daily digest
+              <a href="/inbox" className="underline hover:text-slate-700">
+                control room
               </a>{" "}
               {isPersonal
                 ? "so important replies do not slip."
@@ -761,6 +764,9 @@ export default async function SettingsPage({ searchParams }: Props) {
           </div>
         </section>
 
+        {/* Workflow templates are deferred out of the MVP default path (the
+            builder does not exist yet) — Sales & CRM mode only */}
+        {!isPersonal && (
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">
             <h2 className="font-semibold">Workflows</h2>
@@ -781,6 +787,7 @@ export default async function SettingsPage({ searchParams }: Props) {
             />
           </div>
         </section>
+        )}
         </SettingsSectionGroup>
 
         {/* Training — rules, voice, snippets */}
@@ -826,6 +833,8 @@ export default async function SettingsPage({ searchParams }: Props) {
           </div>
         </section>
 
+        {/* Snippets are deferred out of the MVP default path — Sales & CRM mode only */}
+        {!isPersonal && (
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">
             <h2 className="mb-3 text-base font-semibold">Snippets &amp; Playbooks</h2>
@@ -837,6 +846,7 @@ export default async function SettingsPage({ searchParams }: Props) {
             <SnippetsPanel initialSnippets={snippets} />
           </div>
         </section>
+        )}
         </SettingsSectionGroup>
 
         {/* Profile — capabilities, VIPs, business facts */}
@@ -878,6 +888,10 @@ export default async function SettingsPage({ searchParams }: Props) {
 
         {/* Data — knowledge, apps, AI budget */}
         <SettingsSectionGroup {...sectionMeta("data")}>
+        {/* Google Drive context injection is not built yet, so the connect entry
+            point is off the default path; still shown when already connected so
+            the credential stays manageable */}
+        {(!isPersonal || googleDriveCredential) && (
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">
             <h2 className="font-semibold">Connected Apps</h2>
@@ -892,6 +906,7 @@ export default async function SettingsPage({ searchParams }: Props) {
             />
           </div>
         </section>
+        )}
 
         {!isPersonal && (
           <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
