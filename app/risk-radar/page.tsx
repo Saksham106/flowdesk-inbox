@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth"
 
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { salesCrmEnabled } from "@/lib/tenant-capabilities"
 import {
   buildRiskRadar,
   type RiskRadarItem,
@@ -51,6 +52,12 @@ export default async function RiskRadarPage() {
   if (!session?.user?.tenantId) {
     redirect("/login")
   }
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: session.user.tenantId },
+    select: { salesCrmEnabled: true },
+  })
+  if (!salesCrmEnabled(tenant)) redirect("/inbox")
 
   const tenantId = session.user.tenantId
   const conversations = await prisma.conversation.findMany({
