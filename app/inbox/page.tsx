@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 
 interface Props {
-  searchParams: { status?: string; q?: string; sales?: string; attention?: string; type?: string; page?: string }
+  searchParams: Record<string, string | string[] | undefined>
 }
 
 export default function InboxRedirect({ searchParams }: Props) {
@@ -9,8 +9,12 @@ export default function InboxRedirect({ searchParams }: Props) {
     !!searchParams.status || !!searchParams.q || !!searchParams.sales ||
     !!searchParams.attention || !!searchParams.type || !!searchParams.page
   if (!isListView) redirect("/home")
+  // Repeated query keys arrive as string[]; take the first value so a param
+  // can't get coerced into a comma-joined string.
   const qs = new URLSearchParams(
-    Object.entries(searchParams).filter(([, v]) => v != null) as [string, string][],
+    Object.entries(searchParams)
+      .filter(([, v]) => v != null)
+      .map(([k, v]) => [k, Array.isArray(v) ? v[0] : v] as [string, string]),
   ).toString()
   redirect(qs ? `/mail?${qs}` : "/mail")
 }

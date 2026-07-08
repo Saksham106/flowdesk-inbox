@@ -6,7 +6,6 @@ import WarmingUp from "@/app/components/WarmingUp";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { salesCrmEnabled, accountModeFor } from "@/lib/tenant-capabilities";
 import SignOutButton from "@/app/inbox/SignOutButton";
 import SearchInput from "@/app/inbox/SearchInput";
 import AutoRefresh from "@/app/components/AutoRefresh";
@@ -22,6 +21,7 @@ import { stripHtmlToText } from "@/lib/email-body";
 import { isFyiConversation } from "@/lib/inbox-fyi";
 import { deriveWorkflowStatus } from "@/lib/workflow-status";
 import { CONTENT_TYPE_FILTERS, emailTypesForContentFilter } from "@/lib/content-type-filters";
+import { getAppShellContext, isDbStartingError } from "@/lib/app-shell";
 
 export const revalidate = 60;
 
@@ -38,18 +38,6 @@ const MOBILE_LIST_LIMIT = 50;
 
 interface Props {
   searchParams: { status?: string; q?: string; sales?: string; attention?: string; type?: string; page?: string };
-}
-
-function isDbStartingError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  const msg = err.message;
-  return (
-    msg.includes("database system is starting up") ||
-    msg.includes("database system is not yet accepting connections") ||
-    msg.includes("Can't reach database server") ||
-    msg.includes("ECONNREFUSED") ||
-    (err.constructor.name === "PrismaClientInitializationError" && msg.includes("FATAL"))
-  );
 }
 
 export default async function MailPage({ searchParams }: Props) {
@@ -81,45 +69,16 @@ async function renderMailPage(
   const contentEmailTypes = emailTypesForContentFilter(contentTypeFilter);
   const mobilePage = Math.max(0, parseInt(searchParams.page ?? "0", 10) || 0);
 
-  const [tenant, statusCounts, gmailChannels] = await Promise.all([
-    prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { salesCrmEnabled: true },
-    }),
-    prisma.conversation.groupBy({
-      by: ["status"],
-      where: { tenantId },
-      _count: { status: true },
-    }),
-    prisma.channel.findMany({
-      where: { tenantId, type: "email", provider: "google" },
-      select: {
-        id: true,
-        emailAddress: true,
-        gmailCredential: {
-          select: {
-            lastSyncedAt: true,
-            lastSyncStatus: true,
-            lastSyncError: true,
-            watchExpiresAt: true,
-            watchLastRenewalAttempt: true,
-            watchRenewalError: true,
-            lastHistoryFallbackAt: true,
-          },
-        },
-      },
-      orderBy: { createdAt: "asc" },
-    }),
-  ]);
-
-  const isBusiness = salesCrmEnabled(tenant);
-  const accountType = accountModeFor(tenant);
-
-  const countByStatus = Object.fromEntries(
-    statusCounts.map((r) => [r.status, r._count.status])
-  ) as Record<string, number>;
-  const totalCount = statusCounts.reduce((sum, r) => sum + r._count.status, 0);
-  const needsReplyCount = countByStatus["needs_reply"] ?? 0;
+  const {
+    isBusiness,
+    accountType,
+    statusCounts,
+    countByStatus,
+    totalCount,
+    needsReplyCount,
+    pendingApprovals,
+    gmailSyncChannels,
+  } = await getAppShellContext(tenantId);
 
   // Mobile conversation list (the mobile layout renders its own list rather
   // than reusing the desktop AppListColumn).
@@ -154,10 +113,6 @@ async function renderMailPage(
   });
   const hasMoreMobile = mobileConversations.length > MOBILE_LIST_LIMIT;
   const mobileConversationsPage = mobileConversations.slice(0, MOBILE_LIST_LIMIT);
-
-  const pendingApprovals = await prisma.approvalRequest.count({
-    where: { tenantId, status: "pending" },
-  });
 
   const displayConversations = salesFilter
     ? mobileConversationsPage.filter((c) => {
@@ -211,20 +166,6 @@ async function renderMailPage(
     if (q) params.set("q", q);
     return `/mail?${params.toString()}`;
   }
-
-  const gmailSyncChannels = gmailChannels
-    .filter((channel) => channel.gmailCredential)
-    .map((channel) => ({
-      id: channel.id,
-      emailAddress: channel.emailAddress,
-      lastSyncedAt: channel.gmailCredential?.lastSyncedAt ?? null,
-      lastSyncStatus: channel.gmailCredential?.lastSyncStatus ?? null,
-      lastSyncError: channel.gmailCredential?.lastSyncError ?? null,
-      watchExpiresAt: channel.gmailCredential?.watchExpiresAt ?? null,
-      watchLastRenewalAttempt: channel.gmailCredential?.watchLastRenewalAttempt ?? null,
-      watchRenewalError: channel.gmailCredential?.watchRenewalError ?? null,
-      lastHistoryFallbackAt: channel.gmailCredential?.lastHistoryFallbackAt ?? null,
-    }));
 
   const listTabs = [
     { label: "All", status: "all" as const, count: totalCount },
