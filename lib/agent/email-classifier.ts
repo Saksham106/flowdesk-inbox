@@ -60,8 +60,6 @@ const NOTIFICATION_DOMAINS = new Set([
   "netlify.com",
   "stripe.com",
   "twilio.com",
-  "sendgrid.net",
-  "mailchimp.com",
   // Social / professional networks
   "linkedin.com",
   "e.linkedin.com",
@@ -69,16 +67,17 @@ const NOTIFICATION_DOMAINS = new Set([
   "facebookmail.com",
   "twitter.com",
   "notifications.google.com",
-  // Common e-commerce / marketing platforms
+  // E-commerce senders that predominantly send transactional order/account
+  // mail. Their *marketing* is caught earlier by content (promo intent wins
+  // before this domain check), so listing them here only routes their
+  // non-promotional order/account mail to notification.
   "target.com",
   "amazon.com",
-  "amazonses.com",
-  "klaviyo.com",
-  "constantcontact.com",
-  "hubspot.com",
-  "salesforce.com",
-  "marketo.net",
-  "exacttarget.com",
+  // NOTE: pure email-service-provider / marketing-automation domains
+  // (mailchimp, klaviyo, constantcontact, hubspot, marketo, exacttarget,
+  // sendgrid, amazonses, salesforce) are deliberately NOT listed — they carry
+  // newsletters and marketing, not notifications, so their mail classifies by
+  // content instead of being forced to "notification".
   // Education / test-prep platforms (typically automated)
   "nextadmit.com",
   "collegeboard.org",
@@ -88,8 +87,13 @@ const NOTIFICATION_DOMAINS = new Set([
   "udemy.com",
 ])
 
-// Subdomains used by marketing email platforms: em.company.com, e.company.com, email.company.com
-const MARKETING_SUBDOMAIN_PATTERN = /^(em|e|email|mail|go|info|news|newsletter|promo|campaign|offers?|marketing|updates?|alerts?|notifications?)\./i
+// Sender-subdomain hints, split by intent. These are weak signals used only
+// after content-based classification, so an editorial email from promo.x.com
+// still lands as newsletter on its content — the subdomain is the tiebreaker
+// when the body says nothing decisive. Generic sending subdomains (em, e,
+// email, mail, go, info) are intentionally omitted: they carry anything.
+const MARKETING_SUBDOMAIN_PATTERN = /^(promo|promotions?|offers?|deals?|sale|sales|marketing|campaign|shop|store)\./i
+const NEWSLETTER_SUBDOMAIN_PATTERN = /^(news|newsletter|newsletters|digest|weekly|daily)\./i
 
 const GOOGLE_NOTIFICATION_DOMAIN_PATTERN = /^(docs|drive|accounts|no-reply|mail)\.google\.com$/
 
@@ -127,14 +131,25 @@ const LINKEDIN_JOB_ALERT_PATTERN =
 const FYI_DONE_PATTERN =
   /\b(no action (is )?(needed|required)|for your records|receipt|payment received|all set|completed successfully|successfully updated|confirmed)\b/i
 
-const NEWSLETTER_BODY_PATTERN =
-  /\b(unsubscribe|manage (email )?preferences|email preferences|view in browser|view this email in (your )?browser|if you no longer wish to receive|to stop receiving (these |this )?emails|you('re| are) receiving this (email )?because|update your (email )?preferences|opt.out|this is an automated|do not reply to this email)\b/i
+// Promotional / commercial intent = "Marketing" (Inbox Zero's definition:
+// "Promotional emails about products, services, sales, or offers"). Kept
+// high-precision — commercial phrases only, not bare words like "sale" or
+// "don't miss" — so a personal email mentioning a garage sale isn't swept in.
+const MARKETING_PATTERN =
+  /\b(\d+%\s*off|% off|\$\d+\s*off|save (up to|\$\d)|discount code|coupon|promo code|voucher|clearance|flash sale|door ?buster|black friday|cyber monday|prime day|bogo|buy one get|free shipping|free trial|exclusive (offer|deal|discount|savings)|special offer|limited[- ]time offer|deal of the (day|week)|sale ends|on sale now|new arrivals|back in stock|shop (now|the)|order now|buy now|add to cart|upgrade (now|today)|gift (guide|card)|today only|while supplies last)\b/i
 
-const MARKETING_SUBJECT_PATTERN =
-  /\b(\d+%\s*off|discount|limited time|special offer|early access|free trial|upgrade now|deal of the day)\b/i
+// Editorial / subscribed content = "Newsletter" (Inbox Zero's definition:
+// "Regular content from publications, blogs, or services I've subscribed to").
+const NEWSLETTER_EDITORIAL_PATTERN =
+  /\b(in this (issue|edition|newsletter)|this week'?s?\s|weekly (digest|roundup|recap|newsletter|update|brief|edition)|daily (digest|briefing|brief|newsletter|edition)|monthly (newsletter|roundup|recap|digest)|read (the full|more online|online|the rest)|\d+\s*min(ute)? read|latest (posts?|articles?|stories|issue|edition)|new (post|article|episode)|top stories|what you missed|in case you missed|catch up on|curated|round[- ]?up|editor'?s?[- ]?(note|pick|letter)|issue #?\s?\d+|edition #?\s?\d+)\b/i
 
-const MARKETING_BODY_PATTERN =
-  /\b(\d+%\s*off|exclusive (offer|deal)|limited.time offer|flash sale|cyber monday|black friday|shop now|save (up to|\d+%)|promo code|coupon code|today only|ends (tonight|soon)|don'?t miss out)\b/i
+// Generic bulk-list markers present in most list mail — newsletters AND
+// marketing. Used only as a last-resort "this is bulk list mail, file it as
+// newsletter" AFTER the promotional and editorial checks, because marketing
+// mail carries these (legally required) footers too. Checking this first — as
+// the classifier used to — mislabeled every sale/offer email as a newsletter.
+const BULK_LIST_PATTERN =
+  /\b(unsubscribe|manage (your )?(email )?(preferences|subscription)|update your (email )?preferences|email preferences|if you no longer wish to receive|to stop receiving (these|this)|you('re| are) receiving this (email )?because|opt.out|view (this email )?in (your )?browser|do not reply to this email|this is an automated)\b/i
 
 function extractDomain(email: string): string {
   const match = email.match(/@([^>\s]+)/)
@@ -397,12 +412,26 @@ export function classifyEmailType(input: EmailClassifierInput): EmailClassifierR
     return result("marketing", "quiet", "Automated LinkedIn job alert.", 0.85)
   }
 
-  // Rule 1: No-reply local part
-  if (NO_REPLY_LOCAL_PATTERN.test(localPart)) {
-    return result("notification", "fyi_done", "Automated no-reply notification with no detected action.", 0.75)
+  // ---- Content-type classification ----
+  // Ordering is deliberate: promotional intent (marketing) is checked BEFORE
+  // any "has an unsubscribe link -> newsletter" signal and before the
+  // sender-domain rules, because (1) virtually all marketing mail carries a
+  // legally-required unsubscribe link, and (2) marketing/newsletter mail is
+  // often sent from email-service-provider or e-commerce domains. Deciding on
+  // sender or on the bulk-list footer first mislabeled sale/offer emails as
+  // newsletters and ESP-sent mail as notifications.
+
+  // 1. Promotional / sales content -> Marketing.
+  if (MARKETING_PATTERN.test(text)) {
+    return result("marketing", "quiet", "Promotional or sales email.", 0.85)
   }
 
-  // Rule 2: Known notification domains
+  // 2. Editorial / subscribed content -> Newsletter.
+  if (NEWSLETTER_EDITORIAL_PATTERN.test(text)) {
+    return result("newsletter", "read_later", "Newsletter or editorial content the user may want to read later.", 0.82)
+  }
+
+  // 3. Known automated product/transactional notification senders.
   if (
     NOTIFICATION_DOMAINS.has(domain) ||
     GOOGLE_NOTIFICATION_DOMAIN_PATTERN.test(domain) ||
@@ -411,34 +440,31 @@ export function classifyEmailType(input: EmailClassifierInput): EmailClassifierR
     return result("notification", "fyi_done", "Known automated notification sender.", 0.78)
   }
 
-  // Rule 2b: Marketing subdomains (em.company.com, e.company.com, email.company.com, etc.)
-  if (MARKETING_SUBDOMAIN_PATTERN.test(domain)) {
-    return result("marketing", "quiet", "Marketing or campaign sender subdomain.", 0.82)
-  }
-
-  // Rule 3: Subject-based notification patterns
+  // 4. Subject/body notification patterns (product, workflow, account activity).
   if (NOTIFICATION_SUBJECT_PATTERN.test(subject)) {
     return result("notification", "fyi_done", "Automated product or workflow notification.", 0.78)
   }
-
-  // Rule 4: Security/transactional notification body patterns
   if (NOTIFICATION_BODY_PATTERN.test(body)) {
     return result("notification", "fyi_done", "Automated account notification with no detected action.", 0.76)
   }
 
-  // Rule 5: Newsletter body patterns (unsubscribe links, "do not reply", etc.)
-  if (NEWSLETTER_BODY_PATTERN.test(body)) {
-    return result("newsletter", "read_later", "Newsletter or product update the user may want to read later.", 0.76)
+  // 5. No-reply / automated local part with no promo, editorial, or product
+  //    signal -> a bare automated notification (e.g. a transactional receipt).
+  if (NO_REPLY_LOCAL_PATTERN.test(localPart)) {
+    return result("notification", "fyi_done", "Automated no-reply notification with no detected action.", 0.75)
   }
 
-  // Rule 6: Marketing subject patterns (fires when subject hint is available)
-  if (MARKETING_SUBJECT_PATTERN.test(subject)) {
-    return result("marketing", "quiet", "Promotional marketing email.", 0.86)
+  // 6. Sender-subdomain hints (weak; only reached when content didn't decide).
+  if (MARKETING_SUBDOMAIN_PATTERN.test(domain)) {
+    return result("marketing", "quiet", "Marketing or campaign sender subdomain.", 0.7)
+  }
+  if (NEWSLETTER_SUBDOMAIN_PATTERN.test(domain)) {
+    return result("newsletter", "read_later", "Newsletter sender subdomain.", 0.7)
   }
 
-  // Rule 7: Marketing body patterns
-  if (MARKETING_BODY_PATTERN.test(body)) {
-    return result("marketing", "quiet", "Promotional marketing email.", 0.84)
+  // 7. Generic bulk-list markers with no stronger signal -> Newsletter (soft).
+  if (BULK_LIST_PATTERN.test(body)) {
+    return result("newsletter", "read_later", "Bulk list email the user may want to read later.", 0.72)
   }
 
   if (FYI_DONE_PATTERN.test(text)) {

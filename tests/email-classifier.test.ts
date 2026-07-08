@@ -377,6 +377,85 @@ describe("classifyEmailType", () => {
     expect(result.action?.detectedCode).not.toBe("body")
   })
 
+  // --- Marketing vs newsletter disambiguation (the reported bug) ---
+  // Marketing mail almost always carries a legally-required unsubscribe link,
+  // so "has unsubscribe -> newsletter" mislabeled every sale/offer email.
+  it("classifies a promo email with an unsubscribe link as marketing, not newsletter", () => {
+    const result = classifyEmailType({
+      fromEmail: "promo@brand.com",
+      subject: "Last chance: 30% off everything",
+      body: "Our biggest sale ends tonight. Shop now! Unsubscribe here or manage your preferences.",
+    })
+    expect(result.emailType).toBe("marketing")
+    expect(result.attentionCategory).toBe("quiet")
+  })
+
+  it("classifies e-commerce 'new arrivals' with unsubscribe as marketing", () => {
+    const result = classifyEmailType({
+      fromEmail: "hello@boutique.com",
+      subject: "New arrivals just dropped",
+      body: "Check out the latest collection. Free shipping on orders over $50. Shop now.\nUnsubscribe | View in browser",
+    })
+    expect(result.emailType).toBe("marketing")
+  })
+
+  it("classifies a Klaviyo marketing blast as marketing, not notification", () => {
+    // Klaviyo is an e-commerce marketing platform, not a notification sender —
+    // it must not force everything from it to 'notification'.
+    const result = classifyEmailType({
+      fromEmail: "store@klaviyo.com",
+      subject: "Flash sale: 40% off sitewide",
+      body: "Shop the sale before it ends tonight. Unsubscribe.",
+    })
+    expect(result.emailType).toBe("marketing")
+  })
+
+  it("keeps an editorial newsletter with an unsubscribe link as newsletter", () => {
+    const result = classifyEmailType({
+      fromEmail: "hi@substack.com",
+      subject: "This week in AI",
+      body: "In this issue: 5 stories you missed this week. Read more online.\nUnsubscribe to stop receiving these.",
+    })
+    expect(result.emailType).toBe("newsletter")
+    expect(result.attentionCategory).toBe("read_later")
+  })
+
+  it("classifies a Mailchimp digest as newsletter, not notification", () => {
+    const result = classifyEmailType({
+      fromEmail: "team@mailchimp.com",
+      subject: "Your weekly roundup",
+      body: "Here are this week's top stories. Read the full digest online. Unsubscribe.",
+    })
+    expect(result.emailType).toBe("newsletter")
+  })
+
+  it("routes a promotional email from a marketing subdomain to marketing", () => {
+    const result = classifyEmailType({
+      fromEmail: "hello@promo.retailer.com",
+      subject: "A little something for you",
+      body: "We picked these just for you. Unsubscribe.",
+    })
+    expect(result.emailType).toBe("marketing")
+  })
+
+  it("routes a subscribed-content email from a newsletter subdomain to newsletter", () => {
+    const result = classifyEmailType({
+      fromEmail: "hello@newsletter.publication.com",
+      subject: "A little something for you",
+      body: "Thanks for reading. Unsubscribe.",
+    })
+    expect(result.emailType).toBe("newsletter")
+  })
+
+  it("does not mislabel a personal email that mentions a sale as marketing", () => {
+    const result = classifyEmailType({
+      fromEmail: "alice@example.com",
+      subject: "garage sale this weekend?",
+      body: "Hey, are you still up for the garage sale on Saturday? Let me know.",
+    })
+    expect(result.emailType).toBe("needs_reply")
+  })
+
   it("extracts a numeric OTP from HTML with surrounding boilerplate", () => {
     const htmlBody = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><title>Security Code</title></head>
