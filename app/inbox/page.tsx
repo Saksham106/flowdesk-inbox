@@ -142,6 +142,7 @@ async function renderInboxPage(
                 OR: [
                   { externalThreadId: { contains: q, mode: "insensitive" as const } },
                   { contact: { name: { contains: q, mode: "insensitive" as const } } },
+                  { messages: { some: { body: { contains: q, mode: "insensitive" as const } } } },
                 ],
               }
             : {}),

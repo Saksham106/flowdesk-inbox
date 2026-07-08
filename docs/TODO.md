@@ -32,7 +32,7 @@ These make the difference between "the pipeline works" and "the pipeline is dead
 Take layout and interaction cues from Inbox Zero, Tom Shaw's AI agent inbox, and the other references (`docs/reference-research/`).
 
 - [ ] Split the oversized settings page into focused, navigable sections/tabs — shipped: a sticky section index with anchors for Connect, Gmail behavior, Automation, Training, Profile, and Data, and every one of the 16 panels is now grouped under its matching anchor (`SettingsSectionGroup`) so the nav actually reaches all of them, not just the first panel per bucket. Still needs true route/tab decomposition so heavy panels are not all loaded at once (Inbox Zero's own settings page keeps everything on one route too — the win here is data-fetching per section via client hooks, not URL splitting).
-- [ ] Rebuild the dashboard/inbox shell and navigation so the secondary surface is clean and coherent (Inbox-Zero-style layout) — first slice shipped: the home view's `HomeCommandCenter` went from 3 top-level headers plus 2 differently-styled ad-hoc sub-headings (a bold `<h3>` for Bills & Deadlines, an unlabeled Rules/Waiting-On/Read-Later cluster) down to 2 consistently-accented pillars ("What needs you" / "The agent") with a single neutral `SubHeading` style for everything inside each. Navigation itself (`AppRail`, filter links) is unchanged — user feedback was specifically about home-view clutter, not the nav.
+- [ ] Rebuild the dashboard/inbox shell and navigation so the secondary surface is clean and coherent (Inbox-Zero-style layout) — shipped: the home view's `HomeCommandCenter` went from 3 top-level headers plus 2 differently-styled ad-hoc sub-headings down to 2 consistently-accented pillars ("What needs you" / "The agent") with a single neutral `SubHeading` style. The desktop nav rail (`AppRail`) went from 8 icons to 6: removed the standalone `/search` page (its message-body search is now built into Home's existing search box, so nothing was lost — `/search` redirects to `/inbox` preserving the query) and demoted Activity from a permanent rail icon to a "Full activity log →" link inside Home's "What it did" section. The automation-level status line in `ControlRoomHeader` is now a link to `/settings#automation`, surfacing the single most important trust setting directly from Home instead of requiring a trip through Settings. Mobile's separate header nav (`lib/app-navigation.ts`, `Digest`/`Tasks`/`Settings`/More) is untouched — it's a different surface from the desktop rail and wasn't part of the reported complaint.
 - [ ] Update remaining dashboard/settings copy so the web app reads as an intentional companion product.
 
 ## Phase 3 — Capability parity from the reference repos
@@ -67,6 +67,7 @@ Deliberately parked so they don't distract from the core loop and polish:
 - [ ] Design the team/shared-inbox data and permission model.
 - [ ] Enforce packaging/plan tiers in code.
 - [ ] Document customer-facing privacy, retention, security, and audit posture.
+- [ ] `/digest` (mobile header nav) is a bare `redirect("/inbox")` with no content of its own — either build a real daily-digest view or drop it from `lib/app-navigation.ts`'s mobile nav.
 
 ## Recently shipped
 
