@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-07-08 (default path tightened — `/digest` removed, half-built surfaces gated behind Sales & CRM mode)
+Last updated: 2026-07-08 (default path tightened — `/digest` removed, half-built surfaces gated behind Sales & CRM mode; launch readiness — honest beta pricing, privacy policy, terms)
 
 FlowDesk is a Gmail-native AI email operator for individuals and small businesses. Gmail is the primary daily workspace; the FlowDesk web app is the agent control room for setup, preferences, approvals, audit history, training, and power-user review.
 
@@ -110,12 +110,19 @@ A per-tenant automation level (`AutopilotSetting.automationLevel`, 0–5) is the
 
 ### Landing page
 
-- Full visual redesign: white/light theme replacing dark/indigo. Sections: Nav, Hero, SocialProof, Features, HowItWorks (Outcomes grid), Pricing (Free/Pro/Enterprise), FAQ, FinalCTA, Footer.
+- Full visual redesign: white/light theme replacing dark/indigo. Sections: Nav, Hero, SocialProof, Features, HowItWorks (Outcomes grid), Pricing, FAQ, FinalCTA, Footer.
+- **Pricing is a single honest "Free during beta" plan** (`app/components/landing/Pricing.tsx`): the old Free/Pro/Enterprise tiers advertised features that were never enforced (or never built — shared inboxes, phone numbers, SSO). The one card lists only shipped capabilities under "Included today", explicitly marks planned items (team inboxes, paid tiers, SSO) as "Coming later — not available yet", and routes team/enterprise interest to `mailto:admin@flowdeskinbox.com`.
 - All static assets (hero bg, product screenshot, logo, CTA bg, outcome icon bg) committed to `public/images/landing/`.
 - Lora serif font added via `next/font/google` for the CTA heading; Geist Sans + Geist Mono replace Space Grotesk + DM Mono app-wide.
-- Enterprise "Contact sales" CTA routes to `mailto:admin@flowdeskinbox.com`.
 - OG and Twitter card metadata added to `app/layout.tsx`.
 - ScrollReveal and staggered animations are applied across landing sections; local committed images avoid expiring design-tool URLs. SocialProof section is text-only (no customer logos yet).
+
+### Legal / trust pages
+
+- Real `/privacy` and `/terms` routes (`app/privacy/page.tsx`, `app/terms/page.tsx`) rendered in the landing light theme via a shared `LegalPageShell` (`app/components/landing/LegalPageShell.tsx`).
+- The privacy policy is written against actual behavior: the exact Gmail OAuth scopes (`gmail.readonly`, `gmail.send`, `gmail.modify`, userinfo), what's stored (messages, classifications, drafts, audit logs) and not stored/done (no data sale, no ads, no model training, remote images blocked by default), encrypted-at-rest OAuth tokens, OpenAI as the AI subprocessor, hosting on Railway, cascade deletion of synced data on Gmail disconnect, account deletion via `admin@flowdeskinbox.com`, and the **Google API Services User Data Policy / Limited Use** disclosure required for Gmail-scope OAuth verification.
+- Linked from the landing footer (previously dead `#` links), a consent line on the signup form ("By creating an account, you agree to…"), the Settings Connectors header, and a plain-English **"Your data" panel** in Settings → Data (what's stored, OpenAI processing, how to delete).
+- Both documents still need a human legal review before public launch; account deletion is email-based until self-serve deletion ships.
 
 ## Query and performance constraints
 
