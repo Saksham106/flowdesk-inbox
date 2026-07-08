@@ -32,7 +32,7 @@ export default function WaitingOnSection({
 }: Props) {
   return (
     <div>
-      <p className="text-[10px] font-bold uppercase tracking-wide text-blue-500 mb-2">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-2">
         Waiting On
       </p>
       {items.length === 0 ? (
