@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useState } from "react"
 
 type RelabelResult = {
@@ -9,6 +10,9 @@ type RelabelResult = {
   queued: number
   errors: number
   hasMore: boolean
+  automationLevel: number
+  belowAutomationLevel: boolean
+  minAutomationLevel: number
 }
 
 export default function FixGmailLabelsButton() {
@@ -52,7 +56,17 @@ export default function FixGmailLabelsButton() {
           {loading ? "Fixing…" : "Fix Gmail labels"}
         </button>
       </div>
-      {result && (
+      {result && result.belowAutomationLevel && (
+        <p className="mt-2 text-xs text-amber-700">
+          Your automation level is {result.automationLevel} — FlowDesk needs Level{" "}
+          {result.minAutomationLevel} or higher before it will apply Gmail labels automatically.{" "}
+          <Link href="/settings#automation" className="font-medium underline">
+            Raise it in Automation settings
+          </Link>{" "}
+          and click Fix Gmail labels again.
+        </p>
+      )}
+      {result && !result.belowAutomationLevel && (
         <p className="mt-2 text-xs text-slate-500">
           {result.queued > 0
             ? `Re-applying labels to ${result.queued} of ${result.scanned} recent emails. This can take a moment to show up in Gmail.`

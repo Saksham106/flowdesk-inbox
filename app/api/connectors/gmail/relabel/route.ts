@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { reconcileGmailLabelsForChannel } from "@/lib/agent/gmail-label-reconcile"
+import { getAutomationLevel, isActionAllowedAtLevel, MIN_LEVEL_FOR_ACTION } from "@/lib/agent/automation-level"
 import { revalidateInboxViews } from "@/lib/cache-tags"
 
 export const runtime = "nodejs"
@@ -46,6 +47,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No connected Gmail account found" }, { status: 404 })
   }
 
+  // reconcileGmailLabelsForChannel silently returns null for every
+  // conversation when the tenant's automation level is below the gate for
+  // apply_gmail_labels — indistinguishable from "genuinely nothing to fix"
+  // from the counts alone. Surface it explicitly so the button can tell the
+  // user the real reason instead of a misleading "already up to date".
+  const automationLevel = await getAutomationLevel(session.user.tenantId)
+  const belowAutomationLevel = !isActionAllowedAtLevel(automationLevel, "apply_gmail_labels")
+
   let labelsEnsured = 0
   let scanned = 0
   let queued = 0
@@ -77,7 +86,17 @@ export async function POST(request: Request) {
   revalidateInboxViews(session.user.tenantId)
 
   return NextResponse.json(
-    { channels: channels.length, labelsEnsured, scanned, queued, errors, hasMore },
+    {
+      channels: channels.length,
+      labelsEnsured,
+      scanned,
+      queued,
+      errors,
+      hasMore,
+      automationLevel,
+      belowAutomationLevel,
+      minAutomationLevel: MIN_LEVEL_FOR_ACTION.apply_gmail_labels,
+    },
     { status: errors > 0 && queued === 0 ? 500 : 200 }
   )
 }

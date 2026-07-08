@@ -5,17 +5,20 @@ const {
   mockAuditCreate,
   mockRevalidateInboxViews,
   mockReconcile,
+  mockAutopilotSettingFindUnique,
 } = vi.hoisted(() => ({
   mockChannelFindMany: vi.fn(),
   mockAuditCreate: vi.fn(),
   mockRevalidateInboxViews: vi.fn(),
   mockReconcile: vi.fn(),
+  mockAutopilotSettingFindUnique: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     channel: { findMany: mockChannelFindMany },
     auditLog: { create: mockAuditCreate },
+    autopilotSetting: { findUnique: mockAutopilotSettingFindUnique },
   },
 }))
 
@@ -73,6 +76,7 @@ describe("POST /api/connectors/gmail/relabel", () => {
       errors: 0,
     })
     mockAuditCreate.mockResolvedValue({})
+    mockAutopilotSettingFindUnique.mockResolvedValue({ automationLevel: 3 })
   })
 
   it("returns 401 when unauthenticated", async () => {
@@ -99,6 +103,9 @@ describe("POST /api/connectors/gmail/relabel", () => {
       queued: 12,
       errors: 0,
       hasMore: false,
+      automationLevel: 3,
+      belowAutomationLevel: false,
+      minAutomationLevel: 2,
     })
     expect(mockChannelFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -115,6 +122,27 @@ describe("POST /api/connectors/gmail/relabel", () => {
         data: expect.objectContaining({ action: "gmail.labels.relabel_requested" }),
       })
     )
+  })
+
+  it("reports belowAutomationLevel instead of a misleading 'already up to date' when the level gate is the real blocker", async () => {
+    // Regression: queued=0 was indistinguishable between "genuinely nothing to
+    // fix" and "automation level silently blocked every conversation" — the
+    // client can now tell these apart and point the user at the real fix.
+    mockAutopilotSettingFindUnique.mockResolvedValue({ automationLevel: 1 })
+    mockReconcile.mockResolvedValue({
+      labelsEnsured: false,
+      labelsEnsureError: null,
+      scanned: 5,
+      queued: 0,
+      errors: 0,
+    })
+
+    const res = await POST(postRequest())
+    const body = await res.json()
+
+    expect(body.automationLevel).toBe(1)
+    expect(body.belowAutomationLevel).toBe(true)
+    expect(body.minAutomationLevel).toBe(2)
   })
 
   it("reports hasMore when the batch came back full, so the client knows to prompt another click", async () => {

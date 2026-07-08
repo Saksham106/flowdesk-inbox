@@ -51,6 +51,7 @@ const GOOGLE_CONVERSATION = {
   channel: { provider: "google" },
   draft: null,
   stateRecord: { attentionCategory: "needs_action", emailType: null },
+  messages: [],
 }
 
 describe("filterEnabledFlowDeskLabels", () => {
@@ -132,6 +133,59 @@ describe("projectFlowDeskLabelsForConversation", () => {
       expect.arrayContaining(["Needs Reply", "Needs Action"])
     )
     expect(upsertArg.create.providerMessageIdsJson.threadId).toBe("thread-1")
+  })
+
+  it("falls back to deterministic classification when the conversation was never AI-classified", async () => {
+    // Regression: a conversation whose ConversationState was never populated
+    // (the classification job hadn't run for it — e.g. a legacy account) used
+    // to fall through deriveWorkflowStatus's default and get labeled "Needs
+    // Reply" no matter what the email actually was. An obvious newsletter
+    // should now get classified deterministically (no AI/DB) instead.
+    mockConversationFindFirst.mockResolvedValue({
+      ...GOOGLE_CONVERSATION,
+      status: "needs_reply",
+      stateRecord: null,
+      messages: [
+        {
+          fromE164: "newsletter@example.com",
+          subject: "This week's digest",
+          body: "You are receiving this because you subscribed. Unsubscribe here: https://example.com/unsub",
+        },
+      ],
+    })
+
+    const job = await projectFlowDeskLabelsForConversation({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+    })
+
+    expect(job).toEqual({ id: "job-1" })
+    const upsertArg = mockWritebackUpsert.mock.calls[0][0]
+    expect(upsertArg.create.providerMessageIdsJson.labels).not.toContain("Needs Reply")
+  })
+
+  it("still defaults a genuinely ambiguous, never-classified email to Needs Reply", async () => {
+    mockConversationFindFirst.mockResolvedValue({
+      ...GOOGLE_CONVERSATION,
+      status: "needs_reply",
+      stateRecord: null,
+      messages: [
+        {
+          fromE164: "sarah@example.com",
+          subject: "Quick question",
+          body: "Hey, can you send over the notes from yesterday?",
+        },
+      ],
+    })
+
+    const job = await projectFlowDeskLabelsForConversation({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+    })
+
+    expect(job).toEqual({ id: "job-1" })
+    const upsertArg = mockWritebackUpsert.mock.calls[0][0]
+    expect(upsertArg.create.providerMessageIdsJson.labels).toContain("Needs Reply")
   })
 
   it("drains the queued job inline instead of waiting for the next cron tick", async () => {
