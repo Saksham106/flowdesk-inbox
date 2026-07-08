@@ -29,7 +29,7 @@ describe("dashboard and inbox UI source contracts", () => {
   it("QuietlyHandledBanner links to closed conversations with current copy", () => {
     const s = source("app/components/QuietlyHandledBanner.tsx")
 
-    expect(s).toContain("/inbox?status=closed")
+    expect(s).toContain("/mail?status=closed")
     expect(s).not.toContain("attention=fyi_done")
     expect(s).toContain("emails sorted quietly")
     expect(s).not.toContain("emails quietly handled")
@@ -45,7 +45,7 @@ describe("dashboard and inbox UI source contracts", () => {
     expect(s).toContain("undoable")
     expect(s).toContain("undoTimerRef")
     expect(s).toContain("Undo")
-    expect(s).toContain("/inbox?attention=read_later")
+    expect(s).toContain("/mail?attention=read_later")
   })
 
   it("HandleFirstSection wires snooze, waiting-on, done undo, and avoids old copy", () => {

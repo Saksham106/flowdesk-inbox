@@ -374,7 +374,7 @@ export default async function SettingsPage({ searchParams }: Props) {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 py-4">
           <div>
-            <Link href="/inbox" className="text-sm text-slate-500 hover:text-slate-700">
+            <Link href="/home" className="text-sm text-slate-500 hover:text-slate-700">
               &larr; Back to control room
             </Link>
             <h1 className="mt-1 text-xl font-semibold">Settings</h1>
@@ -723,7 +723,7 @@ export default async function SettingsPage({ searchParams }: Props) {
             <h2 className="font-semibold">Follow-Up Automation</h2>
             <p className="mt-0.5 text-sm text-slate-500">
               {isPersonal ? "Surface quiet conversations in your " : "Surface quiet leads in your "}
-              <a href="/inbox" className="underline hover:text-slate-700">
+              <a href="/home" className="underline hover:text-slate-700">
                 control room
               </a>{" "}
               {isPersonal

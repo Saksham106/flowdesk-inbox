@@ -18,7 +18,7 @@ export default async function KnowledgeBasePage() {
     where: { id: session.user.tenantId },
     select: { salesCrmEnabled: true },
   })
-  if (!salesCrmEnabled(tenant)) redirect("/inbox")
+  if (!salesCrmEnabled(tenant)) redirect("/home")
 
   const docs = await prisma.knowledgeDocument.findMany({
     where: { tenantId: session.user.tenantId },

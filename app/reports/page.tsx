@@ -36,7 +36,7 @@ export default async function ReportsPage() {
     where: { id: tenantId },
     select: { salesCrmEnabled: true },
   })
-  if (!salesCrmEnabled(tenant)) redirect("/inbox")
+  if (!salesCrmEnabled(tenant)) redirect("/home")
 
   const report = await buildWeeklyValueReport(tenantId)
 
@@ -107,7 +107,7 @@ export default async function ReportsPage() {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <div>
-            <Link href="/inbox" className="text-sm text-slate-500 hover:text-slate-700">
+            <Link href="/home" className="text-sm text-slate-500 hover:text-slate-700">
               &larr; Back to inbox
             </Link>
             <h1 className="mt-1 text-xl font-semibold">Weekly value report</h1>

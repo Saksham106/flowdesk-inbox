@@ -57,7 +57,7 @@ export default async function RiskRadarPage() {
     where: { id: session.user.tenantId },
     select: { salesCrmEnabled: true },
   })
-  if (!salesCrmEnabled(tenant)) redirect("/inbox")
+  if (!salesCrmEnabled(tenant)) redirect("/home")
 
   const tenantId = session.user.tenantId
   const conversations = await prisma.conversation.findMany({
@@ -83,7 +83,7 @@ export default async function RiskRadarPage() {
             <h1 className="text-2xl font-semibold text-slate-950">Risk Radar</h1>
           </div>
           <Link
-            href="/inbox"
+            href="/home"
             className="rounded-md border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
           >
             Inbox

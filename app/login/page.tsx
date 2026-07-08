@@ -65,7 +65,7 @@ function LoginForm() {
     const result = await signIn("credentials", {
       email,
       password,
-      callbackUrl: "/inbox",
+      callbackUrl: "/home",
       redirect: false,
     });
 
@@ -114,7 +114,7 @@ function LoginForm() {
       const result = await signIn("credentials", {
         email: signupEmail,
         password: signupPassword,
-        callbackUrl: "/inbox",
+        callbackUrl: "/home",
         redirect: false,
       });
 
