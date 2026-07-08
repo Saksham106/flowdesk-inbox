@@ -4,6 +4,10 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { projectDecisionOntoDraft } from "@/lib/agent/approvals"
+import {
+  bookSchedulingSession,
+  APPROVAL_STEP_BOOK_EVENT,
+} from "@/lib/agent/scheduling-booking"
 
 const ALLOWED_DECISIONS = ["approved", "rejected"] as const
 type Decision = (typeof ALLOWED_DECISIONS)[number]
@@ -61,6 +65,18 @@ export async function POST(
       draftId: approval.draftId,
       conversationId: approval.conversationId,
       decision: decision as Decision,
+    })
+  }
+
+  // Approving a book_event request executes the booking. A calendar failure
+  // does not undo the decision — the error lands on the scheduling session
+  // (audited) and stays retryable from the conversation's Scheduling panel.
+  if (approval.step === APPROVAL_STEP_BOOK_EVENT && decision === "approved") {
+    await bookSchedulingSession({
+      tenantId: session.user.tenantId,
+      conversationId: approval.conversationId,
+      trigger: "approval",
+      actorUserId: session.user.id ?? null,
     })
   }
 

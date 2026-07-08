@@ -40,6 +40,7 @@ export type AutomationAction =
   | "auto_mark_read"
   | "auto_archive"
   | "auto_send"
+  | "auto_book_event"
 
 export const MIN_LEVEL_FOR_ACTION: Record<AutomationAction, number> = {
   apply_gmail_labels: 2,
@@ -47,6 +48,11 @@ export const MIN_LEVEL_FOR_ACTION: Record<AutomationAction, number> = {
   auto_mark_read: 4,
   auto_archive: 4,
   auto_send: 5,
+  // Booking a calendar event sends a real invite to the counterparty — the
+  // same outward-facing commitment tier as auto-send. Below Level 5 a detected
+  // scheduling confirmation raises an ApprovalRequest (step "book_event")
+  // instead of booking.
+  auto_book_event: 5,
 }
 
 export function isActionAllowedAtLevel(level: number, action: AutomationAction): boolean {

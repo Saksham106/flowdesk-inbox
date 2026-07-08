@@ -23,12 +23,12 @@ describe("level -> action mapping", () => {
   // Full matrix from the module doc table / product-direction.md: for every
   // level, exactly which automated actions are allowed.
   const expectations: Array<[number, Record<AutomationAction, boolean>]> = [
-    [0, { apply_gmail_labels: false, create_gmail_drafts: false, auto_mark_read: false, auto_archive: false, auto_send: false }],
-    [1, { apply_gmail_labels: false, create_gmail_drafts: false, auto_mark_read: false, auto_archive: false, auto_send: false }],
-    [2, { apply_gmail_labels: true, create_gmail_drafts: false, auto_mark_read: false, auto_archive: false, auto_send: false }],
-    [3, { apply_gmail_labels: true, create_gmail_drafts: true, auto_mark_read: false, auto_archive: false, auto_send: false }],
-    [4, { apply_gmail_labels: true, create_gmail_drafts: true, auto_mark_read: true, auto_archive: true, auto_send: false }],
-    [5, { apply_gmail_labels: true, create_gmail_drafts: true, auto_mark_read: true, auto_archive: true, auto_send: true }],
+    [0, { apply_gmail_labels: false, create_gmail_drafts: false, auto_mark_read: false, auto_archive: false, auto_send: false, auto_book_event: false }],
+    [1, { apply_gmail_labels: false, create_gmail_drafts: false, auto_mark_read: false, auto_archive: false, auto_send: false, auto_book_event: false }],
+    [2, { apply_gmail_labels: true, create_gmail_drafts: false, auto_mark_read: false, auto_archive: false, auto_send: false, auto_book_event: false }],
+    [3, { apply_gmail_labels: true, create_gmail_drafts: true, auto_mark_read: false, auto_archive: false, auto_send: false, auto_book_event: false }],
+    [4, { apply_gmail_labels: true, create_gmail_drafts: true, auto_mark_read: true, auto_archive: true, auto_send: false, auto_book_event: false }],
+    [5, { apply_gmail_labels: true, create_gmail_drafts: true, auto_mark_read: true, auto_archive: true, auto_send: true, auto_book_event: true }],
   ]
 
   it.each(expectations)("level %i allows exactly the documented actions", (level, allowed) => {

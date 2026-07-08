@@ -845,6 +845,8 @@ model SchedulingSession {
   confirmedTime    String?
   calendarEmail    String?
   eventId          String?
+  lastBookingError     String?
+  lastBookingAttemptAt DateTime?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
   tenant           Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)

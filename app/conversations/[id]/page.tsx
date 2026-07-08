@@ -612,7 +612,9 @@ export default async function ConversationPage({
             confirmedTime: schedulingSession.confirmedTime,
             calendarEmail: schedulingSession.calendarEmail,
             eventId: schedulingSession.eventId,
+            lastBookingError: schedulingSession.lastBookingError,
           } : null}
+          hasPendingBookingApproval={pendingApprovals.some((a) => a.step === "book_event")}
         />
       )}
       <ConversationTimeline entries={timelineEntries} />

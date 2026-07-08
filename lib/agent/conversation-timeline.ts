@@ -287,6 +287,40 @@ const MAPPERS: Record<
     why: null,
     tone: "info",
   }),
+  "scheduling_session.confirmed": (p, row) => ({
+    icon: "📅",
+    title: "Meeting time confirmed",
+    detail: str(p.label) ?? str(p.confirmedTime),
+    why:
+      str(p.detectedFrom) === "inbound_reply"
+        ? null
+        : { kind: "manual", by: row.userEmail },
+    tone: "success",
+  }),
+  "scheduling_session.booking_approval_requested": (p) => ({
+    icon: "⏸",
+    title: "Booking held for your approval",
+    detail: str(p.label),
+    why: null,
+    tone: "warning",
+  }),
+  "scheduling_session.booked": (p, row) => ({
+    icon: "📅",
+    title:
+      str(p.trigger) === "auto"
+        ? "Auto-booked the calendar event"
+        : "Calendar event booked",
+    detail: p.holdConverted === true ? "Converted the tentative hold" : null,
+    why: row.userEmail ? { kind: "manual", by: row.userEmail } : null,
+    tone: "success",
+  }),
+  "scheduling_session.booking_failed": (p) => ({
+    icon: "⚠",
+    title: "Calendar booking failed",
+    detail: str(p.error),
+    why: null,
+    tone: "danger",
+  }),
 }
 
 /**

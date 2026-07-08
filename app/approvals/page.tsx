@@ -36,6 +36,11 @@ export default async function ApprovalsPage() {
 
   const items = approvals.map((approval) => {
     const metadata = approval.draft?.metadataJson as Record<string, unknown> | null
+    const requestMeta = approval.metadataJson as Record<string, unknown> | null
+    const bookingLabel =
+      approval.step === "book_event"
+        ? metadataText(requestMeta?.label) ?? metadataText(requestMeta?.start)
+        : null
     return {
       id: approval.id,
       conversationId: approval.conversationId,
@@ -43,6 +48,10 @@ export default async function ApprovalsPage() {
         approval.conversation.contact?.name ?? approval.conversation.externalThreadId,
       lastMessageBody: approval.conversation.messages[0]?.body ?? null,
       draftText: approval.draft?.text ?? null,
+      actionLabel:
+        approval.step === "book_event"
+          ? `Book calendar event${bookingLabel ? ` — ${bookingLabel}` : ""}`
+          : null,
       intent: metadataText(metadata?.intent),
       riskLevel: metadataText(metadata?.riskLevel),
       confidence: metadataText(metadata?.confidence),
