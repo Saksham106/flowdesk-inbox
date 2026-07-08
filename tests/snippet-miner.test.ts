@@ -2,14 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    tenant: { findMany: vi.fn() },
     message: { findMany: vi.fn() },
     snippet: { findMany: vi.fn(), upsert: vi.fn() },
   },
 }))
 
-import { mineSnippets } from "@/lib/agent/snippet-miner"
+import { mineSnippets, runSnippetMineCron } from "@/lib/agent/snippet-miner"
 import { prisma } from "@/lib/prisma"
 
+const mockTenantFindMany = vi.mocked(prisma.tenant.findMany)
 const mockMessages = vi.mocked(prisma.message.findMany)
 const mockSnippetFindMany = vi.mocked(prisma.snippet.findMany)
 const mockUpsert = vi.mocked(prisma.snippet.upsert)
@@ -39,5 +41,33 @@ describe("mineSnippets", () => {
 
     await mineSnippets("tenant1")
     expect(mockUpsert).not.toHaveBeenCalled()
+  })
+})
+
+describe("runSnippetMineCron", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("mines snippets for every tenant and reports per-tenant counts", async () => {
+    mockTenantFindMany.mockResolvedValueOnce([{ id: "t1" }, { id: "t2" }] as never)
+    mockMessages.mockResolvedValue([] as never)
+    mockSnippetFindMany.mockResolvedValue([] as never)
+
+    const result = await runSnippetMineCron()
+
+    expect(result).toEqual({ ok: true, results: { t1: 0, t2: 0 }, failed: 0 })
+  })
+
+  it("keeps mining other tenants when one tenant fails", async () => {
+    mockTenantFindMany.mockResolvedValueOnce([{ id: "t1" }, { id: "t2" }] as never)
+    mockMessages.mockRejectedValueOnce(new Error("db error")).mockResolvedValueOnce([] as never)
+    mockSnippetFindMany.mockResolvedValue([] as never)
+
+    const result = await runSnippetMineCron()
+
+    expect(result.ok).toBe(false)
+    expect(result.failed).toBe(1)
+    expect(result.results.t2).toBe(0)
   })
 })

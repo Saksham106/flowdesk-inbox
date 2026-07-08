@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { mineSnippets } from "@/lib/agent/snippet-miner"
+import { runSnippetMineCron } from "@/lib/agent/snippet-miner"
 
 export const runtime = "nodejs"
 
@@ -16,19 +15,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const tenants = await prisma.tenant.findMany({ select: { id: true } })
-    const results: Record<string, number> = {}
-    const errors: string[] = []
-    for (const tenant of tenants) {
-      try {
-        results[tenant.id] = await mineSnippets(tenant.id)
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "unknown error"
-        console.error(`snippet-mine: failed for tenant ${tenant.id}: ${msg}`)
-        errors.push(tenant.id)
-      }
-    }
-    return NextResponse.json({ ok: errors.length === 0, results, failed: errors.length })
+    const result = await runSnippetMineCron()
+    return NextResponse.json(result)
   } catch (err) {
     const message = err instanceof Error ? err.message : "snippet-mine batch failed"
     return NextResponse.json({ error: message }, { status: 500 })

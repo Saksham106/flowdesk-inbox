@@ -141,6 +141,29 @@ export async function buildValueSnapshot(
   })
 }
 
+export type ValueSnapshotCronResult = {
+  ok: boolean
+  snapshotted: number
+  failed: number
+}
+
+export async function runValueSnapshotCron(): Promise<ValueSnapshotCronResult> {
+  const tenants = await prisma.tenant.findMany({ select: { id: true } })
+  let snapshotted = 0
+  const errors: string[] = []
+  for (const tenant of tenants) {
+    try {
+      await buildValueSnapshot(tenant.id)
+      snapshotted++
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "unknown error"
+      console.error(`value-snapshot: failed for tenant ${tenant.id}: ${msg}`)
+      errors.push(tenant.id)
+    }
+  }
+  return { ok: errors.length === 0, snapshotted, failed: errors.length }
+}
+
 export async function getWeeklyTrend(tenantId: string, weeks = 4) {
   const snapshots = await prisma.valueSnapshot.findMany({
     where: { tenantId },
