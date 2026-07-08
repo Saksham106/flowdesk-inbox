@@ -11,11 +11,10 @@ interface Props {
 export default function AppRail({ needsReplyCount, pendingApprovals }: Props) {
   const pathname = usePathname()
 
-  const isEmailSection =
-    pathname === "/inbox" || pathname.startsWith("/conversations/")
+  const isHome = pathname === "/home"
+  const isMailSection =
+    pathname === "/mail" || pathname.startsWith("/conversations/")
   const isApprovals = pathname === "/approvals"
-  const isTasks = pathname === "/tasks"
-  const isChat = pathname === "/chat"
   const isCleanInbox = pathname === "/clean-inbox"
   const isSettings = pathname === "/settings"
 
@@ -23,7 +22,7 @@ export default function AppRail({ needsReplyCount, pendingApprovals }: Props) {
     <nav className="flex h-full w-14 shrink-0 flex-col items-center bg-slate-900 py-3 gap-1">
       {/* Logo */}
       <Link
-        href="/inbox"
+        href="/home"
         aria-label="Go to FlowDesk home"
         title="FlowDesk home"
         className="mb-3 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-blue-500 text-sm font-black text-white transition hover:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-900"
@@ -31,14 +30,19 @@ export default function AppRail({ needsReplyCount, pendingApprovals }: Props) {
         F
       </Link>
 
-      {/* Control room / home */}
-      <RailLink
-        href="/inbox"
-        active={isEmailSection}
-        badge={needsReplyCount > 0 ? needsReplyCount : undefined}
-        label="Home"
-      >
+      {/* Home */}
+      <RailLink href="/home" active={isHome} label="Home">
         <HomeIcon />
+      </RailLink>
+
+      {/* Mail */}
+      <RailLink
+        href="/mail"
+        active={isMailSection}
+        badge={needsReplyCount > 0 ? needsReplyCount : undefined}
+        label="Mail"
+      >
+        <MailIcon />
       </RailLink>
 
       {/* Approvals — first-class supervision surface for every user */}
@@ -51,22 +55,23 @@ export default function AppRail({ needsReplyCount, pendingApprovals }: Props) {
         <ApprovalsIcon />
       </RailLink>
 
-      {/* Tasks */}
-      <RailLink href="/tasks" active={isTasks} label="Tasks">
-        <TasksIcon />
-      </RailLink>
-
-      {/* Chat */}
-      <RailLink href="/chat" active={isChat} label="Chat">
-        <ChatIcon />
-      </RailLink>
-
       {/* Clean Inbox */}
       <RailLink href="/clean-inbox" active={isCleanInbox} label="Clean">
         <BroomIcon />
       </RailLink>
 
       <div className="flex-1" />
+
+      {/* Ask FlowDesk — placeholder trigger, wired to a slide-over in Slice 4 */}
+      <button
+        type="button"
+        data-ask-flowdesk
+        title="Ask FlowDesk"
+        className="relative flex h-9 w-10 flex-col items-center justify-center gap-0.5 rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+      >
+        <ChatIcon />
+        <span className="text-[8px] font-semibold leading-none">Ask</span>
+      </button>
 
       {/* Settings */}
       <RailLink href="/settings" active={isSettings} label="Settings">
@@ -128,11 +133,11 @@ function ApprovalsIcon() {
   )
 }
 
-function TasksIcon() {
+function MailIcon() {
   return (
     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <polyline strokeLinecap="round" strokeLinejoin="round" points="9 11 12 14 22 4" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+      <rect x="3" y="5" width="18" height="14" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7l9 6 9-6" />
     </svg>
   )
 }
