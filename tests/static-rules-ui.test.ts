@@ -8,7 +8,7 @@ const panel = readFileSync(
 )
 
 const settingsPage = readFileSync(
-  join(process.cwd(), "app/settings/page.tsx"),
+  join(process.cwd(), "app/settings/training/page.tsx"),
   "utf8"
 )
 
@@ -42,7 +42,7 @@ describe("SenderRulesPanel static rules UI", () => {
   })
 })
 
-describe("settings page wiring", () => {
+describe("settings training tab wiring", () => {
   it("always renders the rules section and passes static rules to the panel", () => {
     expect(settingsPage).toContain("initialStaticRules")
     expect(settingsPage).toMatch(/source/)
