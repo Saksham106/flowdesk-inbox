@@ -14,21 +14,24 @@ export type NavCapabilities = {
 }
 
 /**
- * B2C: one control room for everyone. There is no "business account" — every
+ * B2C: one nav model for everyone. There is no "business account" — every
  * user gets the same baseline navigation. The sales/CRM cluster (Leads, Reports,
  * Risk Radar, Meetings, Knowledge Base) is an opt-in capability that resurfaces
  * in the "More" menu only when the tenant has Sales & CRM mode enabled.
  *
- * `primary` items always render; `secondary` items collapse into a "More" menu.
- * Supervision surfaces (Approvals, Activity) are first-class for all users.
+ * `primary` items are the 5 rail destinations and always render; `secondary`
+ * items (demoted: Tasks, Activity) collapse into a "More" menu.
  */
-const CONTROL_ROOM_PRIMARY: AppNavigationItem[] = [
-  { label: "Tasks", href: "/tasks" },
+const PRIMARY_NAV: AppNavigationItem[] = [
+  { label: "Home", href: "/home" },
+  { label: "Mail", href: "/mail" },
+  { label: "Approvals", href: "/approvals" },
+  { label: "Clean", href: "/clean-inbox" },
   { label: "Settings", href: "/settings" },
 ]
 
-const CONTROL_ROOM_SECONDARY: AppNavigationItem[] = [
-  { label: "Approvals", href: "/approvals" },
+const SECONDARY_NAV: AppNavigationItem[] = [
+  { label: "Tasks", href: "/tasks" },
   { label: "Activity", href: "/audit" },
 ]
 
@@ -41,12 +44,16 @@ const SALES_CRM_SECONDARY: AppNavigationItem[] = [
   { label: "Knowledge Base", href: "/knowledge-base" },
 ]
 
+export function getPrimaryNav(): AppNavigationItem[] {
+  return PRIMARY_NAV
+}
+
 export function getInboxNavigation(capabilities?: NavCapabilities): InboxNavigation {
   const secondary = capabilities?.salesCrm
-    ? [...CONTROL_ROOM_SECONDARY, ...SALES_CRM_SECONDARY]
-    : CONTROL_ROOM_SECONDARY
+    ? [...SECONDARY_NAV, ...SALES_CRM_SECONDARY]
+    : SECONDARY_NAV
   return {
-    primary: CONTROL_ROOM_PRIMARY,
+    primary: PRIMARY_NAV,
     secondary,
   }
 }
