@@ -13,7 +13,7 @@ The product promise:
 - **Gmail is the primary surface.** Most users will interact with FlowDesk almost entirely *through Gmail* — its labels, its drafts, its follow-up nudges. So the Gmail-native side has to work *really well*: when FlowDesk says it labeled a thread, that label is on the thread in Gmail; when it drafts a reply, the draft is there. This is the product.
 - **The web app is the secondary surface, held to a high quality bar.** It is where users connect Gmail, supervise the agent, approve actions, train writing style, and do the occasional deeper review. Most users won't live here — but it must still *work correctly* and *look good*. "Secondary" means smaller in daily footprint, not lower in quality. We take direct design and implementation inspiration from Inbox Zero, Tom Shaw's AI agent inbox, and the other reference projects (`docs/reference-research/`), copying patterns and code where it helps.
 
-> **Current focus (updated 2026-07-08): web-app polish (Phase 2).** Phase 1's trustworthy-core-loop fixes shipped: labels no longer depend purely on background crons (queued jobs drain inline right after they're queued), and explicit user decisions (Mark Done, Waiting On, Read Later) always win over draft-ready/AI-derived signals — see `docs/TODO.md` → Phase 1 for what shipped. Now focused on Phase 2: making the secondary web-app surface genuinely polished, taking cues from Inbox Zero and the other reference projects.
+> **Current focus (updated 2026-07-08): ship a tight MVP.** The trustworthy core loop is done and reliable (inline label writeback, user-state-wins, and — new — an in-process scheduler so every background job actually runs in production without external cron infra). The constraint now is not capability; it is *focus*. FlowDesk has ~45 features and almost all are half-built (`Partial`), which is exactly what keeps a real product from shipping. The MVP is one core loop made genuinely excellent, with everything peripheral deferred out of the default experience. The single missing piece of the core loop is the **first-run "organize my existing inbox" moment** (see MVP definition below); it is the top priority. See `docs/TODO.md` for the actionable backlog.
 
 ## Why this direction
 
@@ -61,21 +61,22 @@ FlowDesk should directly modify the user's Gmail using the Gmail API:
 - Detect follow-ups and apply follow-up labels.
 - Keep an internal audit log of every action.
 
-Gmail label structure (flat, top-level labels — no `FlowDesk/` namespace prefix):
+Gmail label structure (flat, top-level labels — no `FlowDesk/` namespace prefix). Six workflow-state labels plus four content-type labels (the taxonomy was redesigned in 2026-07 taking cues from Inbox Zero's `SystemType` categories; `Follow Up`, `Important`, and `Low Priority` were retired):
 
 ```text
 Needs Reply
 Needs Action
 Waiting On
-Follow Up
 Read Later
-Important
 Handled
 Autodrafted
-Low Priority
+Newsletter
+Marketing
+Notification
+Calendar
 ```
 
-Keep labels user-friendly. Avoid exposing internal states like `triage_pending`, `classification_v2`, or `work_item_status`. (`Handle First` was removed — it was never producible as a stable per-thread label.)
+Keep labels user-friendly. Avoid exposing internal states like `triage_pending`, `classification_v2`, or `work_item_status`. (`Handle First` is a dashboard-only ranking, never a Gmail label; `Follow Up` overdue-tracking is now app-side only.)
 
 ### 2. FlowDesk dashboard
 
@@ -272,38 +273,35 @@ Never start users at auto-send.
 
 ## Roadmap
 
-The Gmail-native foundations (labels, drafts, waiting-on/follow-up, the control-room dashboard) are **built** — see `docs/CURRENT_STATE.md` for exactly what ships today. The problem is no longer "can FlowDesk touch Gmail?" It is "does the core loop work reliably and does the product feel trustworthy and polished?" The roadmap is therefore reordered around **correctness first, then polish, then capability**. The actionable, checkbox-level backlog lives in `docs/TODO.md`; this section is the strategic framing.
+The Gmail-native foundations (labels, drafts, waiting-on/follow-up, the control-room dashboard) are **built and reliable** — see `docs/CURRENT_STATE.md`. The problem is no longer "can FlowDesk touch Gmail?" nor "is the loop reliable?" (both solved). The problem is that the product is **wide and shallow**: ~45 features, almost all half-built. The roadmap is therefore reordered around **ship a tight MVP first** — make one core loop excellent, defer everything else — then polish, then breadth. The actionable, checkbox-level backlog lives in `docs/TODO.md`; this section is the strategic framing.
+
+### MVP definition — the one core loop
+
+The MVP is for a **B2C individual on Gmail**. It does exactly this, and does it well:
+
+1. **Connect Gmail → your existing inbox is organized within ~2 minutes.** A retroactive first-pass runs the (deterministic, zero-LLM-cost) classifier over a batch of existing threads, applies labels in Gmail, and shows a "here's what we just organized" proof screen before the user is dropped into the dashboard. *This is the one missing piece of the core loop and the top build priority.* It is also something FlowDesk can do better than Inbox Zero, whose first-pass runs an LLM per message.
+2. **New mail keeps getting labeled correctly, drafts appear for replies, waiting-on is tracked.** All shipped and reliable.
+3. **A simple, honest control room:** what the agent did, what needs approval, correct/train. No half-built peripheral surfaces in the default path.
+
+Success metric: a brand-new user connects Gmail and, within one session, sees their real inbox meaningfully organized and trusts that FlowDesk did what it said.
 
 ### Phase 1 — Trustworthy core loop — shipped
 
-Goal: the loop *classify → act in Gmail → reflect state truthfully in the UI* is reliable.
+The loop *classify → act in Gmail → reflect state truthfully in the UI* is reliable: label projection drains inline right after queuing (cron as backstop); explicit user decisions always win over AI-derived signals; and an in-process scheduler (`lib/scheduler/`, booted via `instrumentation.ts`) runs every background job in production without depending on external cron infrastructure. Verified end-to-end in the real app.
 
-- **Gmail actions actually happen.** Label projection now best-effort drains inline right after a job is queued (`lib/agent/gmail-writeback-processor.ts`), instead of depending entirely on the `gmail-writeback` cron; the cron remains the retry backstop.
-- **State is the single source of truth.** An explicit user decision (Mark done / waiting-on / read-later) is checked first in `analyzeConversationForCommandCenter` (`lib/agent/command-center.ts`), before any draft-ready or AI-derived signal, so it can never be overridden by a re-created draft or fresh classification.
-- **Verified end-to-end in the real app**, not just unit tests: mark done → refresh → still gone; a queued label writeback drains and audits immediately.
+### Phase 2 — MVP: the first-run organize moment — current focus
 
-Success metric (met): a user can trust that what FlowDesk says it did, it actually did — in Gmail and in the app.
+Goal: close the last gap in the core loop — the retroactive first-pass + proof screen described in the MVP definition — and make the default control-room path tight and honest by deferring half-built peripheral surfaces out of it. Include the concrete performance wins (parallelized/cached home-page data, correct latest-message selection) so the core loop is also *fast*.
 
-### Phase 2 — Web-app polish (secondary surface, high bar) — current focus
+Success metric: the MVP core loop is complete, fast, and the only thing a new user is asked to engage with.
 
-Goal: the companion web app looks and feels like a real product, taking layout cues from Inbox Zero and the other references.
+### Phase 3 — Polish and selective capability parity — after MVP
 
-- Split the oversized settings page into focused, navigable sections.
-- Rebuild the dashboard/inbox shell and navigation so the secondary surface is clean and coherent.
+Goal: once the core loop ships and is used, polish the web app and port only the reference-repo capabilities users actually reach for (bulk-unsubscribe depth, reply-tracking nudges, richer rule authoring), re-enabling deferred surfaces one at a time as each is finished to a real quality bar. See `docs/flowdesk-vs-reference-gap-analysis.md`.
 
-Success metric: the web app reads as polished and intentional, not as a pile of stacked panels.
+### Explicitly deferred out of the MVP
 
-### Phase 3 — Capability parity from the reference repos
-
-Goal: close the capability gap with the projects we studied (`docs/reference-research/`, `docs/flowdesk-vs-reference-gap-analysis.md`).
-
-- Port marquee pieces — bulk unsubscribe/cleanup depth, smart categories, reply-tracking UX, richer rule authoring — copying code where it makes sense.
-
-Success metric: FlowDesk matches or beats the reference inboxes on the features users notice.
-
-### Explicitly de-scoped for now
-
-Moved out of near-term focus so they don't distract from the phases above: Outlook failure-cause recording and writeback parity, CC/BCC send, inline-image backfill, Gmail add-on / browser extension, and other small correctness items. Tracked under "Later / de-scoped" in `docs/TODO.md`.
+Not deleted — kept off the default path so the MVP stays tight and nothing half-built is user-facing: the Sales & CRM cluster (already opt-in, stays off by default), the workflow-template builder, the scheduling/meeting agents, second brain / knowledge base / snippets / concierge templates, Outlook (failure-cause recording and writeback parity), CC/BCC send, inline-image backfill, and the Gmail add-on / browser extension. The dead `/digest` route should be removed from nav. Tracked under "Later / de-scoped" in `docs/TODO.md`.
 
 ## Technical principles
 
