@@ -32,7 +32,7 @@ These make the difference between "the pipeline works" and "the pipeline is dead
 Take layout and interaction cues from Inbox Zero, Tom Shaw's AI agent inbox, and the other references (`docs/reference-research/`).
 
 - [ ] Split the oversized settings page into focused, navigable sections/tabs — shipped: a sticky section index with anchors for Connect, Gmail behavior, Automation, Training, Profile, and Data, and every one of the 16 panels is now grouped under its matching anchor (`SettingsSectionGroup`) so the nav actually reaches all of them, not just the first panel per bucket. Still needs true route/tab decomposition so heavy panels are not all loaded at once (Inbox Zero's own settings page keeps everything on one route too — the win here is data-fetching per section via client hooks, not URL splitting).
-- [ ] Rebuild the dashboard/inbox shell and navigation so the secondary surface is clean and coherent (Inbox-Zero-style layout).
+- [ ] Rebuild the dashboard/inbox shell and navigation so the secondary surface is clean and coherent (Inbox-Zero-style layout) — first slice shipped: the home view's `HomeCommandCenter` went from 3 top-level headers plus 2 differently-styled ad-hoc sub-headings (a bold `<h3>` for Bills & Deadlines, an unlabeled Rules/Waiting-On/Read-Later cluster) down to 2 consistently-accented pillars ("What needs you" / "The agent") with a single neutral `SubHeading` style for everything inside each. Navigation itself (`AppRail`, filter links) is unchanged — user feedback was specifically about home-view clutter, not the nav.
 - [ ] Update remaining dashboard/settings copy so the web app reads as an intentional companion product.
 
 ## Phase 3 — Capability parity from the reference repos
@@ -72,6 +72,7 @@ Deliberately parked so they don't distract from the core loop and polish:
 
 Condensed history (full detail in Git log and `docs/CURRENT_STATE.md`):
 
+- Home view consolidated from 3 top-level headers plus inconsistent ad-hoc sub-headings down to 2 accented pillars ("What needs you" / "The agent") with one consistent neutral sub-heading style throughout.
 - Every settings panel grouped under its promised nav anchor (`SettingsSectionGroup`, styled after Inbox Zero's `SettingsGroup`) — previously only 6 of 16 panels were reachable from the sticky index.
 - Bills & Deadlines dismiss and Read Later's "+N more" badge/backfill now update immediately instead of reappearing on refresh.
 - Inline Gmail writeback draining and the command-center userState-first ordering fix (Phase 1 core loop).

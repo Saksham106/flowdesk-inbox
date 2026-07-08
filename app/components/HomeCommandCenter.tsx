@@ -25,7 +25,10 @@ interface Props {
   hasGmail: boolean
 }
 
-/** Small pillar heading: an accent label + count that frames the sections under it. */
+/** Top-level pillar heading: one per column, sets the accent color for the
+ *  whole pillar. Sub-sections inside a pillar use SubHeading (neutral, no
+ *  color) so the accent reads as "this whole area is about X" rather than
+ *  each sub-section competing for its own attention. */
 function PillarHeading({
   icon,
   label,
@@ -35,10 +38,9 @@ function PillarHeading({
   icon: string
   label: string
   count?: number
-  tone: "danger" | "accent" | "learn"
+  tone: "danger" | "accent"
 }) {
-  const color =
-    tone === "danger" ? "text-red-600" : tone === "accent" ? "text-blue-600" : "text-purple-600"
+  const color = tone === "danger" ? "text-red-600" : "text-blue-600"
   return (
     <div className="flex items-center gap-2">
       <p className={`text-[11px] font-bold uppercase tracking-wide ${color}`}>
@@ -47,6 +49,22 @@ function PillarHeading({
       {count !== undefined && count > 0 && (
         <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
           {count}
+        </span>
+      )}
+    </div>
+  )
+}
+
+/** Neutral sub-heading for a group within a pillar (e.g. "Handle first"
+ *  inside "What needs you"). Deliberately un-colored so it doesn't compete
+ *  with the pillar's accent color above it. */
+function SubHeading({ label, badge }: { label: string; badge?: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
+      {badge && (
+        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-50 text-slate-500 border border-slate-200">
+          {badge}
         </span>
       )}
     </div>
@@ -80,7 +98,8 @@ export default function HomeCommandCenter({
           date={date}
         />
 
-        {/* Three supervision pillars */}
+        {/* Two pillars: everything that needs a decision from you, and a
+            compact summary of what the agent has been doing/learning. */}
         <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
 
           {/* What needs you */}
@@ -102,10 +121,8 @@ export default function HomeCommandCenter({
               </Link>
             )}
 
-            <div>
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                ⚡ Handle first
-              </p>
+            <div className="flex flex-col gap-2">
+              <SubHeading label="⚡ Handle first" />
               <HandleFirstSection items={topActions} />
             </div>
 
@@ -115,30 +132,28 @@ export default function HomeCommandCenter({
             />
 
             {billsSection.count > 0 && (
-              <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="text-sm font-semibold text-slate-700">
-                  Bills &amp; Deadlines
-                  <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                    {billsSection.count}
-                  </span>
-                </h3>
+              <div className="flex flex-col gap-2">
+                <SubHeading label="Bills & Deadlines" badge={String(billsSection.count)} />
                 <BillsDeadlinesList items={billsSection.items} />
-              </section>
+              </div>
             )}
           </div>
 
-          {/* Right column: What FlowDesk did + What it learned */}
-          <div className="flex flex-col gap-5">
-            <div className="flex flex-col gap-3">
-              <PillarHeading icon="✦" label="What FlowDesk did" tone="accent" />
+          {/* The agent: what it did, what it learned, who you're waiting on,
+              what's saved for later — one pillar instead of three. */}
+          <div className="flex flex-col gap-4">
+            <PillarHeading icon="✦" label="The agent" tone="accent" />
+
+            <div className="flex flex-col gap-2">
+              <SubHeading label="What it did" />
               <AgentActivitySection
                 agentSummary={agentSummary}
                 quietlyHandledBreakdown={quietlyHandledBreakdown}
               />
             </div>
 
-            <div className="flex flex-col gap-3">
-              <PillarHeading icon="🧠" label="What it learned" tone="learn" />
+            <div className="flex flex-col gap-2">
+              <SubHeading label="What it learned" />
               <Link
                 href="/settings"
                 className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition hover:bg-slate-50"
@@ -155,12 +170,13 @@ export default function HomeCommandCenter({
                 </div>
                 <span className="text-[11px] font-medium text-slate-400">Tune →</span>
               </Link>
-              <WaitingOnSection
-                items={sections.waitingOnThem}
-                staleAfterBusinessDays={followUpDelayBusinessDays}
-              />
-              <ReadLaterSection items={sections.readLater} />
             </div>
+
+            <WaitingOnSection
+              items={sections.waitingOnThem}
+              staleAfterBusinessDays={followUpDelayBusinessDays}
+            />
+            <ReadLaterSection items={sections.readLater} />
           </div>
         </div>
 
