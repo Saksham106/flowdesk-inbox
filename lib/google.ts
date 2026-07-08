@@ -744,19 +744,26 @@ export function normalizeGmailSyncThreadLimit(value?: number | null): number {
   return Math.max(1, Math.min(GMAIL_SYNC_MAX_THREAD_LIMIT, Math.floor(value as number)))
 }
 
+// Gmail's label color API only accepts a fixed, undocumented-in-types set of
+// backgroundColor/textColor PAIRS — an unlisted pair is rejected with a 400,
+// which (before this file added error isolation around color-setting) could
+// abort the entire label pipeline before a single thread got labeled. These
+// exact hex values are copied from Inbox Zero (apps/web/utils/label.ts),
+// which uses them successfully in a live, shipped product, paired uniformly
+// with black text — safer than hand-picking unverified Gmail swatch values.
 const FLOWDESK_GMAIL_LABEL_COLORS: Record<
   FlowDeskGmailLabelName,
   { backgroundColor: string; textColor: string }
 > = {
-  "Needs Reply": { backgroundColor: "#fb4c2f", textColor: "#ffffff" },
-  "Needs Action": { backgroundColor: "#f691b3", textColor: "#000000" },
-  "Waiting On": { backgroundColor: "#a479e2", textColor: "#ffffff" },
-  "Follow Up": { backgroundColor: "#f2c960", textColor: "#000000" },
-  "Read Later": { backgroundColor: "#a4c2f4", textColor: "#000000" },
-  Important: { backgroundColor: "#ffad47", textColor: "#000000" },
-  Handled: { backgroundColor: "#16a765", textColor: "#ffffff" },
-  Autodrafted: { backgroundColor: "#4a86e8", textColor: "#ffffff" },
-  "Low Priority": { backgroundColor: "#cccccc", textColor: "#000000" },
+  "Needs Reply": { backgroundColor: "#ffc8af", textColor: "#000000" }, // coral
+  "Needs Action": { backgroundColor: "#ffdeb5", textColor: "#000000" }, // orange
+  "Waiting On": { backgroundColor: "#b6cff5", textColor: "#000000" }, // blue
+  "Follow Up": { backgroundColor: "#fdedc1", textColor: "#000000" }, // yellow
+  "Read Later": { backgroundColor: "#fbc8d9", textColor: "#000000" }, // rose
+  Important: { backgroundColor: "#f2b2a8", textColor: "#000000" }, // red
+  Handled: { backgroundColor: "#c2c2c2", textColor: "#000000" }, // gray
+  Autodrafted: { backgroundColor: "#e3d7ff", textColor: "#000000" }, // purple
+  "Low Priority": { backgroundColor: "#98d7e4", textColor: "#000000" }, // cyan
 }
 
 async function listGmailLabels(
@@ -772,6 +779,29 @@ async function listGmailLabels(
   return labelsByName
 }
 
+// Color is cosmetic; the label existing and being applied to threads is not.
+// Gmail's label color API only accepts a fixed set of backgroundColor/
+// textColor pairs — an unlisted pair 400s. Setting color as a separate
+// best-effort call (rather than inline on the create/rename payload) means a
+// bad or rejected color can never block the label from existing or being
+// applied to a thread; it just stays uncolored until retried.
+async function applyLabelColorBestEffort(
+  gmail: ReturnType<typeof google.gmail>,
+  labelId: string,
+  labelName: string,
+  color: { backgroundColor: string; textColor: string }
+): Promise<void> {
+  try {
+    await gmail.users.labels.patch({
+      userId: "me",
+      id: labelId,
+      requestBody: { color },
+    })
+  } catch (err) {
+    console.warn(`[gmail-labels] failed to set color for "${labelName}", label still usable:`, err)
+  }
+}
+
 async function getOrCreateFlowDeskLabelIds(
   gmail: ReturnType<typeof google.gmail>,
   existingLabelIdsByName: Map<string, string>,
@@ -781,11 +811,7 @@ async function getOrCreateFlowDeskLabelIds(
   for (const labelName of labelsToEnsure) {
     const existingId = existingLabelIdsByName.get(labelName)
     if (existingId) {
-      await gmail.users.labels.patch({
-        userId: "me",
-        id: existingId,
-        requestBody: { color: FLOWDESK_GMAIL_LABEL_COLORS[labelName] },
-      })
+      await applyLabelColorBestEffort(gmail, existingId, labelName, FLOWDESK_GMAIL_LABEL_COLORS[labelName])
       ids.set(labelName, existingId)
       continue
     }
@@ -796,13 +822,13 @@ async function getOrCreateFlowDeskLabelIds(
         name: labelName,
         labelListVisibility: "labelShow",
         messageListVisibility: "show",
-        color: FLOWDESK_GMAIL_LABEL_COLORS[labelName],
       },
     })
     const createdId = created.data.id
     if (!createdId) throw new Error(`Gmail did not return an id for label ${labelName}`)
     existingLabelIdsByName.set(labelName, createdId)
     ids.set(labelName, createdId)
+    await applyLabelColorBestEffort(gmail, createdId, labelName, FLOWDESK_GMAIL_LABEL_COLORS[labelName])
   }
 
   return ids
@@ -834,10 +860,11 @@ async function reconcileLegacyFlowDeskLabels(
     await gmail.users.labels.patch({
       userId: "me",
       id: legacyId,
-      requestBody: { name: newName, color: FLOWDESK_GMAIL_LABEL_COLORS[newName] },
+      requestBody: { name: newName },
     })
     existingLabelIdsByName.delete(legacyName)
     existingLabelIdsByName.set(newName, legacyId)
+    await applyLabelColorBestEffort(gmail, legacyId, newName, FLOWDESK_GMAIL_LABEL_COLORS[newName])
   }
 
   // Remove the now-childless "FlowDesk" parent label. Gmail auto-created it when
