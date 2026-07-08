@@ -677,6 +677,28 @@ function LoginForm() {
             >
               {isSigningUp ? "Creating account…" : "Create account →"}
             </button>
+
+            <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0, textAlign: "center", lineHeight: 1.5 }}>
+              By creating an account, you agree to the{" "}
+              <a
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "#6b7280", textDecoration: "underline", textUnderlineOffset: "2px" }}
+              >
+                Terms of Service
+              </a>{" "}
+              and{" "}
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "#6b7280", textDecoration: "underline", textUnderlineOffset: "2px" }}
+              >
+                Privacy Policy
+              </a>
+              .
+            </p>
           </form>
         )}
 

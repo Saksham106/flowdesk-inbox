@@ -48,10 +48,9 @@ export default function Home() {
               <p className="text-[13px] font-semibold text-[#141a3d]">Company</p>
               <div className="h-1.5" />
               {[
-                { label: "Blog", href: "#" },
-                { label: "Contact Us", href: "#" },
-                { label: "Terms of Service", href: "#" },
-                { label: "Privacy Policy", href: "#" },
+                { label: "Contact Us", href: "mailto:admin@flowdeskinbox.com" },
+                { label: "Terms of Service", href: "/terms" },
+                { label: "Privacy Policy", href: "/privacy" },
               ].map((item) => (
                 <Link key={item.label} href={item.href} className="text-[13px] text-[#595961] hover:text-black transition-colors">
                   {item.label}
