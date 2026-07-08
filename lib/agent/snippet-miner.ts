@@ -85,3 +85,25 @@ export async function mineSnippets(tenantId: string): Promise<number> {
 
   return created
 }
+
+export type SnippetMineCronResult = {
+  ok: boolean
+  results: Record<string, number>
+  failed: number
+}
+
+export async function runSnippetMineCron(): Promise<SnippetMineCronResult> {
+  const tenants = await prisma.tenant.findMany({ select: { id: true } })
+  const results: Record<string, number> = {}
+  const errors: string[] = []
+  for (const tenant of tenants) {
+    try {
+      results[tenant.id] = await mineSnippets(tenant.id)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "unknown error"
+      console.error(`snippet-mine: failed for tenant ${tenant.id}: ${msg}`)
+      errors.push(tenant.id)
+    }
+  }
+  return { ok: errors.length === 0, results, failed: errors.length }
+}

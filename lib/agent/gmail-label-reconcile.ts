@@ -65,3 +65,57 @@ export async function reconcileGmailLabelsForChannel(
     errors,
   }
 }
+
+export type GmailLabelReconcileCronResult = {
+  channels: number
+  labelsEnsured: number
+  scanned: number
+  queued: number
+  errors: number
+}
+
+// Bounded work per run: labels drift slowly (a user moving/removing FlowDesk
+// labels by hand in Gmail, or a writeback that failed out of its retry
+// budget), so a small rolling window converges within a few runs. Batches per
+// channel (not globally) so one very active tenant can't consume every other
+// tenant's slice of the run's work.
+const RECONCILE_WINDOW_DAYS = 14
+const RECONCILE_BATCH_SIZE = 50
+
+export async function runGmailLabelReconcileCron(): Promise<GmailLabelReconcileCronResult> {
+  const channels = await prisma.channel.findMany({
+    where: { provider: "google", gmailCredential: { isNot: null } },
+    select: { id: true, tenantId: true },
+  })
+
+  let labelsEnsured = 0
+  let scanned = 0
+  let queued = 0
+  let errors = 0
+
+  for (const channel of channels) {
+    const result = await reconcileGmailLabelsForChannel(channel, {
+      windowDays: RECONCILE_WINDOW_DAYS,
+      batchSize: RECONCILE_BATCH_SIZE,
+    })
+    if (result.labelsEnsured) {
+      labelsEnsured++
+    } else {
+      errors++
+      await prisma.auditLog
+        .create({
+          data: {
+            tenantId: channel.tenantId,
+            action: "gmail.labels.ensure_failed",
+            payloadJson: { channelId: channel.id, error: result.labelsEnsureError },
+          },
+        })
+        .catch(() => {})
+    }
+    scanned += result.scanned
+    queued += result.queued
+    errors += result.errors
+  }
+
+  return { channels: channels.length, labelsEnsured, scanned, queued, errors }
+}
