@@ -89,14 +89,41 @@ describe("GET /api/cron/gmail-label-reconcile", () => {
     expect(body).toEqual({ channels: 1, labelsEnsured: 1, scanned: 2, queued: 2, errors: 0 })
     expect(mockEnsureFlowDeskLabels).toHaveBeenCalledWith("channel-1")
     expect(mockProjectLabels).toHaveBeenCalledTimes(2)
+    // Scoped to this specific channel (not a global cross-tenant query) so one
+    // very active tenant can't consume every other tenant's batch slice.
     expect(mockConversationFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          channel: { provider: "google" },
+          channelId: "channel-1",
           externalThreadId: { not: "" },
         }),
         take: expect.any(Number),
       })
+    )
+  })
+
+  it("batches per channel so one tenant's conversations can't crowd out another's", async () => {
+    // Regression: the batch used to be a single global take(50) across every
+    // tenant's conversations pooled together, so one very active tenant could
+    // consume the whole run's budget and starve everyone else. Each channel
+    // now gets its own bounded batch.
+    mockChannelFindMany.mockResolvedValue([
+      { id: "channel-1", tenantId: "tenant-1" },
+      { id: "channel-2", tenantId: "tenant-2" },
+    ])
+    mockConversationFindMany.mockResolvedValue([{ id: "conv-1" }])
+
+    const res = await GET(request("Bearer cron-secret"))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body).toEqual({ channels: 2, labelsEnsured: 2, scanned: 2, queued: 2, errors: 0 })
+    expect(mockConversationFindMany).toHaveBeenCalledTimes(2)
+    expect(mockConversationFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ channelId: "channel-1" }) })
+    )
+    expect(mockConversationFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ channelId: "channel-2" }) })
     )
   })
 
