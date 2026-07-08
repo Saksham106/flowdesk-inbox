@@ -61,6 +61,7 @@ export async function GET(request: Request) {
 
   // Upsert Channel + GmailCredential
   const existing = await prisma.channel.findUnique({ where: { emailAddress: gmailAddress } });
+  const isNewConnection = !existing;
 
   let channelId: string;
 
@@ -126,6 +127,16 @@ export async function GET(request: Request) {
     });
   } catch (err) {
     console.error("[gmail/callback] initial sync failed:", err);
+  }
+
+  // A fresh connection goes to the onboarding proof screen, which runs the
+  // first-pass over existing mail and shows what was organized. A reconnect
+  // (credential refresh on an already-known account) skips it and returns to
+  // Settings — that inbox is already organized.
+  if (isNewConnection) {
+    return NextResponse.redirect(
+      `${process.env.NEXTAUTH_URL}/onboarding?connected=${encodeURIComponent(gmailAddress)}`
+    );
   }
 
   return NextResponse.redirect(`${redirectBase}?connected=${encodeURIComponent(gmailAddress)}`);
