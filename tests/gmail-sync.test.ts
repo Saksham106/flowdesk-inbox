@@ -131,6 +131,28 @@ describe('syncGmailChannel', () => {
     expect(mockConversationUpsert).not.toHaveBeenCalled()
   })
 
+  it('limits full inbox sync to the requested recent-thread batch size', async () => {
+    mockThreadsList.mockResolvedValue({ data: { threads: [] } })
+
+    await syncGmailChannel(CHANNEL_ID, TENANT_ID, { maxThreads: 20 })
+
+    expect(mockThreadsList).toHaveBeenCalledWith({
+      userId: 'me',
+      labelIds: ['INBOX'],
+      maxResults: 20,
+    })
+  })
+
+  it('caps full inbox sync batches at 50 threads for safer testing', async () => {
+    mockThreadsList.mockResolvedValue({ data: { threads: [] } })
+
+    await syncGmailChannel(CHANNEL_ID, TENANT_ID, { maxThreads: 500 })
+
+    expect(mockThreadsList).toHaveBeenCalledWith(
+      expect.objectContaining({ maxResults: 50 })
+    )
+  })
+
   it('upserts a conversation and message for each inbound thread', async () => {
     const thread = makeThread('thread-1', 'customer@example.com', CHANNEL_EMAIL)
     mockThreadsList.mockResolvedValue({ data: { threads: [{ id: 'thread-1' }] } })

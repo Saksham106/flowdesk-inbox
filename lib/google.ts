@@ -486,7 +486,11 @@ async function syncFetchedGmailThread({
 }
 
 // Pulls recent INBOX threads and upserts them as Conversations + Messages
-export async function syncGmailChannel(channelId: string, tenantId: string): Promise<number> {
+export async function syncGmailChannel(
+  channelId: string,
+  tenantId: string,
+  options: { maxThreads?: number } = {}
+): Promise<number> {
   const channel = await prisma.channel.findUnique({ where: { id: channelId } });
   if (!channel?.emailAddress) throw new Error("Not an email channel");
 
@@ -495,7 +499,7 @@ export async function syncGmailChannel(channelId: string, tenantId: string): Pro
   const threadsRes = await gmail.users.threads.list({
     userId: "me",
     labelIds: ["INBOX"],
-    maxResults: 25,
+    maxResults: normalizeGmailSyncThreadLimit(options.maxThreads),
   });
 
   const threads = threadsRes.data.threads ?? [];
@@ -732,6 +736,29 @@ type GmailLabelRecord = {
   name?: string | null
 }
 
+const GMAIL_SYNC_DEFAULT_THREAD_LIMIT = 25
+const GMAIL_SYNC_MAX_THREAD_LIMIT = 50
+
+export function normalizeGmailSyncThreadLimit(value?: number | null): number {
+  if (!Number.isFinite(value ?? NaN)) return GMAIL_SYNC_DEFAULT_THREAD_LIMIT
+  return Math.max(1, Math.min(GMAIL_SYNC_MAX_THREAD_LIMIT, Math.floor(value as number)))
+}
+
+const FLOWDESK_GMAIL_LABEL_COLORS: Record<
+  FlowDeskGmailLabelName,
+  { backgroundColor: string; textColor: string }
+> = {
+  "Needs Reply": { backgroundColor: "#fb4c2f", textColor: "#ffffff" },
+  "Needs Action": { backgroundColor: "#f691b3", textColor: "#000000" },
+  "Waiting On": { backgroundColor: "#a479e2", textColor: "#ffffff" },
+  "Follow Up": { backgroundColor: "#f2c960", textColor: "#000000" },
+  "Read Later": { backgroundColor: "#a4c2f4", textColor: "#000000" },
+  Important: { backgroundColor: "#ffad47", textColor: "#000000" },
+  Handled: { backgroundColor: "#16a765", textColor: "#ffffff" },
+  Autodrafted: { backgroundColor: "#4a86e8", textColor: "#ffffff" },
+  "Low Priority": { backgroundColor: "#cccccc", textColor: "#000000" },
+}
+
 async function listGmailLabels(
   gmail: ReturnType<typeof google.gmail>
 ): Promise<Map<string, string>> {
@@ -754,6 +781,11 @@ async function getOrCreateFlowDeskLabelIds(
   for (const labelName of labelsToEnsure) {
     const existingId = existingLabelIdsByName.get(labelName)
     if (existingId) {
+      await gmail.users.labels.patch({
+        userId: "me",
+        id: existingId,
+        requestBody: { color: FLOWDESK_GMAIL_LABEL_COLORS[labelName] },
+      })
       ids.set(labelName, existingId)
       continue
     }
@@ -764,6 +796,7 @@ async function getOrCreateFlowDeskLabelIds(
         name: labelName,
         labelListVisibility: "labelShow",
         messageListVisibility: "show",
+        color: FLOWDESK_GMAIL_LABEL_COLORS[labelName],
       },
     })
     const createdId = created.data.id
@@ -781,10 +814,10 @@ async function getOrCreateFlowDeskLabelIds(
 // `existingLabelIdsByName` so callers that computed it can keep using it.
 //
 // If both the legacy and the new label already exist (e.g. the account was
-// partially migrated), the legacy one is left untouched — merging two label ids
-// onto every thread is not worth the extra API cost, and the new one wins going
-// forward. After all children are renamed, an empty "FlowDesk" parent label is
-// removed so it doesn't linger in the label list.
+// partially migrated), the flat label wins and the duplicate legacy label is
+// deleted so Gmail does not keep showing stale FlowDesk/* labels. After all
+// children are renamed or removed, an empty "FlowDesk" parent label is removed
+// so it doesn't linger in the label list.
 async function reconcileLegacyFlowDeskLabels(
   gmail: ReturnType<typeof google.gmail>,
   existingLabelIdsByName: Map<string, string>
@@ -792,12 +825,16 @@ async function reconcileLegacyFlowDeskLabels(
   for (const [legacyName, newName] of LEGACY_FLOWDESK_LABEL_RENAMES) {
     const legacyId = existingLabelIdsByName.get(legacyName)
     if (!legacyId) continue
-    if (existingLabelIdsByName.has(newName)) continue
+    if (existingLabelIdsByName.has(newName)) {
+      await gmail.users.labels.delete({ userId: "me", id: legacyId })
+      existingLabelIdsByName.delete(legacyName)
+      continue
+    }
 
     await gmail.users.labels.patch({
       userId: "me",
       id: legacyId,
-      requestBody: { name: newName },
+      requestBody: { name: newName, color: FLOWDESK_GMAIL_LABEL_COLORS[newName] },
     })
     existingLabelIdsByName.delete(legacyName)
     existingLabelIdsByName.set(newName, legacyId)

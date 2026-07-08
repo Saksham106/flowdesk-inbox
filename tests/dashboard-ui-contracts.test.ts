@@ -179,4 +179,18 @@ describe("dashboard and inbox UI source contracts", () => {
     expect(s).toContain("Profile")
     expect(s).toContain("Data")
   })
+
+  it("settings exposes Gmail operator health for sync, queues, and agent jobs", () => {
+    const settings = source("app/settings/page.tsx")
+    const panel = source("app/settings/GmailOperatorHealthPanel.tsx")
+
+    expect(settings).toContain("GmailOperatorHealthPanel")
+    expect(settings).toContain("summarizeGmailOperatorHealth")
+    expect(settings).toContain("gmailWritebackQueue")
+    expect(settings).toContain("gmailPushEvent")
+    expect(settings).toContain("agentJob")
+    expect(panel).toContain("Gmail operator health")
+    expect(panel).toContain("writeback")
+    expect(panel).toContain("agent jobs")
+  })
 })

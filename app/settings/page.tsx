@@ -29,6 +29,8 @@ import TrainAgentPanel from "@/app/settings/TrainAgentPanel"
 import SnippetsPanel from "@/app/settings/SnippetsPanel"
 import WorkflowsPanel from "@/app/settings/WorkflowsPanel"
 import ConnectedAppsPanel from "@/app/settings/ConnectedAppsPanel"
+import GmailOperatorHealthPanel from "@/app/settings/GmailOperatorHealthPanel"
+import { summarizeGmailOperatorHealth } from "@/lib/gmail-operator-health"
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +87,20 @@ export default async function SettingsPage({ searchParams }: Props) {
   ] = await Promise.all([
     prisma.channel.findMany({
       where: { tenantId: session.user.tenantId, type: "email" },
-      include: { gmailCredential: { select: { createdAt: true, lastSyncedAt: true, lastSyncError: true, watchExpiresAt: true, lastSyncMode: true, lastSyncStatus: true } } },
+      include: {
+        gmailCredential: {
+          select: {
+            createdAt: true,
+            lastSyncedAt: true,
+            lastSyncError: true,
+            watchExpiresAt: true,
+            watchLastRenewalAttempt: true,
+            watchRenewalError: true,
+            lastSyncMode: true,
+            lastSyncStatus: true,
+          },
+        },
+      },
       orderBy: { createdAt: "asc" },
     }),
     prisma.channel.findMany({
@@ -144,7 +159,21 @@ export default async function SettingsPage({ searchParams }: Props) {
     }),
   ]);
 
-  const [senderRules, aiBudgetStatus, gmailLabelMappings] = await Promise.all([
+  const recentPushFailureCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const [
+    senderRules,
+    aiBudgetStatus,
+    gmailLabelMappings,
+    pendingWritebacks,
+    processingWritebacks,
+    failedWritebacks,
+    oldestPendingWriteback,
+    pendingAgentJobs,
+    runningAgentJobs,
+    failedAgentJobs,
+    oldestPendingAgentJob,
+    recentPushFailures,
+  ] = await Promise.all([
     prisma.senderRule.findMany({
       where: { tenantId: session.user.tenantId, status: { in: ["suggested", "active"] } },
       orderBy: { createdAt: "desc" },
@@ -153,6 +182,41 @@ export default async function SettingsPage({ searchParams }: Props) {
     prisma.gmailLabelMapping.findMany({
       where: { tenantId: session.user.tenantId },
       select: { canonical: true, enabled: true },
+    }),
+    prisma.gmailWritebackQueue.count({
+      where: { tenantId: session.user.tenantId, status: "pending" },
+    }),
+    prisma.gmailWritebackQueue.count({
+      where: { tenantId: session.user.tenantId, status: "processing" },
+    }),
+    prisma.gmailWritebackQueue.count({
+      where: { tenantId: session.user.tenantId, status: "failed" },
+    }),
+    prisma.gmailWritebackQueue.findFirst({
+      where: { tenantId: session.user.tenantId, status: "pending" },
+      orderBy: { nextAttemptAt: "asc" },
+      select: { nextAttemptAt: true },
+    }),
+    prisma.agentJob.count({
+      where: { tenantId: session.user.tenantId, status: "pending" },
+    }),
+    prisma.agentJob.count({
+      where: { tenantId: session.user.tenantId, status: "running" },
+    }),
+    prisma.agentJob.count({
+      where: { tenantId: session.user.tenantId, status: "failed" },
+    }),
+    prisma.agentJob.findFirst({
+      where: { tenantId: session.user.tenantId, status: "pending" },
+      orderBy: { createdAt: "asc" },
+      select: { createdAt: true },
+    }),
+    prisma.gmailPushEvent.count({
+      where: {
+        tenantId: session.user.tenantId,
+        status: "failed",
+        createdAt: { gte: recentPushFailureCutoff },
+      },
     }),
   ]);
 
@@ -163,6 +227,31 @@ export default async function SettingsPage({ searchParams }: Props) {
     canonical,
     enabled: gmailLabelEnabledByCanonical.get(canonical) ?? true,
   }));
+  const gmailOperatorHealth = summarizeGmailOperatorHealth({
+    channels: gmailChannels
+      .filter((channel) => channel.provider === "google")
+      .map((channel) => ({
+        emailAddress: channel.emailAddress,
+        lastSyncedAt: channel.gmailCredential?.lastSyncedAt ?? null,
+        lastSyncStatus: channel.gmailCredential?.lastSyncStatus ?? null,
+        lastSyncError: channel.gmailCredential?.lastSyncError ?? null,
+        watchExpiresAt: channel.gmailCredential?.watchExpiresAt ?? null,
+        watchRenewalError: channel.gmailCredential?.watchRenewalError ?? null,
+      })),
+    writeback: {
+      pending: pendingWritebacks,
+      processing: processingWritebacks,
+      failed: failedWritebacks,
+      oldestPendingAt: oldestPendingWriteback?.nextAttemptAt ?? null,
+    },
+    agentJobs: {
+      pending: pendingAgentJobs,
+      running: runningAgentJobs,
+      failed: failedAgentJobs,
+      oldestPendingAt: oldestPendingAgentJob?.createdAt ?? null,
+    },
+    recentPushFailures,
+  });
 
   // Workflow templates — seed 3 defaults if tenant has none
   const DEFAULT_WORKFLOW_TEMPLATES = [
@@ -381,6 +470,7 @@ export default async function SettingsPage({ searchParams }: Props) {
 
             {gmailChannels.length > 0 && (
               <div className="mt-4 space-y-3">
+                <GmailOperatorHealthPanel summary={gmailOperatorHealth} />
                 {gmailChannels.map((channel) => (
                   <div
                     key={channel.id}

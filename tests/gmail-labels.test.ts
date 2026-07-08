@@ -134,6 +134,10 @@ describe("FlowDesk Gmail labels", () => {
         name: "Waiting On",
         labelListVisibility: "labelShow",
         messageListVisibility: "show",
+        color: expect.objectContaining({
+          backgroundColor: expect.any(String),
+          textColor: expect.any(String),
+        }),
       }),
     })
     expect(mockThreadsModify).toHaveBeenCalledWith({
@@ -186,12 +190,18 @@ describe("FlowDesk Gmail labels", () => {
     expect(mockLabelsPatch).toHaveBeenCalledWith({
       userId: "me",
       id: "Legacy_1",
-      requestBody: { name: "Needs Reply" },
+      requestBody: expect.objectContaining({
+        name: "Needs Reply",
+        color: expect.objectContaining({ backgroundColor: "#fb4c2f" }),
+      }),
     })
     expect(mockLabelsPatch).toHaveBeenCalledWith({
       userId: "me",
       id: "Legacy_2",
-      requestBody: { name: "Handled" },
+      requestBody: expect.objectContaining({
+        name: "Handled",
+        color: expect.objectContaining({ backgroundColor: "#16a765" }),
+      }),
     })
     // The now-childless "FlowDesk" parent is removed.
     expect(mockLabelsDelete).toHaveBeenCalledWith({ userId: "me", id: "Legacy_Parent" })
@@ -221,10 +231,17 @@ describe("FlowDesk Gmail labels", () => {
 
     await applyFlowDeskLabelsToGmailThread("channel-1", "thread-1", ["Needs Reply"])
 
-    expect(mockLabelsPatch).not.toHaveBeenCalled()
-    // The flat label wins; the legacy one is left alone (still nested, so the
-    // parent is not deleted either).
-    expect(mockLabelsDelete).not.toHaveBeenCalled()
+    // The flat label wins going forward, the duplicate legacy label is removed
+    // so Gmail does not keep showing FlowDesk/Needs Reply, and the surviving
+    // flat label is patched with the FlowDesk color.
+    expect(mockLabelsPatch).toHaveBeenCalledWith({
+      userId: "me",
+      id: "Flat_1",
+      requestBody: expect.objectContaining({
+        color: expect.objectContaining({ backgroundColor: "#fb4c2f" }),
+      }),
+    })
+    expect(mockLabelsDelete).toHaveBeenCalledWith({ userId: "me", id: "Legacy_1" })
     expect(mockThreadsModify).toHaveBeenCalledWith({
       userId: "me",
       id: "thread-1",

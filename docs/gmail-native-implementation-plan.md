@@ -15,7 +15,7 @@ Shipped foundations:
 - Gmail OAuth connect/callback, encrypted tokens, invalid-token reauth CTA.
 - Gmail full and incremental history sync, Pub/Sub push/watch, sync locks.
 - Gmail read/archive/trash/unsubscribe writeback and retry queue.
-- Canonical flat Gmail labels (`Needs Reply`, `Waiting On`, …; no `FlowDesk/` prefix), `GmailLabelMapping`, and label projection gated by automation level. Legacy `FlowDesk/*` labels are renamed in place on the next ensure/apply.
+- Canonical flat, colored Gmail labels (`Needs Reply`, `Waiting On`, …; no `FlowDesk/` prefix), `GmailLabelMapping`, and label projection gated by automation level. Legacy `FlowDesk/*` labels are renamed in place or deleted when duplicate flat labels already exist on the next ensure/apply.
 - Gmail-native draft creation and withdrawal through writeback.
 - Waiting-on/follow-up lifecycle: outbound expected-reply detection, inbound self-healing, `Waiting On` and `Follow Up` labels, follow-up cron sweep, and no auto-sent follow-ups.
 - Unified approvals: `ApprovalRequest` is the single approval primitive for proposed drafts and future approval surfaces.
@@ -55,7 +55,8 @@ Status: Core shipped. Remaining work is hardening, reconciliation, correctness, 
 - Add a conversation-level audit timeline showing label/draft/status changes and undo availability.
   - Areas: `app/audit/page.tsx`, `app/conversations/[id]/AutomationRunHistory.tsx`, `app/conversations/[id]/ExplainThreadPanel.tsx`.
 - Expose Gmail watch/sync/writeback health in settings.
-  - Areas: `app/settings/ConnectedAppsPanel.tsx`, `lib/gmail-sync.ts`, `GmailCredential`, `GmailPushEvent`, `GmailWritebackQueue`.
+  - First slice shipped: Settings renders Gmail operator health from Gmail sync/watch state, recent push failures, Gmail writeback queue health, and agent-job backlog (`lib/gmail-operator-health.ts`, `app/settings/GmailOperatorHealthPanel.tsx`).
+  - Remaining: richer operator drilldowns and explicit cron last-run timestamps.
 
 ### P2
 

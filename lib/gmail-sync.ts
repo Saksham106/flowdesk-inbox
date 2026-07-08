@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import {
   fetchLatestHistoryId,
+  normalizeGmailSyncThreadLimit,
   syncGmailChannel,
   syncGmailChannelIncremental,
   watchGmailChannel,
@@ -89,12 +90,14 @@ export async function runGmailSync({
   requestedMode,
   incremental,
   ensureWatch = false,
+  maxThreads,
 }: {
   channelId: string
   tenantId: string
   requestedMode: RequestedSyncMode
   incremental: boolean
   ensureWatch?: boolean
+  maxThreads?: number
 }): Promise<GmailSyncResult> {
   const lockUntil = new Date(Date.now() + SYNC_LOCK_MS)
   const lock = await prisma.gmailCredential.updateMany({
@@ -117,6 +120,12 @@ export async function runGmailSync({
   let synced = 0
   let historyId: string | null = null
   let historyFallbackAt: Date | null = null
+  const runFullSync = () =>
+    maxThreads === undefined
+      ? syncGmailChannel(channelId, tenantId)
+      : syncGmailChannel(channelId, tenantId, {
+          maxThreads: normalizeGmailSyncThreadLimit(maxThreads),
+        })
 
   try {
     if (incremental) {
@@ -135,16 +144,16 @@ export async function runGmailSync({
           })
           storedMode = "history_fallback"
           historyFallbackAt = new Date()
-          synced = await syncGmailChannel(channelId, tenantId)
+          synced = await runFullSync()
           historyId = await ensureLatestHistoryId(channelId)
         }
       } else {
         storedMode = modeName(requestedMode, false)
-        synced = await syncGmailChannel(channelId, tenantId)
+        synced = await runFullSync()
         historyId = await ensureLatestHistoryId(channelId)
       }
     } else {
-      synced = await syncGmailChannel(channelId, tenantId)
+      synced = await runFullSync()
       historyId = await ensureLatestHistoryId(channelId)
     }
 
