@@ -21,7 +21,15 @@ type GroupStatus = {
 
 const EMPTY: GroupStatus = { loading: false, done: null, batchToken: null, undone: false }
 
-export default function CleanInboxClient({ groups }: { groups: SenderGroupView[] }) {
+export default function CleanInboxClient({
+  groups,
+  mode = "archive",
+  protectedOrSkipped = 0,
+}: {
+  groups: SenderGroupView[]
+  mode?: "archive" | "unsubscribe"
+  protectedOrSkipped?: number
+}) {
   const [status, setStatus] = useState<Record<string, GroupStatus>>({})
 
   function patch(key: string, next: Partial<GroupStatus>) {
@@ -72,27 +80,41 @@ export default function CleanInboxClient({ groups }: { groups: SenderGroupView[]
         <Link href="/home" className="text-xs text-slate-400 hover:text-slate-700">
           ← Back to control room
         </Link>
-        <h1 className="mt-2 text-xl font-semibold text-slate-900">Bulk Archive</h1>
+        <h1 className="mt-2 text-xl font-semibold text-slate-900">
+          {mode === "unsubscribe" ? "Bulk Unsubscribe" : "Bulk Archive"}
+        </h1>
         {remainingSenders > 0 ? (
           <p className="mt-1 text-sm text-slate-500">
-            Clear {totalEmails.toLocaleString()} email{totalEmails === 1 ? "" : "s"} from{" "}
+            {mode === "unsubscribe" ? "Unsubscribe and clear " : "Clear "}
+            {totalEmails.toLocaleString()} email{totalEmails === 1 ? "" : "s"} from{" "}
             {remainingSenders} sender{remainingSenders === 1 ? "" : "s"}.
           </p>
         ) : (
           <p className="mt-1 text-sm text-slate-500">Nothing left to clean up.</p>
         )}
         <p className="mt-1 text-xs text-slate-400">
-          Archived in Gmail, not deleted · your Needs Reply and receipts are never touched · undo
-          within 1 hour.
+          {mode === "unsubscribe"
+            ? "Unsubscribes and archives in Gmail, not deleted · your Needs Reply and receipts are never touched · undo within 1 hour."
+            : "Archived in Gmail, not deleted · your Needs Reply and receipts are never touched · undo within 1 hour."}
         </p>
       </div>
 
       {groups.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
           <p className="text-sm font-medium text-slate-700">Your inbox looks clean.</p>
-          <p className="mt-1 text-xs text-slate-400">
-            No newsletters, marketing, or quietly-handled mail to group right now.
-          </p>
+          {protectedOrSkipped > 0 ? (
+            <p className="mt-1 text-xs text-slate-400">
+              No newsletters, marketing, or quietly-handled mail to group right now.
+              {" "}
+              {protectedOrSkipped} conversation{protectedOrSkipped === 1 ? "" : "s"}{" "}
+              {protectedOrSkipped === 1 ? "was" : "were"} protected by safety rules (needs reply,
+              waiting on, receipts, etc.) and excluded.
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-slate-400">
+              No newsletters, marketing, or quietly-handled mail to group right now.
+            </p>
+          )}
         </div>
       ) : (
         <div className="space-y-2">

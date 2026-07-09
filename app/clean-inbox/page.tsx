@@ -1,11 +1,10 @@
 import { redirect } from "next/navigation"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
-import { groupCleanupBySender, type CleanupCandidate } from "@/lib/agent/sender-cleanup"
 import AppRail from "@/app/components/AppRail"
 import AskFlowDeskPanel from "@/app/components/AskFlowDeskPanel"
 import { getAppShellContext } from "@/lib/app-shell"
+import { getCleanupOverview } from "@/lib/cleanup-candidates"
 import CleanInboxClient from "./CleanInboxClient"
 import CleanupTabNav from "./CleanupTabNav"
 
@@ -17,64 +16,7 @@ export default async function CleanInboxPage() {
   const tenantId = session.user.tenantId
 
   const { needsReplyCount, pendingApprovals } = await getAppShellContext(tenantId)
-
-  // Cleanable candidates: newsletters/marketing plus quietly-handled and FYI
-  // mail. The grouping helper applies the safety skip rules (never needs-reply,
-  // waiting-on, important, or receipts), so this query stays permissive.
-  const conversations = await prisma.conversation.findMany({
-    where: {
-      tenantId,
-      status: { not: "closed" },
-      OR: [
-        { stateRecord: { emailType: { in: ["newsletter", "marketing"] } } },
-        { stateRecord: { attentionCategory: { in: ["quiet", "fyi_done"] } } },
-      ],
-    },
-    select: {
-      id: true,
-      status: true,
-      userState: true,
-      lastMessageAt: true,
-      contact: { select: { name: true, phoneE164: true } },
-      messages: { take: 1, orderBy: { createdAt: "asc" }, select: { subject: true } },
-      stateRecord: {
-        select: { emailType: true, attentionCategory: true, metadataJson: true },
-      },
-    },
-    take: 400,
-    orderBy: { lastMessageAt: "desc" },
-  })
-
-  const candidates: CleanupCandidate[] = conversations.map((c) => {
-    const meta =
-      c.stateRecord?.metadataJson &&
-      typeof c.stateRecord.metadataJson === "object" &&
-      !Array.isArray(c.stateRecord.metadataJson)
-        ? (c.stateRecord.metadataJson as Record<string, unknown>)
-        : null
-    return {
-      id: c.id,
-      senderEmail: c.contact?.phoneE164 ?? null,
-      senderName: c.contact?.name ?? null,
-      subject: c.messages[0]?.subject ?? null,
-      emailType: c.stateRecord?.emailType ?? null,
-      attentionCategory: c.stateRecord?.attentionCategory ?? null,
-      status: c.status,
-      userState: c.userState,
-      hasUnsubscribe: typeof meta?.unsubscribeUrl === "string" && meta.unsubscribeUrl.length > 0,
-      lastReceivedAt: c.lastMessageAt ?? new Date(0),
-    }
-  })
-
-  const groups = groupCleanupBySender(candidates).map((g) => ({
-    senderEmail: g.senderEmail,
-    senderName: g.senderName,
-    domain: g.domain,
-    count: g.count,
-    sampleSubjects: g.sampleSubjects,
-    conversationIds: g.conversationIds,
-    hasUnsubscribe: g.hasUnsubscribe,
-  }))
+  const overview = await getCleanupOverview(tenantId)
 
   return (
     <>
@@ -86,7 +28,11 @@ export default async function CleanInboxPage() {
           <div className="mx-auto max-w-2xl px-4 pt-8">
             <CleanupTabNav />
           </div>
-          <CleanInboxClient groups={groups} />
+          <CleanInboxClient
+            groups={overview.groups}
+            mode="archive"
+            protectedOrSkipped={overview.analytics.protectedOrSkipped}
+          />
         </div>
       </div>
       <AskFlowDeskPanel />
