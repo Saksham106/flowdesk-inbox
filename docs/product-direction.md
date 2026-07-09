@@ -80,22 +80,28 @@ Keep labels user-friendly. Avoid exposing internal states like `triage_pending`,
 
 ### 2. FlowDesk dashboard
 
-The dashboard stays, but its job changes.
+The dashboard stays, but its job changed — and its information architecture was
+restructured (2026-07-08) around **one job per screen**, taking cues from Inbox
+Zero (see `docs/superpowers/specs/2026-07-08-web-app-revamp-design.md` and
+`docs/CURRENT_STATE.md` → "Web app information architecture").
 
-It should become the agent control room:
+Navigation is 5 primary destinations — **Home** (`/home`), **Mail** (`/mail`),
+**Approvals**, **Clean**, **Settings** — plus a global "Ask FlowDesk" assistant
+slide-over:
 
-- Connect Gmail account.
-- Configure label rules.
-- Set automation level.
-- Review approval queue.
-- View daily inbox brief.
-- See agent activity and audit logs.
-- Train writing style.
-- Set personal/business context.
-- Manage VIPs, blocked senders, and categories.
-- Review conversations in a power-user view.
+- **Home** is the agent control room only (no email list): what needs you
+  (approvals, handle-first, tasks & deadlines) and what the agent did/learned.
+- **Mail** owns the in-app email list + filters + reading pane (kept, but moved
+  off the home screen so neither surface feels crowded).
+- **Approvals** is the approval queue; **Clean** is bulk unsubscribe/archive.
+- **Settings** is route-based tabs (Connect, Gmail, Automation, Training,
+  Profile, Data) — connect Gmail, configure labels/rules, set the automation
+  level, train writing style, manage VIPs, tune AI budget.
+- Agent activity/audit and the full tasks list are one click away (links from
+  Home), not permanent nav.
 
-The dashboard should not require users to abandon Gmail. It should make the Gmail-native agent more trustworthy, configurable, and transparent.
+The dashboard should not require users to abandon Gmail. It should make the
+Gmail-native agent more trustworthy, configurable, and transparent.
 
 ### 3. Gmail add-on
 
@@ -329,12 +335,15 @@ Not deleted — kept off the default path so the MVP stays tight and nothing hal
 
 ### Frontend dashboard
 
-- Rename dashboard language from “inbox replacement” to “agent control room.”
-- Add Gmail-native settings page.
-- Add automation level selector.
-- Add label configuration UI.
-- Add audit log UI.
-- Add approval queue UI.
+All shipped as of the 2026-07-08 web-app IA revamp (see `docs/CURRENT_STATE.md`
+→ "Web app information architecture"):
+
+- ~~Rename dashboard language from "inbox replacement" to "agent control room."~~ Done — Home (`/home`) is the control room; the email list moved to `/mail`.
+- ~~Add Gmail-native settings page.~~ Done — route-based settings tabs (Connect/Gmail/Automation/Training/Profile/Data).
+- ~~Add automation level selector.~~ Done — Settings → Automation.
+- ~~Add label configuration UI.~~ Done — Settings → Gmail.
+- ~~Add audit log UI.~~ Done — `/audit` + per-conversation timeline (linked from Home).
+- ~~Add approval queue UI.~~ Done — `/approvals` (primary nav).
 
 ### Agent/AI
 
