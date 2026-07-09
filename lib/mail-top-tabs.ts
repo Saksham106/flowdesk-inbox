@@ -45,3 +45,55 @@ export function matchesMailTopTab(tab: MailTopTabValue, input: MailTopTabInput):
       return false
   }
 }
+
+export function buildMailTopTabWhere(tab: MailTopTabValue | null | undefined): Record<string, unknown> | null {
+  switch (tab) {
+    case "important":
+      return {
+        stateRecord: {
+          is: {
+            metadataJson: { path: ["isVip"], equals: true },
+          },
+        },
+      }
+    case "needs_reply":
+      return {
+        OR: [
+          { status: "needs_reply" },
+          { draft: { is: { status: "proposed" } } },
+        ],
+      }
+    case "waiting_on":
+      return {
+        OR: [
+          { userState: "waiting_on" },
+          { status: "in_progress" },
+          { stateRecord: { is: { attentionCategory: "waiting_on" } } },
+        ],
+      }
+    case "read_later":
+      return {
+        OR: [
+          { userState: "read_later" },
+          { stateRecord: { is: { attentionCategory: "read_later" } } },
+        ],
+      }
+    case "calendar":
+      return { stateRecord: { is: { emailType: "calendar" } } }
+    case "other":
+      return {
+        OR: [
+          { userState: "done" },
+          { status: "closed" },
+          { stateRecord: { is: { attentionCategory: { in: ["quiet", "fyi_done"] } } } },
+          { stateRecord: { is: { emailType: { in: ["notification", "newsletter", "marketing"] } } } },
+        ],
+        NOT: [
+          { stateRecord: { is: { emailType: "calendar" } } },
+          { stateRecord: { is: { metadataJson: { path: ["isVip"], equals: true } } } },
+        ],
+      }
+    default:
+      return null
+  }
+}

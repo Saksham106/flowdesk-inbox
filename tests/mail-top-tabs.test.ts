@@ -1,11 +1,26 @@
 import { describe, it, expect } from "vitest"
-import { MAIL_TOP_TABS, matchesMailTopTab } from "@/lib/mail-top-tabs"
+import { buildMailTopTabWhere, MAIL_TOP_TABS, matchesMailTopTab } from "@/lib/mail-top-tabs"
 
 describe("MAIL_TOP_TABS", () => {
   it("defines the six tabs in order", () => {
     expect(MAIL_TOP_TABS.map((t) => t.value)).toEqual([
       "important", "needs_reply", "waiting_on", "read_later", "other", "calendar",
     ])
+  })
+})
+
+describe("buildMailTopTabWhere", () => {
+  it("builds database prefilters for navigated top-tab views", () => {
+    expect(buildMailTopTabWhere("waiting_on")).toEqual({
+      OR: [
+        { userState: "waiting_on" },
+        { status: "in_progress" },
+        { stateRecord: { is: { attentionCategory: "waiting_on" } } },
+      ],
+    })
+    expect(buildMailTopTabWhere("calendar")).toEqual({
+      stateRecord: { is: { emailType: "calendar" } },
+    })
   })
 })
 

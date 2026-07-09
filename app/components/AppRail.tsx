@@ -49,7 +49,7 @@ const RAIL_CONFIG: Record<string, RailRenderConfig> = {
   "/clean-inbox": {
     label: "Clean",
     icon: <BroomIcon />,
-    isActive: (p) => p === "/clean-inbox",
+    isActive: (p) => p === "/clean-inbox" || p.startsWith("/clean-inbox/"),
   },
   "/assistant": {
     label: "Assistant",

@@ -9,6 +9,7 @@ import { resolveAccountMode } from "@/lib/account-mode"
 import { inboxTag } from "@/lib/cache-tags"
 import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status"
 import { CONTENT_TYPE_FILTERS, emailTypesForContentFilter } from "@/lib/content-type-filters"
+import { buildMailTopTabWhere, type MailTopTabValue } from "@/lib/mail-top-tabs"
 
 interface Props {
   tenantId: string
@@ -167,12 +168,14 @@ export function getCachedListData(input: {
   contentType?: string | null
   q?: string
   sales: boolean
+  topTab?: MailTopTabValue | null
 }) {
   const key = [
     "app-list-column",
     input.tenantId,
     input.status ?? "all",
     input.contentType ?? "all",
+    input.topTab ?? "no-top-tab",
     input.q ?? "",
     input.sales ? "sales" : "standard",
   ]
@@ -182,31 +185,41 @@ export function getCachedListData(input: {
   return unstable_cache(
     async () => {
       const where: Record<string, unknown> = { tenantId: input.tenantId }
+      const andFilters: Record<string, unknown>[] = []
       if (input.status) where.status = input.status
       if (contentEmailTypes) {
-        where.stateRecord = {
-          is: {
-            emailType: { in: contentEmailTypes },
+        andFilters.push({
+          stateRecord: {
+            is: {
+              emailType: { in: contentEmailTypes },
+            },
           },
-        }
+        })
       }
       if (input.sales) {
-        where.stateRecord = {
-          is: {
-            isSalesLead: true,
+        andFilters.push({
+          stateRecord: {
+            is: {
+              isSalesLead: true,
+            },
           },
-        }
+        })
       }
+      const topTabWhere = buildMailTopTabWhere(input.topTab)
+      if (topTabWhere) andFilters.push(topTabWhere)
       if (input.q) {
         // Matches the standalone /search page's message-body search too, so
         // this one box covers both "find a conversation" and "find something
         // someone said" — no separate search page needed.
-        where.OR = [
-          { externalThreadId: { contains: input.q, mode: "insensitive" } },
-          { contact: { name: { contains: input.q, mode: "insensitive" } } },
-          { messages: { some: { body: { contains: input.q, mode: "insensitive" } } } },
-        ]
+        andFilters.push({
+          OR: [
+            { externalThreadId: { contains: input.q, mode: "insensitive" } },
+            { contact: { name: { contains: input.q, mode: "insensitive" } } },
+            { messages: { some: { body: { contains: input.q, mode: "insensitive" } } } },
+          ],
+        })
       }
+      if (andFilters.length > 0) where.AND = andFilters
 
       return Promise.all([
         prisma.conversation.findMany({

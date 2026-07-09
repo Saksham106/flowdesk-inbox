@@ -16,8 +16,6 @@ const MAIL_SECTION: AppSidebarSection = {
     { label: "Waiting On", href: "/mail?tab=waiting_on" },
     { label: "Read Later", href: "/mail?tab=read_later" },
     { label: "Done", href: "/mail?status=closed" },
-    { label: "Drafts", href: "/mail?tab=drafts" },
-    { label: "Sent", href: "/mail?tab=sent" },
   ],
 }
 

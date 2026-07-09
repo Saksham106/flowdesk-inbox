@@ -181,6 +181,46 @@ describe("dashboard and inbox UI source contracts", () => {
     }
   })
 
+  it("assistant routes render inside the app rail/sidebar shell", () => {
+    const layout = source("app/assistant/layout.tsx")
+
+    expect(layout).toContain("AppRail")
+    expect(layout).toContain("AppSidebar")
+    expect(layout).toContain("getAppShellContext")
+  })
+
+  it("cleanup subroutes keep the Clean rail item active", () => {
+    const rail = source("app/components/AppRail.tsx")
+
+    expect(rail).toContain('isActive: (p) => p === "/clean-inbox" || p.startsWith("/clean-inbox/")')
+  })
+
+  it("new app-shell pages mount the Ask FlowDesk panel with the rail trigger", () => {
+    const shellPages = [
+      "app/assistant/layout.tsx",
+      "app/clean-inbox/page.tsx",
+      "app/clean-inbox/unsubscribe/page.tsx",
+      "app/clean-inbox/analytics/page.tsx",
+      "app/tools/page.tsx",
+    ]
+
+    for (const path of shellPages) {
+      const s = source(path)
+      expect(s).toContain("AppRail")
+      expect(s).toContain("AskFlowDeskPanel")
+    }
+  })
+
+  it("desktop Mail top-tab views are preserved in query and return links", () => {
+    const mail = source("app/mail/page.tsx")
+    const list = source("app/components/AppListColumn.tsx")
+
+    expect(mail).toContain("if (activeTopTab) params.set(\"tab\", activeTopTab)")
+    expect(mail).toContain("topTab: activeTopTab")
+    expect(list).toContain("buildMailTopTabWhere(input.topTab)")
+    expect(list).toContain('input.topTab ?? "no-top-tab"')
+  })
+
   it("settings exposes Gmail operator health for sync, queues, and agent jobs", () => {
     const connect = source("app/settings/connect/page.tsx")
     const panel = source("app/settings/GmailOperatorHealthPanel.tsx")

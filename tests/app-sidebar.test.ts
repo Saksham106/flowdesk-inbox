@@ -6,7 +6,7 @@ describe("getSidebarSection", () => {
     const mail = getSidebarSection("/mail")
     expect(mail?.title).toBe("Mail")
     expect(mail?.items.map((i) => i.label)).toEqual([
-      "Inbox", "Needs Reply", "Waiting On", "Read Later", "Done", "Drafts", "Sent",
+      "Inbox", "Needs Reply", "Waiting On", "Read Later", "Done",
     ])
     expect(getSidebarSection("/conversations/abc123")?.title).toBe("Mail")
   })

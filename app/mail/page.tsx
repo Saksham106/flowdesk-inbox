@@ -159,7 +159,12 @@ async function renderMailPage(
   }
 
   function currentMailHref() {
-    return tabHref(activeStatus, salesFilter);
+    const href = tabHref(activeStatus, salesFilter);
+    if (!activeTopTab) return href;
+    const params = new URLSearchParams(href.includes("?") ? href.split("?")[1] : "");
+    if (activeTopTab) params.set("tab", activeTopTab);
+    const qs = params.toString();
+    return qs ? `/mail?${qs}` : "/mail";
   }
 
   function attentionTabHref(category: string) {
@@ -222,6 +227,7 @@ async function renderMailPage(
   // behave identically to before. `tab` is an additional post-filter layered
   // on top for the desktop top-tabs UI.
   const isPersonal = resolveAccountMode(accountType) === "personal";
+  const activeTopTab = isValidMailTopTab(searchParams.tab) ? searchParams.tab : null;
   const returnTo = currentMailHref();
   const [desktopConversations] = await getCachedListData({
     tenantId,
@@ -229,6 +235,7 @@ async function renderMailPage(
     contentType: contentTypeFilter || undefined,
     q: q || undefined,
     sales: salesFilter && isBusiness,
+    topTab: activeTopTab,
   });
   const desktopRawItems: InboxListItem[] = desktopConversations.map((conv) =>
     mapConversationRowToListItem(conv, { activeConversationId: undefined, isPersonal, returnTo })
@@ -261,7 +268,6 @@ async function renderMailPage(
     }
   }
 
-  const activeTopTab = isValidMailTopTab(searchParams.tab) ? searchParams.tab : null;
   const desktopFilteredItems = activeTopTab
     ? desktopAllItems.filter((item) =>
         matchesMailTopTab(activeTopTab, {
