@@ -277,6 +277,15 @@ describe("dashboard and inbox UI source contracts", () => {
     expect(page).toContain("<SenderRulesPanel")
   })
 
+  it("static rules display their planned Gmail label via plannedLabelsForRuleAction", () => {
+    const panel = source("app/settings/SenderRulesPanel.tsx")
+
+    expect(panel).toContain(
+      'import { plannedLabelsForRuleAction } from "@/lib/assistant-rule-view"'
+    )
+    expect(panel).toContain("plannedLabelsForRuleAction(rule.actionJson)")
+  })
+
   it("Test Rules is a server-loaded rule select, not a freeform id input", () => {
     const page = source("app/assistant/test-rules/page.tsx")
     const client = source("app/assistant/TestRulesClient.tsx")

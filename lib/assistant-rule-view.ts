@@ -27,6 +27,12 @@ export type AssistantRuleSummary = {
 // "review_soon" has no dedicated Gmail label; deriveWorkflowStatus
 // (lib/workflow-status.ts) has no case for it either and falls through to
 // "needs_reply", so it's mapped the same way here for consistency.
+//
+// This previews only the attention-target's own label — it does not derive
+// content-type labels (Newsletter/Marketing/…) or Autodrafted the way
+// flowDeskLabelsForConversationState does from full conversation state.
+// Don't mistake it for a mirror of that pipeline; it's a narrower, static
+// preview keyed off a rule's targetAttention alone.
 export function plannedLabelsForRuleAction(
   actionJson: Record<string, unknown>
 ): FlowDeskGmailLabelName[] {
