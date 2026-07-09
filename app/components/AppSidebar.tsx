@@ -62,6 +62,7 @@ export default function AppSidebar() {
               key={item.href}
               href={item.href}
               title={item.label}
+              aria-label={item.label}
               className="truncate rounded-md px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900"
             >
               {collapsed ? item.label.slice(0, 1) : item.label}
