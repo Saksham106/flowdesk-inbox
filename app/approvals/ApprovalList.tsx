@@ -5,7 +5,7 @@ import { useState } from "react"
 
 import ApprovalActions from "./ApprovalActions"
 
-type ApprovalItem = {
+export type ApprovalItem = {
   id: string
   conversationId: string
   displayName: string
@@ -82,8 +82,30 @@ export default function ApprovalList({ items }: { items: ApprovalItem[] }) {
 
   if (visible.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
-        Nothing needs approval right now.
+      <div className="rounded-xl border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-sm">
+        <p className="text-sm font-medium text-slate-800">Nothing needs approval right now.</p>
+        <p className="mt-2">
+          Approvals appear here when FlowDesk needs an explicit decision before acting.
+        </p>
+        <ul className="mt-4 list-disc space-y-1 pl-5 text-left">
+          <li>Draft send approvals before an email is sent.</li>
+          <li>Calendar booking approvals before an event is created.</li>
+          <li>Higher-risk automation approvals as Assistant rules get more capable.</li>
+        </ul>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <Link
+            href="/assistant/rules"
+            className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Review rules
+          </Link>
+          <Link
+            href="/settings/automation"
+            className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Automation settings
+          </Link>
+        </div>
       </div>
     )
   }

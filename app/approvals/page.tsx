@@ -4,7 +4,10 @@ import { getServerSession } from "next-auth"
 
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import ApprovalList from "./ApprovalList"
+import AppRail from "@/app/components/AppRail"
+import AskFlowDeskPanel from "@/app/components/AskFlowDeskPanel"
+import { getAppShellContext } from "@/lib/app-shell"
+import ApprovalList, { type ApprovalItem } from "./ApprovalList"
 
 export const dynamic = "force-dynamic"
 
@@ -14,9 +17,35 @@ function metadataText(value: unknown): string | null {
   return JSON.stringify(value)
 }
 
+function ApprovalsContent({ count, items }: { count: number; items: ApprovalItem[] }) {
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+          <div>
+            <Link href="/home" className="text-sm text-slate-500 hover:text-slate-700 lg:hidden">
+              ← Back to inbox
+            </Link>
+            <h1 className="mt-1 text-xl font-semibold">Approval Queue</h1>
+            <p className="text-sm text-slate-500">
+              {count} draft{count === 1 ? "" : "s"} waiting for review
+            </p>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-5xl px-6 py-8">
+        <ApprovalList items={items} />
+      </main>
+    </div>
+  )
+}
+
 export default async function ApprovalsPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.tenantId) redirect("/login")
+
+  const { needsReplyCount, pendingApprovals } = await getAppShellContext(session.user.tenantId)
 
   const approvals = await prisma.approvalRequest.findMany({
     where: { tenantId: session.user.tenantId, status: "pending" },
@@ -59,24 +88,17 @@ export default async function ApprovalsPage() {
   })
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <div>
-            <Link href="/home" className="text-sm text-slate-500 hover:text-slate-700">
-              ← Back to inbox
-            </Link>
-            <h1 className="mt-1 text-xl font-semibold">Approval Queue</h1>
-            <p className="text-sm text-slate-500">
-              {approvals.length} draft{approvals.length === 1 ? "" : "s"} waiting for review
-            </p>
-          </div>
+    <>
+      <div className="hidden lg:flex lg:h-screen">
+        <AppRail needsReplyCount={needsReplyCount} pendingApprovals={pendingApprovals} />
+        <div className="flex flex-1 flex-col overflow-y-auto">
+          <ApprovalsContent count={approvals.length} items={items} />
         </div>
-      </header>
-
-      <main className="mx-auto max-w-5xl px-6 py-8">
-        <ApprovalList items={items} />
-      </main>
-    </div>
+      </div>
+      <div className="lg:hidden">
+        <ApprovalsContent count={approvals.length} items={items} />
+      </div>
+      <AskFlowDeskPanel />
+    </>
   )
 }

@@ -255,4 +255,16 @@ describe("dashboard and inbox UI source contracts", () => {
     expect(panel).toContain("writeback")
     expect(panel).toContain("agent jobs")
   })
+
+  it("approvals renders in the app rail shell and explains empty state sources", () => {
+    const page = source("app/approvals/page.tsx")
+    const list = source("app/approvals/ApprovalList.tsx")
+
+    expect(page).toContain("AppRail")
+    expect(page).toContain("AskFlowDeskPanel")
+    expect(page).toContain("getAppShellContext")
+    expect(list).toContain("Draft send approvals")
+    expect(list).toContain("Calendar booking approvals")
+    expect(list).not.toContain("fake")
+  })
 })
