@@ -9,7 +9,7 @@ import { resolveAccountMode } from "@/lib/account-mode"
 import { inboxTag } from "@/lib/cache-tags"
 import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status"
 import { CONTENT_TYPE_FILTERS, emailTypesForContentFilter } from "@/lib/content-type-filters"
-import { buildMailTopTabWhere, type MailTopTabValue } from "@/lib/mail-top-tabs"
+import { buildMailLabelTabWhere, type MailLabelTabValue } from "@/lib/mail-label-tabs"
 
 interface Props {
   tenantId: string
@@ -94,6 +94,7 @@ export function mapConversationRowToListItem(
     statusText: wfStyle.text,
     statusLabel: WORKFLOW_STATUS_LABEL[workflowStatus],
     hasDraft,
+    draftStatus: conv.draft?.status ?? null,
     initialStatus: conv.status,
     attentionCategory: attention,
     contentType: conv.stateRecord?.emailType ?? null,
@@ -168,14 +169,14 @@ export function getCachedListData(input: {
   contentType?: string | null
   q?: string
   sales: boolean
-  topTab?: MailTopTabValue | null
+  labelTab?: MailLabelTabValue | null
 }) {
   const key = [
     "app-list-column",
     input.tenantId,
     input.status ?? "all",
     input.contentType ?? "all",
-    input.topTab ?? "no-top-tab",
+    input.labelTab ?? "no-label-tab",
     input.q ?? "",
     input.sales ? "sales" : "standard",
   ]
@@ -205,8 +206,8 @@ export function getCachedListData(input: {
           },
         })
       }
-      const topTabWhere = buildMailTopTabWhere(input.topTab)
-      if (topTabWhere) andFilters.push(topTabWhere)
+      const labelTabWhere = buildMailLabelTabWhere(input.labelTab)
+      if (labelTabWhere) andFilters.push(labelTabWhere)
       if (input.q) {
         // Matches the standalone /search page's message-body search too, so
         // this one box covers both "find a conversation" and "find something

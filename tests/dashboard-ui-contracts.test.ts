@@ -232,14 +232,14 @@ describe("dashboard and inbox UI source contracts", () => {
     }
   })
 
-  it("desktop Mail top-tab views are preserved in query and return links", () => {
+  it("desktop Mail label-tab views are preserved in query and return links", () => {
     const mail = source("app/mail/page.tsx")
     const list = source("app/components/AppListColumn.tsx")
 
-    expect(mail).toContain("if (activeTopTab) params.set(\"tab\", activeTopTab)")
-    expect(mail).toContain("topTab: activeTopTab")
-    expect(list).toContain("buildMailTopTabWhere(input.topTab)")
-    expect(list).toContain('input.topTab ?? "no-top-tab"')
+    expect(mail).toContain("if (activeLabelTab) params.set(\"label\", activeLabelTab)")
+    expect(mail).toContain("labelTab: activeLabelTab")
+    expect(list).toContain("buildMailLabelTabWhere(input.labelTab)")
+    expect(list).toContain('input.labelTab ?? "no-label-tab"')
   })
 
   it("settings exposes Gmail operator health for sync, queues, and agent jobs", () => {

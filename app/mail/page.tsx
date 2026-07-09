@@ -26,7 +26,7 @@ import { deriveWorkflowStatus } from "@/lib/workflow-status";
 import { CONTENT_TYPE_FILTERS, emailTypesForContentFilter } from "@/lib/content-type-filters";
 import { getAppShellContext, isDbStartingError } from "@/lib/app-shell";
 import { resolveAccountMode } from "@/lib/account-mode";
-import { MAIL_TOP_TABS, matchesMailTopTab, type MailTopTabValue } from "@/lib/mail-top-tabs";
+import { MAIL_LABEL_TABS, matchesMailLabelTab, type MailLabelTabValue } from "@/lib/mail-label-tabs";
 
 export const revalidate = 60;
 
@@ -42,11 +42,11 @@ const ALL_STATUSES = Object.keys(STATUS_LABELS) as ConversationStatus[];
 const MOBILE_LIST_LIMIT = 50;
 
 interface Props {
-  searchParams: { status?: string; q?: string; sales?: string; attention?: string; type?: string; page?: string; tab?: string };
+  searchParams: { status?: string; q?: string; sales?: string; attention?: string; type?: string; page?: string; label?: string; tab?: string };
 }
 
-function isValidMailTopTab(value: string | undefined): value is MailTopTabValue {
-  return MAIL_TOP_TABS.some((t) => t.value === value);
+function isValidMailLabelTab(value: string | undefined): value is MailLabelTabValue {
+  return MAIL_LABEL_TABS.some((t) => t.value === value);
 }
 
 export default async function MailPage({ searchParams }: Props) {
@@ -159,9 +159,9 @@ async function renderMailPage(
 
   function currentMailHref() {
     const href = tabHref(activeStatus, salesFilter);
-    if (!activeTopTab) return href;
+    if (!activeLabelTab) return href;
     const params = new URLSearchParams(href.includes("?") ? href.split("?")[1] : "");
-    if (activeTopTab) params.set("tab", activeTopTab);
+    if (activeLabelTab) params.set("label", activeLabelTab);
     const qs = params.toString();
     return qs ? `/mail?${qs}` : "/mail";
   }
@@ -223,10 +223,16 @@ async function renderMailPage(
 
   // Desktop full-width list data (Task 2.6): reuses the same cached query and
   // row-mapping AppListColumn already uses, so status/type/q/sales filters
-  // behave identically to before. `tab` is an additional post-filter layered
-  // on top for the desktop top-tabs UI.
+  // behave identically to before. `label` is an additional post-filter layered
+  // on top for the desktop label-tabs UI, aligned to Gmail's own label
+  // vocabulary (see lib/mail-label-tabs.ts). `tab` is kept as a read-side
+  // fallback for old bookmarked `/mail?tab=...` links; new links always use
+  // `label`. "all" is app-only (no Gmail label) and folds to null, same as
+  // an absent/invalid param.
   const isPersonal = resolveAccountMode(accountType) === "personal";
-  const activeTopTab = isValidMailTopTab(searchParams.tab) ? searchParams.tab : null;
+  const rawLabelParam = searchParams.label ?? searchParams.tab;
+  const activeLabelTab =
+    isValidMailLabelTab(rawLabelParam) && rawLabelParam !== "all" ? rawLabelParam : null;
   const returnTo = currentMailHref();
   const [desktopConversations] = await getCachedListData({
     tenantId,
@@ -234,7 +240,7 @@ async function renderMailPage(
     contentType: contentTypeFilter || undefined,
     q: q || undefined,
     sales: salesFilter && isBusiness,
-    topTab: activeTopTab,
+    labelTab: activeLabelTab,
   });
   const desktopRawItems: InboxListItem[] = desktopConversations.map((conv) =>
     mapConversationRowToListItem(conv, { activeConversationId: undefined, isPersonal, returnTo })
@@ -250,16 +256,21 @@ async function renderMailPage(
   // not an account-wide total — intentional per Phase-1 scope constraint
   // (docs/superpowers/specs/2026-07-09-inbox-redesign-phase-1-3-design.md:156),
   // which keeps the initial Mail desktop query at 50 with no pagination/virtualization.
-  const tabCounts: Record<MailTopTabValue, number> = Object.fromEntries(
-    MAIL_TOP_TABS.map((t) => [t.value, 0])
-  ) as Record<MailTopTabValue, number>;
+  // When a label tab is active, desktopAllItems was already fetched narrowed
+  // to that tab's Prisma prefilter, so counts for the OTHER (inactive) tabs
+  // undercount them (they're only counted within the active tab's narrowed
+  // window). Pre-existing, documented tradeoff — not fixed here.
+  const tabCounts: Record<MailLabelTabValue, number> = Object.fromEntries(
+    MAIL_LABEL_TABS.map((t) => [t.value, 0])
+  ) as Record<MailLabelTabValue, number>;
   for (const item of desktopAllItems) {
-    for (const tab of MAIL_TOP_TABS) {
+    for (const tab of MAIL_LABEL_TABS) {
       if (
-        matchesMailTopTab(tab.value, {
+        matchesMailLabelTab(tab.value, {
           workflowStatus: item.workflowStatus,
+          draftStatus: item.draftStatus,
+          attentionCategory: item.attentionCategory ?? null,
           emailType: item.contentType ?? null,
-          isVip: item.isVip ?? false,
         })
       ) {
         tabCounts[tab.value] += 1;
@@ -267,12 +278,13 @@ async function renderMailPage(
     }
   }
 
-  const desktopFilteredItems = activeTopTab
+  const desktopFilteredItems = activeLabelTab
     ? desktopAllItems.filter((item) =>
-        matchesMailTopTab(activeTopTab, {
+        matchesMailLabelTab(activeLabelTab, {
           workflowStatus: item.workflowStatus,
+          draftStatus: item.draftStatus,
+          attentionCategory: item.attentionCategory ?? null,
           emailType: item.contentType ?? null,
-          isVip: item.isVip ?? false,
         })
       )
     : desktopAllItems;
@@ -303,10 +315,10 @@ async function renderMailPage(
             </Suspense>
           </div>
           <MailTopTabs
-            activeTab={activeTopTab}
+            activeTab={activeLabelTab}
             counts={tabCounts}
             // Only `q` is preserved across tab switches; status/type/sales are
-            // intentionally dropped since the desktop top tabs replace those
+            // intentionally dropped since the desktop label tabs replace those
             // filters here rather than layering on top of them.
             preserveQuery={{ q: q || undefined }}
           />
