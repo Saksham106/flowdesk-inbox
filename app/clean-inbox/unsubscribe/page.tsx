@@ -7,12 +7,12 @@ import AppRail from "@/app/components/AppRail"
 import AppSidebar from "@/app/components/AppSidebar"
 import AskFlowDeskPanel from "@/app/components/AskFlowDeskPanel"
 import { getAppShellContext } from "@/lib/app-shell"
-import CleanInboxClient from "./CleanInboxClient"
-import CleanupTabNav from "./CleanupTabNav"
+import CleanInboxClient from "@/app/clean-inbox/CleanInboxClient"
+import CleanupTabNav from "@/app/clean-inbox/CleanupTabNav"
 
 export const dynamic = "force-dynamic"
 
-export default async function CleanInboxPage() {
+export default async function BulkUnsubscribePage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.tenantId) redirect("/login")
   const tenantId = session.user.tenantId
@@ -67,15 +67,17 @@ export default async function CleanInboxPage() {
     }
   })
 
-  const groups = groupCleanupBySender(candidates).map((g) => ({
-    senderEmail: g.senderEmail,
-    senderName: g.senderName,
-    domain: g.domain,
-    count: g.count,
-    sampleSubjects: g.sampleSubjects,
-    conversationIds: g.conversationIds,
-    hasUnsubscribe: g.hasUnsubscribe,
-  }))
+  const groups = groupCleanupBySender(candidates)
+    .filter((g) => g.hasUnsubscribe)
+    .map((g) => ({
+      senderEmail: g.senderEmail,
+      senderName: g.senderName,
+      domain: g.domain,
+      count: g.count,
+      sampleSubjects: g.sampleSubjects,
+      conversationIds: g.conversationIds,
+      hasUnsubscribe: g.hasUnsubscribe,
+    }))
 
   return (
     <>

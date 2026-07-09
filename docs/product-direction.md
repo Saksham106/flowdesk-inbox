@@ -81,19 +81,28 @@ Keep labels user-friendly. Avoid exposing internal states like `triage_pending`,
 ### 2. FlowDesk dashboard
 
 The dashboard stays, but its job changed — and its information architecture was
-restructured (2026-07-08) around **one job per screen**, taking cues from Inbox
-Zero (see `docs/superpowers/specs/2026-07-08-web-app-revamp-design.md` and
+restructured (2026-07-08, then extended 2026-07-09) around **one job per screen**,
+taking cues from Inbox Zero (see `docs/superpowers/specs/2026-07-08-web-app-revamp-design.md`,
+`docs/superpowers/specs/2026-07-09-inbox-redesign-phase-1-3-design.md`, and
 `docs/CURRENT_STATE.md` → "Web app information architecture").
 
-Navigation is 5 primary destinations — **Home** (`/home`), **Mail** (`/mail`),
-**Approvals**, **Clean**, **Settings** — plus a global "Ask FlowDesk" assistant
-slide-over:
+Navigation is 7 primary destinations — **Home** (`/home`), **Mail** (`/mail`),
+**Assistant** (`/assistant`), **Approvals**, **Clean**, **Tools**, **Settings** —
+plus a global "Ask FlowDesk" assistant slide-over (distinct from the Assistant
+rail item) and a collapsible expanded sidebar on Mail/Assistant/Clean/Tools
+showing route-specific sub-navigation:
 
 - **Home** is the agent control room only (no email list): what needs you
   (approvals, handle-first, tasks & deadlines) and what the agent did/learned.
-- **Mail** owns the in-app email list + filters + reading pane (kept, but moved
-  off the home screen so neither surface feels crowded).
-- **Approvals** is the approval queue; **Clean** is bulk unsubscribe/archive.
+- **Mail** owns the in-app email list + filters + reading pane, now rendered as
+  full-width rows with top category tabs (Important, Needs Reply, Waiting On,
+  Read Later, Other, Calendar) instead of a narrow compact list.
+- **Assistant** is the first-class home for AI rules (Rules, Test Rules,
+  History, Settings tabs) — previously buried in Settings → Training.
+- **Approvals** is the approval queue; **Clean** is split into Bulk Archive,
+  Bulk Unsubscribe, and Analytics tabs.
+- **Tools** is a placeholder for planned-but-unbuilt surfaces (Calendar,
+  Meeting Briefs, Attachments) — no fake functionality.
 - **Settings** is route-based tabs (Connect, Gmail, Automation, Training,
   Profile, Data) — connect Gmail, configure labels/rules, set the automation
   level, train writing style, manage VIPs, tune AI budget.

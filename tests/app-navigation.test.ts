@@ -2,12 +2,19 @@ import { describe, it, expect } from "vitest"
 import { getPrimaryNav, getInboxNavigation } from "@/lib/app-navigation"
 
 describe("primary navigation", () => {
-  it("has exactly the 5 primary destinations in order", () => {
+  it("has exactly the 7 primary destinations in order", () => {
     const nav = getPrimaryNav()
     expect(nav.map((i) => i.href)).toEqual([
-      "/home", "/mail", "/approvals", "/clean-inbox", "/settings",
+      "/home",
+      "/mail",
+      "/assistant",
+      "/approvals",
+      "/clean-inbox",
+      "/tools",
+      "/settings",
     ])
   })
+
   it("does not include deleted or demoted routes", () => {
     const hrefs = getPrimaryNav().map((i) => i.href)
     expect(hrefs).not.toContain("/digest")

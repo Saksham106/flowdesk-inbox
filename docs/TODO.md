@@ -1,6 +1,6 @@
 # Remaining Work
 
-Last updated: 2026-07-08 (web-app IA revamp: /inbox split into control-room /home + list /mail, 5-item nav, route-based settings tabs, global Ask FlowDesk slide-over, /search removed — Phase 3 web-app polish complete; default path tightened: /digest removed, deferred surfaces gated; launch readiness: beta pricing, privacy policy, terms; scheduling confirmation + event booking end-to-end)
+Last updated: 2026-07-09 (inbox redesign phases 1-3: 7-item nav + collapsible sidebar, full-width /mail rows with top tabs, first-class /assistant area, /clean-inbox split into Bulk Archive/Bulk Unsubscribe/Analytics, /tools placeholder; web-app IA revamp: /inbox split into control-room /home + list /mail, route-based settings tabs, global Ask FlowDesk slide-over, /search removed — Phase 3 web-app polish complete; default path tightened: /digest removed, deferred surfaces gated; launch readiness: beta pricing, privacy policy, terms; scheduling confirmation + event booking end-to-end)
 
 Reprioritized around shipping a **tight MVP** (`docs/product-direction.md` → MVP definition): the trustworthy core loop is done and reliable; the blocker to a shippable product is that ~45 features are almost all half-built. Order of work is now **complete the core loop (the first-run organize moment) → make it fast → tighten the default path → then polish and breadth.** The Sales & CRM cluster and all half-built peripheral surfaces stay deferred (opt-in / off the default path) until the MVP ships.
 
@@ -45,6 +45,15 @@ Completed by the **web-app IA revamp (2026-07-08)** — spec `docs/superpowers/s
 - [x] Split the oversized settings page into focused, navigable sections/tabs — **done via true route/tab decomposition**: `app/settings/layout.tsx` + `SettingsTabNav` + six independent tab routes (`connect`/`gmail`/`automation`/`training`/`profile`/`data`, `lib/settings-tabs.ts`), each fetching only its own data instead of the old ~30-query front-load; `/settings` redirects to `/settings/connect`; OAuth callbacks land on the connect tab so banners survive. (Superseded the earlier interim anchor-index approach.)
 - [x] Rebuild the dashboard/inbox shell and navigation so the secondary surface is clean and coherent (Inbox-Zero-style layout) — **done**: the crowded `/inbox` (email list + full dashboard on one screen) was split into control-room **`/home`** (no list) and email-list **`/mail`**; primary nav collapsed to 5 destinations (Home·Mail·Approvals·Clean·Settings) driven by `getPrimaryNav()` as the single source of truth; a global "Ask FlowDesk" slide-over replaced the Chat nav slot; Tasks/Activity demoted to links; `/inbox` redirects; `/search` and `/digest` removed.
 - [x] Update remaining dashboard/settings copy so the web app reads as an intentional companion product — "Bills & Deadlines" → "Tasks & Deadlines" with a "View all" link; nav/rail labels and settings tab copy refreshed. (Further copy polish can continue opportunistically.)
+
+Extended by **inbox redesign phases 1-3 (2026-07-09)** — spec `docs/superpowers/specs/2026-07-09-inbox-redesign-phase-1-3-design.md`, plan `docs/superpowers/plans/2026-07-09-inbox-redesign-phase1-3.md`, PR #126. See `docs/CURRENT_STATE.md` → "Web app information architecture".
+
+- [x] Restructure primary nav to a 7-item rail (Home·Mail·Assistant·Approvals·Clean·Tools·Settings) with a new collapsible expanded sidebar (`app/components/AppSidebar.tsx`, `lib/app-sidebar.ts`) showing route-specific sub-navigation on Mail/Assistant/Cleanup/Tools.
+- [x] Convert `/mail` desktop to full-width columnar rows (sender/subject/snippet/timestamp) with top category tabs (Important/Needs Reply/Waiting On/Read Later/Other/Calendar), reusing existing row hover-action endpoints via a shared `useInboxRowActions` hook extracted from `InboxRow` (compact-list behavior unchanged).
+- [x] Give AI rules a first-class `/assistant` area (Rules, Test Rules, History, Settings tabs), reusing the existing rule panels/APIs verbatim; `/settings/training` still works and links to `/assistant`.
+- [x] Split `/clean-inbox` into a Bulk Archive / Bulk Unsubscribe / Analytics tab strip, reusing the existing sender-grouping logic and batch archive/unsubscribe/undo routes.
+- [x] Add an honest `/tools` placeholder for planned-but-unbuilt surfaces (Calendar, Meeting Briefs, Attachments).
+- [ ] Phase 4 (deferred): optional right reading pane in `/mail` + keyboard shortcuts — not started, per the design spec's explicit non-goal for this pass.
 
 ## Phase 4 — Capability parity from the reference repos (after MVP)
 

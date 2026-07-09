@@ -125,7 +125,7 @@ Shared inboxes, assignments, comments, collision detection, roles, permissions, 
 | 38 | Second Brain / Inbox Memory | `Partial` | PersonMemory facts, fact extractor, SecondBrainPanel; natural-language retrieval remains. |
 | 39 | Auto-Personalized Outreach | `Later` | Valuable, but avoid spam positioning. |
 | 40 | Email Triage by Money Impact | `Shipped` | Revenue-weighted score bonus in command center; Revenue at Risk subsection for stale high-value leads. |
-| 41 | Clean My Inbox | `Shipped` | /clean-inbox page, batch archive/unsubscribe, 1-hour undo via AuditLog. |
+| 41 | Clean My Inbox | `Shipped` | /clean-inbox split into Bulk Archive / Bulk Unsubscribe / Analytics tabs, batch archive/unsubscribe, 1-hour undo via AuditLog. |
 | 42 | Gmail-Native Smart Labels | `Shipped` | 10-label taxonomy (6 workflow-state + 4 content-type: Newsletter/Marketing/Notification/Calendar; no `FlowDesk/` prefix, legacy labels renamed in place), colored via Inbox-Zero palette, state+emailType mapping, queued+inline-drained writeback, bootstrap on connect, classification-triggered projection, per-label settings, deterministic fallback for unclassified threads, and the in-app inbox UI synced to the same taxonomy. Per-thread "why this label" explainability remains (Phase 3). |
 | 43 | Ask My Inbox Chat | `Partial` | Budget-metered streaming RAG pipeline, /chat page, SSE route; action-taking answers remain later. |
 | 44 | Trust, Privacy, and Audit Log | `Partial` | Audit log and undo for reversible autopilot approvals; broader coverage remains. |

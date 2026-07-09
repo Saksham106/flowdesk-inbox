@@ -99,13 +99,16 @@ describe("dashboard and inbox UI source contracts", () => {
   })
 
   it("loading states clear through failed async paths", () => {
-    const inboxRow = source("app/components/InboxRow.tsx")
+    // InboxRow's pending-action state/handlers live in the shared
+    // useInboxRowActions hook (also used by MailInboxRow) — assert the
+    // contract there rather than in InboxRow.tsx itself.
+    const inboxRowActions = source("app/components/useInboxRowActions.ts")
     const phishing = source("app/conversations/[id]/PhishingWarningBanner.tsx")
     const support = source("app/conversations/[id]/SupportPanel.tsx")
     const scheduling = source("app/conversations/[id]/SchedulingPanel.tsx")
 
-    expect(inboxRow).toContain("finally {")
-    expect(inboxRow).toContain("setPendingAction(null)")
+    expect(inboxRowActions).toContain("finally {")
+    expect(inboxRowActions).toContain("setPendingAction(null)")
     expect(phishing).toContain("finally {")
     expect(phishing).toContain("setLoading(false)")
     expect(support).toContain("finally {")
@@ -176,6 +179,46 @@ describe("dashboard and inbox UI source contracts", () => {
     for (const slug of ["connect", "gmail", "automation", "training", "profile", "data"]) {
       expect(source(`app/settings/${slug}/page.tsx`)).toBeTruthy()
     }
+  })
+
+  it("assistant routes render inside the app rail/sidebar shell", () => {
+    const layout = source("app/assistant/layout.tsx")
+
+    expect(layout).toContain("AppRail")
+    expect(layout).toContain("AppSidebar")
+    expect(layout).toContain("getAppShellContext")
+  })
+
+  it("cleanup subroutes keep the Clean rail item active", () => {
+    const rail = source("app/components/AppRail.tsx")
+
+    expect(rail).toContain('isActive: (p) => p === "/clean-inbox" || p.startsWith("/clean-inbox/")')
+  })
+
+  it("new app-shell pages mount the Ask FlowDesk panel with the rail trigger", () => {
+    const shellPages = [
+      "app/assistant/layout.tsx",
+      "app/clean-inbox/page.tsx",
+      "app/clean-inbox/unsubscribe/page.tsx",
+      "app/clean-inbox/analytics/page.tsx",
+      "app/tools/page.tsx",
+    ]
+
+    for (const path of shellPages) {
+      const s = source(path)
+      expect(s).toContain("AppRail")
+      expect(s).toContain("AskFlowDeskPanel")
+    }
+  })
+
+  it("desktop Mail top-tab views are preserved in query and return links", () => {
+    const mail = source("app/mail/page.tsx")
+    const list = source("app/components/AppListColumn.tsx")
+
+    expect(mail).toContain("if (activeTopTab) params.set(\"tab\", activeTopTab)")
+    expect(mail).toContain("topTab: activeTopTab")
+    expect(list).toContain("buildMailTopTabWhere(input.topTab)")
+    expect(list).toContain('input.topTab ?? "no-top-tab"')
   })
 
   it("settings exposes Gmail operator health for sync, queues, and agent jobs", () => {

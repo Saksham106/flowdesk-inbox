@@ -11,9 +11,12 @@ import SearchInput from "@/app/inbox/SearchInput";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import { StatusBadge, LabelBadge } from "@/app/components/badges";
 import AppRail from "@/app/components/AppRail";
+import AppSidebar from "@/app/components/AppSidebar";
 import AskFlowDeskPanel from "@/app/components/AskFlowDeskPanel";
-import AppListColumn from "@/app/components/AppListColumn";
-import DesktopResizablePanels from "@/app/components/DesktopResizablePanels";
+import { getCachedListData, mapConversationRowToListItem } from "@/app/components/AppListColumn";
+import MailTopTabs from "@/app/components/MailTopTabs";
+import MailInboxTable from "@/app/components/MailInboxTable";
+import type { InboxListItem } from "@/app/components/ClientFilteredInboxList";
 import BulkCloseButton from "@/app/inbox/BulkCloseButton";
 import GmailSyncControl from "@/app/components/GmailSyncControl";
 import { AppNavigationItem, getInboxNavigation } from "@/lib/app-navigation";
@@ -23,6 +26,8 @@ import { isFyiConversation } from "@/lib/inbox-fyi";
 import { deriveWorkflowStatus } from "@/lib/workflow-status";
 import { CONTENT_TYPE_FILTERS, emailTypesForContentFilter } from "@/lib/content-type-filters";
 import { getAppShellContext, isDbStartingError } from "@/lib/app-shell";
+import { resolveAccountMode } from "@/lib/account-mode";
+import { MAIL_TOP_TABS, matchesMailTopTab, type MailTopTabValue } from "@/lib/mail-top-tabs";
 
 export const revalidate = 60;
 
@@ -38,7 +43,11 @@ const ALL_STATUSES = Object.keys(STATUS_LABELS) as ConversationStatus[];
 const MOBILE_LIST_LIMIT = 50;
 
 interface Props {
-  searchParams: { status?: string; q?: string; sales?: string; attention?: string; type?: string; page?: string };
+  searchParams: { status?: string; q?: string; sales?: string; attention?: string; type?: string; page?: string; tab?: string };
+}
+
+function isValidMailTopTab(value: string | undefined): value is MailTopTabValue {
+  return MAIL_TOP_TABS.some((t) => t.value === value);
 }
 
 export default async function MailPage({ searchParams }: Props) {
@@ -73,7 +82,6 @@ async function renderMailPage(
   const {
     isBusiness,
     accountType,
-    statusCounts,
     countByStatus,
     totalCount,
     needsReplyCount,
@@ -151,7 +159,12 @@ async function renderMailPage(
   }
 
   function currentMailHref() {
-    return tabHref(activeStatus, salesFilter);
+    const href = tabHref(activeStatus, salesFilter);
+    if (!activeTopTab) return href;
+    const params = new URLSearchParams(href.includes("?") ? href.split("?")[1] : "");
+    if (activeTopTab) params.set("tab", activeTopTab);
+    const qs = params.toString();
+    return qs ? `/mail?${qs}` : "/mail";
   }
 
   function attentionTabHref(category: string) {
@@ -209,6 +222,62 @@ async function renderMailPage(
     );
   }
 
+  // Desktop full-width list data (Task 2.6): reuses the same cached query and
+  // row-mapping AppListColumn already uses, so status/type/q/sales filters
+  // behave identically to before. `tab` is an additional post-filter layered
+  // on top for the desktop top-tabs UI.
+  const isPersonal = resolveAccountMode(accountType) === "personal";
+  const activeTopTab = isValidMailTopTab(searchParams.tab) ? searchParams.tab : null;
+  const returnTo = currentMailHref();
+  const [desktopConversations] = await getCachedListData({
+    tenantId,
+    status: contentTypeFilter ? null : activeStatus,
+    contentType: contentTypeFilter || undefined,
+    q: q || undefined,
+    sales: salesFilter && isBusiness,
+    topTab: activeTopTab,
+  });
+  const desktopRawItems: InboxListItem[] = desktopConversations.map((conv) =>
+    mapConversationRowToListItem(conv, { activeConversationId: undefined, isPersonal, returnTo })
+  );
+  // Mirrors AppListColumn's needs_reply filter: excludes FYI/done conversations
+  // from the needs_reply status view.
+  const desktopAllItems =
+    activeStatus === "needs_reply"
+      ? desktopRawItems.filter((item) => item.workflowStatus !== "done")
+      : desktopRawItems;
+
+  // Counts reflect only the fetched window (top 50 conversations by recency),
+  // not an account-wide total — intentional per Phase-1 scope constraint
+  // (docs/superpowers/specs/2026-07-09-inbox-redesign-phase-1-3-design.md:156),
+  // which keeps the initial Mail desktop query at 50 with no pagination/virtualization.
+  const tabCounts: Record<MailTopTabValue, number> = Object.fromEntries(
+    MAIL_TOP_TABS.map((t) => [t.value, 0])
+  ) as Record<MailTopTabValue, number>;
+  for (const item of desktopAllItems) {
+    for (const tab of MAIL_TOP_TABS) {
+      if (
+        matchesMailTopTab(tab.value, {
+          workflowStatus: item.workflowStatus,
+          emailType: item.contentType ?? null,
+          isVip: item.isVip ?? false,
+        })
+      ) {
+        tabCounts[tab.value] += 1;
+      }
+    }
+  }
+
+  const desktopFilteredItems = activeTopTab
+    ? desktopAllItems.filter((item) =>
+        matchesMailTopTab(activeTopTab, {
+          workflowStatus: item.workflowStatus,
+          emailType: item.contentType ?? null,
+          isVip: item.isVip ?? false,
+        })
+      )
+    : desktopAllItems;
+
   const loadMoreHref = (() => {
     const p = new URLSearchParams();
     if (activeStatus) p.set("status", activeStatus);
@@ -225,37 +294,26 @@ async function renderMailPage(
       <AutoRefresh intervalMs={60000} />
 
       {/* ── DESKTOP SHELL (lg+) ── */}
-      <div className="hidden lg:flex h-screen overflow-hidden bg-slate-50">
+      <div className="hidden lg:flex lg:h-screen">
         <AppRail needsReplyCount={needsReplyCount} pendingApprovals={pendingApprovals} />
-        <DesktopResizablePanels
-          storageKey="flowdesk.inbox.desktopPanels"
-          left={
-            <AppListColumn
-              tenantId={tenantId}
-              accountType={accountType}
-              status={activeStatus}
-              contentType={contentTypeFilter || undefined}
-              q={q || undefined}
-              sales={salesFilter}
-              statusCounts={statusCounts}
-              gmailChannels={gmailSyncChannels}
-              className="w-full shrink-0"
-            />
-          }
-          main={
-            <div className="flex h-full items-center justify-center">
-              <div className="text-center">
-                <p className="text-sm font-semibold text-slate-700">Select a conversation</p>
-                <p className="mt-1 text-xs text-slate-400">
-                  or{" "}
-                  <Link href="/home" className="text-blue-600 hover:underline">
-                    go to Home
-                  </Link>
-                </p>
-              </div>
-            </div>
-          }
-        />
+        <AppSidebar />
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+            <h1 className="text-lg font-semibold text-slate-900">Mail</h1>
+            <Suspense>
+              <SearchInput defaultValue={q} />
+            </Suspense>
+          </div>
+          <MailTopTabs
+            activeTab={activeTopTab}
+            counts={tabCounts}
+            // Only `q` is preserved across tab switches; status/type/sales are
+            // intentionally dropped since the desktop top tabs replace those
+            // filters here rather than layering on top of them.
+            preserveQuery={{ q: q || undefined }}
+          />
+          <MailInboxTable items={desktopFilteredItems} emptyMessage="No conversations match this view." />
+        </div>
       </div>
 
       {/* ── MOBILE LAYOUT (< lg) ── */}

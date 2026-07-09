@@ -9,6 +9,7 @@ import { resolveAccountMode } from "@/lib/account-mode"
 import { inboxTag } from "@/lib/cache-tags"
 import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status"
 import { CONTENT_TYPE_FILTERS, emailTypesForContentFilter } from "@/lib/content-type-filters"
+import { buildMailTopTabWhere, type MailTopTabValue } from "@/lib/mail-top-tabs"
 
 interface Props {
   tenantId: string
@@ -33,7 +34,7 @@ interface Props {
   className?: string
 }
 
-type ConvRow = {
+export type ConvRow = {
   id: string
   status: string
   lastMessageAt: Date
@@ -51,6 +52,59 @@ type ConvRow = {
     emailType: string | null
   } | null
   channel: { provider: string }
+}
+
+export function mapConversationRowToListItem(
+  conv: ConvRow,
+  opts: { activeConversationId?: string; isPersonal: boolean; returnTo: string }
+): InboxListItem {
+  const { activeConversationId, isPersonal, returnTo } = opts
+  const attention = attentionCategory(conv)
+  const attnCat = attention
+  const workflowStatus = deriveWorkflowStatus({
+    status: conv.status,
+    userState: conv.userState,
+    draftStatus: conv.draft?.status,
+    attentionCategory: attnCat,
+    emailType: conv.stateRecord?.emailType,
+  })
+  const wfStyle = WORKFLOW_STATUS_STYLE[workflowStatus]
+  const name = conv.contact?.name ?? conv.externalThreadId
+  const msg0 = conv.messages[0]
+  const bodySnippet = msg0?.body ? stripHtmlToText(msg0.body, 75) : ""
+  const snippet = buildPreviewText(msg0?.subject, bodySnippet)
+  const hasDraft = conv.draft?.status === "proposed" || conv.draft?.status === "approved"
+  const meta = conv.stateRecord?.metadataJson as Record<string, unknown> | null ?? {}
+  const isVip = meta?.isVip === true
+  const vipLabel = typeof meta?.vipLabel === "string" ? meta.vipLabel : null
+  const snoozeUntil = typeof meta?.snoozeUntil === "string" ? meta.snoozeUntil : null
+
+  return {
+    id: conv.id,
+    href: buildConversationHref(conv.id, returnTo),
+    isSelected: conv.id === activeConversationId,
+    isUnread: !conv.readAt && conv.gmailUnread !== false,
+    isFyi: workflowStatus === "done",
+    isClosed: workflowStatus === "done",
+    name,
+    subject: msg0?.subject ?? null,
+    snippet,
+    timeLabel: relativeTime(conv.lastMessageAt),
+    statusDot: wfStyle.dot,
+    statusText: wfStyle.text,
+    statusLabel: WORKFLOW_STATUS_LABEL[workflowStatus],
+    hasDraft,
+    initialStatus: conv.status,
+    attentionCategory: attention,
+    contentType: conv.stateRecord?.emailType ?? null,
+    isPersonal,
+    isGmail: conv.channel.provider === "google",
+    isVip,
+    vipLabel,
+    snoozeUntil,
+    searchText: `${name} ${conv.externalThreadId} ${snippet}`.toLowerCase(),
+    workflowStatus,
+  }
 }
 
 function attentionCategory(conv: ConvRow): string | null {
@@ -108,18 +162,20 @@ async function getCachedStatusCounts(tenantId: string) {
   )()
 }
 
-function getCachedListData(input: {
+export function getCachedListData(input: {
   tenantId: string
   status?: string | null
   contentType?: string | null
   q?: string
   sales: boolean
+  topTab?: MailTopTabValue | null
 }) {
   const key = [
     "app-list-column",
     input.tenantId,
     input.status ?? "all",
     input.contentType ?? "all",
+    input.topTab ?? "no-top-tab",
     input.q ?? "",
     input.sales ? "sales" : "standard",
   ]
@@ -129,31 +185,41 @@ function getCachedListData(input: {
   return unstable_cache(
     async () => {
       const where: Record<string, unknown> = { tenantId: input.tenantId }
+      const andFilters: Record<string, unknown>[] = []
       if (input.status) where.status = input.status
       if (contentEmailTypes) {
-        where.stateRecord = {
-          is: {
-            emailType: { in: contentEmailTypes },
+        andFilters.push({
+          stateRecord: {
+            is: {
+              emailType: { in: contentEmailTypes },
+            },
           },
-        }
+        })
       }
       if (input.sales) {
-        where.stateRecord = {
-          is: {
-            isSalesLead: true,
+        andFilters.push({
+          stateRecord: {
+            is: {
+              isSalesLead: true,
+            },
           },
-        }
+        })
       }
+      const topTabWhere = buildMailTopTabWhere(input.topTab)
+      if (topTabWhere) andFilters.push(topTabWhere)
       if (input.q) {
         // Matches the standalone /search page's message-body search too, so
         // this one box covers both "find a conversation" and "find something
         // someone said" — no separate search page needed.
-        where.OR = [
-          { externalThreadId: { contains: input.q, mode: "insensitive" } },
-          { contact: { name: { contains: input.q, mode: "insensitive" } } },
-          { messages: { some: { body: { contains: input.q, mode: "insensitive" } } } },
-        ]
+        andFilters.push({
+          OR: [
+            { externalThreadId: { contains: input.q, mode: "insensitive" } },
+            { contact: { name: { contains: input.q, mode: "insensitive" } } },
+            { messages: { some: { body: { contains: input.q, mode: "insensitive" } } } },
+          ],
+        })
       }
+      if (andFilters.length > 0) where.AND = andFilters
 
       return Promise.all([
         prisma.conversation.findMany({
@@ -262,53 +328,9 @@ export default async function AppListColumn({
         })
       : conversations
 
-  const listItems: InboxListItem[] = displayConversations.map((conv) => {
-    const attention = attentionCategory(conv)
-    const attnCat = attention
-    const workflowStatus = deriveWorkflowStatus({
-      status: conv.status,
-      userState: conv.userState,
-      draftStatus: conv.draft?.status,
-      attentionCategory: attnCat,
-      emailType: conv.stateRecord?.emailType,
-    })
-    const wfStyle = WORKFLOW_STATUS_STYLE[workflowStatus]
-    const name = conv.contact?.name ?? conv.externalThreadId
-    const msg0 = conv.messages[0]
-    const bodySnippet = msg0?.body ? stripHtmlToText(msg0.body, 75) : ""
-    const snippet = buildPreviewText(msg0?.subject, bodySnippet)
-    const hasDraft = conv.draft?.status === "proposed" || conv.draft?.status === "approved"
-    const meta = conv.stateRecord?.metadataJson as Record<string, unknown> | null ?? {}
-    const isVip = meta?.isVip === true
-    const vipLabel = typeof meta?.vipLabel === "string" ? meta.vipLabel : null
-    const snoozeUntil = typeof meta?.snoozeUntil === "string" ? meta.snoozeUntil : null
-
-    return {
-      id: conv.id,
-      href: buildConversationHref(conv.id, returnTo),
-      isSelected: conv.id === activeConversationId,
-      isUnread: !conv.readAt && conv.gmailUnread !== false,
-      isFyi: workflowStatus === "done",
-      isClosed: workflowStatus === "done",
-      name,
-      snippet,
-      timeLabel: relativeTime(conv.lastMessageAt),
-      statusDot: wfStyle.dot,
-      statusText: wfStyle.text,
-      statusLabel: WORKFLOW_STATUS_LABEL[workflowStatus],
-      hasDraft,
-      initialStatus: conv.status,
-      attentionCategory: attention,
-      contentType: conv.stateRecord?.emailType ?? null,
-      isPersonal,
-      isGmail: conv.channel.provider === "google",
-      isVip,
-      vipLabel,
-      snoozeUntil,
-      searchText: `${name} ${conv.externalThreadId} ${snippet}`.toLowerCase(),
-      workflowStatus,
-    }
-  })
+  const listItems: InboxListItem[] = displayConversations.map((conv) =>
+    mapConversationRowToListItem(conv, { activeConversationId, isPersonal, returnTo })
+  )
 
   return (
     <ClientFilteredInboxList

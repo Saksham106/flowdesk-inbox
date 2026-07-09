@@ -7,12 +7,11 @@ import AppRail from "@/app/components/AppRail"
 import AppSidebar from "@/app/components/AppSidebar"
 import AskFlowDeskPanel from "@/app/components/AskFlowDeskPanel"
 import { getAppShellContext } from "@/lib/app-shell"
-import CleanInboxClient from "./CleanInboxClient"
-import CleanupTabNav from "./CleanupTabNav"
+import CleanupTabNav from "@/app/clean-inbox/CleanupTabNav"
 
 export const dynamic = "force-dynamic"
 
-export default async function CleanInboxPage() {
+export default async function CleanupAnalyticsPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.tenantId) redirect("/login")
   const tenantId = session.user.tenantId
@@ -67,15 +66,26 @@ export default async function CleanInboxPage() {
     }
   })
 
-  const groups = groupCleanupBySender(candidates).map((g) => ({
-    senderEmail: g.senderEmail,
-    senderName: g.senderName,
-    domain: g.domain,
-    count: g.count,
-    sampleSubjects: g.sampleSubjects,
-    conversationIds: g.conversationIds,
-    hasUnsubscribe: g.hasUnsubscribe,
-  }))
+  const groups = groupCleanupBySender(candidates)
+
+  // groupCleanupBySender silently drops "protected" conversations (needs-reply,
+  // waiting-on, important, receipts, etc.), so headline counts must be derived
+  // from the same actionable population the groups represent, not raw candidates.
+  const actionableIds = new Set(groups.flatMap((g) => g.conversationIds))
+  const actionableCandidates = candidates.filter((c) => actionableIds.has(c.id))
+
+  const byDomain = new Map<string, number>()
+  const byEmailType = new Map<string, number>()
+  for (const candidate of actionableCandidates) {
+    byEmailType.set(candidate.emailType ?? "unknown", (byEmailType.get(candidate.emailType ?? "unknown") ?? 0) + 1)
+  }
+  for (const group of groups) {
+    byDomain.set(group.domain, (byDomain.get(group.domain) ?? 0) + group.count)
+  }
+  const topDomains = [...byDomain.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20)
+  const sortedEmailTypes = [...byEmailType.entries()].sort((a, b) => b[1] - a[1])
+  const totalCleanable = actionableCandidates.length
+  const unsubscribableCount = groups.filter((g) => g.hasUnsubscribe).reduce((sum, g) => sum + g.count, 0)
 
   return (
     <>
@@ -88,7 +98,37 @@ export default async function CleanInboxPage() {
           <div className="mx-auto max-w-2xl px-4 pt-8">
             <CleanupTabNav />
           </div>
-          <CleanInboxClient groups={groups} />
+          <main className="mx-auto max-w-5xl px-6 pb-8">
+            <h1 className="text-xl font-semibold text-slate-900">Cleanup Analytics</h1>
+            <p className="mb-6 text-sm text-slate-500">
+              {totalCleanable} cleanable conversations across {groups.length} senders,{" "}
+              {unsubscribableCount} with an unsubscribe link.
+            </p>
+            <div className="grid gap-6 md:grid-cols-2">
+              <section className="rounded-xl border border-slate-200 bg-white p-4">
+                <h2 className="mb-2 text-sm font-semibold text-slate-700">By content type</h2>
+                <ul className="space-y-1 text-sm">
+                  {sortedEmailTypes.map(([type, count]) => (
+                    <li key={type} className="flex justify-between">
+                      <span className="text-slate-600">{type}</span>
+                      <span className="text-slate-900">{count}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+              <section className="rounded-xl border border-slate-200 bg-white p-4">
+                <h2 className="mb-2 text-sm font-semibold text-slate-700">Top domains</h2>
+                <ul className="space-y-1 text-sm">
+                  {topDomains.map(([domain, count]) => (
+                    <li key={domain} className="flex justify-between">
+                      <span className="text-slate-600">{domain}</span>
+                      <span className="text-slate-900">{count}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </div>
+          </main>
         </div>
       </div>
       <AskFlowDeskPanel />

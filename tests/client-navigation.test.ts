@@ -60,8 +60,10 @@ describe("getInboxNavigation (B2C: baseline + opt-in Sales & CRM)", () => {
       primary: [
         { label: "Home", href: "/home" },
         { label: "Mail", href: "/mail" },
+        { label: "Assistant", href: "/assistant" },
         { label: "Approvals", href: "/approvals" },
         { label: "Clean", href: "/clean-inbox" },
+        { label: "Tools", href: "/tools" },
         { label: "Settings", href: "/settings" },
       ],
       secondary: [

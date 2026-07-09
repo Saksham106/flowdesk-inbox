@@ -17,6 +17,7 @@ export type InboxListItem = {
   isFyi: boolean
   isClosed: boolean
   name: string
+  subject?: string | null
   snippet: string
   timeLabel: string
   statusDot: string
