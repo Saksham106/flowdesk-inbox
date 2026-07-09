@@ -111,18 +111,33 @@ export function buildMailLabelTabWhere(tab: MailLabelTabValue | null | undefined
         ],
       }
     case "waiting_on":
+      // Same column/JSON desync as needs_action above: attentionCategory()
+      // falls back to metadataJson.attentionCategory when the stateRecord
+      // column is null, and that helper feeds deriveWorkflowStatus for every
+      // tab — so this branch is needed here too.
       return {
         OR: [
           { userState: "waiting_on" },
           { status: "in_progress" },
           { stateRecord: { is: { attentionCategory: "waiting_on" } } },
+          {
+            stateRecord: {
+              is: { metadataJson: { path: ["attentionCategory"], equals: "waiting_on" } },
+            },
+          },
         ],
       }
     case "read_later":
+      // Same column/JSON desync as needs_action/waiting_on above.
       return {
         OR: [
           { userState: "read_later" },
           { stateRecord: { is: { attentionCategory: "read_later" } } },
+          {
+            stateRecord: {
+              is: { metadataJson: { path: ["attentionCategory"], equals: "read_later" } },
+            },
+          },
         ],
       }
     case "handled":

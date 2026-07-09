@@ -63,21 +63,31 @@ describe("buildMailLabelTabWhere", () => {
     })
   })
 
-  it("covers every workflowStatus-driven path into waiting_on: userState, status, and attentionCategory", () => {
+  it("covers every workflowStatus-driven path into waiting_on: userState, status, attentionCategory, and its metadataJson fallback", () => {
     expect(buildMailLabelTabWhere("waiting_on")).toEqual({
       OR: [
         { userState: "waiting_on" },
         { status: "in_progress" },
         { stateRecord: { is: { attentionCategory: "waiting_on" } } },
+        {
+          stateRecord: {
+            is: { metadataJson: { path: ["attentionCategory"], equals: "waiting_on" } },
+          },
+        },
       ],
     })
   })
 
-  it("covers every workflowStatus-driven path into read_later: userState and attentionCategory", () => {
+  it("covers every workflowStatus-driven path into read_later: userState, attentionCategory, and its metadataJson fallback", () => {
     expect(buildMailLabelTabWhere("read_later")).toEqual({
       OR: [
         { userState: "read_later" },
         { stateRecord: { is: { attentionCategory: "read_later" } } },
+        {
+          stateRecord: {
+            is: { metadataJson: { path: ["attentionCategory"], equals: "read_later" } },
+          },
+        },
       ],
     })
   })
