@@ -60,7 +60,7 @@ export default function FixGmailLabelsButton() {
         <p className="mt-2 text-xs text-amber-700">
           Your automation level is {result.automationLevel} — FlowDesk needs Level{" "}
           {result.minAutomationLevel} or higher before it will apply Gmail labels automatically.{" "}
-          <Link href="/settings#automation" className="font-medium underline">
+          <Link href="/settings/automation" className="font-medium underline">
             Raise it in Automation settings
           </Link>{" "}
           and click Fix Gmail labels again.

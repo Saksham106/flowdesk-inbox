@@ -45,7 +45,7 @@ export default function ControlRoomHeader({
           <span className="text-[11px] text-slate-400">{dateLabel(date)}</span>
         </div>
         <Link
-          href={hasGmail ? "/settings#automation" : "/settings#connect"}
+          href={hasGmail ? "/settings/automation" : "/settings/connect"}
           className="mt-1 block text-xs text-slate-500 break-words [overflow-wrap:anywhere] hover:text-slate-700 hover:underline"
           title={hasGmail ? "Change how much FlowDesk can do on its own" : "Connect your Gmail account"}
         >
@@ -66,7 +66,7 @@ export default function ControlRoomHeader({
         </a>
       ) : (
         <Link
-          href="/settings#connect"
+          href="/settings/connect"
           className="flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300"
         >
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

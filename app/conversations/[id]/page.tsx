@@ -20,6 +20,7 @@ import PersonMemoryEditShell from "./PersonMemoryEditShell";
 import CollapsibleCard from "@/app/components/CollapsibleCard";
 import { StatusBadge, LabelBadge } from "@/app/components/badges";
 import AppRail from "@/app/components/AppRail";
+import AskFlowDeskPanel from "@/app/components/AskFlowDeskPanel";
 import AppListColumn from "@/app/components/AppListColumn";
 import DesktopResizablePanels from "@/app/components/DesktopResizablePanels";
 import {
@@ -860,6 +861,8 @@ export default async function ConversationPage({
           </aside>
         </main>
       </div>
+
+      <AskFlowDeskPanel />
     </>
   );
 }

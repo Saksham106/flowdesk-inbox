@@ -11,6 +11,7 @@ import SearchInput from "@/app/inbox/SearchInput";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import { StatusBadge, LabelBadge } from "@/app/components/badges";
 import AppRail from "@/app/components/AppRail";
+import AskFlowDeskPanel from "@/app/components/AskFlowDeskPanel";
 import AppListColumn from "@/app/components/AppListColumn";
 import DesktopResizablePanels from "@/app/components/DesktopResizablePanels";
 import BulkCloseButton from "@/app/inbox/BulkCloseButton";
@@ -444,6 +445,8 @@ async function renderMailPage(
           <BulkCloseButton />
         </main>
       </div>
+
+      <AskFlowDeskPanel />
     </>
   );
 }
