@@ -49,9 +49,16 @@ const TOOLS_SECTION: AppSidebarSection = {
  * Which expanded-sidebar section (if any) applies to the given pathname.
  * Returns null for pages that render their own sub-navigation (Settings)
  * or have none (Home, Approvals).
+ *
+ * Note: this only matches on pathname (Next.js App Router's usePathname()
+ * never includes the query string). Several Mail items (Needs Reply,
+ * Waiting On, Read Later, Done, Drafts, Sent) share the "/mail" pathname
+ * and differ only by query string, so per-item active-state highlighting
+ * for those items will need the consuming component to also inspect
+ * useSearchParams(), not just pathname, when that UI is built.
  */
 export function getSidebarSection(pathname: string): AppSidebarSection | null {
-  if (pathname === "/mail" || pathname.startsWith("/mail?") || pathname.startsWith("/conversations/")) {
+  if (pathname === "/mail" || pathname.startsWith("/conversations/")) {
     return MAIL_SECTION
   }
   if (pathname === "/assistant" || pathname.startsWith("/assistant/")) {
