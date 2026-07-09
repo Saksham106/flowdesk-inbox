@@ -240,6 +240,10 @@ async function renderMailPage(
       ? desktopRawItems.filter((item) => item.workflowStatus !== "done")
       : desktopRawItems;
 
+  // Counts reflect only the fetched window (top 50 conversations by recency),
+  // not an account-wide total — intentional per Phase-1 scope constraint
+  // (docs/superpowers/specs/2026-07-09-inbox-redesign-phase-1-3-design.md:156),
+  // which keeps the initial Mail desktop query at 50 with no pagination/virtualization.
   const tabCounts: Record<MailTopTabValue, number> = Object.fromEntries(
     MAIL_TOP_TABS.map((t) => [t.value, 0])
   ) as Record<MailTopTabValue, number>;
@@ -297,6 +301,9 @@ async function renderMailPage(
           <MailTopTabs
             activeTab={activeTopTab}
             counts={tabCounts}
+            // Only `q` is preserved across tab switches; status/type/sales are
+            // intentionally dropped since the desktop top tabs replace those
+            // filters here rather than layering on top of them.
             preserveQuery={{ q: q || undefined }}
           />
           <MailInboxTable items={desktopFilteredItems} emptyMessage="No conversations match this view." />
