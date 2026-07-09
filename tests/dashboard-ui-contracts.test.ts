@@ -267,4 +267,43 @@ describe("dashboard and inbox UI source contracts", () => {
     expect(list).toContain("Calendar booking approvals")
     expect(list).not.toContain("fake")
   })
+
+  it("assistant Rules page shows a rule summary computed from all agent rules", () => {
+    const page = source("app/assistant/rules/page.tsx")
+
+    expect(page).toContain("summarizeAssistantRules")
+    expect(page).toContain("summarizeAssistantRules(agentRules)")
+    expect(page).toContain("function Stat(")
+    expect(page).toContain("<SenderRulesPanel")
+  })
+
+  it("Test Rules is a server-loaded rule select, not a freeform id input", () => {
+    const page = source("app/assistant/test-rules/page.tsx")
+    const client = source("app/assistant/TestRulesClient.tsx")
+
+    expect(page).not.toContain('"use client"')
+    expect(page).toContain("prisma.agentRule.findMany")
+    expect(page).toContain("<TestRulesClient rules={ruleOptions} />")
+    expect(client).toContain('"use client"')
+    expect(client).toContain("<select")
+    expect(client).not.toContain('placeholder="Rule ID"')
+    expect(client).toContain("/api/agent-rules/dry-run")
+  })
+
+  it("assistant History renders readable rule action labels with raw action as secondary text", () => {
+    const page = source("app/assistant/history/page.tsx")
+
+    expect(page).toContain("RULE_ACTION_LABELS")
+    expect(page).toContain('"agent_rule.create": "Rule created"')
+    expect(page).toContain("RULE_ACTION_LABELS[entry.action] ?? entry.action")
+    expect(page).toContain("entry.createdAt.toLocaleString()")
+  })
+
+  it("assistant Settings clarifies automation-level gating for higher-risk actions", () => {
+    const page = source("app/assistant/settings/page.tsx")
+
+    expect(page).toContain("automation level")
+    expect(page).toContain("approvals")
+    expect(page).toContain("<TrainAgentPanel")
+  })
 })

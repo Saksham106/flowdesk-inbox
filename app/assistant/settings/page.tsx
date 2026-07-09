@@ -37,7 +37,10 @@ export default async function AssistantSettingsPage() {
     <section className="rounded-xl border border-slate-200 bg-white p-6">
       <h2 className="text-lg font-semibold text-slate-900">Assistant Settings</h2>
       <p className="mb-4 text-sm text-slate-500">
-        Describe rules in plain English. FlowDesk will apply them automatically.
+        Describe rules in plain English and FlowDesk turns them into rules it can act on.
+        Labeling and routing apply automatically; higher-risk actions like drafting,
+        archiving, or sending stay gated by your automation level and approvals, so
+        training the assistant here never bypasses that trust ladder.
       </p>
       <TrainAgentPanel initialRules={plainEnglishRules} />
     </section>
