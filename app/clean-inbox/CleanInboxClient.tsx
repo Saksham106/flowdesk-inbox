@@ -72,7 +72,7 @@ export default function CleanInboxClient({ groups }: { groups: SenderGroupView[]
         <Link href="/home" className="text-xs text-slate-400 hover:text-slate-700">
           ← Back to control room
         </Link>
-        <h1 className="mt-2 text-xl font-semibold text-slate-900">Clean up by sender</h1>
+        <h1 className="mt-2 text-xl font-semibold text-slate-900">Bulk Archive</h1>
         {remainingSenders > 0 ? (
           <p className="mt-1 text-sm text-slate-500">
             Clear {totalEmails.toLocaleString()} email{totalEmails === 1 ? "" : "s"} from{" "}
