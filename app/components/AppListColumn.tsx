@@ -225,7 +225,7 @@ export default async function AppListColumn({
     if (s) p.set("status", s)
     if (q) p.set("q", q)
     const qs = p.toString()
-    return qs ? `/inbox?${qs}` : "/inbox"
+    return qs ? `/mail?${qs}` : "/mail"
   }
 
   function contentTypePillHref(t: string | null): string {
@@ -233,7 +233,7 @@ export default async function AppListColumn({
     if (t) p.set("type", t)
     if (q) p.set("q", q)
     const qs = p.toString()
-    return qs ? `/inbox?${qs}` : "/inbox"
+    return qs ? `/mail?${qs}` : "/mail"
   }
 
   function currentInboxHref(): string {
@@ -242,7 +242,7 @@ export default async function AppListColumn({
     else if (status) p.set("status", status)
     if (q) p.set("q", q)
     const qs = p.toString()
-    return qs ? `/inbox?${qs}` : "/inbox"
+    return qs ? `/mail?${qs}` : "/mail"
   }
 
   const returnTo = currentInboxHref()
@@ -343,7 +343,7 @@ export default async function AppListColumn({
             })}
             {isBusiness && (
               <Link
-                href={q ? `/inbox?sales=1&q=${encodeURIComponent(q)}` : "/inbox?sales=1"}
+                href={q ? `/mail?sales=1&q=${encodeURIComponent(q)}` : "/mail?sales=1"}
                 className={`rounded-full px-2.5 py-0.5 text-xs font-semibold transition ${
                   sales
                     ? "bg-emerald-600 text-white"

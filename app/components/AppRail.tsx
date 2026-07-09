@@ -3,27 +3,91 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
+import { getPrimaryNav } from "@/lib/app-navigation"
+
 interface Props {
   needsReplyCount: number
   pendingApprovals: number
 }
 
-export default function AppRail({ needsReplyCount, pendingApprovals }: Props) {
-  const pathname = usePathname()
+/**
+ * Per-destination render config, keyed by the href from the pure nav model
+ * (`getPrimaryNav`). The nav model owns the *set*, *order*, and *hrefs* of the
+ * primary destinations; this lookup only owns how each one is drawn (icon,
+ * short rail label, badge, and active-path matching). Adding or removing a
+ * primary destination happens in the model — this map just needs an entry for
+ * the new href so the rail can render it.
+ */
+type RailRenderConfig = {
+  /** Short label under the icon (may abbreviate the nav model's label). */
+  label: string
+  icon: React.ReactNode
+  /** Whether this pathname should light up the item as active. */
+  isActive: (pathname: string) => boolean
+  /** Optional badge count derived from the rail's props. */
+  badge?: (props: Props) => number | undefined
+}
 
-  const isEmailSection =
-    pathname === "/inbox" || pathname.startsWith("/conversations/")
-  const isApprovals = pathname === "/approvals"
-  const isTasks = pathname === "/tasks"
-  const isChat = pathname === "/chat"
-  const isCleanInbox = pathname === "/clean-inbox"
-  const isSettings = pathname === "/settings"
+const RAIL_CONFIG: Record<string, RailRenderConfig> = {
+  "/home": {
+    label: "Home",
+    icon: <HomeIcon />,
+    isActive: (p) => p === "/home",
+  },
+  "/mail": {
+    label: "Mail",
+    icon: <MailIcon />,
+    isActive: (p) => p === "/mail" || p.startsWith("/conversations/"),
+    badge: ({ needsReplyCount }) => (needsReplyCount > 0 ? needsReplyCount : undefined),
+  },
+  "/approvals": {
+    label: "Approve",
+    icon: <ApprovalsIcon />,
+    isActive: (p) => p === "/approvals",
+    badge: ({ pendingApprovals }) => (pendingApprovals > 0 ? pendingApprovals : undefined),
+  },
+  "/clean-inbox": {
+    label: "Clean",
+    icon: <BroomIcon />,
+    isActive: (p) => p === "/clean-inbox",
+  },
+  "/settings": {
+    label: "Settings",
+    icon: <SettingsIcon />,
+    isActive: (p) => p === "/settings" || p.startsWith("/settings/"),
+  },
+}
+
+export default function AppRail(props: Props) {
+  const pathname = usePathname()
+  const primary = getPrimaryNav()
+
+  // Settings is the last primary item and stays pinned below the spacer; the
+  // rest render above it in nav-model order.
+  const topItems = primary.slice(0, -1)
+  const bottomItems = primary.slice(-1)
+
+  const renderItem = (href: string) => {
+    const config = RAIL_CONFIG[href]
+    if (!config) return null
+    return (
+      <RailLink
+        key={href}
+        href={href}
+        active={config.isActive(pathname)}
+        badge={config.badge?.(props)}
+        label={config.label}
+      >
+        {config.icon}
+      </RailLink>
+    )
+  }
 
   return (
     <nav className="flex h-full w-14 shrink-0 flex-col items-center bg-slate-900 py-3 gap-1">
       {/* Logo */}
       <Link
-        href="/inbox"
+        href="/home"
         aria-label="Go to FlowDesk home"
         title="FlowDesk home"
         className="mb-3 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-blue-500 text-sm font-black text-white transition hover:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-900"
@@ -31,47 +95,22 @@ export default function AppRail({ needsReplyCount, pendingApprovals }: Props) {
         F
       </Link>
 
-      {/* Control room / home */}
-      <RailLink
-        href="/inbox"
-        active={isEmailSection}
-        badge={needsReplyCount > 0 ? needsReplyCount : undefined}
-        label="Home"
-      >
-        <HomeIcon />
-      </RailLink>
-
-      {/* Approvals — first-class supervision surface for every user */}
-      <RailLink
-        href="/approvals"
-        active={isApprovals}
-        badge={pendingApprovals > 0 ? pendingApprovals : undefined}
-        label="Approve"
-      >
-        <ApprovalsIcon />
-      </RailLink>
-
-      {/* Tasks */}
-      <RailLink href="/tasks" active={isTasks} label="Tasks">
-        <TasksIcon />
-      </RailLink>
-
-      {/* Chat */}
-      <RailLink href="/chat" active={isChat} label="Chat">
-        <ChatIcon />
-      </RailLink>
-
-      {/* Clean Inbox */}
-      <RailLink href="/clean-inbox" active={isCleanInbox} label="Clean">
-        <BroomIcon />
-      </RailLink>
+      {topItems.map((item) => renderItem(item.href))}
 
       <div className="flex-1" />
 
-      {/* Settings */}
-      <RailLink href="/settings" active={isSettings} label="Settings">
-        <SettingsIcon />
-      </RailLink>
+      {/* Ask FlowDesk — opens the global slide-over (see AskFlowDeskPanel) */}
+      <button
+        type="button"
+        data-ask-flowdesk
+        title="Ask FlowDesk"
+        className="relative flex h-9 w-10 flex-col items-center justify-center gap-0.5 rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-900"
+      >
+        <ChatIcon />
+        <span className="text-[8px] font-semibold leading-none">Ask</span>
+      </button>
+
+      {bottomItems.map((item) => renderItem(item.href))}
     </nav>
   )
 }
@@ -93,7 +132,7 @@ function RailLink({
     <Link
       href={href}
       title={label}
-      className={`relative flex h-9 w-10 flex-col items-center justify-center gap-0.5 rounded-lg transition ${
+      className={`relative flex h-9 w-10 flex-col items-center justify-center gap-0.5 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-900 ${
         active
           ? "bg-slate-700 text-white"
           : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
@@ -128,11 +167,11 @@ function ApprovalsIcon() {
   )
 }
 
-function TasksIcon() {
+function MailIcon() {
   return (
     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <polyline strokeLinecap="round" strokeLinejoin="round" points="9 11 12 14 22 4" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+      <rect x="3" y="5" width="18" height="14" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7l9 6 9-6" />
     </svg>
   )
 }

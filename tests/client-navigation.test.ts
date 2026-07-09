@@ -40,29 +40,32 @@ describe("scrollToLandingSection", () => {
 
 describe("conversation inbox return links", () => {
   it("preserves the current inbox filter in conversation hrefs", () => {
-    expect(buildConversationHref("conv-1", "/inbox?status=needs_reply&q=vip")).toBe(
-      "/conversations/conv-1?returnTo=%2Finbox%3Fstatus%3Dneeds_reply%26q%3Dvip"
+    expect(buildConversationHref("conv-1", "/mail?status=needs_reply&q=vip")).toBe(
+      "/conversations/conv-1?returnTo=%2Fmail%3Fstatus%3Dneeds_reply%26q%3Dvip"
     );
   });
 
-  it("only allows inbox return paths", () => {
-    expect(getSafeInboxReturnPath("/inbox?status=closed")).toBe("/inbox?status=closed");
-    expect(getSafeInboxReturnPath("/settings")).toBe("/inbox");
-    expect(getSafeInboxReturnPath("https://example.com/inbox?status=needs_reply")).toBe(
-      "/inbox?status=needs_reply"
+  it("only allows mail return paths", () => {
+    expect(getSafeInboxReturnPath("/mail?status=closed")).toBe("/mail?status=closed");
+    expect(getSafeInboxReturnPath("/settings")).toBe("/mail");
+    expect(getSafeInboxReturnPath("https://example.com/mail?status=needs_reply")).toBe(
+      "/mail?status=needs_reply"
     );
   });
 });
 
 describe("getInboxNavigation (B2C: baseline + opt-in Sales & CRM)", () => {
-  it("returns the baseline control-room navigation when Sales & CRM is off", () => {
+  it("returns the baseline navigation when Sales & CRM is off", () => {
     expect(getInboxNavigation({ salesCrm: false })).toEqual({
       primary: [
-        { label: "Tasks", href: "/tasks" },
+        { label: "Home", href: "/home" },
+        { label: "Mail", href: "/mail" },
+        { label: "Approvals", href: "/approvals" },
+        { label: "Clean", href: "/clean-inbox" },
         { label: "Settings", href: "/settings" },
       ],
       secondary: [
-        { label: "Approvals", href: "/approvals" },
+        { label: "Tasks", href: "/tasks" },
         { label: "Activity", href: "/audit" },
       ],
     });
@@ -71,7 +74,7 @@ describe("getInboxNavigation (B2C: baseline + opt-in Sales & CRM)", () => {
   it("adds the Sales & CRM cluster when the capability is enabled", () => {
     const secondary = getInboxNavigation({ salesCrm: true }).secondary.map((i) => i.href);
     expect(secondary).toEqual([
-      "/approvals",
+      "/tasks",
       "/audit",
       "/leads",
       "/reports",

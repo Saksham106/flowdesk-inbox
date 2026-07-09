@@ -11,7 +11,8 @@ export function conversationTag(conversationId: string): string {
 export function revalidateInboxViews(tenantId: string, conversationId?: string): void {
   try {
     revalidateTag(inboxTag(tenantId))
-    revalidatePath("/inbox")
+    revalidatePath("/home")
+    revalidatePath("/mail")
     if (conversationId) {
       revalidateTag(conversationTag(conversationId))
       revalidatePath(`/conversations/${conversationId}`)

@@ -140,7 +140,7 @@ export default function HomeCommandCenter({
 
             {billsSection.count > 0 && (
               <div className="flex flex-col gap-2">
-                <SubHeading label="Bills & Deadlines" badge={String(billsSection.count)} />
+                <SubHeading label="Tasks & Deadlines" badge={String(billsSection.count)} href="/tasks" hrefLabel="View all →" />
                 <BillsDeadlinesList items={billsSection.items} />
               </div>
             )}
@@ -162,7 +162,7 @@ export default function HomeCommandCenter({
             <div className="flex flex-col gap-2">
               <SubHeading label="What it learned" />
               <Link
-                href="/settings"
+                href="/settings/training"
                 className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition hover:bg-slate-50"
               >
                 <div className="min-w-0">

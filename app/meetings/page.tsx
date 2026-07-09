@@ -20,7 +20,7 @@ export default async function MeetingsPage() {
     where: { id: tenantId },
     select: { salesCrmEnabled: true },
   })
-  if (!salesCrmEnabled(tenant)) redirect("/inbox")
+  if (!salesCrmEnabled(tenant)) redirect("/home")
 
   const credential = await prisma.googleCalendarCredential.findFirst({
     where: { tenantId },
@@ -66,7 +66,7 @@ export default async function MeetingsPage() {
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white px-6 py-5">
         <div className="mx-auto max-w-3xl">
-          <Link href="/inbox" className="text-sm text-slate-500 hover:text-slate-700">
+          <Link href="/home" className="text-sm text-slate-500 hover:text-slate-700">
             ← Inbox
           </Link>
           <h1 className="mt-2 text-2xl font-semibold text-slate-900">Meeting Prep</h1>
