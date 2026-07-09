@@ -86,21 +86,30 @@ taking cues from Inbox Zero (see `docs/superpowers/specs/2026-07-08-web-app-reva
 `docs/superpowers/specs/2026-07-09-inbox-redesign-phase-1-3-design.md`, and
 `docs/CURRENT_STATE.md` → "Web app information architecture").
 
-Navigation is 7 primary destinations — **Home** (`/home`), **Mail** (`/mail`),
+Navigation is 6 primary destinations — **Mail** (`/mail`),
 **Assistant** (`/assistant`), **Approvals**, **Clean**, **Tools**, **Settings** —
-plus a global "Ask FlowDesk" assistant slide-over (distinct from the Assistant
-rail item) and a collapsible expanded sidebar on Mail/Assistant/Clean/Tools
-showing route-specific sub-navigation:
+plus the `F` logo as the sole `/home` link and a global "Ask FlowDesk" assistant
+slide-over (distinct from the Assistant rail item). The collapsible expanded
+sidebar that used to sit next to the rail on Mail/Assistant/Clean/Tools was
+removed (2026-07-09) — it repeated each page's own tab strip without adding
+navigation value, so page-local sub-navigation now lives only in each page:
 
 - **Home** is the agent control room only (no email list): what needs you
   (approvals, handle-first, tasks & deadlines) and what the agent did/learned.
-- **Mail** owns the in-app email list + filters + reading pane, now rendered as
-  full-width rows with top category tabs (Important, Needs Reply, Waiting On,
-  Read Later, Other, Calendar) instead of a narrow compact list.
-- **Assistant** is the first-class home for AI rules (Rules, Test Rules,
-  History, Settings tabs) — previously buried in Settings → Training.
-- **Approvals** is the approval queue; **Clean** is split into Bulk Archive,
-  Bulk Unsubscribe, and Analytics tabs.
+  Reached via the rail's `F` logo, not a separate nav item.
+- **Mail** owns the in-app email list + filters + reading pane, rendered as
+  full-width rows with tabs aligned to FlowDesk's canonical Gmail label
+  vocabulary (Needs Reply, Needs Action, Waiting On, Read Later, Handled,
+  Autodrafted, Newsletter, Marketing, Notification, Calendar) instead of a
+  narrow compact list or the earlier ad hoc tab set.
+- **Assistant** is the first-class home for AI rules (Rules — with an active/
+  draft/manual/learned summary and planned-label preview, Test Rules — a
+  server-loaded rule picker, History — readable action labels, Settings tabs)
+  — previously buried in Settings → Training.
+- **Approvals** is the approval queue, rendered in the same rail shell as the
+  rest of the app with a diagnostic empty state explaining what creates an
+  approval; **Clean** is split into Bulk Archive, Bulk Unsubscribe, and
+  Analytics tabs sharing one candidate source.
 - **Tools** is a placeholder for planned-but-unbuilt surfaces (Calendar,
   Meeting Briefs, Attachments) — no fake functionality.
 - **Settings** is route-based tabs (Connect, Gmail, Automation, Training,
