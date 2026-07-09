@@ -59,6 +59,13 @@ export default async function TrainingSettingsPage() {
 
   return (
     <>
+      <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        Rules and training now have a dedicated home.{" "}
+        <a href="/assistant" className="font-medium underline">
+          Open Assistant →
+        </a>
+      </div>
+
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 px-6 py-4">
           <h2 className="font-semibold">Reply Learning</h2>
