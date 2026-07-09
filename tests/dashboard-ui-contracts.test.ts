@@ -99,13 +99,16 @@ describe("dashboard and inbox UI source contracts", () => {
   })
 
   it("loading states clear through failed async paths", () => {
-    const inboxRow = source("app/components/InboxRow.tsx")
+    // InboxRow's pending-action state/handlers live in the shared
+    // useInboxRowActions hook (also used by MailInboxRow) — assert the
+    // contract there rather than in InboxRow.tsx itself.
+    const inboxRowActions = source("app/components/useInboxRowActions.ts")
     const phishing = source("app/conversations/[id]/PhishingWarningBanner.tsx")
     const support = source("app/conversations/[id]/SupportPanel.tsx")
     const scheduling = source("app/conversations/[id]/SchedulingPanel.tsx")
 
-    expect(inboxRow).toContain("finally {")
-    expect(inboxRow).toContain("setPendingAction(null)")
+    expect(inboxRowActions).toContain("finally {")
+    expect(inboxRowActions).toContain("setPendingAction(null)")
     expect(phishing).toContain("finally {")
     expect(phishing).toContain("setLoading(false)")
     expect(support).toContain("finally {")
