@@ -25,10 +25,12 @@ export default function CleanInboxClient({
   groups,
   mode = "archive",
   protectedOrSkipped = 0,
+  noUnsubscribeLinkCount = 0,
 }: {
   groups: SenderGroupView[]
   mode?: "archive" | "unsubscribe"
   protectedOrSkipped?: number
+  noUnsubscribeLinkCount?: number
 }) {
   const [status, setStatus] = useState<Record<string, GroupStatus>>({})
 
@@ -102,7 +104,15 @@ export default function CleanInboxClient({
       {groups.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
           <p className="text-sm font-medium text-slate-700">Your inbox looks clean.</p>
-          {protectedOrSkipped > 0 ? (
+          {mode === "unsubscribe" && noUnsubscribeLinkCount > 0 ? (
+            <p className="mt-1 text-xs text-slate-400">
+              No senders with a detected unsubscribe link right now.
+              {" "}
+              {noUnsubscribeLinkCount} newsletter/marketing conversation
+              {noUnsubscribeLinkCount === 1 ? "" : "s"} {noUnsubscribeLinkCount === 1 ? "is" : "are"}{" "}
+              still there for Bulk Archive.
+            </p>
+          ) : protectedOrSkipped > 0 ? (
             <p className="mt-1 text-xs text-slate-400">
               No newsletters, marketing, or quietly-handled mail to group right now.
               {" "}

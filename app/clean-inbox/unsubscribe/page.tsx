@@ -32,6 +32,7 @@ export default async function BulkUnsubscribePage() {
             groups={overview.unsubscribeGroups}
             mode="unsubscribe"
             protectedOrSkipped={overview.analytics.protectedOrSkipped}
+            noUnsubscribeLinkCount={overview.analytics.noUnsubscribeLinkCount}
           />
         </div>
       </div>

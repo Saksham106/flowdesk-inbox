@@ -29,6 +29,7 @@ export type CleanupAnalytics = {
   protectedOrSkipped: number
   senderCount: number
   unsubscribableCount: number
+  noUnsubscribeLinkCount: number
   byEmailType: [string, number][]
   topDomains: [string, number][]
 }
@@ -67,6 +68,10 @@ export function summarizeCleanupCandidates(candidates: CleanupCandidate[]): Clea
     byDomain.set(group.domain, (byDomain.get(group.domain) ?? 0) + group.count)
   }
 
+  const unsubscribableCount = groups
+    .filter((g) => g.hasUnsubscribe)
+    .reduce((sum, g) => sum + g.count, 0)
+
   return {
     groups,
     unsubscribeGroups: groups.filter((g) => g.hasUnsubscribe),
@@ -75,7 +80,12 @@ export function summarizeCleanupCandidates(candidates: CleanupCandidate[]): Clea
       totalCleanable: actionable.length,
       protectedOrSkipped: candidates.length - actionable.length,
       senderCount: groups.length,
-      unsubscribableCount: groups.filter((g) => g.hasUnsubscribe).reduce((sum, g) => sum + g.count, 0),
+      unsubscribableCount,
+      // Actionable conversations (i.e. present in `groups`) whose sender has no
+      // detected unsubscribe link. Distinct from `protectedOrSkipped`, which is
+      // about the full candidate population, not why `unsubscribeGroups`
+      // specifically may be empty/smaller than `groups`.
+      noUnsubscribeLinkCount: groups.reduce((sum, g) => sum + g.count, 0) - unsubscribableCount,
       byEmailType: [...byEmailType.entries()].sort((a, b) => a[0].localeCompare(b[0])),
       topDomains: [...byDomain.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20),
     },
