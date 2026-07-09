@@ -11,7 +11,6 @@ import SearchInput from "@/app/inbox/SearchInput";
 import AutoRefresh from "@/app/components/AutoRefresh";
 import { StatusBadge, LabelBadge } from "@/app/components/badges";
 import AppRail from "@/app/components/AppRail";
-import AppSidebar from "@/app/components/AppSidebar";
 import AskFlowDeskPanel from "@/app/components/AskFlowDeskPanel";
 import { getCachedListData, mapConversationRowToListItem } from "@/app/components/AppListColumn";
 import MailTopTabs from "@/app/components/MailTopTabs";
@@ -296,7 +295,6 @@ async function renderMailPage(
       {/* ── DESKTOP SHELL (lg+) ── */}
       <div className="hidden lg:flex lg:h-screen">
         <AppRail needsReplyCount={needsReplyCount} pendingApprovals={pendingApprovals} />
-        <AppSidebar />
         <div className="flex flex-1 flex-col overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
             <h1 className="text-lg font-semibold text-slate-900">Mail</h1>

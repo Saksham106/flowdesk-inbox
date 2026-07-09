@@ -14,13 +14,14 @@ export type NavCapabilities = {
 }
 
 /**
- * The 7 primary destinations shown in the desktop rail and mobile nav.
+ * The 6 primary destinations shown in the desktop rail and mobile nav.
+ * Home is not one of them — the `F` logo at the top of the desktop rail is
+ * the sole Home affordance, so it is never duplicated as a nav item.
  * Assistant surfaces AI rules (previously buried in Settings > Training).
  * Approvals keeps its own slot — a trust-critical surface, not folded into
  * Mail's sidebar. Tools is a placeholder landing page for now.
  */
 const PRIMARY_NAV: AppNavigationItem[] = [
-  { label: "Home", href: "/home" },
   { label: "Mail", href: "/mail" },
   { label: "Assistant", href: "/assistant" },
   { label: "Approvals", href: "/approvals" },

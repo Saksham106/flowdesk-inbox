@@ -181,11 +181,32 @@ describe("dashboard and inbox UI source contracts", () => {
     }
   })
 
-  it("assistant routes render inside the app rail/sidebar shell", () => {
+  it("desktop rail uses the F logo as the only Home affordance", () => {
+    const rail = source("app/components/AppRail.tsx")
+    const nav = source("lib/app-navigation.ts")
+
+    expect(rail).toContain('href="/home"')
+    expect(rail).toContain('aria-label="Go to FlowDesk home"')
+    expect(nav).not.toContain('{ label: "Home", href: "/home" }')
+  })
+
+  it("expanded AppSidebar is removed from shell pages", () => {
+    for (const path of [
+      "app/mail/page.tsx",
+      "app/assistant/layout.tsx",
+      "app/clean-inbox/page.tsx",
+      "app/clean-inbox/unsubscribe/page.tsx",
+      "app/clean-inbox/analytics/page.tsx",
+      "app/tools/page.tsx",
+    ]) {
+      expect(source(path)).not.toContain("AppSidebar")
+    }
+  })
+
+  it("assistant routes render inside the app rail shell", () => {
     const layout = source("app/assistant/layout.tsx")
 
     expect(layout).toContain("AppRail")
-    expect(layout).toContain("AppSidebar")
     expect(layout).toContain("getAppShellContext")
   })
 

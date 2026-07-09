@@ -58,7 +58,6 @@ describe("getInboxNavigation (B2C: baseline + opt-in Sales & CRM)", () => {
   it("returns the baseline navigation when Sales & CRM is off", () => {
     expect(getInboxNavigation({ salesCrm: false })).toEqual({
       primary: [
-        { label: "Home", href: "/home" },
         { label: "Mail", href: "/mail" },
         { label: "Assistant", href: "/assistant" },
         { label: "Approvals", href: "/approvals" },

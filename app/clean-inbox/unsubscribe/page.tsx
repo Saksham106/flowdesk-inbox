@@ -4,7 +4,6 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { groupCleanupBySender, type CleanupCandidate } from "@/lib/agent/sender-cleanup"
 import AppRail from "@/app/components/AppRail"
-import AppSidebar from "@/app/components/AppSidebar"
 import AskFlowDeskPanel from "@/app/components/AskFlowDeskPanel"
 import { getAppShellContext } from "@/lib/app-shell"
 import CleanInboxClient from "@/app/clean-inbox/CleanInboxClient"
@@ -84,7 +83,6 @@ export default async function BulkUnsubscribePage() {
       <div className="lg:flex lg:h-screen">
         <div className="hidden lg:flex">
           <AppRail needsReplyCount={needsReplyCount} pendingApprovals={pendingApprovals} />
-          <AppSidebar />
         </div>
         <div className="flex flex-1 flex-col overflow-hidden lg:overflow-y-auto">
           <div className="mx-auto max-w-2xl px-4 pt-8">
