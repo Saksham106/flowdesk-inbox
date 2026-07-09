@@ -29,7 +29,7 @@ describe("dashboard and inbox UI source contracts", () => {
   it("QuietlyHandledBanner links to closed conversations with current copy", () => {
     const s = source("app/components/QuietlyHandledBanner.tsx")
 
-    expect(s).toContain("/inbox?status=closed")
+    expect(s).toContain("/mail?status=closed")
     expect(s).not.toContain("attention=fyi_done")
     expect(s).toContain("emails sorted quietly")
     expect(s).not.toContain("emails quietly handled")
@@ -45,7 +45,7 @@ describe("dashboard and inbox UI source contracts", () => {
     expect(s).toContain("undoable")
     expect(s).toContain("undoTimerRef")
     expect(s).toContain("Undo")
-    expect(s).toContain("/inbox?attention=read_later")
+    expect(s).toContain("/mail?attention=read_later")
   })
 
   it("HandleFirstSection wires snooze, waiting-on, done undo, and avoids old copy", () => {
@@ -162,37 +162,31 @@ describe("dashboard and inbox UI source contracts", () => {
     expect(s).toContain("JSON.stringify({ automationLevel: pendingLevel })")
   })
 
-  it("settings page exposes a navigable control-room section index", () => {
-    const s = source("app/settings/page.tsx")
+  it("settings is a route-based tab layout, one page per section", () => {
+    const layout = source("app/settings/layout.tsx")
+    const nav = source("app/settings/SettingsTabNav.tsx")
+    const root = source("app/settings/page.tsx")
 
-    expect(s).toContain("SETTINGS_SECTIONS")
-    // Every panel is grouped under a SettingsSectionGroup keyed by sectionMeta(id),
-    // so every nav anchor actually has matching content below it (not just the
-    // first panel in each bucket, which was the gap the anchor-only index left).
-    for (const id of ["connect", "gmail", "automation", "training", "profile", "data"]) {
-      expect(s).toContain(`sectionMeta("${id}")`)
+    expect(layout).toContain("SettingsTabNav")
+    expect(nav).toContain("SETTINGS_TABS")
+    expect(nav).toContain("usePathname")
+    expect(nav).toContain("aria-current")
+    expect(root).toContain('redirect("/settings/connect")')
+
+    for (const slug of ["connect", "gmail", "automation", "training", "profile", "data"]) {
+      expect(source(`app/settings/${slug}/page.tsx`)).toBeTruthy()
     }
-    expect(s).toContain("SETTINGS_SECTIONS.map")
-    expect(s).toContain("href={`#${section.id}`}")
-    expect(s).toContain("SettingsNavigation")
-    expect(s).toContain("SettingsSectionGroup")
-    expect(s).toContain("Connect")
-    expect(s).toContain("Gmail behavior")
-    expect(s).toContain("Automation")
-    expect(s).toContain("Training")
-    expect(s).toContain("Profile")
-    expect(s).toContain("Data")
   })
 
   it("settings exposes Gmail operator health for sync, queues, and agent jobs", () => {
-    const settings = source("app/settings/page.tsx")
+    const connect = source("app/settings/connect/page.tsx")
     const panel = source("app/settings/GmailOperatorHealthPanel.tsx")
 
-    expect(settings).toContain("GmailOperatorHealthPanel")
-    expect(settings).toContain("summarizeGmailOperatorHealth")
-    expect(settings).toContain("gmailWritebackQueue")
-    expect(settings).toContain("gmailPushEvent")
-    expect(settings).toContain("agentJob")
+    expect(connect).toContain("GmailOperatorHealthPanel")
+    expect(connect).toContain("summarizeGmailOperatorHealth")
+    expect(connect).toContain("gmailWritebackQueue")
+    expect(connect).toContain("gmailPushEvent")
+    expect(connect).toContain("agentJob")
     expect(panel).toContain("Gmail operator health")
     expect(panel).toContain("writeback")
     expect(panel).toContain("agent jobs")

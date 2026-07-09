@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const state = searchParams.get("state")
   const error = searchParams.get("error")
 
-  const redirectBase = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/settings`
+  const redirectBase = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/settings/connect`
 
   if (error) {
     return NextResponse.redirect(`${redirectBase}?drive_error=google_denied`)

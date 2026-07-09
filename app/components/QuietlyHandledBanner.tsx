@@ -13,10 +13,10 @@ export default function QuietlyHandledBanner({ count, breakdown }: Props) {
   // (lib/content-type-filters.ts), so clicking a pill jumps straight to the
   // matching Gmail-labeled set of conversations instead of just displaying a count.
   const pills: { label: string; value: number; href?: string }[] = [
-    { label: "newsletters", value: breakdown.newsletter, href: "/inbox?type=newsletter" },
-    { label: "notifications", value: breakdown.notification, href: "/inbox?type=notification" },
-    { label: "marketing", value: breakdown.marketing, href: "/inbox?type=marketing" },
-    { label: "calendar", value: breakdown.calendar, href: "/inbox?type=calendar" },
+    { label: "newsletters", value: breakdown.newsletter, href: "/mail?type=newsletter" },
+    { label: "notifications", value: breakdown.notification, href: "/mail?type=notification" },
+    { label: "marketing", value: breakdown.marketing, href: "/mail?type=marketing" },
+    { label: "calendar", value: breakdown.calendar, href: "/mail?type=calendar" },
     { label: "other", value: breakdown.other },
   ].filter((p) => p.value > 0)
 
@@ -47,7 +47,7 @@ export default function QuietlyHandledBanner({ count, breakdown }: Props) {
         </div>
       </div>
       <Link
-        href="/inbox?status=closed"
+        href="/mail?status=closed"
         className="text-[10px] font-semibold text-slate-500 border border-slate-200 bg-slate-50 rounded-lg px-3 py-1.5 hover:bg-slate-100 transition flex-shrink-0"
       >
         Review all →

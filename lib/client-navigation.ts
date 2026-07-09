@@ -1,6 +1,6 @@
 export function getAuthSuccessPath(authResultUrl?: string | null): string {
   if (!authResultUrl) {
-    return "/inbox";
+    return "/home";
   }
 
   if (authResultUrl.startsWith("/")) {
@@ -9,9 +9,9 @@ export function getAuthSuccessPath(authResultUrl?: string | null): string {
 
   try {
     const url = new URL(authResultUrl);
-    return `${url.pathname}${url.search}${url.hash}` || "/inbox";
+    return `${url.pathname}${url.search}${url.hash}` || "/home";
   } catch {
-    return "/inbox";
+    return "/home";
   }
 }
 
@@ -44,7 +44,7 @@ export function buildConversationHref(conversationId: string, returnTo?: string 
 
 export function getSafeInboxReturnPath(returnTo?: string | null): string {
   if (!returnTo) {
-    return "/inbox";
+    return "/mail";
   }
 
   try {
@@ -52,12 +52,12 @@ export function getSafeInboxReturnPath(returnTo?: string | null): string {
       ? new URL(returnTo, "https://flowdesk.local")
       : new URL(returnTo);
 
-    if (url.pathname !== "/inbox") {
-      return "/inbox";
+    if (url.pathname !== "/mail") {
+      return "/mail";
     }
 
     return `${url.pathname}${url.search}`;
   } catch {
-    return "/inbox";
+    return "/mail";
   }
 }

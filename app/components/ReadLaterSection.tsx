@@ -174,7 +174,7 @@ export default function ReadLaterSection({ items }: Props) {
       <div className="flex items-center justify-between mb-2">
         <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Read Later</p>
         {overflow > 0 && (
-          <a href="/inbox?attention=read_later" className="text-[10px] text-blue-500 hover:underline">
+          <a href="/mail?attention=read_later" className="text-[10px] text-blue-500 hover:underline">
             +{overflow} more
           </a>
         )}

@@ -69,7 +69,7 @@ export default function CleanInboxClient({ groups }: { groups: SenderGroupView[]
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
       <div className="mb-6">
-        <Link href="/inbox" className="text-xs text-slate-400 hover:text-slate-700">
+        <Link href="/home" className="text-xs text-slate-400 hover:text-slate-700">
           ← Back to control room
         </Link>
         <h1 className="mt-2 text-xl font-semibold text-slate-900">Clean up by sender</h1>

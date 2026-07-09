@@ -39,8 +39,8 @@ describe("denormalizeConversationStateMetadata", () => {
 })
 
 describe("home and conversation performance safeguards", () => {
-  it("keeps the inbox home query small and avoids the duplicate persisted-state ID subquery", () => {
-    const source = readFileSync(join(process.cwd(), "app/inbox/page.tsx"), "utf8")
+  it("keeps the home command-center query small and avoids the duplicate persisted-state ID subquery", () => {
+    const source = readFileSync(join(process.cwd(), "app/home/page.tsx"), "utf8")
 
     expect(source).toContain("const HOME_CONVERSATION_LIMIT = 25")
     expect(source).toContain("const HOME_MESSAGE_LIMIT = 5")
@@ -61,13 +61,16 @@ describe("home and conversation performance safeguards", () => {
     expect(source).not.toContain("<AutoRefresh intervalMs={8000} />")
   })
 
-  it("keeps inbox polling lightweight and avoids full page refresh polling", () => {
-    const inboxSource = readFileSync(join(process.cwd(), "app/inbox/page.tsx"), "utf8")
+  it("keeps home and mail polling lightweight and avoids full page refresh polling", () => {
+    const homeSource = readFileSync(join(process.cwd(), "app/home/page.tsx"), "utf8")
+    const mailSource = readFileSync(join(process.cwd(), "app/mail/page.tsx"), "utf8")
     const autoRefreshSource = readFileSync(join(process.cwd(), "app/components/AutoRefresh.tsx"), "utf8")
     const syncControlSource = readFileSync(join(process.cwd(), "app/components/GmailSyncControl.tsx"), "utf8")
 
-    expect(inboxSource).toContain("<AutoRefresh intervalMs={60000} />")
-    expect(inboxSource).not.toContain("<AutoRefresh intervalMs={10000} />")
+    expect(homeSource).toContain("<AutoRefresh intervalMs={60000} />")
+    expect(homeSource).not.toContain("<AutoRefresh intervalMs={10000} />")
+    expect(mailSource).toContain("<AutoRefresh intervalMs={60000} />")
+    expect(mailSource).not.toContain("<AutoRefresh intervalMs={10000} />")
     expect(autoRefreshSource).not.toContain("useRouter")
     expect(autoRefreshSource).not.toContain("router.refresh")
     expect(autoRefreshSource).toContain("/api/inbox/summary")
