@@ -86,6 +86,7 @@ export function mapConversationRowToListItem(
     isFyi: workflowStatus === "done",
     isClosed: workflowStatus === "done",
     name,
+    subject: msg0?.subject ?? null,
     snippet,
     timeLabel: relativeTime(conv.lastMessageAt),
     statusDot: wfStyle.dot,
