@@ -62,16 +62,23 @@ export default async function CleanupAnalyticsPage() {
 
   const groups = groupCleanupBySender(candidates)
 
+  // groupCleanupBySender silently drops "protected" conversations (needs-reply,
+  // waiting-on, important, receipts, etc.), so headline counts must be derived
+  // from the same actionable population the groups represent, not raw candidates.
+  const actionableIds = new Set(groups.flatMap((g) => g.conversationIds))
+  const actionableCandidates = candidates.filter((c) => actionableIds.has(c.id))
+
   const byDomain = new Map<string, number>()
   const byEmailType = new Map<string, number>()
-  for (const candidate of candidates) {
+  for (const candidate of actionableCandidates) {
     byEmailType.set(candidate.emailType ?? "unknown", (byEmailType.get(candidate.emailType ?? "unknown") ?? 0) + 1)
   }
   for (const group of groups) {
     byDomain.set(group.domain, (byDomain.get(group.domain) ?? 0) + group.count)
   }
   const topDomains = [...byDomain.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20)
-  const totalCleanable = candidates.length
+  const sortedEmailTypes = [...byEmailType.entries()].sort((a, b) => b[1] - a[1])
+  const totalCleanable = actionableCandidates.length
   const unsubscribableCount = groups.filter((g) => g.hasUnsubscribe).reduce((sum, g) => sum + g.count, 0)
 
   return (
@@ -89,7 +96,7 @@ export default async function CleanupAnalyticsPage() {
           <section className="rounded-xl border border-slate-200 bg-white p-4">
             <h2 className="mb-2 text-sm font-semibold text-slate-700">By content type</h2>
             <ul className="space-y-1 text-sm">
-              {[...byEmailType.entries()].map(([type, count]) => (
+              {sortedEmailTypes.map(([type, count]) => (
                 <li key={type} className="flex justify-between">
                   <span className="text-slate-600">{type}</span>
                   <span className="text-slate-900">{count}</span>
