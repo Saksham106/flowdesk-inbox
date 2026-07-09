@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { groupCleanupBySender, type CleanupCandidate } from "@/lib/agent/sender-cleanup"
+import AppRail from "@/app/components/AppRail"
+import AppSidebar from "@/app/components/AppSidebar"
+import { getAppShellContext } from "@/lib/app-shell"
 import CleanInboxClient from "./CleanInboxClient"
 import CleanupTabNav from "./CleanupTabNav"
 
@@ -12,6 +15,8 @@ export default async function CleanInboxPage() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.tenantId) redirect("/login")
   const tenantId = session.user.tenantId
+
+  const { needsReplyCount, pendingApprovals } = await getAppShellContext(tenantId)
 
   // Cleanable candidates: newsletters/marketing plus quietly-handled and FYI
   // mail. The grouping helper applies the safety skip rules (never needs-reply,
@@ -72,11 +77,15 @@ export default async function CleanInboxPage() {
   }))
 
   return (
-    <>
-      <div className="mx-auto max-w-2xl px-4 pt-8">
-        <CleanupTabNav />
+    <div className="hidden lg:flex lg:h-screen">
+      <AppRail needsReplyCount={needsReplyCount} pendingApprovals={pendingApprovals} />
+      <AppSidebar />
+      <div className="flex flex-1 flex-col overflow-hidden overflow-y-auto">
+        <div className="mx-auto max-w-2xl px-4 pt-8">
+          <CleanupTabNav />
+        </div>
+        <CleanInboxClient groups={groups} />
       </div>
-      <CleanInboxClient groups={groups} />
-    </>
+    </div>
   )
 }
