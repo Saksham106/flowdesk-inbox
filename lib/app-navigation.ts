@@ -14,19 +14,18 @@ export type NavCapabilities = {
 }
 
 /**
- * B2C: one nav model for everyone. There is no "business account" — every
- * user gets the same baseline navigation. The sales/CRM cluster (Leads, Reports,
- * Risk Radar, Meetings, Knowledge Base) is an opt-in capability that resurfaces
- * in the "More" menu only when the tenant has Sales & CRM mode enabled.
- *
- * `primary` items are the 5 rail destinations and always render; `secondary`
- * items (demoted: Tasks, Activity) collapse into a "More" menu.
+ * The 7 primary destinations shown in the desktop rail and mobile nav.
+ * Assistant surfaces AI rules (previously buried in Settings > Training).
+ * Approvals keeps its own slot — a trust-critical surface, not folded into
+ * Mail's sidebar. Tools is a placeholder landing page for now.
  */
 const PRIMARY_NAV: AppNavigationItem[] = [
   { label: "Home", href: "/home" },
   { label: "Mail", href: "/mail" },
+  { label: "Assistant", href: "/assistant" },
   { label: "Approvals", href: "/approvals" },
   { label: "Clean", href: "/clean-inbox" },
+  { label: "Tools", href: "/tools" },
   { label: "Settings", href: "/settings" },
 ]
 
