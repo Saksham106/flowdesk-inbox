@@ -79,10 +79,12 @@ export default async function BulkUnsubscribePage() {
     }))
 
   return (
-    <div className="hidden lg:flex lg:h-screen">
-      <AppRail needsReplyCount={needsReplyCount} pendingApprovals={pendingApprovals} />
-      <AppSidebar />
-      <div className="flex flex-1 flex-col overflow-hidden overflow-y-auto">
+    <div className="lg:flex lg:h-screen">
+      <div className="hidden lg:flex">
+        <AppRail needsReplyCount={needsReplyCount} pendingApprovals={pendingApprovals} />
+        <AppSidebar />
+      </div>
+      <div className="flex flex-1 flex-col overflow-hidden lg:overflow-y-auto">
         <div className="mx-auto max-w-2xl px-4 pt-8">
           <CleanupTabNav />
         </div>
