@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { groupCleanupBySender, type CleanupCandidate } from "@/lib/agent/sender-cleanup"
 import CleanInboxClient from "./CleanInboxClient"
+import CleanupTabNav from "./CleanupTabNav"
 
 export const dynamic = "force-dynamic"
 
@@ -70,5 +71,12 @@ export default async function CleanInboxPage() {
     hasUnsubscribe: g.hasUnsubscribe,
   }))
 
-  return <CleanInboxClient groups={groups} />
+  return (
+    <>
+      <div className="mx-auto max-w-2xl px-4 pt-8">
+        <CleanupTabNav />
+      </div>
+      <CleanInboxClient groups={groups} />
+    </>
+  )
 }
