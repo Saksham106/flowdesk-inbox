@@ -33,7 +33,7 @@ interface Props {
   className?: string
 }
 
-type ConvRow = {
+export type ConvRow = {
   id: string
   status: string
   lastMessageAt: Date
@@ -51,6 +51,58 @@ type ConvRow = {
     emailType: string | null
   } | null
   channel: { provider: string }
+}
+
+export function mapConversationRowToListItem(
+  conv: ConvRow,
+  opts: { activeConversationId?: string; isPersonal: boolean; returnTo: string }
+): InboxListItem {
+  const { activeConversationId, isPersonal, returnTo } = opts
+  const attention = attentionCategory(conv)
+  const attnCat = attention
+  const workflowStatus = deriveWorkflowStatus({
+    status: conv.status,
+    userState: conv.userState,
+    draftStatus: conv.draft?.status,
+    attentionCategory: attnCat,
+    emailType: conv.stateRecord?.emailType,
+  })
+  const wfStyle = WORKFLOW_STATUS_STYLE[workflowStatus]
+  const name = conv.contact?.name ?? conv.externalThreadId
+  const msg0 = conv.messages[0]
+  const bodySnippet = msg0?.body ? stripHtmlToText(msg0.body, 75) : ""
+  const snippet = buildPreviewText(msg0?.subject, bodySnippet)
+  const hasDraft = conv.draft?.status === "proposed" || conv.draft?.status === "approved"
+  const meta = conv.stateRecord?.metadataJson as Record<string, unknown> | null ?? {}
+  const isVip = meta?.isVip === true
+  const vipLabel = typeof meta?.vipLabel === "string" ? meta.vipLabel : null
+  const snoozeUntil = typeof meta?.snoozeUntil === "string" ? meta.snoozeUntil : null
+
+  return {
+    id: conv.id,
+    href: buildConversationHref(conv.id, returnTo),
+    isSelected: conv.id === activeConversationId,
+    isUnread: !conv.readAt && conv.gmailUnread !== false,
+    isFyi: workflowStatus === "done",
+    isClosed: workflowStatus === "done",
+    name,
+    snippet,
+    timeLabel: relativeTime(conv.lastMessageAt),
+    statusDot: wfStyle.dot,
+    statusText: wfStyle.text,
+    statusLabel: WORKFLOW_STATUS_LABEL[workflowStatus],
+    hasDraft,
+    initialStatus: conv.status,
+    attentionCategory: attention,
+    contentType: conv.stateRecord?.emailType ?? null,
+    isPersonal,
+    isGmail: conv.channel.provider === "google",
+    isVip,
+    vipLabel,
+    snoozeUntil,
+    searchText: `${name} ${conv.externalThreadId} ${snippet}`.toLowerCase(),
+    workflowStatus,
+  }
 }
 
 function attentionCategory(conv: ConvRow): string | null {
@@ -108,7 +160,7 @@ async function getCachedStatusCounts(tenantId: string) {
   )()
 }
 
-function getCachedListData(input: {
+export function getCachedListData(input: {
   tenantId: string
   status?: string | null
   contentType?: string | null
@@ -262,53 +314,9 @@ export default async function AppListColumn({
         })
       : conversations
 
-  const listItems: InboxListItem[] = displayConversations.map((conv) => {
-    const attention = attentionCategory(conv)
-    const attnCat = attention
-    const workflowStatus = deriveWorkflowStatus({
-      status: conv.status,
-      userState: conv.userState,
-      draftStatus: conv.draft?.status,
-      attentionCategory: attnCat,
-      emailType: conv.stateRecord?.emailType,
-    })
-    const wfStyle = WORKFLOW_STATUS_STYLE[workflowStatus]
-    const name = conv.contact?.name ?? conv.externalThreadId
-    const msg0 = conv.messages[0]
-    const bodySnippet = msg0?.body ? stripHtmlToText(msg0.body, 75) : ""
-    const snippet = buildPreviewText(msg0?.subject, bodySnippet)
-    const hasDraft = conv.draft?.status === "proposed" || conv.draft?.status === "approved"
-    const meta = conv.stateRecord?.metadataJson as Record<string, unknown> | null ?? {}
-    const isVip = meta?.isVip === true
-    const vipLabel = typeof meta?.vipLabel === "string" ? meta.vipLabel : null
-    const snoozeUntil = typeof meta?.snoozeUntil === "string" ? meta.snoozeUntil : null
-
-    return {
-      id: conv.id,
-      href: buildConversationHref(conv.id, returnTo),
-      isSelected: conv.id === activeConversationId,
-      isUnread: !conv.readAt && conv.gmailUnread !== false,
-      isFyi: workflowStatus === "done",
-      isClosed: workflowStatus === "done",
-      name,
-      snippet,
-      timeLabel: relativeTime(conv.lastMessageAt),
-      statusDot: wfStyle.dot,
-      statusText: wfStyle.text,
-      statusLabel: WORKFLOW_STATUS_LABEL[workflowStatus],
-      hasDraft,
-      initialStatus: conv.status,
-      attentionCategory: attention,
-      contentType: conv.stateRecord?.emailType ?? null,
-      isPersonal,
-      isGmail: conv.channel.provider === "google",
-      isVip,
-      vipLabel,
-      snoozeUntil,
-      searchText: `${name} ${conv.externalThreadId} ${snippet}`.toLowerCase(),
-      workflowStatus,
-    }
-  })
+  const listItems: InboxListItem[] = displayConversations.map((conv) =>
+    mapConversationRowToListItem(conv, { activeConversationId, isPersonal, returnTo })
+  )
 
   return (
     <ClientFilteredInboxList
