@@ -95,7 +95,21 @@ export function buildMailLabelTabWhere(tab: MailLabelTabValue | null | undefined
         ],
       }
     case "needs_action":
-      return { stateRecord: { is: { attentionCategory: "needs_action" } } }
+      // attentionCategory() in AppListColumn.tsx falls back to
+      // stateRecord.metadataJson.attentionCategory when the stateRecord
+      // column itself is null (a known column/JSON desync — see
+      // lib/agent/automation-runner.ts). Match both so legacy rows whose
+      // column hasn't been backfilled still surface here.
+      return {
+        OR: [
+          { stateRecord: { is: { attentionCategory: "needs_action" } } },
+          {
+            stateRecord: {
+              is: { metadataJson: { path: ["attentionCategory"], equals: "needs_action" } },
+            },
+          },
+        ],
+      }
     case "waiting_on":
       return {
         OR: [
@@ -112,10 +126,19 @@ export function buildMailLabelTabWhere(tab: MailLabelTabValue | null | undefined
         ],
       }
     case "handled":
+      // workflowStatus becomes "done" (deriveWorkflowStatus, lib/workflow-status.ts)
+      // via userState/status *or* independently via a "quiet"/"fyi_done"
+      // attentionCategory or a notification/newsletter/marketing emailType,
+      // with no status/userState involved in those two paths at all — so
+      // both branches are required here too, or FYI-typed rows silently
+      // disappear from this tab (and its count) before matchesMailLabelTab
+      // ever sees them.
       return {
         OR: [
           { userState: "done" },
           { status: "closed" },
+          { stateRecord: { is: { attentionCategory: { in: ["quiet", "fyi_done"] } } } },
+          { stateRecord: { is: { emailType: { in: ["notification", "newsletter", "marketing"] } } } },
         ],
       }
     case "autodrafted":
