@@ -85,6 +85,25 @@ export function matchesMailLabelTab(tab: MailLabelTabValue, input: MailLabelTabI
   }
 }
 
+const MAIL_LABEL_TAB_VALUES = new Set<string>(MAIL_LABEL_TABS.map((t) => t.value))
+
+/**
+ * Resolves the active label tab from a request's query params, preferring
+ * the new `label` param and falling back to the legacy `tab` param so old
+ * bookmarked/shared `/mail?tab=...` links keep working. Two legacy tab
+ * values no longer have a direct counterpart in the canonical Gmail label
+ * vocabulary (see lib/gmail-labels.ts's FLOWDESK_GMAIL_LABEL_NAMES comment):
+ * "important" (now in-app-only, not a Gmail label) folds to "all", and
+ * "other" folds to "handled" (its closest surviving bucket). Any other
+ * unrecognized value also falls back to "all".
+ */
+export function coerceMailLabelTab(input: { label?: string; tab?: string }): MailLabelTabValue {
+  const raw = input.label ?? input.tab ?? "all"
+  if (raw === "other") return "handled"
+  if (raw === "important") return "all"
+  return MAIL_LABEL_TAB_VALUES.has(raw) ? (raw as MailLabelTabValue) : "all"
+}
+
 export function buildMailLabelTabWhere(tab: MailLabelTabValue | null | undefined): Record<string, unknown> | null {
   switch (tab) {
     case "needs_reply":

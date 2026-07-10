@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 import { FLOWDESK_GMAIL_LABEL_NAMES } from "@/lib/gmail-labels"
-import { MAIL_LABEL_TABS, buildMailLabelTabWhere, matchesMailLabelTab } from "@/lib/mail-label-tabs"
+import {
+  MAIL_LABEL_TABS,
+  buildMailLabelTabWhere,
+  coerceMailLabelTab,
+  matchesMailLabelTab,
+} from "@/lib/mail-label-tabs"
 
 describe("MAIL_LABEL_TABS", () => {
   it("matches the canonical Gmail label vocabulary plus All", () => {
@@ -13,6 +18,24 @@ describe("MAIL_LABEL_TABS", () => {
   it("does not include legacy synthetic tabs", () => {
     expect(MAIL_LABEL_TABS.map((t) => t.label)).not.toContain("Important")
     expect(MAIL_LABEL_TABS.map((t) => t.label)).not.toContain("Other")
+  })
+})
+
+describe("coerceMailLabelTab", () => {
+  it("accepts new label params and legacy tab params", () => {
+    expect(coerceMailLabelTab({ label: "newsletter" })).toBe("newsletter")
+    expect(coerceMailLabelTab({ tab: "calendar" })).toBe("calendar")
+    expect(coerceMailLabelTab({ tab: "other" })).toBe("handled")
+    expect(coerceMailLabelTab({ tab: "important" })).toBe("all")
+  })
+
+  it("falls back to all for missing or unrecognized values", () => {
+    expect(coerceMailLabelTab({})).toBe("all")
+    expect(coerceMailLabelTab({ label: "bogus" })).toBe("all")
+  })
+
+  it("prefers label over tab when both are present", () => {
+    expect(coerceMailLabelTab({ label: "handled", tab: "calendar" })).toBe("handled")
   })
 })
 

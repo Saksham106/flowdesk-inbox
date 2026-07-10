@@ -26,7 +26,12 @@ import { deriveWorkflowStatus } from "@/lib/workflow-status";
 import { CONTENT_TYPE_FILTERS, emailTypesForContentFilter } from "@/lib/content-type-filters";
 import { getAppShellContext, isDbStartingError } from "@/lib/app-shell";
 import { resolveAccountMode } from "@/lib/account-mode";
-import { MAIL_LABEL_TABS, matchesMailLabelTab, type MailLabelTabValue } from "@/lib/mail-label-tabs";
+import {
+  MAIL_LABEL_TABS,
+  coerceMailLabelTab,
+  matchesMailLabelTab,
+  type MailLabelTabValue,
+} from "@/lib/mail-label-tabs";
 
 export const revalidate = 60;
 
@@ -43,10 +48,6 @@ const MOBILE_LIST_LIMIT = 50;
 
 interface Props {
   searchParams: { status?: string; q?: string; sales?: string; attention?: string; type?: string; page?: string; label?: string; tab?: string };
-}
-
-function isValidMailLabelTab(value: string | undefined): value is MailLabelTabValue {
-  return MAIL_LABEL_TABS.some((t) => t.value === value);
 }
 
 export default async function MailPage({ searchParams }: Props) {
@@ -230,9 +231,13 @@ async function renderMailPage(
   // `label`. "all" is app-only (no Gmail label) and folds to null, same as
   // an absent/invalid param.
   const isPersonal = resolveAccountMode(accountType) === "personal";
-  const rawLabelParam = searchParams.label ?? searchParams.tab;
-  const activeLabelTab =
-    isValidMailLabelTab(rawLabelParam) && rawLabelParam !== "all" ? rawLabelParam : null;
+  // coerceMailLabelTab folds legacy `tab=important`/`tab=other` links onto
+  // their nearest surviving bucket ("all"/"handled" respectively) and any
+  // other unrecognized/missing value onto "all". "all" is app-only (no
+  // Gmail label backs it — see lib/mail-label-tabs.ts) so it folds to null
+  // here, same as an absent/invalid param.
+  const coercedLabelTab = coerceMailLabelTab({ label: searchParams.label, tab: searchParams.tab });
+  const activeLabelTab: MailLabelTabValue | null = coercedLabelTab === "all" ? null : coercedLabelTab;
   const returnTo = currentMailHref();
   const [desktopConversations] = await getCachedListData({
     tenantId,
@@ -315,7 +320,7 @@ async function renderMailPage(
             </Suspense>
           </div>
           <MailTopTabs
-            activeTab={activeLabelTab}
+            activeLabel={activeLabelTab}
             counts={tabCounts}
             // Only `q` is preserved across tab switches; status/type/sales are
             // intentionally dropped since the desktop label tabs replace those
