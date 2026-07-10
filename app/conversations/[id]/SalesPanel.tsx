@@ -9,6 +9,10 @@ type SalesPanelProps = {
   extractedBudget: string | null
   extractedTimeline: string | null
   suggestedAction: string
+  /** CRM pipeline label (Lead/Reschedule/Pricing/Complaint) — business-only,
+   * scoped to the sales pipeline rather than the general FlowDesk label
+   * vocabulary, so it lives here instead of the general contact card. */
+  pipelineLabel: string | null
 }
 
 const STAGE_COLORS: Record<string, string> = {
@@ -18,16 +22,31 @@ const STAGE_COLORS: Record<string, string> = {
   closing: "bg-emerald-100 text-emerald-700",
 }
 
+const PIPELINE_LABELS = ["Lead", "Reschedule", "Pricing", "Complaint"] as const
+
 export default function SalesPanel({
   conversationId,
   closingStage,
   extractedBudget,
   extractedTimeline,
   suggestedAction,
+  pipelineLabel,
 }: SalesPanelProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [savingLabel, setSavingLabel] = useState(false)
+
+  async function handlePipelineLabelChange(value: string) {
+    setSavingLabel(true)
+    await fetch(`/api/conversations/${conversationId}/label`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: value === "none" ? null : value }),
+    })
+    setSavingLabel(false)
+    router.refresh()
+  }
 
   async function handleGenerateDraft() {
     setLoading(true)
@@ -84,6 +103,23 @@ export default function SalesPanel({
           {loading ? "Generating…" : "Generate closing draft"}
         </button>
         {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+
+        <div className="mt-2 border-t border-emerald-100 pt-2">
+          <label className="text-xs font-medium text-emerald-800">Pipeline label</label>
+          <select
+            value={pipelineLabel ?? "none"}
+            onChange={(e) => handlePipelineLabelChange(e.target.value)}
+            disabled={savingLabel}
+            className="mt-1 block w-full rounded-lg border border-emerald-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-60"
+          >
+            <option value="none">No label</option>
+            {PIPELINE_LABELS.map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
     </section>
   )

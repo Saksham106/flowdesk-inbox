@@ -322,4 +322,10 @@ describe("dashboard and inbox UI source contracts", () => {
     expect(page).toContain("approvals")
     expect(page).toContain("<TrainAgentPanel")
   })
+
+  it("mail row uses label language rather than tag language", () => {
+    const row = source("app/components/MailInboxRow.tsx")
+    expect(row).toContain("Change label")
+    expect(row).not.toContain("Change tag")
+  })
 })

@@ -12,7 +12,6 @@ import WorkItemsPanel from "@/app/conversations/[id]/WorkItemsPanel";
 import ThreadStatusHeader from "@/app/conversations/[id]/ThreadStatusHeader";
 import StatusButton from "@/app/conversations/[id]/StatusButton";
 import MarkReadButton from "@/app/conversations/[id]/MarkReadButton";
-import LabelSelect from "@/app/conversations/[id]/LabelSelect"
 import WorkflowStatusSelect from "@/app/conversations/[id]/WorkflowStatusSelect";
 import SaveContactForm from "@/app/conversations/[id]/SaveContactForm";
 import AutoRefresh from "@/app/components/AutoRefresh"
@@ -464,15 +463,6 @@ export default async function ConversationPage({
           phoneE164={conversation.externalThreadId}
         />
       )}
-      {!isPersonal && (
-        <div className="mt-3 border-t border-slate-100 pt-3">
-          <LabelSelect
-            conversationId={conversation.id}
-            currentLabel={conversation.label}
-            isPersonal={isPersonal}
-          />
-        </div>
-      )}
       <div className="mt-3 border-t border-slate-100 pt-3">
         <WorkflowStatusSelect
           conversationId={conversation.id}
@@ -528,6 +518,7 @@ export default async function ConversationPage({
           extractedBudget={extractedBudget}
           extractedTimeline={extractedTimeline}
           suggestedAction={salesSuggestedAction}
+          pipelineLabel={conversation.label}
         />
       )}
       {conversation.channel.type === "email" && !isPersonal && !isAutoEmailConversation && (

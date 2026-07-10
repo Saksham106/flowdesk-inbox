@@ -3,13 +3,13 @@
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import type { WorkflowStatus } from "@/lib/workflow-status"
+// Type-only import — safe from a client component since it's erased at
+// compile time and never pulls lib/gmail-labels.ts's server-only runtime
+// (prisma, etc.) into the browser bundle.
+import type { FlowDeskGmailLabelName } from "@/lib/gmail-labels"
+import { FLOWDESK_LABEL_OPTIONS, currentFlowDeskLabel } from "@/lib/flowdesk-label-display"
 
-export const WORKFLOW_OPTIONS: { value: string; label: string; dot: string }[] = [
-  { value: "needs_reply", label: "Needs Reply", dot: "bg-red-500" },
-  { value: "waiting_on",  label: "Waiting On",  dot: "bg-indigo-400" },
-  { value: "read_later",  label: "Read Later",  dot: "bg-violet-400" },
-  { value: "done",        label: "Done",        dot: "bg-emerald-500" },
-]
+export { FLOWDESK_LABEL_OPTIONS }
 
 type UseInboxRowActionsParams = {
   id: string
@@ -17,7 +17,10 @@ type UseInboxRowActionsParams = {
   isUnread: boolean
   initialStatus: string
   attentionCategory: string | null
+  contentType?: string | null
   workflowStatus: WorkflowStatus
+  /** Whether the conversation currently has a proposed/approved draft — gates manual "Autodrafted" selection. */
+  hasDraft?: boolean
 }
 
 /**
@@ -30,14 +33,18 @@ export function useInboxRowActions({
   isUnread: initialIsUnread,
   initialStatus,
   attentionCategory: initialAttention,
+  contentType,
   workflowStatus: initialWorkflowStatus,
+  hasDraft = false,
 }: UseInboxRowActionsParams) {
   const router = useRouter()
   // Derive isRead from the pre-computed isUnread prop (considers readAt + gmailUnread).
   // FYI classification does not affect read state — an unread FYI is still visually unread.
   const [isRead, setIsRead]         = useState(!initialIsUnread)
   const [status, setStatus]         = useState(initialStatus)
-  const [attention, setAttention]   = useState(initialAttention)
+  const [label, setLabel] = useState<FlowDeskGmailLabelName>(
+    currentFlowDeskLabel(initialAttention, contentType, initialWorkflowStatus)
+  )
   const [workflowStatus, setWorkflowStatus] = useState(initialWorkflowStatus)
   const [showAttention, setShowAtt] = useState(false)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null)
@@ -150,30 +157,36 @@ export function useInboxRowActions({
     setShowAtt((v) => !v)
   }
 
-  async function changeAttention(e: React.MouseEvent, cat: string) {
+  // Changes the conversation's canonical FlowDesk label via the unified
+  // manual-correction endpoint (lib/conversation-labels.ts). "Autodrafted" is
+  // never selectable here unless a draft already exists — enforced both by
+  // disabling the option in the UI (see FLOWDESK_LABEL_OPTIONS consumers) and
+  // by this guard, since the server also rejects it.
+  async function changeLabel(e: React.MouseEvent, next: FlowDeskGmailLabelName) {
     e.preventDefault()
     e.stopPropagation()
     if (pendingAction) return
+    if (next === "Autodrafted" && !hasDraft) return
     setShowAtt(false)
-    const prev = attention
-    setAttention(cat)
-    setWorkflowStatus(cat as WorkflowStatus)
+    const prevLabel = label
+    const prevWorkflowStatus = workflowStatus
+    setLabel(next)
     setPendingAction("attention")
     try {
-      const res = await fetch(`/api/conversations/${id}/workflow-status`, {
+      const res = await fetch(`/api/conversations/${id}/flowdesk-label`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workflowStatus: cat }),
+        body: JSON.stringify({ label: next }),
       })
       if (!res.ok) {
-        setAttention(prev)
-        setWorkflowStatus(initialWorkflowStatus)
+        setLabel(prevLabel)
+        setWorkflowStatus(prevWorkflowStatus)
         return
       }
       router.refresh()
     } catch {
-      setAttention(prev)
-      setWorkflowStatus(initialWorkflowStatus)
+      setLabel(prevLabel)
+      setWorkflowStatus(prevWorkflowStatus)
     } finally {
       setPendingAction(null)
     }
@@ -183,7 +196,7 @@ export function useInboxRowActions({
     isRead,
     isUnread,
     status,
-    attention,
+    label,
     workflowStatus,
     isClosed,
     showAttention,
@@ -196,6 +209,6 @@ export function useInboxRowActions({
     toggleStatus,
     archiveConversation,
     openAttentionDropdown,
-    changeAttention,
+    changeLabel,
   }
 }

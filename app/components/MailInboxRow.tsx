@@ -4,7 +4,7 @@ import { createPortal } from "react-dom"
 import Link from "next/link"
 import type { WorkflowStatus } from "@/lib/workflow-status"
 import { ContentTypeBadge } from "@/app/components/badges"
-import { useInboxRowActions, WORKFLOW_OPTIONS } from "@/app/components/useInboxRowActions"
+import { useInboxRowActions, FLOWDESK_LABEL_OPTIONS } from "@/app/components/useInboxRowActions"
 
 type MailInboxRowProps = {
   id: string
@@ -69,7 +69,7 @@ export default function MailInboxRow({
   const {
     isRead,
     isUnread,
-    attention,
+    label,
     workflowStatus,
     isClosed,
     showAttention,
@@ -82,13 +82,15 @@ export default function MailInboxRow({
     toggleStatus,
     archiveConversation,
     openAttentionDropdown,
-    changeAttention,
+    changeLabel,
   } = useInboxRowActions({
     id,
     isUnread: initialIsUnread,
     initialStatus,
     attentionCategory: initialAttention,
+    contentType,
     workflowStatus: initialWorkflowStatus,
+    hasDraft,
   })
 
   const subjectLine = subject && subject.trim() ? subject : snippet
@@ -188,8 +190,8 @@ export default function MailInboxRow({
             type="button"
             onClick={openAttentionDropdown}
             disabled={!!pendingAction}
-            title="Change tag"
-            aria-label="Change tag"
+            title="Change label"
+            aria-label="Change label"
             aria-expanded={showAttention}
             className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-40 disabled:cursor-wait"
           >
@@ -278,19 +280,24 @@ export default function MailInboxRow({
           style={{ position: "fixed", top: dropdownPos.top, right: dropdownPos.right, zIndex: 9999 }}
           className="min-w-[126px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
         >
-          {WORKFLOW_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={(e) => changeAttention(e, opt.value)}
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] hover:bg-slate-50 focus:outline-none ${
-                attention === opt.value ? "font-semibold text-slate-900" : "text-slate-700"
-              }`}
-            >
-              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${opt.dot}`} />
-              {opt.label}
-            </button>
-          ))}
+          {FLOWDESK_LABEL_OPTIONS.map((opt) => {
+            const disabled = opt.value === "Autodrafted" && !hasDraft
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                disabled={disabled}
+                onClick={(e) => changeLabel(e, opt.value)}
+                title={disabled ? "Only available when a draft is proposed or approved" : undefined}
+                className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] hover:bg-slate-50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent ${
+                  label === opt.value ? "font-semibold text-slate-900" : "text-slate-700"
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${opt.dot}`} />
+                {opt.label}
+              </button>
+            )
+          })}
         </div>,
         document.body
       )}
