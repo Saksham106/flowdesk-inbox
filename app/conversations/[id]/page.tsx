@@ -23,6 +23,8 @@ import AppRail from "@/app/components/AppRail";
 import AskFlowDeskPanel from "@/app/components/AskFlowDeskPanel";
 import AppListColumn from "@/app/components/AppListColumn";
 import DesktopResizablePanels from "@/app/components/DesktopResizablePanels";
+import MailTopTabs from "@/app/components/MailTopTabs";
+import { MAIL_LABEL_TABS, coerceMailLabelTab, type MailLabelTabValue } from "@/lib/mail-label-tabs";
 import {
   analyzeConversationForCommandCenter,
   buildRelationshipContext,
@@ -226,6 +228,17 @@ export default async function ConversationPage({
     : null;
   const returnSales = inboxReturnParams.get("sales") === "1";
   const returnQuery = inboxReturnParams.get("q") ?? undefined;
+  // Mirrors app/mail/page.tsx's coerceMailLabelTab usage so the label tab
+  // context a user came from (`?label=...`, or a legacy `?tab=...` link)
+  // survives opening a thread and is available to both the sticky
+  // MailTopTabs strip and the split view's own left list.
+  const returnLabel = coerceMailLabelTab({
+    label: inboxReturnParams.get("label") ?? undefined,
+    tab: inboxReturnParams.get("tab") ?? undefined,
+  });
+  const mailLabelCounts: Record<MailLabelTabValue, number> = Object.fromEntries(
+    MAIL_LABEL_TABS.map((t) => [t.value, 0])
+  ) as Record<MailLabelTabValue, number>;
   const gmailSyncChannels = gmailChannels
     .filter((channel) => channel.gmailCredential)
     .map((channel) => ({
@@ -666,21 +679,30 @@ export default async function ConversationPage({
       {/* ── DESKTOP SHELL (lg+) ── */}
       <div className="hidden lg:flex h-screen overflow-hidden bg-slate-50">
         <AppRail needsReplyCount={needsReplyCount} pendingApprovals={railPendingApprovals} />
-        <DesktopResizablePanels
-          storageKey="flowdesk.conversation.desktopPanels"
-          left={
-            <AppListColumn
-              tenantId={session.user.tenantId}
-              accountType={accountType}
-              activeConversationId={conversation.id}
-              status={returnStatus}
-              q={returnQuery}
-              sales={returnSales}
-              gmailChannels={gmailSyncChannels}
-              className="w-full shrink-0"
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="shrink-0 border-b border-slate-200 bg-white">
+            <MailTopTabs
+              activeLabel={returnLabel === "all" ? null : returnLabel}
+              counts={mailLabelCounts}
+              preserveQuery={{ q: returnQuery }}
             />
-          }
-          main={
+          </div>
+          <DesktopResizablePanels
+            storageKey="flowdesk.conversation.desktopPanels"
+            left={
+              <AppListColumn
+                tenantId={session.user.tenantId}
+                accountType={accountType}
+                activeConversationId={conversation.id}
+                status={returnStatus}
+                q={returnQuery}
+                sales={returnSales}
+                labelTab={returnLabel}
+                gmailChannels={gmailSyncChannels}
+                className="w-full shrink-0"
+              />
+            }
+            main={
             <div className="flex h-full min-w-0 flex-col overflow-hidden border-r border-slate-200 bg-white">
               {/* Sticky thread header */}
               <div className="shrink-0 border-b border-slate-200 px-5 py-3">
@@ -760,7 +782,8 @@ export default async function ConversationPage({
               {phase4Panels}
             </div>
           }
-        />
+          />
+        </div>
       </div>
 
       {/* ── MOBILE LAYOUT (< lg) ── */}

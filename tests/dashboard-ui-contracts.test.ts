@@ -308,6 +308,13 @@ describe("dashboard and inbox UI source contracts", () => {
     expect(page).toContain("entry.createdAt.toLocaleString()")
   })
 
+  it("conversation detail keeps Mail top tabs in the desktop shell", () => {
+    const page = source("app/conversations/[id]/page.tsx")
+    expect(page).toContain("MailTopTabs")
+    expect(page).toContain("activeLabel")
+    expect(page).toContain("returnLabel")
+  })
+
   it("assistant Settings clarifies automation-level gating for higher-risk actions", () => {
     const page = source("app/assistant/settings/page.tsx")
 

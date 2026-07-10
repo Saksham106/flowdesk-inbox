@@ -9,7 +9,7 @@ import { resolveAccountMode } from "@/lib/account-mode"
 import { inboxTag } from "@/lib/cache-tags"
 import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status"
 import { CONTENT_TYPE_FILTERS, emailTypesForContentFilter } from "@/lib/content-type-filters"
-import { buildMailLabelTabWhere, type MailLabelTabValue } from "@/lib/mail-label-tabs"
+import { buildMailLabelTabWhere, matchesMailLabelTab, type MailLabelTabValue } from "@/lib/mail-label-tabs"
 
 interface Props {
   tenantId: string
@@ -19,6 +19,7 @@ interface Props {
   contentType?: string | null
   q?: string
   sales?: boolean
+  labelTab?: MailLabelTabValue | null
   statusCounts?: { status: string; _count: { status: number } }[]
   gmailChannels?: {
     id: string
@@ -268,6 +269,7 @@ export default async function AppListColumn({
   contentType,
   q,
   sales = false,
+  labelTab,
   statusCounts,
   gmailChannels = [],
   className = "w-[280px] shrink-0",
@@ -281,6 +283,7 @@ export default async function AppListColumn({
     contentType,
     q,
     sales: sales && isBusiness,
+    labelTab,
   })
 
   const rawCounts = (statusCounts ?? await getCachedStatusCounts(tenantId)) as { status: string; _count: { status: number } }[]
@@ -308,26 +311,37 @@ export default async function AppListColumn({
     if (sales && isBusiness) p.set("sales", "1")
     else if (status) p.set("status", status)
     if (q) p.set("q", q)
+    if (labelTab && labelTab !== "all") p.set("label", labelTab)
     const qs = p.toString()
     return qs ? `/mail?${qs}` : "/mail"
   }
 
   const returnTo = currentInboxHref()
-  const scrollKey = [status ?? "all", contentType ?? "all", q ?? "", sales ? "s" : ""].join("_")
-  const emptyMessage = q || status || contentType || sales ? "No results." : "No conversations yet."
-  const displayConversations =
-    status === "needs_reply"
-      ? conversations.filter((conv) => {
-          const ws = deriveWorkflowStatus({
-            status: conv.status,
-            userState: conv.userState,
-            draftStatus: conv.draft?.status,
-            attentionCategory: attentionCategory(conv),
-            emailType: conv.stateRecord?.emailType,
-          })
-          return ws !== "done"
-        })
-      : conversations
+  const scrollKey = [status ?? "all", contentType ?? "all", q ?? "", sales ? "s" : "", labelTab ?? "all"].join("_")
+  const emptyMessage = q || status || contentType || sales || (labelTab && labelTab !== "all") ? "No results." : "No conversations yet."
+  const displayConversations = conversations.filter((conv) => {
+    const ws = deriveWorkflowStatus({
+      status: conv.status,
+      userState: conv.userState,
+      draftStatus: conv.draft?.status,
+      attentionCategory: attentionCategory(conv),
+      emailType: conv.stateRecord?.emailType,
+    })
+    if (status === "needs_reply" && ws === "done") return false
+    if (
+      labelTab &&
+      labelTab !== "all" &&
+      !matchesMailLabelTab(labelTab, {
+        workflowStatus: ws,
+        draftStatus: conv.draft?.status,
+        attentionCategory: attentionCategory(conv),
+        emailType: conv.stateRecord?.emailType ?? null,
+      })
+    ) {
+      return false
+    }
+    return true
+  })
 
   const listItems: InboxListItem[] = displayConversations.map((conv) =>
     mapConversationRowToListItem(conv, { activeConversationId, isPersonal, returnTo })
