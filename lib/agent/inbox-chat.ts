@@ -52,6 +52,7 @@ If the retrieved messages don't contain the answer, say so clearly. Do not make 
   if (!budgetCheck.allowed) {
     await recordAiUsageEvent({
       tenantId,
+      userId: aiContext?.userId,
       feature: "chat.inbox",
       model,
       estimatedInputTokens,
@@ -109,6 +110,7 @@ If the retrieved messages don't contain the answer, say so clearly. Do not make 
         : `OpenRouter request failed (${res.status})`
     await recordAiUsageEvent({
       tenantId,
+      userId: aiContext.userId,
       feature: "chat.inbox",
       model,
       estimatedInputTokens,
@@ -152,6 +154,7 @@ If the retrieved messages don't contain the answer, say so clearly. Do not make 
   } catch (err) {
     await recordAiUsageEvent({
       tenantId,
+      userId: aiContext.userId,
       feature: "chat.inbox",
       model,
       estimatedInputTokens,
@@ -163,6 +166,7 @@ If the retrieved messages don't contain the answer, say so clearly. Do not make 
 
   await recordAiUsageEvent({
     tenantId,
+    userId: aiContext.userId,
     feature: "chat.inbox",
     model,
     estimatedInputTokens,

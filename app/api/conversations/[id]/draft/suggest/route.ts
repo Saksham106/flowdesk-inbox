@@ -113,15 +113,11 @@ export async function POST(
       })
       result = normalizeDraftReplyOutput(JSON.stringify(output), resolvedModel)
     } catch (err) {
+      // Budget checks and AiUsageEvent recording (success/blocked/failed) happen
+      // inside runAiJsonFeature under the "autopilot.draft" feature — recording
+      // our own AiUsageEvent on top would double-count spend.
       const message = err instanceof Error ? err.message : "Failed to generate AI draft"
       const status = message.includes("spend limit reached") ? 429 : 502
-      await recordAiUsageEvent({
-        tenantId: session.user.tenantId,
-        feature: "draft.suggest",
-        model: "unknown",
-        estimatedInputTokens: estimatedPromptTokens,
-        status: status === 429 ? "blocked" : "failed",
-      })
       return NextResponse.json({ error: message }, { status })
     }
   } else {
@@ -169,15 +165,12 @@ export async function POST(
     try {
       result = await generateDraftReply(draftInput)
     } catch (err) {
+      // generateDraftReply -> generateDraftReplyWithOpenAI already records
+      // succeeded/blocked/failed AiUsageEvents under "autopilot.draft" via
+      // runAiJsonFeature — recording our own AiUsageEvent on top would
+      // double-count spend.
       const message = err instanceof Error ? err.message : "Failed to generate AI draft"
       const status = message.includes("spend limit reached") ? 429 : 502
-      await recordAiUsageEvent({
-        tenantId: session.user.tenantId,
-        feature: "draft.suggest",
-        model: "unknown",
-        estimatedInputTokens: estimatedPromptTokens,
-        status: status === 429 ? "blocked" : "failed",
-      })
       return NextResponse.json({ error: message }, { status })
     }
   }
@@ -275,15 +268,6 @@ export async function POST(
         metadata: metadataJson,
       },
     },
-  })
-
-  await recordAiUsageEvent({
-    tenantId: session.user.tenantId,
-    feature: "draft.suggest",
-    model: result.model,
-    estimatedInputTokens: estimatedPromptTokens,
-    estimatedOutputTokens: estimateTokenCount(JSON.stringify(result)),
-    status: "succeeded",
   })
 
   revalidateInboxViews(session.user.tenantId, conversation.id)

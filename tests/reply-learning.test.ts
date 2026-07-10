@@ -150,19 +150,20 @@ describe('trainLearnedReplyProfile', () => {
     const createData = mockProfileCreate.mock.calls[0][0].data
     expect(createData.styleSummaryJson).toEqual({ tone: 'warm', averageLength: 'short' })
     expect(JSON.stringify(createData)).not.toContain('I will send this over today')
-    expect(mockUsageCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          tenantId: 'tenant-A',
-          feature: 'reply_learning.train',
-          model: 'gpt-test',
-          status: 'succeeded',
-        }),
-      })
-    )
+    // Budget checks and AiUsageEvent recording (succeeded/blocked/failed) now
+    // happen inside runAiJsonFeature (via summarizeLearnedReplyProfile),
+    // keyed by "reply_learning.summarize" — not here. Recording our own
+    // "reply_learning.train" event on top of that would double-count spend
+    // for a single AI call, so this function no longer writes usage events.
+    expect(mockUsageCreate).not.toHaveBeenCalled()
   })
 
-  it('throws before summarizing when AI budget would be exceeded', async () => {
+  it('propagates the gateway budget-block error without a local pre-check', async () => {
+    // Budget gating now happens inside the gateway (via
+    // summarizeLearnedReplyProfile -> runAiJsonFeature), which throws when
+    // the tenant is over budget. trainLearnedReplyProfile no longer does its
+    // own pre-check or AiUsageEvent recording (that's the gateway's job, and
+    // doing it here too would double-count spend).
     mockMessageFindMany.mockResolvedValue(
       Array.from({ length: 5 }, (_, index) => ({
         body: makeBody(index),
@@ -170,10 +171,7 @@ describe('trainLearnedReplyProfile', () => {
       }))
     )
     mockFetchGmailSentSamples.mockResolvedValue([])
-    mockCheckAiBudgetForTokens.mockResolvedValue({
-      allowed: false,
-      reason: 'Daily AI spend limit reached',
-    })
+    mockSummarize.mockRejectedValue(new Error('Daily AI spend limit reached'))
     mockUsageCreate.mockResolvedValue({})
 
     await expect(
@@ -184,16 +182,7 @@ describe('trainLearnedReplyProfile', () => {
       })
     ).rejects.toThrow('Daily AI spend limit reached')
 
-    expect(mockSummarize).not.toHaveBeenCalled()
-    expect(mockUsageCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          tenantId: 'tenant-A',
-          feature: 'reply_learning.train',
-          status: 'blocked',
-        }),
-      })
-    )
+    expect(mockUsageCreate).not.toHaveBeenCalled()
   })
 
   it('falls back to Gmail sent history when DB has fewer than 5 samples', async () => {

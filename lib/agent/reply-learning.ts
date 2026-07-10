@@ -1,8 +1,5 @@
 import type { Prisma } from "@prisma/client"
 
-import { checkAiBudgetForTokens } from "@/lib/ai/budget"
-import { buildLearnedReplyProfilePrompt } from "@/lib/ai/prompts/learned-reply-profile"
-import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import { summarizeLearnedReplyProfile } from "@/lib/ai/provider"
 import { prisma } from "@/lib/prisma"
 import { fetchGmailSentSamples } from "@/lib/google"
@@ -113,51 +110,20 @@ export async function trainLearnedReplyProfile(input: {
     )
   }
 
-  let result: Awaited<ReturnType<typeof summarizeLearnedReplyProfile>>
-  const model = process.env.OPENAI_LEARNING_MODEL || process.env.OPENAI_MODEL || "gpt-5.4-mini"
-  const estimatedInputTokens = estimateTokenCount(buildLearnedReplyProfilePrompt(samples))
-  const budgetCheck = await checkAiBudgetForTokens({
-    tenantId: input.tenantId,
-    model,
-    estimatedInputTokens,
-    estimatedOutputTokens: 800,
-  })
-  if (!budgetCheck.allowed) {
-    await recordAiUsageEvent({
-      tenantId: input.tenantId,
-      feature: "reply_learning.train",
-      model,
-      estimatedInputTokens,
-      status: "blocked",
-    })
-    throw new Error(budgetCheck.reason)
-  }
-
-  try {
-    result = await summarizeLearnedReplyProfile(
-      samples,
-      input.aiContext
-        ? { tenantId: input.tenantId, userId: input.aiContext.userId, userEmail: input.aiContext.userEmail }
-        : undefined
-    )
-    await recordAiUsageEvent({
-      tenantId: input.tenantId,
-      feature: "reply_learning.train",
-      model: result.model,
-      estimatedInputTokens: result.estimatedInputTokens,
-      estimatedOutputTokens: result.estimatedOutputTokens,
-      status: "succeeded",
-    })
-  } catch (err) {
-    await recordAiUsageEvent({
-      tenantId: input.tenantId,
-      feature: "reply_learning.train",
-      model,
-      estimatedInputTokens,
-      status: "failed",
-    })
-    throw err
-  }
+  // Budget checks and AiUsageEvent recording (success/blocked/failed) happen
+  // inside runAiJsonFeature (via summarizeLearnedReplyProfile ->
+  // summarizeLearnedReplyProfileWithOpenAI), keyed by the "reply_learning.summarize"
+  // feature. That gateway call is the same underlying AI call this function
+  // used to record separately as "reply_learning.train" — recording our own
+  // AiUsageEvent on top would double-count spend for a single call. The
+  // gateway throws on both a budget-block and a generation failure, so this
+  // just lets that error propagate to the caller.
+  const result = await summarizeLearnedReplyProfile(
+    samples,
+    input.aiContext
+      ? { tenantId: input.tenantId, userId: input.aiContext.userId, userEmail: input.aiContext.userEmail }
+      : undefined
+  )
 
   const data = {
     tenantId: input.tenantId,

@@ -5,9 +5,6 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { salesCrmEnabled } from "@/lib/tenant-capabilities"
 import { generateMeetingPrep } from "@/lib/ai/provider"
-import { buildMeetingPrepPrompt } from "@/lib/ai/prompts/meeting-prep"
-import { checkAiBudgetForTokens } from "@/lib/ai/budget"
-import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import type { MeetingPrepAttendee } from "@/lib/ai/prompts/meeting-prep"
 
 export const runtime = "nodejs"
@@ -99,50 +96,20 @@ export async function POST(request: Request) {
     eventStart: new Date(eventStart),
     attendees,
   }
-  const prompt = buildMeetingPrepPrompt(input)
-  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
-  const estimatedInputTokens = estimateTokenCount(prompt)
-  const budgetCheck = await checkAiBudgetForTokens({
-    tenantId,
-    model,
-    estimatedInputTokens,
-    estimatedOutputTokens: 800,
-  })
-  if (!budgetCheck.allowed) {
-    await recordAiUsageEvent({
-      tenantId,
-      feature: "meeting_prep",
-      model,
-      estimatedInputTokens,
-      status: "blocked",
-    })
-    return NextResponse.json({ error: budgetCheck.reason }, { status: 429 })
-  }
 
+  // Budget checks and AiUsageEvent recording (success/blocked/failed) happen
+  // inside runAiJsonFeature (via generateMeetingPrep -> generateMeetingPrepWithOpenAI),
+  // keyed by the "meeting.prep" feature. The gateway throws on both a
+  // budget-block and a generation failure, so a single catch here covers
+  // both — recording our own AiUsageEvent on top would double-count spend.
   let result: Awaited<ReturnType<typeof generateMeetingPrep>>
   try {
     result = await generateMeetingPrep(input)
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to generate prep brief"
     const status = message.includes("spend limit reached") ? 429 : 502
-    await recordAiUsageEvent({
-      tenantId,
-      feature: "meeting_prep",
-      model,
-      estimatedInputTokens,
-      status: "failed",
-    })
     return NextResponse.json({ error: message }, { status })
   }
-
-  await recordAiUsageEvent({
-    tenantId,
-    feature: "meeting_prep",
-    model: result.model,
-    estimatedInputTokens,
-    estimatedOutputTokens: estimateTokenCount(JSON.stringify(result)),
-    status: "succeeded",
-  })
 
   await prisma.auditLog.create({
     data: {
