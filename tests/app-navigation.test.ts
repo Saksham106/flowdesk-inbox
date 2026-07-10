@@ -2,10 +2,9 @@ import { describe, it, expect } from "vitest"
 import { getPrimaryNav, getInboxNavigation } from "@/lib/app-navigation"
 
 describe("primary navigation", () => {
-  it("has exactly the 7 primary destinations in order", () => {
+  it("has exactly the 6 primary destinations in order", () => {
     const nav = getPrimaryNav()
     expect(nav.map((i) => i.href)).toEqual([
-      "/home",
       "/mail",
       "/assistant",
       "/approvals",
@@ -21,6 +20,11 @@ describe("primary navigation", () => {
     expect(hrefs).not.toContain("/search")
     expect(hrefs).not.toContain("/tasks")
     expect(hrefs).not.toContain("/chat")
+  })
+
+  it("does not duplicate Home — the F logo is the sole Home affordance", () => {
+    const nav = getPrimaryNav()
+    expect(nav.map((i) => i.href)).not.toContain("/home")
   })
 })
 

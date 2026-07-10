@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { plannedLabelsForRuleAction } from "@/lib/assistant-rule-view"
 
 type SenderRule = {
   id: string
@@ -293,6 +294,7 @@ export default function SenderRulesPanel({
             const dryRun = dryRuns[rule.id]
             const canEnable = rule.status !== "active" && Boolean(rule.lastDryRunAt || dryRun)
             const ruleVersions = versions[rule.id]
+            const plannedLabels = plannedLabelsForRuleAction(rule.actionJson)
             return (
               <div key={rule.id} className="rounded-lg border border-slate-200 bg-white px-4 py-3">
                 <div className="flex items-start justify-between gap-4">
@@ -303,6 +305,18 @@ export default function SenderRulesPanel({
                       <span className="font-medium">
                         {ATTENTION_LABELS[rule.actionJson.targetAttention] ?? rule.actionJson.targetAttention}
                       </span>
+                      {plannedLabels.length > 0 && (
+                        <span className="ml-2 inline-flex items-center gap-1">
+                          {plannedLabels.map((label) => (
+                            <span
+                              key={label}
+                              className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600"
+                            >
+                              → {label}
+                            </span>
+                          ))}
+                        </span>
+                      )}
                     </p>
                     <p className="mt-0.5 text-xs text-slate-400">
                       {rule.status === "draft" && (

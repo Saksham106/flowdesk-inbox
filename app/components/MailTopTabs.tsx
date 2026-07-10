@@ -1,9 +1,9 @@
 import Link from "next/link"
-import { MAIL_TOP_TABS, type MailTopTabValue } from "@/lib/mail-top-tabs"
+import { MAIL_LABEL_TABS, type MailLabelTabValue } from "@/lib/mail-label-tabs"
 
 type Props = {
-  activeTab: MailTopTabValue | null
-  counts: Record<MailTopTabValue, number>
+  activeTab: MailLabelTabValue | null
+  counts: Record<MailLabelTabValue, number>
   /** Other active search params to preserve when switching tabs (e.g. q). */
   preserveQuery?: Record<string, string | undefined>
 }
@@ -15,10 +15,15 @@ export default function MailTopTabs({ activeTab, counts, preserveQuery }: Props)
 
   return (
     <nav className="flex items-center gap-1 overflow-x-auto border-b border-slate-200 px-4">
-      {MAIL_TOP_TABS.map((tab) => {
+      {MAIL_LABEL_TABS.map((tab) => {
         const params = new URLSearchParams(baseParams)
-        params.set("tab", tab.value)
-        const isActive = activeTab === tab.value
+        // "All" is app-only — no Gmail label backs it — so its URL omits the
+        // `label` param entirely rather than encoding a synthetic "all" value.
+        if (tab.value !== "all") params.set("label", tab.value)
+        // A null activeTab (no/invalid `label` param) means "All" — there's
+        // no `?label=all` URL for it, so it's the implicit default rather
+        // than a value activeTab is ever literally set to.
+        const isActive = tab.value === "all" ? activeTab === null : activeTab === tab.value
         return (
           <Link
             key={tab.value}

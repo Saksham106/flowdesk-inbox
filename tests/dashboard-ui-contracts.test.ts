@@ -181,11 +181,32 @@ describe("dashboard and inbox UI source contracts", () => {
     }
   })
 
-  it("assistant routes render inside the app rail/sidebar shell", () => {
+  it("desktop rail uses the F logo as the only Home affordance", () => {
+    const rail = source("app/components/AppRail.tsx")
+    const nav = source("lib/app-navigation.ts")
+
+    expect(rail).toContain('href="/home"')
+    expect(rail).toContain('aria-label="Go to FlowDesk home"')
+    expect(nav).not.toContain('{ label: "Home", href: "/home" }')
+  })
+
+  it("expanded AppSidebar is removed from shell pages", () => {
+    for (const path of [
+      "app/mail/page.tsx",
+      "app/assistant/layout.tsx",
+      "app/clean-inbox/page.tsx",
+      "app/clean-inbox/unsubscribe/page.tsx",
+      "app/clean-inbox/analytics/page.tsx",
+      "app/tools/page.tsx",
+    ]) {
+      expect(source(path)).not.toContain("AppSidebar")
+    }
+  })
+
+  it("assistant routes render inside the app rail shell", () => {
     const layout = source("app/assistant/layout.tsx")
 
     expect(layout).toContain("AppRail")
-    expect(layout).toContain("AppSidebar")
     expect(layout).toContain("getAppShellContext")
   })
 
@@ -211,14 +232,14 @@ describe("dashboard and inbox UI source contracts", () => {
     }
   })
 
-  it("desktop Mail top-tab views are preserved in query and return links", () => {
+  it("desktop Mail label-tab views are preserved in query and return links", () => {
     const mail = source("app/mail/page.tsx")
     const list = source("app/components/AppListColumn.tsx")
 
-    expect(mail).toContain("if (activeTopTab) params.set(\"tab\", activeTopTab)")
-    expect(mail).toContain("topTab: activeTopTab")
-    expect(list).toContain("buildMailTopTabWhere(input.topTab)")
-    expect(list).toContain('input.topTab ?? "no-top-tab"')
+    expect(mail).toContain("if (activeLabelTab) params.set(\"label\", activeLabelTab)")
+    expect(mail).toContain("labelTab: activeLabelTab")
+    expect(list).toContain("buildMailLabelTabWhere(input.labelTab)")
+    expect(list).toContain('input.labelTab ?? "no-label-tab"')
   })
 
   it("settings exposes Gmail operator health for sync, queues, and agent jobs", () => {
@@ -233,5 +254,65 @@ describe("dashboard and inbox UI source contracts", () => {
     expect(panel).toContain("Gmail operator health")
     expect(panel).toContain("writeback")
     expect(panel).toContain("agent jobs")
+  })
+
+  it("approvals renders in the app rail shell and explains empty state sources", () => {
+    const page = source("app/approvals/page.tsx")
+    const list = source("app/approvals/ApprovalList.tsx")
+
+    expect(page).toContain("AppRail")
+    expect(page).toContain("AskFlowDeskPanel")
+    expect(page).toContain("getAppShellContext")
+    expect(list).toContain("Draft send approvals")
+    expect(list).toContain("Calendar booking approvals")
+    expect(list).not.toContain("fake")
+  })
+
+  it("assistant Rules page shows a rule summary computed from all agent rules", () => {
+    const page = source("app/assistant/rules/page.tsx")
+
+    expect(page).toContain("summarizeAssistantRules")
+    expect(page).toContain("summarizeAssistantRules(agentRules)")
+    expect(page).toContain("function Stat(")
+    expect(page).toContain("<SenderRulesPanel")
+  })
+
+  it("static rules display their planned Gmail label via plannedLabelsForRuleAction", () => {
+    const panel = source("app/settings/SenderRulesPanel.tsx")
+
+    expect(panel).toContain(
+      'import { plannedLabelsForRuleAction } from "@/lib/assistant-rule-view"'
+    )
+    expect(panel).toContain("plannedLabelsForRuleAction(rule.actionJson)")
+  })
+
+  it("Test Rules is a server-loaded rule select, not a freeform id input", () => {
+    const page = source("app/assistant/test-rules/page.tsx")
+    const client = source("app/assistant/TestRulesClient.tsx")
+
+    expect(page).not.toContain('"use client"')
+    expect(page).toContain("prisma.agentRule.findMany")
+    expect(page).toContain("<TestRulesClient rules={ruleOptions} />")
+    expect(client).toContain('"use client"')
+    expect(client).toContain("<select")
+    expect(client).not.toContain('placeholder="Rule ID"')
+    expect(client).toContain("/api/agent-rules/dry-run")
+  })
+
+  it("assistant History renders readable rule action labels with raw action as secondary text", () => {
+    const page = source("app/assistant/history/page.tsx")
+
+    expect(page).toContain("RULE_ACTION_LABELS")
+    expect(page).toContain('"agent_rule.create": "Rule created"')
+    expect(page).toContain("RULE_ACTION_LABELS[entry.action] ?? entry.action")
+    expect(page).toContain("entry.createdAt.toLocaleString()")
+  })
+
+  it("assistant Settings clarifies automation-level gating for higher-risk actions", () => {
+    const page = source("app/assistant/settings/page.tsx")
+
+    expect(page).toContain("automation level")
+    expect(page).toContain("approvals")
+    expect(page).toContain("<TrainAgentPanel")
   })
 })

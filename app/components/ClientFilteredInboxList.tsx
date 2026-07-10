@@ -24,6 +24,7 @@ export type InboxListItem = {
   statusText: string
   statusLabel: string
   hasDraft: boolean
+  draftStatus: string | null
   initialStatus: string
   attentionCategory: string | null
   contentType: string | null

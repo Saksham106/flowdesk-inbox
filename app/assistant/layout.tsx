@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 
 import AssistantTabNav from "@/app/assistant/AssistantTabNav";
 import AppRail from "@/app/components/AppRail";
-import AppSidebar from "@/app/components/AppSidebar";
 import AskFlowDeskPanel from "@/app/components/AskFlowDeskPanel";
 import { authOptions } from "@/lib/auth";
 import { getAppShellContext } from "@/lib/app-shell";
@@ -21,7 +20,6 @@ export default async function AssistantLayout({ children }: { children: ReactNod
     <>
       <div className="hidden lg:flex lg:h-screen">
         <AppRail needsReplyCount={needsReplyCount} pendingApprovals={pendingApprovals} />
-        <AppSidebar />
         <div className="flex flex-1 flex-col overflow-y-auto bg-slate-50">
           <AssistantContent>{children}</AssistantContent>
         </div>
