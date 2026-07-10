@@ -150,4 +150,14 @@ describe("summarizeAiUsage", () => {
     expect(summary.dailyRemainingUsd).toBe(0)
     expect(summary.monthlyRemainingUsd).toBe(0)
   })
+
+  it("prefers actual provider cost over estimated cost", () => {
+    const summary = summarizeAiUsage(
+      [event({ estimatedCostUsd: 0.5, actualCostUsd: 0.02 } as Partial<AiUsageEventRow>)],
+      { dailyLimitUsd: 5, monthlyLimitUsd: 50 },
+      now
+    )
+    expect(summary.dailyUsedUsd).toBeCloseTo(0.02)
+    expect(summary.monthlyUsedUsd).toBeCloseTo(0.02)
+  })
 })

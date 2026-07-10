@@ -28,7 +28,15 @@ export default async function DataSettingsPage() {
     }),
     prisma.aiUsageEvent.findMany({
       where: { tenantId: session.user.tenantId, createdAt: { gte: startOfMonthUtc(new Date()) } },
-      select: { feature: true, estimatedCostUsd: true, status: true, createdAt: true },
+      select: {
+        feature: true,
+        estimatedCostUsd: true,
+        actualCostUsd: true,
+        status: true,
+        createdAt: true,
+        userId: true,
+        provider: true,
+      },
     }),
   ]);
 
@@ -57,8 +65,9 @@ export default async function DataSettingsPage() {
             </li>
             <li>
               <span className="font-medium text-slate-900">AI processing:</span> portions of
-              email content are sent to OpenAI to classify messages and generate drafts. Your
-              email is never sold, never used for ads, and never used to train AI models.
+              email content are sent to OpenRouter (using per-user provisioned API keys) to
+              classify messages and generate drafts. Your email is never sold, never used for
+              ads, and never used to train AI models.
             </li>
             <li>
               <span className="font-medium text-slate-900">Deletion:</span> disconnecting Gmail

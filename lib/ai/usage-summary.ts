@@ -7,6 +7,9 @@ export type AiUsageEventRow = {
   estimatedCostUsd: number
   status: string
   createdAt: Date
+  actualCostUsd?: number | null
+  userId?: string | null
+  provider?: string | null
 }
 
 export type AiFeatureUsage = {
@@ -91,8 +94,9 @@ export function summarizeAiUsage(
     if (event.status === "blocked") {
       row.monthlyBlocked += 1
     } else if (event.status === "succeeded") {
-      row.monthlyCostUsd += event.estimatedCostUsd
-      if (event.createdAt >= dayStart) row.dailyCostUsd += event.estimatedCostUsd
+      const cost = event.actualCostUsd ?? event.estimatedCostUsd
+      row.monthlyCostUsd += cost
+      if (event.createdAt >= dayStart) row.dailyCostUsd += cost
     }
   }
 

@@ -54,7 +54,7 @@ Email is the active channel. SMS may return later only after customer demand jus
 - **PostgreSQL + Prisma 5**
 - **NextAuth** (credentials-based auth, JWT sessions)
 - **Google APIs** — Gmail API (email read/reply/modify/labels) + Google Calendar API (availability + events)
-- **OpenAI** — draft suggestions, thread explanations, lead scoring, meeting prep/follow-up, reply-learning profiles, and gated relationship-memory extraction
+- **OpenRouter** (default AI provider, per-user provisioned child keys) — draft suggestions, thread explanations, lead scoring, meeting prep/follow-up, reply-learning profiles, and gated relationship-memory extraction
 - **MindBody Public API v6** — optional connector foundation
 - **Railway** — hosting + managed Postgres
 
@@ -87,8 +87,10 @@ Required variables:
 - `NEXTAUTH_SECRET` — generate with `openssl rand -base64 32`
 - `ENCRYPTION_SECRET` — generate with `openssl rand -base64 32`
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — see Google OAuth setup below
-- `OPENAI_API_KEY` — required for AI draft suggestions, explanations, lead scoring, meeting prep/follow-up, reply-learning, inbox chat, agent-rule compilation, and gated relationship-memory extraction
-- `OPENAI_MODEL` — defaults/recommended value: `gpt-5.4-mini`
+- `OPENROUTER_MANAGEMENT_API_KEY` — OpenRouter is the default AI provider for AI draft suggestions, explanations, lead scoring, meeting prep/follow-up, reply-learning, inbox chat, agent-rule compilation, and gated relationship-memory extraction. This management key lets FlowDesk provision one OpenRouter child key per FlowDesk user (not per tenant, not shared), so per-user usage and spend are tracked individually. `OPENAI_API_KEY` is **not** required for app AI.
+- `OPENROUTER_API_KEY` — optional shared fallback key used only outside production when no management key is configured (local dev convenience); production fails closed without a management key.
+- `OPENROUTER_MODEL` — defaults/recommended value: `anthropic/claude-sonnet-4.5`
+- `OPENROUTER_LEARNING_MODEL` — cheaper model used for reply-style learning, defaults to `anthropic/claude-haiku-4.5`
 
 ### 3. Start Postgres
 
@@ -221,8 +223,11 @@ Credentials are verified live against MindBody's API before being saved. Use Sit
 | `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth client secret |
 | `MICROSOFT_CLIENT_ID` | For Outlook | Microsoft Entra application (client) ID |
 | `MICROSOFT_CLIENT_SECRET` | For Outlook | Microsoft Entra application client secret |
-| `OPENAI_API_KEY` | Yes | OpenAI API key for AI draft suggestions, explanations, lead scoring, meeting prep/follow-up, reply-learning, inbox chat, agent-rule compilation, and gated relationship memory |
-| `OPENAI_MODEL` | Yes | OpenAI model used for AI features; defaults/recommended value: `gpt-5.4-mini` |
+| `OPENROUTER_MANAGEMENT_API_KEY` | Yes | Provisions per-user OpenRouter child keys for AI draft suggestions, explanations, lead scoring, meeting prep/follow-up, reply-learning, inbox chat, agent-rule compilation, and gated relationship memory. OpenRouter is the default AI provider; `OPENAI_API_KEY` is not required for app AI. |
+| `OPENROUTER_API_KEY` | Dev only | Shared fallback key used outside production when no management key is configured |
+| `OPENROUTER_MODEL` | No | Default OpenRouter model, e.g. `anthropic/claude-sonnet-4.5` |
+| `OPENROUTER_LEARNING_MODEL` | No | Cheaper OpenRouter model for reply-style learning, e.g. `anthropic/claude-haiku-4.5` |
+| `OPENROUTER_CHILD_KEY_MONTHLY_LIMIT_USD` | No | Monthly spend limit set on each provisioned per-user child key, defaults to `10` |
 | `GMAIL_PUSH_TOPIC` | Optional | Google Pub/Sub topic name for Gmail watch notifications, e.g. `projects/<project>/topics/<topic>` |
 | `GMAIL_PUSH_SECRET` | Optional | Shared secret for the Pub/Sub push endpoint at `/api/connectors/gmail/push?secret=...` |
 | `CRON_SECRET` | Required for cron | Bearer token for scheduled endpoints, including Gmail, Outlook, and agent jobs. Cron routes reject requests when this is unset; never configure schedulers with `Bearer undefined`. |
