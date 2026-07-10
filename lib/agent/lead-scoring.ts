@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { scoreLead } from "@/lib/ai/provider"
-import { buildLeadScoringPrompt, type LeadScoringPromptInput } from "@/lib/ai/prompts/lead-scoring"
+import type { LeadScoringPromptInput } from "@/lib/ai/prompts/lead-scoring"
 import { recordAiUsageEvent } from "@/lib/ai/usage"
 
 export function shouldRescoreLead(
