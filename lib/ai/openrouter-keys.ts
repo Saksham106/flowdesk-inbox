@@ -64,15 +64,32 @@ export async function getOpenRouterApiKeyForUser(input: {
 
   if (!apiKey || !keyHash) throw new Error("OpenRouter key provisioning response was missing key/hash")
 
-  await prisma.openRouterUserKey.create({
-    data: {
+  const resolvedLimit = Number.isFinite(limit) ? limit : 10
+  const encryptedApiKey = encryptString(apiKey)
+
+  // `userId` is unique on this model, so a disabled row falls through to this
+  // point (see the early-return guard above) and must be re-enabled in place
+  // rather than inserted, or `create` throws a P2002 unique-constraint error.
+  await prisma.openRouterUserKey.upsert({
+    where: { userId: input.userId },
+    create: {
       tenantId: input.tenantId,
       userId: input.userId,
       keyHash,
       keyLabel,
-      encryptedApiKey: encryptString(apiKey),
-      limitUsd: Number.isFinite(limit) ? limit : 10,
+      encryptedApiKey,
+      limitUsd: resolvedLimit,
       limitReset: "monthly",
+    },
+    update: {
+      keyHash,
+      keyLabel,
+      encryptedApiKey,
+      limitUsd: resolvedLimit,
+      limitReset: "monthly",
+      disabled: false,
+      lastProvisionedAt: new Date(),
+      lastError: null,
     },
   })
 

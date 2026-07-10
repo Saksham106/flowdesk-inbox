@@ -43,6 +43,18 @@ export type RunAiJsonFeatureResult<T> = {
 export async function runAiJsonFeature<T>(input: RunAiJsonFeatureInput): Promise<RunAiJsonFeatureResult<T>> {
   const model = input.model ?? DEFAULT_MODEL
 
+  const recordEvent = (fields: Partial<Parameters<typeof recordAiUsageEvent>[0]>) =>
+    recordAiUsageEvent({
+      tenantId: input.tenantId,
+      userId: input.userId,
+      feature: input.feature,
+      model,
+      estimatedInputTokens: input.estimatedInputTokens,
+      estimatedOutputTokens: input.estimatedOutputTokens,
+      status: "failed",
+      ...fields,
+    })
+
   const budget = await checkAiBudgetForTokens({
     tenantId: input.tenantId,
     model,
@@ -51,13 +63,7 @@ export async function runAiJsonFeature<T>(input: RunAiJsonFeatureInput): Promise
   })
 
   if (!budget.allowed) {
-    await recordAiUsageEvent({
-      tenantId: input.tenantId,
-      userId: input.userId,
-      feature: input.feature,
-      model,
-      estimatedInputTokens: input.estimatedInputTokens,
-      estimatedOutputTokens: input.estimatedOutputTokens,
+    await recordEvent({
       status: "blocked",
       errorCode: "budget_exceeded",
       errorMessage: budget.reason,
@@ -74,13 +80,7 @@ export async function runAiJsonFeature<T>(input: RunAiJsonFeatureInput): Promise
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to provision OpenRouter key"
-    await recordAiUsageEvent({
-      tenantId: input.tenantId,
-      userId: input.userId,
-      feature: input.feature,
-      model,
-      estimatedInputTokens: input.estimatedInputTokens,
-      estimatedOutputTokens: input.estimatedOutputTokens,
+    await recordEvent({
       status: "failed",
       errorCode: "key_provisioning_failed",
       errorMessage: message,
@@ -101,16 +101,11 @@ export async function runAiJsonFeature<T>(input: RunAiJsonFeatureInput): Promise
       maxTokens: input.maxTokens,
     })
 
-    await recordAiUsageEvent({
-      tenantId: input.tenantId,
-      userId: input.userId,
-      feature: input.feature,
+    await recordEvent({
       model: result.model,
       provider: "openrouter",
       providerKeyHash: result.providerKeyHash,
       providerGenerationId: result.providerGenerationId,
-      estimatedInputTokens: input.estimatedInputTokens,
-      estimatedOutputTokens: input.estimatedOutputTokens,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
       totalTokens: result.totalTokens,
@@ -125,15 +120,9 @@ export async function runAiJsonFeature<T>(input: RunAiJsonFeatureInput): Promise
     }
   } catch (error) {
     const err = error as Error & { code?: string }
-    await recordAiUsageEvent({
-      tenantId: input.tenantId,
-      userId: input.userId,
-      feature: input.feature,
-      model,
+    await recordEvent({
       provider: "openrouter",
       providerKeyHash: runtimeKey.keyHash,
-      estimatedInputTokens: input.estimatedInputTokens,
-      estimatedOutputTokens: input.estimatedOutputTokens,
       status: "failed",
       errorCode: err.code ?? "openrouter_call_failed",
       errorMessage: err.message ?? "OpenRouter call failed",
