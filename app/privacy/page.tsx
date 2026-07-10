@@ -131,9 +131,11 @@ export default function PrivacyPolicyPage() {
       <h2>Service providers (subprocessors)</h2>
       <ul>
         <li>
-          <strong>OpenAI</strong> — AI processing. Portions of email content are sent to
-          OpenAI&rsquo;s API to classify messages and generate reply drafts. Under OpenAI&rsquo;s
-          API terms, data sent via the API is not used to train OpenAI&rsquo;s models.
+          <strong>OpenRouter and its underlying model providers</strong> — AI processing.
+          Portions of email content are routed through OpenRouter to the underlying AI model
+          providers it connects to, in order to classify messages and generate reply drafts.
+          Under OpenRouter&rsquo;s terms, data sent via the API is not used to train the
+          underlying providers&rsquo; models.
         </li>
         <li>
           <strong>Cloud hosting and database infrastructure</strong> — FlowDesk runs on managed

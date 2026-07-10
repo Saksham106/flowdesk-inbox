@@ -109,6 +109,7 @@ model Tenant {
   workflowRuns              WorkflowRun[]
   googleDriveCredential     GoogleDriveCredential?
   gmailLabelMappings        GmailLabelMapping[]
+  openRouterUserKeys       OpenRouterUserKey[]
 }
 
 model User {
@@ -120,6 +121,30 @@ model User {
   tenant       Tenant    @relation(fields: [tenantId], references: [id])
   auditLogs        AuditLog[]
   approvalRequests ApprovalRequest[]
+  openRouterUserKey OpenRouterUserKey?
+  aiUsageEvents     AiUsageEvent[]
+}
+
+model OpenRouterUserKey {
+  id                   String   @id @default(cuid())
+  tenantId             String
+  userId               String   @unique
+  keyHash              String   @unique
+  keyLabel             String
+  encryptedApiKey      String
+  limitUsd             Float?
+  limitReset           String?
+  disabled             Boolean  @default(false)
+  lastProvisionedAt    DateTime @default(now())
+  lastUsedAt           DateTime?
+  lastError            String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  tenant               Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([disabled])
 }
 
 model Channel {
@@ -668,19 +693,32 @@ model LearnedReplyProfile {
 }
 
 model AiUsageEvent {
-  id              String   @id @default(cuid())
-  tenantId        String
-  feature         String
-  model           String
+  id                    String   @id @default(cuid())
+  tenantId              String
+  userId                String?
+  feature               String
+  provider              String   @default("openrouter")
+  providerKeyHash       String?
+  providerGenerationId  String?
+  model                 String
   estimatedInputTokens  Int      @default(0)
   estimatedOutputTokens Int      @default(0)
+  inputTokens           Int      @default(0)
+  outputTokens          Int      @default(0)
+  totalTokens           Int      @default(0)
   estimatedCostUsd      Float    @default(0)
-  status          String
-  createdAt       DateTime @default(now())
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actualCostUsd         Float?
+  status                String
+  errorCode             String?
+  errorMessage          String?
+  createdAt             DateTime @default(now())
+  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                  User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, createdAt])
+  @@index([userId, createdAt])
   @@index([feature])
+  @@index([providerGenerationId])
 }
 
 model AiBudget {
