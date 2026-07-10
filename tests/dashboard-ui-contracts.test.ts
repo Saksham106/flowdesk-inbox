@@ -328,4 +328,10 @@ describe("dashboard and inbox UI source contracts", () => {
     expect(row).toContain("Change label")
     expect(row).not.toContain("Change tag")
   })
+
+  it("inbox row uses label language rather than tag language", () => {
+    const row = source("app/components/InboxRow.tsx")
+    expect(row).toContain("Change label")
+    expect(row).not.toContain("Change tag")
+  })
 })

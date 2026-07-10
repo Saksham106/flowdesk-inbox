@@ -165,7 +165,7 @@ export default function InboxRow({
               : <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />}
         </button>
 
-        {/* Attention / tag picker — dropdown rendered in a portal to escape the scroll container */}
+        {/* Attention / label picker — dropdown rendered in a portal to escape the scroll container */}
         <button
           ref={attentionBtnRef}
           type="button"

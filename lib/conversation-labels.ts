@@ -173,7 +173,18 @@ export function labelToState(
   if (label === "Calendar") {
     const actionable = context.currentStatus === "needs_reply" || context.currentStatus === "in_progress"
     const status: ConversationStatus = actionable ? (context.currentStatus as ConversationStatus) : "needs_reply"
-    const attentionCategory = context.currentAttentionCategory ?? "needs_action"
+    // When the thread wasn't already actionable, forcing status to
+    // "needs_reply" must not leave a stale closed-state attentionCategory
+    // (e.g. "fyi_done"/"quiet" inherited from a prior Handled/Newsletter
+    // label) behind — that would produce a persisted record where `status`
+    // says "needs action" but `attentionCategory`/`userState` say "done" or
+    // "quiet". Only inherit the existing attentionCategory when the thread
+    // was already actionable (status carried over unchanged); otherwise use
+    // "needs_action" so status/attentionCategory/userState stay a
+    // consistent triple.
+    const attentionCategory = actionable
+      ? context.currentAttentionCategory ?? "needs_action"
+      : "needs_action"
     return {
       status,
       userState: ATTENTION_TO_USER_STATE[attentionCategory] ?? attentionCategory,

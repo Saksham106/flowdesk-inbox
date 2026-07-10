@@ -118,6 +118,78 @@ describe("PATCH /flowdesk-label", () => {
     expect(mockConversationUpdate).toHaveBeenCalled()
   })
 
+  it("relabeling an already-actionable thread as Calendar preserves its actionable status", async () => {
+    mockFindFirst.mockResolvedValue({
+      id: "c1",
+      tenantId: "t1",
+      channelId: "ch1",
+      externalThreadId: "thread1",
+      status: "needs_reply",
+      userState: "needs_reply",
+      contact: { phoneE164: "sender@example.com" },
+      draft: null,
+      stateRecord: { attentionCategory: "needs_reply", emailType: null, metadataJson: null },
+      channel: { provider: "google" },
+    })
+
+    const { PATCH } = await import("@/app/api/conversations/[id]/flowdesk-label/route")
+    const res = await PATCH(new Request("http://test", {
+      method: "PATCH",
+      body: JSON.stringify({ label: "Calendar" }),
+    }), { params: { id: "c1" } })
+
+    expect(res.status).toBe(200)
+    expect(mockConversationUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "c1" },
+      data: expect.objectContaining({
+        status: "needs_reply",
+        userState: "needs_reply",
+      }),
+    }))
+    expect(mockUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      update: expect.objectContaining({
+        metadataJson: expect.objectContaining({
+          attentionCategory: "needs_reply",
+          emailType: "calendar",
+        }),
+      }),
+    }))
+  })
+
+  it("relabeling an already-closed/quiet thread as Calendar does not produce a status/userState mismatch", async () => {
+    mockFindFirst.mockResolvedValue({
+      id: "c1",
+      tenantId: "t1",
+      channelId: "ch1",
+      externalThreadId: "thread1",
+      status: "closed",
+      userState: "quiet",
+      contact: { phoneE164: "sender@example.com" },
+      draft: null,
+      stateRecord: { attentionCategory: "quiet", emailType: "newsletter", metadataJson: null },
+      channel: { provider: "google" },
+    })
+
+    const { PATCH } = await import("@/app/api/conversations/[id]/flowdesk-label/route")
+    const res = await PATCH(new Request("http://test", {
+      method: "PATCH",
+      body: JSON.stringify({ label: "Calendar" }),
+    }), { params: { id: "c1" } })
+
+    expect(res.status).toBe(200)
+    const updateCall = mockConversationUpdate.mock.calls[0][0]
+    const upsertCall = mockUpsert.mock.calls[0][0]
+    const persistedStatus = updateCall.data.status
+    const persistedUserState = updateCall.data.userState
+    const persistedAttentionCategory = upsertCall.update.metadataJson.attentionCategory
+
+    // status/attentionCategory/userState must never disagree: if status says
+    // needs_reply, attentionCategory/userState must not still say "quiet"/"done".
+    expect(persistedStatus).toBe("needs_reply")
+    expect(persistedAttentionCategory).toBe("needs_action")
+    expect(persistedUserState).toBe("needs_action")
+  })
+
   it("records five side effects for a workflow label like Waiting On", async () => {
     const { PATCH } = await import("@/app/api/conversations/[id]/flowdesk-label/route")
     const res = await PATCH(new Request("http://test", {
