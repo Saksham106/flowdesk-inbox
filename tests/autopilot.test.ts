@@ -465,26 +465,19 @@ describe('attemptAutopilotSend', () => {
     expect(result.sent).toBe(false)
   })
 
-  it('returns sent: false without generating a draft when AI budget would be exceeded', async () => {
-    mockCheckAiBudgetForTokens.mockResolvedValue({
-      allowed: false,
-      reason: 'Daily AI spend limit reached',
-    })
+  it('returns sent: false when AI budget would be exceeded', async () => {
+    // Budget gating now happens inside the gateway (runAiJsonFeature), which
+    // throws when the tenant is over budget. generateDraftReply surfaces
+    // that as a rejected promise; autopilot.ts no longer does its own
+    // pre-check or AiUsageEvent recording (that's the gateway's job, and
+    // doing it here too would double-count spend).
+    mockGenerateDraftReply.mockRejectedValue(new Error('Daily AI spend limit reached'))
 
     const result = await attemptAutopilotSend(JOB_ID, classification, policyOk)
 
     expect(result.sent).toBe(false)
-    if (!result.sent) expect(result.reason).toBe('Daily AI spend limit reached')
-    expect(mockGenerateDraftReply).not.toHaveBeenCalled()
-    expect(mockAiUsageCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          tenantId: TENANT,
-          feature: 'autopilot.draft',
-          status: 'blocked',
-        }),
-      })
-    )
+    if (!result.sent) expect(result.reason).toBe('Draft generation failed')
+    expect(mockAutopilotSettingUpdate).toHaveBeenCalled()
   })
 
   it('returns sent: false and logs a hold when learned profile is missing', async () => {

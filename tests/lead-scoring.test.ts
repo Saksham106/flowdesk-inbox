@@ -331,13 +331,24 @@ describe('scoreLeadForConversation', () => {
     expect(mockLeadUpdateMany).not.toHaveBeenCalled()
   })
 
-  it('does not call scoreLead when the tenant has no user to attribute the AI call to', async () => {
+  it('does not call scoreLead when the tenant has no user to attribute the AI call to, and records an observable AiUsageEvent', async () => {
     mockUserFindFirst.mockResolvedValue(null)
+    mockAiUsageCreate.mockResolvedValue({})
 
     await scoreLeadForConversation(TENANT, LEAD_ID)
 
     expect(mockScoreLead).not.toHaveBeenCalled()
     expect(mockLeadUpdateMany).not.toHaveBeenCalled()
+    expect(mockAiUsageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tenantId: TENANT,
+          feature: 'lead.score',
+          status: 'skipped',
+          errorMessage: 'No tenant owner found for lead scoring',
+        }),
+      })
+    )
   })
 
   it('returns immediately when the lead is not found', async () => {

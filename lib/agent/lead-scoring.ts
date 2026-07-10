@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { scoreLead } from "@/lib/ai/provider"
 import { buildLeadScoringPrompt, type LeadScoringPromptInput } from "@/lib/ai/prompts/lead-scoring"
+import { recordAiUsageEvent } from "@/lib/ai/usage"
 
 export function shouldRescoreLead(
   scoredAt: Date | null,
@@ -33,13 +34,24 @@ export async function scoreLeadForConversation(
 
   // Background job, no session user in scope — resolve the tenant's earliest
   // user as the owner for OpenRouter key + budget attribution. Leave the
-  // heuristic score intact (silent no-op) if the tenant somehow has no user.
+  // heuristic score intact if the tenant somehow has no user, but record an
+  // observable AiUsageEvent so the skip isn't silent (mirrors the no-owner
+  // fallback in lib/agent/person-memory.ts).
   const owner = await prisma.user.findFirst({
     where: { tenantId },
     orderBy: { createdAt: "asc" },
     select: { id: true, email: true },
   })
-  if (!owner) return
+  if (!owner) {
+    await recordAiUsageEvent({
+      tenantId,
+      feature: "lead.score",
+      model: "none",
+      status: "skipped",
+      errorMessage: "No tenant owner found for lead scoring",
+    })
+    return
+  }
 
   const input: LeadScoringPromptInput = {
     aiContext: { tenantId, userId: owner.id, userEmail: owner.email },

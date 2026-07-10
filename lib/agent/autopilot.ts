@@ -2,9 +2,6 @@ import { prisma } from "@/lib/prisma"
 import { evaluateAutonomy } from "@/lib/agent/autonomy"
 import { getReplyGenerationContext } from "@/lib/agent/reply-context"
 import { generateDraftReply } from "@/lib/ai/provider"
-import { checkAiBudgetForTokens } from "@/lib/ai/budget"
-import { buildDraftReplyPrompt } from "@/lib/ai/prompts/draft-reply"
-import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import { sendConversationMessage, ConversationSendError } from "@/lib/conversations/send-message"
 import { resolveDraftApprovalRequests } from "@/lib/agent/approvals"
 import { isActionAllowedAtLevel } from "@/lib/agent/automation-level"
@@ -258,57 +255,17 @@ export async function attemptAutopilotSend(
     conversationSummary,
     availableSlots: slots,
   }
-  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
-  const estimatedInputTokens = estimateTokenCount(buildDraftReplyPrompt(draftInput))
-  const budgetCheck = await checkAiBudgetForTokens({
-    tenantId: job.tenantId,
-    model,
-    estimatedInputTokens,
-    estimatedOutputTokens: 600,
-  })
-  if (!budgetCheck.allowed) {
-    await recordAiUsageEvent({
-      tenantId: job.tenantId,
-      feature: "autopilot.draft",
-      model,
-      estimatedInputTokens,
-      status: "blocked",
-    })
-    await prisma.auditLog.create({
-      data: {
-        tenantId: job.tenantId,
-        action: "autopilot.held",
-        payloadJson: {
-          jobId,
-          conversationId: job.conversationId,
-          reason: budgetCheck.reason,
-          accountType: context.accountType,
-        },
-      },
-    })
-    return { sent: false, reason: budgetCheck.reason }
-  }
 
+  // Budget checks and AiUsageEvent recording (success/blocked/failed) happen
+  // inside runAiJsonFeature (via generateDraftReply -> generateDraftReplyWithOpenAI),
+  // keyed by the "autopilot.draft" feature. The gateway throws on both a
+  // budget-block and a generation failure, so a single catch here covers
+  // both — recording our own AiUsageEvent on top would double-count spend.
   let draftText: string
   try {
     const result = await generateDraftReply(draftInput)
     draftText = result.draftText
-    await recordAiUsageEvent({
-      tenantId: job.tenantId,
-      feature: "autopilot.draft",
-      model: result.model,
-      estimatedInputTokens,
-      estimatedOutputTokens: estimateTokenCount(JSON.stringify(result)),
-      status: "succeeded",
-    })
   } catch (err) {
-    await recordAiUsageEvent({
-      tenantId: job.tenantId,
-      feature: "autopilot.draft",
-      model,
-      estimatedInputTokens,
-      status: "failed",
-    })
     await recordAutopilotFailure(job.tenantId)
     await prisma.auditLog.create({
       data: {
