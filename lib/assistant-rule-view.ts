@@ -58,6 +58,72 @@ export function plannedLabelsForRuleAction(
   }
 }
 
+// Chips describing what a rule does, for the Rules table's Action column.
+// AgentRule.actionJson only ever carries `targetAttention` in this codebase
+// (see lib/agent/rule-compiler.ts and the manual-rule POST handler in
+// app/api/agent-rules/route.ts) — there is no gmailLabels/createDraft/archive
+// field to read. Chips are derived from the same attention -> Gmail label
+// mapping used for the dry-run preview so the Rules table and Test Rules
+// results describe the same outcome.
+export function actionChipsForRule(actionJson: Record<string, unknown>): string[] {
+  return plannedLabelsForRuleAction(actionJson).map((label) => `Label as '${label}'`)
+}
+
+// Action string literals verified against the AuditLog.create() call sites in
+// app/api/agent-rules/route.ts, app/api/agent-rules/[id]/route.ts,
+// app/api/agent-rules/[id]/versions/route.ts, and
+// app/api/agent-rules/dry-run/route.ts.
+export function describeRuleAuditAction(action: string): string {
+  switch (action) {
+    case "agent_rule.create":
+      return "Rule created"
+    case "agent_rule.update":
+      return "Rule updated"
+    case "agent_rule.version_snapshot":
+      return "Version saved"
+    case "agent_rule.delete":
+      return "Rule deleted"
+    case "agent_rule.dry_run":
+      return "Rule tested"
+    default:
+      return action
+  }
+}
+
+// payloadJson shapes (see the route files above): create uses `ruleId`,
+// update/delete use `id`, version_snapshot/dry_run use `ruleId` + `version`.
+// Normalize to a single secondary line rather than a full diff viewer — the
+// payload doesn't carry enough of a before/after shape to justify one.
+export function ruleContextFromAuditPayload(payloadJson: unknown): string | null {
+  if (!payloadJson || typeof payloadJson !== "object" || Array.isArray(payloadJson)) return null
+  const payload = payloadJson as Record<string, unknown>
+  const ruleId = payload.ruleId ?? payload.id
+  if (typeof ruleId !== "string") return null
+  const version = typeof payload.version === "number" ? payload.version : null
+  return version !== null ? `Rule ${ruleId} · v${version}` : `Rule ${ruleId}`
+}
+
+// A short human-readable summary of what happened, distinct from the rule
+// identifier context above. Only dry_run and create/update payloads carry
+// enough structured detail to summarize meaningfully; other actions fall
+// back to no summary rather than dumping raw JSON.
+export function ruleAuditPayloadSummary(action: string, payloadJson: unknown): string | null {
+  if (!payloadJson || typeof payloadJson !== "object" || Array.isArray(payloadJson)) return null
+  const payload = payloadJson as Record<string, unknown>
+
+  if (action === "agent_rule.dry_run") {
+    const sampleSize = typeof payload.sampleSize === "number" ? payload.sampleSize : null
+    const matchedCount = typeof payload.matchedCount === "number" ? payload.matchedCount : null
+    if (sampleSize !== null && matchedCount !== null) {
+      return `${matchedCount} of ${sampleSize} sampled conversations matched`
+    }
+    return null
+  }
+
+  const targetAttention = typeof payload.targetAttention === "string" ? payload.targetAttention : null
+  return targetAttention ? `→ ${targetAttention.replace(/_/g, " ")}` : null
+}
+
 export function summarizeAssistantRules(rules: RuleLike[]): AssistantRuleSummary {
   const lastDryRunAt =
     rules

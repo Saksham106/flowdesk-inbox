@@ -299,13 +299,15 @@ describe("dashboard and inbox UI source contracts", () => {
     expect(client).toContain("/api/agent-rules/dry-run")
   })
 
-  it("assistant History renders readable rule action labels with raw action as secondary text", () => {
+  it("assistant History renders readable rule action labels via the shared rule-view presenter", () => {
     const page = source("app/assistant/history/page.tsx")
+    const list = source("app/assistant/RuleHistoryList.tsx")
+    const ruleView = source("lib/assistant-rule-view.ts")
 
-    expect(page).toContain("RULE_ACTION_LABELS")
-    expect(page).toContain('"agent_rule.create": "Rule created"')
-    expect(page).toContain("RULE_ACTION_LABELS[entry.action] ?? entry.action")
-    expect(page).toContain("entry.createdAt.toLocaleString()")
+    expect(page).toContain("RuleHistoryList")
+    expect(list).toContain("describeRuleAuditAction")
+    expect(ruleView).toContain('case "agent_rule.create":')
+    expect(ruleView).toContain("Rule created")
   })
 
   it("conversation detail keeps Mail top tabs in the desktop shell", () => {

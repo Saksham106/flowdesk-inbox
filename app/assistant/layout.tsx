@@ -49,7 +49,7 @@ function AssistantContent({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+      <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
         <AssistantTabNav />
         <div className="space-y-10">{children}</div>
       </main>
