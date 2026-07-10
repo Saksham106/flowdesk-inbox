@@ -20,7 +20,7 @@ export default async function TrainingSettingsPage() {
       orderBy: { updatedAt: "desc" },
     }),
     prisma.aiUsageEvent.findFirst({
-      where: { tenantId: session.user.tenantId, feature: "reply_learning.train" },
+      where: { tenantId: session.user.tenantId, feature: "reply_learning.summarize" },
       orderBy: { createdAt: "desc" },
     }),
     prisma.senderRule.findMany({

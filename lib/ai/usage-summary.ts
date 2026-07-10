@@ -39,8 +39,10 @@ const FEATURE_LABELS: Record<string, string> = {
   "agent.classify": "Email classification",
   "autopilot.draft": "Reply drafting",
   "lead.score": "Lead scoring",
-  "reply_learning.train": "Reply-style learning",
+  "reply_learning.summarize": "Reply-style learning",
   person_memory: "Person memory",
+  "meeting.prep": "Meeting prep",
+  "meeting.follow_up": "Meeting follow-up",
 }
 
 function featureGroup(feature: string): string {
