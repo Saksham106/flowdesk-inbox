@@ -6,7 +6,7 @@ import {
   scoreLeadWithOpenAI,
 } from "@/lib/ai/openai"
 import type { DraftReplyPromptInput, DraftReplyResult } from "@/lib/ai/prompts/draft-reply"
-import type { PersonalStyleProfile } from "@/lib/ai/prompts/draft-reply"
+import type { PersonalStyleProfile, AiCallContext } from "@/lib/ai/prompts/draft-reply"
 import { explainThreadWithOpenAI, summarizeLearnedReplyProfileWithOpenAI } from "@/lib/ai/openai"
 import type {
   LearnedReplyProfileResult,
@@ -29,15 +29,17 @@ export async function generateDraftReply(
 }
 
 export async function generatePersonalStyleProfile(
-  messages: Array<{ body: string; createdAt: Date }>
+  messages: Array<{ body: string; createdAt: Date }>,
+  aiContext?: AiCallContext
 ): Promise<PersonalStyleProfile> {
-  return generatePersonalStyleProfileWithOpenAI(messages)
+  return generatePersonalStyleProfileWithOpenAI(messages, aiContext)
 }
 
 export async function summarizeLearnedReplyProfile(
-  samples: ReplyLearningSample[]
+  samples: ReplyLearningSample[],
+  aiContext?: AiCallContext
 ): Promise<LearnedReplyProfileResult> {
-  return summarizeLearnedReplyProfileWithOpenAI(samples)
+  return summarizeLearnedReplyProfileWithOpenAI(samples, aiContext)
 }
 
 export async function explainThread(

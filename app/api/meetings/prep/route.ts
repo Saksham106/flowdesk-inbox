@@ -93,7 +93,12 @@ export async function POST(request: Request) {
     }
   })
 
-  const input = { eventTitle, eventStart: new Date(eventStart), attendees }
+  const input = {
+    aiContext: { tenantId, userId: session.user.id, userEmail: session.user.email ?? "" },
+    eventTitle,
+    eventStart: new Date(eventStart),
+    attendees,
+  }
   const prompt = buildMeetingPrepPrompt(input)
   const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
   const estimatedInputTokens = estimateTokenCount(prompt)
@@ -119,7 +124,7 @@ export async function POST(request: Request) {
     result = await generateMeetingPrep(input)
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to generate prep brief"
-    const status = message.includes("OPENAI_API_KEY") ? 503 : 502
+    const status = message.includes("spend limit reached") ? 429 : 502
     await recordAiUsageEvent({
       tenantId,
       feature: "meeting_prep",

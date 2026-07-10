@@ -2,8 +2,6 @@ import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { scoreLead } from "@/lib/ai/provider"
 import { buildLeadScoringPrompt, type LeadScoringPromptInput } from "@/lib/ai/prompts/lead-scoring"
-import { checkAiBudgetForTokens } from "@/lib/ai/budget"
-import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 
 export function shouldRescoreLead(
   scoredAt: Date | null,
@@ -33,55 +31,33 @@ export async function scoreLeadForConversation(
 
   if (!options.force && !shouldRescoreLead(lead.scoredAt, lead.conversation.lastMessageAt)) return
 
+  // Background job, no session user in scope — resolve the tenant's earliest
+  // user as the owner for OpenRouter key + budget attribution. Leave the
+  // heuristic score intact (silent no-op) if the tenant somehow has no user.
+  const owner = await prisma.user.findFirst({
+    where: { tenantId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, email: true },
+  })
+  if (!owner) return
+
   const input: LeadScoringPromptInput = {
+    aiContext: { tenantId, userId: owner.id, userEmail: owner.email },
     messages: lead.conversation.messages.slice().reverse(),
     existingNeed: lead.need,
     existingUrgency: lead.urgency,
     existingBudgetClue: lead.budgetClue,
   }
-  const prompt = buildLeadScoringPrompt(input)
-  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
-  const estimatedInputTokens = estimateTokenCount(prompt)
-  const budgetCheck = await checkAiBudgetForTokens({
-    tenantId,
-    model,
-    estimatedInputTokens,
-    estimatedOutputTokens: 500,
-  })
-  if (!budgetCheck.allowed) {
-    await recordAiUsageEvent({
-      tenantId,
-      feature: "lead.score",
-      model,
-      estimatedInputTokens,
-      status: "blocked",
-    })
-    return
-  }
 
+  // Budget checks and AiUsageEvent recording happen inside runAiJsonFeature
+  // (via scoreLead -> scoreLeadWithOpenAI), keyed by the "lead.score" feature.
   let result: Awaited<ReturnType<typeof scoreLead>>
   try {
     result = await scoreLead(input)
   } catch {
-    await recordAiUsageEvent({
-      tenantId,
-      feature: "lead.score",
-      model,
-      estimatedInputTokens,
-      status: "failed",
-    })
     // Leave existing heuristic score intact on LLM failure
     return
   }
-
-  await recordAiUsageEvent({
-    tenantId,
-    feature: "lead.score",
-    model: result.model,
-    estimatedInputTokens,
-    estimatedOutputTokens: estimateTokenCount(JSON.stringify(result)),
-    status: "succeeded",
-  })
 
   await prisma.lead.updateMany({
     where: { id: leadId, tenantId },

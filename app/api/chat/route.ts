@@ -19,16 +19,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "question required" }, { status: 400 })
   }
 
-  if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json({ error: "OPENAI_API_KEY is not configured" }, { status: 503 })
-  }
-
   const tenantId = session.user.tenantId
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const gen = streamInboxChat(tenantId, question, history)
+        const gen = streamInboxChat(tenantId, question, history, {
+          userId: session.user.id,
+          userEmail: session.user.email ?? "",
+        })
         for await (const chunk of gen) {
           const data = `data: ${JSON.stringify({ text: chunk })}\n\n`
           controller.enqueue(new TextEncoder().encode(data))

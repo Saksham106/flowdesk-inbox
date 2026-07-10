@@ -1,4 +1,5 @@
-import OpenAI from "openai"
+import { runAiJsonFeature } from "@/lib/ai/gateway"
+import { estimateTokenCount } from "@/lib/ai/usage"
 
 import {
   buildClassifyPrompt,
@@ -57,27 +58,25 @@ export async function tryStaticClassification(input: {
 export async function classifyConversation(
   input: ClassifyPromptInput
 ): Promise<ClassifyResult> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured")
+  if (!input.aiContext) {
+    throw new Error(
+      "AI provider is not configured: classifyConversation requires tenant/user context (aiContext) to route through OpenRouter"
+    )
   }
-
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini"
-  const client = new OpenAI({ apiKey })
+  const { tenantId, userId, userEmail } = input.aiContext
   const prompt = buildClassifyPrompt(input)
 
-  const response = await client.responses.create({
-    model,
-    input: prompt,
-    text: {
-      format: {
-        type: "json_schema",
-        name: "flowdesk_classify",
-        strict: true,
-        schema: classifyJsonSchema,
-      },
-    },
+  const { output } = await runAiJsonFeature<Record<string, unknown>>({
+    tenantId,
+    userId,
+    userEmail,
+    feature: "agent.classify",
+    messages: [{ role: "user", content: prompt }],
+    schemaName: "flowdesk_classify",
+    schema: classifyJsonSchema,
+    estimatedInputTokens: estimateTokenCount(prompt),
+    estimatedOutputTokens: 800,
   })
 
-  return normalizeClassifyOutput(response.output_text)
+  return normalizeClassifyOutput(JSON.stringify(output))
 }

@@ -14,9 +14,9 @@ const {
   mockAiUsageCreate,
   mockGetFullBusinessContext,
   mockClassify,
-  mockCheckAiBudgetForTokens,
   mockCheckAvailability,
   mockTenantFindUnique,
+  mockUserFindFirst,
 } = vi.hoisted(() => ({
   mockConvFindFirst:          vi.fn(),
   mockJobCreate:              vi.fn(),
@@ -28,9 +28,9 @@ const {
   mockAiUsageCreate:          vi.fn(),
   mockGetFullBusinessContext: vi.fn(),
   mockClassify:               vi.fn(),
-  mockCheckAiBudgetForTokens: vi.fn(),
   mockCheckAvailability:      vi.fn(),
   mockTenantFindUnique:       vi.fn(),
+  mockUserFindFirst:          vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -41,6 +41,7 @@ vi.mock('@/lib/prisma', () => ({
     auditLog:      { create: mockAuditCreate },
     aiUsageEvent:  { create: mockAiUsageCreate },
     tenant:        { findUnique: mockTenantFindUnique },
+    user:          { findFirst: mockUserFindFirst },
   },
 }))
 
@@ -50,11 +51,6 @@ vi.mock('@/lib/agent/context', () => ({
 
 vi.mock('@/lib/agent/classify', () => ({
   classifyConversation: mockClassify,
-}))
-
-vi.mock('@/lib/ai/budget', () => ({
-  checkAiBudgetForTokens: mockCheckAiBudgetForTokens,
-  estimateCostUsd: () => 0.01,
 }))
 
 vi.mock('@/lib/agent/availability', () => ({
@@ -218,6 +214,8 @@ describe('createAgentJob', () => {
 // runAgentJob — happy path
 // ---------------------------------------------------------------------------
 
+const OWNER = { id: 'owner-1', email: 'owner@example.com' }
+
 describe('runAgentJob', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -234,7 +232,7 @@ describe('runAgentJob', () => {
     mockToolCallUpdate.mockResolvedValue({})
     mockAuditCreate.mockResolvedValue({})
     mockAiUsageCreate.mockResolvedValue({})
-    mockCheckAiBudgetForTokens.mockResolvedValue({ allowed: true, reason: "Within budget" })
+    mockUserFindFirst.mockResolvedValue(OWNER)
   })
 
   it('marks job completed and writes an audit log on success', async () => {
@@ -291,11 +289,8 @@ describe('runAgentJob', () => {
     )
   })
 
-  it('blocks classification before calling OpenAI when AI budget would be exceeded', async () => {
-    mockCheckAiBudgetForTokens.mockResolvedValue({
-      allowed: false,
-      reason: 'Daily AI spend limit reached',
-    })
+  it('fails the job when the AI budget is exceeded (enforced inside classifyConversation/gateway)', async () => {
+    mockClassify.mockRejectedValue(new Error('Daily AI spend limit reached'))
 
     const result = await runAgentJob(JOB_ID)
 
@@ -303,16 +298,15 @@ describe('runAgentJob', () => {
     if (result.status === 'failed') {
       expect(result.error).toContain('Daily AI spend limit reached')
     }
+  })
+
+  it('fails the job when the tenant has no user to attribute the AI classify call to', async () => {
+    mockUserFindFirst.mockResolvedValue(null)
+
+    const result = await runAgentJob(JOB_ID)
+
+    expect(result.status).toBe('failed')
     expect(mockClassify).not.toHaveBeenCalled()
-    expect(mockAiUsageCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          tenantId: TENANT,
-          feature: 'agent.classify',
-          status: 'blocked',
-        }),
-      })
-    )
   })
 
   it('returns failed (not throws) when job is not found', async () => {
@@ -338,20 +332,17 @@ describe('runAgentJob', () => {
     )
   })
 
-  it('records AI usage metrics for classification success and failure', async () => {
+  it('resolves the tenant owner and passes aiContext into classifyConversation on success and failure', async () => {
     mockClassify.mockResolvedValueOnce(goodClassification)
 
     await runAgentJob(JOB_ID)
 
-    expect(mockAiUsageCreate).toHaveBeenCalledWith(
+    // AiUsageEvent recording for the "agent.classify" AI call itself happens
+    // inside classifyConversation/runAiJsonFeature (mocked here at the
+    // classifyConversation boundary), not in jobs.ts directly.
+    expect(mockClassify).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          tenantId: TENANT,
-          feature: 'agent.classify',
-          status: 'succeeded',
-          estimatedInputTokens: expect.any(Number),
-          estimatedOutputTokens: expect.any(Number),
-        }),
+        aiContext: { tenantId: TENANT, userId: OWNER.id, userEmail: OWNER.email },
       })
     )
 
@@ -369,18 +360,15 @@ describe('runAgentJob', () => {
     mockToolCallUpdate.mockResolvedValue({})
     mockAuditCreate.mockResolvedValue({})
     mockAiUsageCreate.mockResolvedValue({})
+    mockUserFindFirst.mockResolvedValue(OWNER)
     mockClassify.mockRejectedValueOnce(new Error('OpenAI error'))
 
-    await runAgentJob(JOB_ID)
+    const result = await runAgentJob(JOB_ID)
 
-    expect(mockAiUsageCreate).toHaveBeenCalledWith(
+    expect(result.status).toBe('failed')
+    expect(mockToolCallUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          tenantId: TENANT,
-          feature: 'agent.classify',
-          status: 'failed',
-          estimatedInputTokens: expect.any(Number),
-        }),
+        data: expect.objectContaining({ status: 'failed' }),
       })
     )
   })

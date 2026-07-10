@@ -1,9 +1,8 @@
 import type { Prisma } from "@prisma/client"
 import { createHash } from "crypto"
-import OpenAI from "openai"
 import { prisma } from "@/lib/prisma"
 import { stripHtmlToText } from "@/lib/email-body"
-import { checkAiBudgetForTokens } from "@/lib/ai/budget"
+import { runAiJsonFeature } from "@/lib/ai/gateway"
 import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 
 import {
@@ -43,10 +42,6 @@ export type PersonMemorySyncResult =
 export type SyncPersonMemoryWithLLMOptions = {
   featureContext?: string
   force?: boolean
-}
-
-function getOpenAIClient(): OpenAI | null {
-  return process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
 }
 
 export function buildPersonMemoryContentHash(
@@ -188,8 +183,16 @@ export async function syncPersonMemoryWithLLM(
   contactId: string,
   options: SyncPersonMemoryWithLLMOptions = {}
 ): Promise<PersonMemorySyncResult> {
-  const client = getOpenAIClient()
-  if (!client) {
+  // Background/tool caller has no session user in scope here — resolve the
+  // tenant's earliest user as the owner for OpenRouter key + budget
+  // attribution. No user for the tenant means AI sync can't run; degrade to
+  // the deterministic summary rather than failing the whole sync.
+  const owner = await prisma.user.findFirst({
+    where: { tenantId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, email: true },
+  })
+  if (!owner) {
     await syncPersonMemory(tenantId, contactId)
     await recordAiUsageEvent({
       tenantId,
@@ -197,7 +200,7 @@ export async function syncPersonMemoryWithLLM(
       model: "none",
       status: "skipped",
     })
-    return { status: "deterministic", reason: "OPENAI_API_KEY is not configured" }
+    return { status: "deterministic", reason: "No user found for tenant; cannot route AI call" }
   }
 
   const contact = await prisma.contact.findFirst({
@@ -244,7 +247,7 @@ export async function syncPersonMemoryWithLLM(
     await recordAiUsageEvent({
       tenantId,
       feature: "person_memory.cache_hit",
-      model: process.env.OPENAI_MODEL || "gpt-5.4-mini",
+      model: "none",
       status: "skipped",
     })
     return { status: "cache_hit", contentHash }
@@ -256,67 +259,37 @@ export async function syncPersonMemoryWithLLM(
   })
 
   let extracted: ReturnType<typeof normalizePersonMemoryExtractResult> = null
-  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
+  let model = "unknown"
   const estimatedInputTokens = estimateTokenCount(prompt)
-  const budgetCheck = await checkAiBudgetForTokens({
-    tenantId,
-    model,
-    estimatedInputTokens,
-    estimatedOutputTokens: 500,
-  })
-  if (!budgetCheck.allowed) {
-    await syncPersonMemory(tenantId, contactId)
-    await recordAiUsageEvent({
-      tenantId,
-      feature: options.featureContext ? `person_memory.${options.featureContext}` : "person_memory.llm",
-      model,
-      estimatedInputTokens,
-      status: "blocked",
-    })
-    return { status: "llm_failed", reason: budgetCheck.reason }
-  }
 
   try {
-    const response = await client.responses.create({
-      model,
-      input: prompt,
-      text: {
-        format: {
-          type: "json_schema",
-          name: "flowdesk_person_memory_extract",
-          strict: true,
-          schema: personMemoryExtractJsonSchema,
-        },
-      },
-    })
-    const content = response.output_text
-    if (content) {
-      extracted = normalizePersonMemoryExtractResult(JSON.parse(content))
-    }
-  } catch (err) {
-    await syncPersonMemory(tenantId, contactId)
-    await recordAiUsageEvent({
+    const result = await runAiJsonFeature<Record<string, unknown>>({
       tenantId,
-      feature: "person_memory.llm",
-      model,
+      userId: owner.id,
+      userEmail: owner.email,
+      feature: options.featureContext ? `person_memory.${options.featureContext}` : "person_memory.llm",
+      messages: [{ role: "user", content: prompt }],
+      schemaName: "flowdesk_person_memory_extract",
+      schema: personMemoryExtractJsonSchema,
       estimatedInputTokens,
-      status: "failed",
+      estimatedOutputTokens: 500,
     })
+    model = result.model
+    extracted = normalizePersonMemoryExtractResult(result.output)
+  } catch (err) {
+    // runAiJsonFeature already records the AiUsageEvent (success/blocked/
+    // failed) for this call under the same feature key, so we don't
+    // double-record here.
+    await syncPersonMemory(tenantId, contactId)
+    const message = err instanceof Error ? err.message : "Failed to generate person memory"
     return {
       status: "llm_failed",
-      reason: err instanceof Error ? err.message : "Failed to generate person memory",
+      reason: message,
     }
   }
 
   if (!extracted) {
     await syncPersonMemory(tenantId, contactId)
-    await recordAiUsageEvent({
-      tenantId,
-      feature: "person_memory.llm",
-      model,
-      estimatedInputTokens,
-      status: "failed",
-    })
     return { status: "llm_failed", reason: "AI response did not include usable memory" }
   }
 
@@ -348,15 +321,6 @@ export async function syncPersonMemoryWithLLM(
       model,
       llmSyncedAt: new Date(),
     },
-  })
-
-  await recordAiUsageEvent({
-    tenantId,
-    feature: options.featureContext ? `person_memory.${options.featureContext}` : "person_memory.llm",
-    model,
-    estimatedInputTokens,
-    estimatedOutputTokens: estimateTokenCount(JSON.stringify(extracted)),
-    status: "succeeded",
   })
 
   await prisma.auditLog.create({

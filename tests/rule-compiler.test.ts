@@ -1,51 +1,41 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-const { mockCreate, mockCheckAiBudgetForTokens, mockRecordAiUsageEvent } = vi.hoisted(() => ({
-  mockCreate: vi.fn(),
-  mockCheckAiBudgetForTokens: vi.fn(),
-  mockRecordAiUsageEvent: vi.fn(),
+const { mockRunAiJsonFeature, mockUserFindFirst } = vi.hoisted(() => ({
+  mockRunAiJsonFeature: vi.fn(),
+  mockUserFindFirst: vi.fn(),
 }))
 
-vi.mock("openai", () => ({
-  default: class {
-    chat = { completions: { create: mockCreate } }
+vi.mock("@/lib/ai/gateway", () => ({
+  runAiJsonFeature: mockRunAiJsonFeature,
+}))
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    user: { findFirst: mockUserFindFirst },
   },
-}))
-
-vi.mock("@/lib/ai/budget", () => ({
-  checkAiBudgetForTokens: mockCheckAiBudgetForTokens,
-}))
-
-vi.mock("@/lib/ai/usage", () => ({
-  estimateTokenCount: (value: string) => Math.ceil(value.length / 4),
-  recordAiUsageEvent: mockRecordAiUsageEvent,
 }))
 
 import { compileRule, RuleCompileError } from "@/lib/agent/rule-compiler"
 
+const OWNER = { id: "owner-1", email: "owner@example.com" }
+
 describe("compileRule", () => {
   beforeEach(() => {
     vi.resetAllMocks()
-    process.env.OPENAI_API_KEY = "test-key"
-    delete process.env.OPENAI_MODEL
-    mockCheckAiBudgetForTokens.mockResolvedValue({ allowed: true, reason: "Within budget", estimatedCostUsd: 0 })
-    mockRecordAiUsageEvent.mockResolvedValue(undefined)
+    mockUserFindFirst.mockResolvedValue(OWNER)
+    mockRunAiJsonFeature.mockResolvedValue({
+      output: {
+        ruleType: "attention",
+        conditionsJson: { matchType: "domain", matchValue: "amazon.com" },
+        actionJson: { targetAttention: "read_later" },
+        confidence: 0.95,
+      },
+      model: "anthropic/claude-sonnet-4.5",
+      providerGenerationId: "gen-1",
+    })
   })
 
   it("compiles domain-based attention rule", async () => {
-    mockCreate.mockResolvedValueOnce({
-      choices: [{
-        message: {
-          content: JSON.stringify({
-            ruleType: "attention",
-            conditionsJson: { matchType: "domain", matchValue: "amazon.com" },
-            actionJson: { targetAttention: "read_later" },
-            confidence: 0.95,
-          }),
-        },
-      }],
-    } as never)
-
     const result = await compileRule("t1", "Move all emails from amazon.com to read later")
     expect(result.ruleType).toBe("attention")
     expect(result.conditionsJson).toEqual({ matchType: "domain", matchValue: "amazon.com" })
@@ -56,66 +46,61 @@ describe("compileRule", () => {
   it("falls back to regex for simple sender patterns", async () => {
     // Regex fallback: "emails from @newsletter.com → read_later"
     const result = await compileRule("t1", "emails from newsletters@example.com should be quiet")
-    // If OpenAI is mocked to not be called because regex catches it first,
+    // If the AI gateway is not called because regex catches it first,
     // result should still be valid
     expect(result.ruleType).toBe("attention")
     expect(result.conditionsJson.matchType).toBeDefined()
-    expect(mockCreate).not.toHaveBeenCalled()
-    expect(mockCheckAiBudgetForTokens).not.toHaveBeenCalled()
+    expect(mockRunAiJsonFeature).not.toHaveBeenCalled()
   })
 
   it("returns low confidence for ambiguous input", async () => {
-    mockCreate.mockResolvedValueOnce({
-      choices: [{
-        message: {
-          content: JSON.stringify({
-            ruleType: "attention",
-            conditionsJson: { matchType: "domain", matchValue: "example.com" },
-            actionJson: { targetAttention: "quiet" },
-            confidence: 0.3,
-          }),
-        },
-      }],
-    } as never)
+    mockRunAiJsonFeature.mockResolvedValueOnce({
+      output: {
+        ruleType: "attention",
+        conditionsJson: { matchType: "domain", matchValue: "example.com" },
+        actionJson: { targetAttention: "quiet" },
+        confidence: 0.3,
+      },
+      model: "anthropic/claude-sonnet-4.5",
+      providerGenerationId: "gen-1",
+    })
 
     const result = await compileRule("t1", "do something with example emails")
     expect(result.confidence).toBeLessThan(0.5)
-    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ model: "gpt-5.4-mini" }))
-    expect(mockRecordAiUsageEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ tenantId: "t1", feature: "agent_rule.compile", status: "succeeded" })
+    expect(mockRunAiJsonFeature).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "t1",
+        userId: OWNER.id,
+        userEmail: OWNER.email,
+        feature: "agent_rule.compile",
+      })
     )
   })
 
-  it("respects OPENAI_MODEL for the LLM path", async () => {
-    process.env.OPENAI_MODEL = "gpt-custom"
-    mockCreate.mockResolvedValueOnce({ choices: [{ message: { content: "{}" } }] } as never)
-
-    await compileRule("t1", "do something with example emails")
-    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ model: "gpt-custom" }))
-  })
-
-  it("throws RuleCompileError 429 and records blocked usage when over budget", async () => {
-    mockCheckAiBudgetForTokens.mockResolvedValue({
-      allowed: false,
-      reason: "Daily AI spend limit reached ($1.00/day). Resets at midnight UTC.",
-      estimatedCostUsd: 0.01,
-    })
+  it("throws RuleCompileError 429 when over budget", async () => {
+    mockRunAiJsonFeature.mockRejectedValue(
+      new Error("Daily AI spend limit reached ($1.00/day). Resets at midnight UTC.")
+    )
 
     const err = await compileRule("t1", "do something with example emails").catch((e) => e)
     expect(err).toBeInstanceOf(RuleCompileError)
     expect(err.status).toBe(429)
-    expect(mockCreate).not.toHaveBeenCalled()
-    expect(mockRecordAiUsageEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ tenantId: "t1", feature: "agent_rule.compile", status: "blocked" })
-    )
   })
 
-  it("throws RuleCompileError 503 when OPENAI_API_KEY is unset", async () => {
-    delete process.env.OPENAI_API_KEY
+  it("throws RuleCompileError 503 when the tenant has no user to attribute the AI call to", async () => {
+    mockUserFindFirst.mockResolvedValue(null)
 
     const err = await compileRule("t1", "do something with example emails").catch((e) => e)
     expect(err).toBeInstanceOf(RuleCompileError)
     expect(err.status).toBe(503)
-    expect(mockCreate).not.toHaveBeenCalled()
+    expect(mockRunAiJsonFeature).not.toHaveBeenCalled()
+  })
+
+  it("throws RuleCompileError 503 for other gateway failures", async () => {
+    mockRunAiJsonFeature.mockRejectedValue(new Error("OpenRouter call failed"))
+
+    const err = await compileRule("t1", "do something with example emails").catch((e) => e)
+    expect(err).toBeInstanceOf(RuleCompileError)
+    expect(err.status).toBe(503)
   })
 })

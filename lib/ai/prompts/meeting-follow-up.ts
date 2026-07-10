@@ -17,7 +17,10 @@ export type MeetingFollowUpAttendee = {
   } | null
 }
 
+export type AiCallContext = { tenantId: string; userId: string; userEmail: string }
+
 export type MeetingFollowUpPromptInput = {
+  aiContext?: AiCallContext
   eventTitle: string
   eventStart: Date
   userNotes: string

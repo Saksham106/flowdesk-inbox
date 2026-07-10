@@ -9,14 +9,14 @@ const {
   mockAuditCreate,
   mockAiUsageCreate,
   mockScoreLead,
-  mockCheckAiBudgetForTokens,
+  mockUserFindFirst,
 } = vi.hoisted(() => ({
   mockLeadFindFirst:          vi.fn(),
   mockLeadUpdateMany:         vi.fn(),
   mockAuditCreate:            vi.fn(),
   mockAiUsageCreate:          vi.fn(),
   mockScoreLead:              vi.fn(),
-  mockCheckAiBudgetForTokens: vi.fn(),
+  mockUserFindFirst:          vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -24,16 +24,12 @@ vi.mock('@/lib/prisma', () => ({
     lead:         { findFirst: mockLeadFindFirst, updateMany: mockLeadUpdateMany },
     auditLog:     { create: mockAuditCreate },
     aiUsageEvent: { create: mockAiUsageCreate },
+    user:         { findFirst: mockUserFindFirst },
   },
 }))
 
 vi.mock('@/lib/ai/provider', () => ({
   scoreLead: mockScoreLead,
-}))
-
-vi.mock('@/lib/ai/budget', () => ({
-  checkAiBudgetForTokens: mockCheckAiBudgetForTokens,
-  estimateCostUsd: () => 0.01,
 }))
 
 import {
@@ -270,6 +266,8 @@ describe('scoreLeadForConversation', () => {
     model: 'gpt-5.4-mini',
   }
 
+  const OWNER = { id: 'owner-1', email: 'owner@example.com' }
+
   beforeEach(() => {
     vi.clearAllMocks()
     mockLeadFindFirst.mockResolvedValue(MOCK_LEAD)
@@ -277,12 +275,17 @@ describe('scoreLeadForConversation', () => {
     mockLeadUpdateMany.mockResolvedValue({ count: 1 })
     mockAuditCreate.mockResolvedValue({})
     mockAiUsageCreate.mockResolvedValue({})
-    mockCheckAiBudgetForTokens.mockResolvedValue({ allowed: true, reason: "Within budget" })
+    mockUserFindFirst.mockResolvedValue(OWNER)
   })
 
-  it('calls scoreLead and updates the lead when scoredAt is null', async () => {
+  it('calls scoreLead with aiContext and updates the lead when scoredAt is null', async () => {
     await scoreLeadForConversation(TENANT, LEAD_ID)
     expect(mockScoreLead).toHaveBeenCalledOnce()
+    expect(mockScoreLead).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aiContext: { tenantId: TENANT, userId: OWNER.id, userEmail: OWNER.email },
+      })
+    )
     expect(mockLeadUpdateMany).toHaveBeenCalledWith({
       where: { id: LEAD_ID, tenantId: TENANT },
       data: expect.objectContaining({
@@ -320,25 +323,21 @@ describe('scoreLeadForConversation', () => {
     expect(mockLeadUpdateMany).not.toHaveBeenCalled()
   })
 
-  it('does not call scoreLead when AI budget would be exceeded', async () => {
-    mockCheckAiBudgetForTokens.mockResolvedValue({
-      allowed: false,
-      reason: 'Daily AI spend limit reached',
-    })
+  it('does not update the lead when scoreLead rejects (e.g. AI budget exceeded)', async () => {
+    mockScoreLead.mockRejectedValue(new Error('Daily AI spend limit reached'))
+
+    await scoreLeadForConversation(TENANT, LEAD_ID)
+
+    expect(mockLeadUpdateMany).not.toHaveBeenCalled()
+  })
+
+  it('does not call scoreLead when the tenant has no user to attribute the AI call to', async () => {
+    mockUserFindFirst.mockResolvedValue(null)
 
     await scoreLeadForConversation(TENANT, LEAD_ID)
 
     expect(mockScoreLead).not.toHaveBeenCalled()
     expect(mockLeadUpdateMany).not.toHaveBeenCalled()
-    expect(mockAiUsageCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          tenantId: TENANT,
-          feature: 'lead.score',
-          status: 'blocked',
-        }),
-      })
-    )
   })
 
   it('returns immediately when the lead is not found', async () => {

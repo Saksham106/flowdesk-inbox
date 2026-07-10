@@ -18,7 +18,13 @@ export type DraftReplyResult = {
   model: string
 }
 
+// Per-call OpenRouter routing context (tenant/user for budget + key
+// resolution). Optional on the type so prompt-builder-only tests can keep
+// constructing inputs without it; the transport layer requires it at runtime.
+export type AiCallContext = { tenantId: string; userId: string; userEmail: string }
+
 export type DraftReplyPromptInput = {
+  aiContext?: AiCallContext
   businessProfile: {
     businessName?: string | null
     industry?: string | null

@@ -19,6 +19,7 @@ const {
   mockGenerateDraftReply,
   mockCheckAiBudgetForTokens,
   mockSendConversationMessage,
+  mockUserFindFirst,
 } = vi.hoisted(() => ({
   mockAutopilotSettingFindUnique: vi.fn(),
   mockAutopilotSettingUpdate:     vi.fn(),
@@ -35,6 +36,7 @@ const {
   mockGenerateDraftReply:         vi.fn(),
   mockCheckAiBudgetForTokens:     vi.fn(),
   mockSendConversationMessage:    vi.fn(),
+  mockUserFindFirst:              vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -49,6 +51,7 @@ vi.mock('@/lib/prisma', () => ({
     auditLog: { create: mockAuditCreate, count: mockAuditCount },
     approvalRequest: { updateMany: mockApprovalUpdateMany },
     aiUsageEvent: { create: mockAiUsageCreate },
+    user: { findFirst: mockUserFindFirst },
   },
 }))
 
@@ -394,6 +397,14 @@ describe('attemptAutopilotSend', () => {
     mockAiUsageCreate.mockResolvedValue({})
     mockCheckAiBudgetForTokens.mockResolvedValue({ allowed: true, reason: 'Within budget' })
     mockApprovalUpdateMany.mockResolvedValue({ count: 0 })
+    mockUserFindFirst.mockResolvedValue({ id: 'owner-1', email: 'owner@example.com' })
+  })
+
+  it('returns sent: false when the tenant has no user to attribute the AI call to', async () => {
+    mockUserFindFirst.mockResolvedValue(null)
+    const result = await attemptAutopilotSend(JOB_ID, classification, policyOk)
+    expect(result.sent).toBe(false)
+    expect(mockGenerateDraftReply).not.toHaveBeenCalled()
   })
 
   it('sends draft and returns sent: true on success', async () => {

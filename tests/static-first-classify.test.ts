@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 // Static-first rule evaluation in the agent-job classification path:
-// a static rule match must short-circuit BEFORE any budget check or model
-// call — no OpenAI request, no AI budget spend, no AiUsageEvent row.
+// a static rule match must short-circuit BEFORE any AI gateway call — no
+// OpenRouter request, no AI budget spend, no AiUsageEvent row.
 
 const {
   mockConvFindFirst,
@@ -15,9 +15,9 @@ const {
   mockAgentRuleFindMany,
   mockSenderRuleFindMany,
   mockGetFullBusinessContext,
-  mockCheckAiBudgetForTokens,
   mockTenantFindUnique,
-  mockResponsesCreate,
+  mockUserFindFirst,
+  mockRunAiJsonFeature,
 } = vi.hoisted(() => ({
   mockConvFindFirst: vi.fn(),
   mockJobFindUnique: vi.fn(),
@@ -29,9 +29,9 @@ const {
   mockAgentRuleFindMany: vi.fn(),
   mockSenderRuleFindMany: vi.fn(),
   mockGetFullBusinessContext: vi.fn(),
-  mockCheckAiBudgetForTokens: vi.fn(),
   mockTenantFindUnique: vi.fn(),
-  mockResponsesCreate: vi.fn(),
+  mockUserFindFirst: vi.fn(),
+  mockRunAiJsonFeature: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -44,23 +44,16 @@ vi.mock("@/lib/prisma", () => ({
     tenant: { findUnique: mockTenantFindUnique },
     agentRule: { findMany: mockAgentRuleFindMany },
     senderRule: { findMany: mockSenderRuleFindMany },
+    user: { findFirst: mockUserFindFirst },
   },
 }))
 
-vi.mock("openai", () => ({
-  default: class OpenAI {
-    responses = { create: mockResponsesCreate }
-    chat = { completions: { create: mockResponsesCreate } }
-  },
+vi.mock("@/lib/ai/gateway", () => ({
+  runAiJsonFeature: mockRunAiJsonFeature,
 }))
 
 vi.mock("@/lib/agent/context", () => ({
   getFullBusinessContext: mockGetFullBusinessContext,
-}))
-
-vi.mock("@/lib/ai/budget", () => ({
-  checkAiBudgetForTokens: mockCheckAiBudgetForTokens,
-  estimateCostUsd: () => 0.01,
 }))
 
 vi.mock("@/lib/google", () => ({
@@ -80,6 +73,7 @@ import { runAgentJob } from "@/lib/agent/jobs"
 const TENANT = "tenant-1"
 const CONV_ID = "conv-1"
 const JOB_ID = "job-1"
+const OWNER = { id: "owner-1", email: "owner@example.com" }
 
 const baseJob = {
   id: JOB_ID,
@@ -118,7 +112,6 @@ const llmClassification = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  process.env.OPENAI_API_KEY = "test-key"
   mockJobFindUnique.mockResolvedValue(baseJob)
   mockJobUpdate.mockResolvedValue({})
   mockConvFindFirst.mockResolvedValue({
@@ -134,8 +127,12 @@ beforeEach(() => {
   mockAiUsageCreate.mockResolvedValue({})
   mockAgentRuleFindMany.mockResolvedValue([])
   mockSenderRuleFindMany.mockResolvedValue([])
-  mockCheckAiBudgetForTokens.mockResolvedValue({ allowed: true, reason: "Within budget" })
-  mockResponsesCreate.mockResolvedValue({ output_text: JSON.stringify(llmClassification) })
+  mockUserFindFirst.mockResolvedValue(OWNER)
+  mockRunAiJsonFeature.mockResolvedValue({
+    output: llmClassification,
+    model: "anthropic/claude-sonnet-4.5",
+    providerGenerationId: "gen-1",
+  })
 })
 
 describe("static-first classification in runAgentJob", () => {
@@ -145,9 +142,8 @@ describe("static-first classification in runAgentJob", () => {
     const result = await runAgentJob(JOB_ID)
 
     expect(result.status).toBe("completed")
-    // No model call, no budget check, no usage row: zero budget spend.
-    expect(mockResponsesCreate).not.toHaveBeenCalled()
-    expect(mockCheckAiBudgetForTokens).not.toHaveBeenCalled()
+    // No model call, no usage row: zero budget spend.
+    expect(mockRunAiJsonFeature).not.toHaveBeenCalled()
     expect(mockAiUsageCreate).not.toHaveBeenCalled()
 
     // Execution history records which rule (and version) fired.
@@ -194,29 +190,38 @@ describe("static-first classification in runAgentJob", () => {
     )
   })
 
-  it("falls back to the budget-gated LLM path when no static rule matches", async () => {
+  it("falls back to the AI gateway path when no static rule matches", async () => {
     const result = await runAgentJob(JOB_ID)
 
     expect(result.status).toBe("completed")
     if (result.status === "completed") {
       expect(result.intent).toBe("booking_request")
     }
-    expect(mockCheckAiBudgetForTokens).toHaveBeenCalled()
-    expect(mockResponsesCreate).toHaveBeenCalled()
-    expect(mockAiUsageCreate).toHaveBeenCalledWith(
+    expect(mockRunAiJsonFeature).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ feature: "agent.classify", status: "succeeded" }),
+        tenantId: TENANT,
+        userId: OWNER.id,
+        userEmail: OWNER.email,
+        feature: "agent.classify",
       })
     )
   })
 
   it("keeps the LLM budget gate on the fallback path", async () => {
-    mockCheckAiBudgetForTokens.mockResolvedValue({ allowed: false, reason: "Daily AI spend limit reached" })
+    mockRunAiJsonFeature.mockRejectedValue(new Error("Daily AI spend limit reached"))
 
     const result = await runAgentJob(JOB_ID)
 
     expect(result.status).toBe("failed")
-    expect(mockResponsesCreate).not.toHaveBeenCalled()
+  })
+
+  it("fails clearly when the tenant has no user to attribute the AI call to", async () => {
+    mockUserFindFirst.mockResolvedValue(null)
+
+    const result = await runAgentJob(JOB_ID)
+
+    expect(result.status).toBe("failed")
+    expect(mockRunAiJsonFeature).not.toHaveBeenCalled()
   })
 
   it("skips static evaluation gracefully when the conversation has no inbound message", async () => {
@@ -230,6 +235,6 @@ describe("static-first classification in runAgentJob", () => {
     const result = await runAgentJob(JOB_ID)
 
     expect(result.status).toBe("completed")
-    expect(mockResponsesCreate).toHaveBeenCalled()
+    expect(mockRunAiJsonFeature).toHaveBeenCalled()
   })
 })

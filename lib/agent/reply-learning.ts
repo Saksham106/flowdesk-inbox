@@ -81,6 +81,7 @@ export async function trainLearnedReplyProfile(input: {
   tenantId: string
   channelId?: string | null
   profileType: ReplyProfileTypeValue
+  aiContext?: { userId: string; userEmail: string }
 }): Promise<{ profileId: string; sampleCount: number; fromDb: number; fromGmail: number }> {
   const dbSamples = await collectOutboundReplySamples({
     tenantId: input.tenantId,
@@ -133,7 +134,12 @@ export async function trainLearnedReplyProfile(input: {
   }
 
   try {
-    result = await summarizeLearnedReplyProfile(samples)
+    result = await summarizeLearnedReplyProfile(
+      samples,
+      input.aiContext
+        ? { tenantId: input.tenantId, userId: input.aiContext.userId, userEmail: input.aiContext.userEmail }
+        : undefined
+    )
     await recordAiUsageEvent({
       tenantId: input.tenantId,
       feature: "reply_learning.train",

@@ -209,10 +209,7 @@ describe('buildPersonalDraftReplyPrompt', () => {
 })
 
 describe('generateDraftReplyWithOpenAI', () => {
-  it('fails clearly when OPENAI_API_KEY is missing', async () => {
-    const previous = process.env.OPENAI_API_KEY
-    delete process.env.OPENAI_API_KEY
-
+  it('fails clearly when no aiContext (tenant/user) is provided to route through OpenRouter', async () => {
     await expect(
       generateDraftReplyWithOpenAI({
         businessProfile: null,
@@ -220,12 +217,6 @@ describe('generateDraftReplyWithOpenAI', () => {
         conversationSummary: null,
         messages: [],
       })
-    ).rejects.toThrow('OPENAI_API_KEY is not configured')
-
-    if (previous === undefined) {
-      delete process.env.OPENAI_API_KEY
-    } else {
-      process.env.OPENAI_API_KEY = previous
-    }
+    ).rejects.toThrow('AI provider is not configured')
   })
 })

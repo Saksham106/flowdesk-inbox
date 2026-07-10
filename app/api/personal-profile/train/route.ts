@@ -39,10 +39,11 @@ export async function POST() {
       tenantId,
       channelId: channel.id,
       profileType: accountModeFor(tenant),
+      aiContext: { userId: session.user.id, userEmail: session.user.email ?? "" },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to train reply style";
-    const status = message.includes("OPENAI_API_KEY") ? 503 : 502;
+    const status = message.includes("spend limit reached") ? 429 : 502;
     return NextResponse.json({ error: message }, { status });
   }
 

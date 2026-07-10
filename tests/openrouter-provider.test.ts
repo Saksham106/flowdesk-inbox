@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest"
 
 describe("callOpenRouterJson", () => {
@@ -50,5 +51,21 @@ describe("callOpenRouterJson", () => {
     const body = JSON.parse((fetch as unknown as Mock).mock.calls[0][1].body)
     expect(body.user).toBe("u1")
     expect(body.response_format.type).toBe("json_schema")
+  })
+})
+
+describe("AI gateway migration contract", () => {
+  it("keeps app AI paths off direct OPENAI_API_KEY checks", () => {
+    for (const path of [
+      "lib/agent/classify.ts",
+      "lib/agent/rule-compiler.ts",
+      "lib/agent/inbox-chat.ts",
+      "lib/agent/person-memory.ts",
+      "app/api/chat/route.ts",
+      "app/api/conversations/[id]/draft/suggest/route.ts",
+    ]) {
+      const source = readFileSync(path, "utf8")
+      expect(source).not.toContain("OPENAI_API_KEY")
+    }
   })
 })

@@ -11,7 +11,10 @@ export type LeadScoringResult = {
   model: string
 }
 
+export type AiCallContext = { tenantId: string; userId: string; userEmail: string }
+
 export type LeadScoringPromptInput = {
+  aiContext?: AiCallContext
   messages: Array<{
     direction: string
     body: string

@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import OpenAI from "openai"
 import { createHash } from "crypto"
 
 import { authOptions } from "@/lib/auth"
 import { detectSensitiveMatches } from "@/lib/agent/risk-radar"
 import { getReplyGenerationContext } from "@/lib/agent/reply-context"
 import { generateDraftReply } from "@/lib/ai/provider"
+import { runAiJsonFeature } from "@/lib/ai/gateway"
 import { buildDraftReplyPrompt, buildPersonalDraftReplyPrompt, draftReplyJsonSchema, normalizeDraftReplyOutput } from "@/lib/ai/prompts/draft-reply"
 import { summarizeConversation } from "@/lib/ai/summarize"
 import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
-import { checkAiBudget, estimateCostUsd } from "@/lib/ai/budget"
 import { prisma } from "@/lib/prisma"
 import { revalidateInboxViews } from "@/lib/cache-tags"
 import { conversationUpdateForDraftReady } from "@/lib/workflow-status-transitions"
@@ -100,48 +99,31 @@ export async function POST(
     })
     if (cached) return cached
 
-    const apiKey = process.env.OPENAI_API_KEY
-    if (!apiKey) {
-      return NextResponse.json({ error: "OPENAI_API_KEY is not configured" }, { status: 503 })
-    }
-
-    const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
-    const budgetCheck = await checkAiBudget(
-      session.user.tenantId,
-      estimateCostUsd(model, estimatedPromptTokens, 500)
-    )
-    if (!budgetCheck.allowed) {
-      return NextResponse.json({ error: budgetCheck.reason }, { status: 429 })
-    }
-    const client = new OpenAI({ apiKey })
-
-    let rawResponse: OpenAI.Responses.Response
     try {
-      rawResponse = await client.responses.create({
-        model,
-        input: prompt,
-        text: {
-          format: {
-            type: "json_schema",
-            name: "flowdesk_draft_reply",
-            strict: true,
-            schema: draftReplyJsonSchema,
-          },
-        },
+      const { output, model: resolvedModel } = await runAiJsonFeature<Record<string, unknown>>({
+        tenantId: session.user.tenantId,
+        userId: session.user.id,
+        userEmail: session.user.email ?? "",
+        feature: "autopilot.draft",
+        messages: [{ role: "user", content: prompt }],
+        schemaName: "flowdesk_draft_reply",
+        schema: draftReplyJsonSchema,
+        estimatedInputTokens: estimatedPromptTokens,
+        estimatedOutputTokens: 500,
       })
+      result = normalizeDraftReplyOutput(JSON.stringify(output), resolvedModel)
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to generate AI draft"
+      const status = message.includes("spend limit reached") ? 429 : 502
       await recordAiUsageEvent({
         tenantId: session.user.tenantId,
         feature: "draft.suggest",
-        model,
+        model: "unknown",
         estimatedInputTokens: estimatedPromptTokens,
-        status: "failed",
+        status: status === 429 ? "blocked" : "failed",
       })
-      return NextResponse.json({ error: message }, { status: 502 })
+      return NextResponse.json({ error: message }, { status })
     }
-
-    result = normalizeDraftReplyOutput(rawResponse.output_text, model)
   } else {
     if (!context.businessProfile) {
       return NextResponse.json({ error: "Business profile is required before generating drafts" }, { status: 400 })
@@ -158,6 +140,11 @@ export async function POST(
       ? (latestJob.slotsJson as string[])
       : undefined
     const draftInput = {
+      aiContext: {
+        tenantId: session.user.tenantId,
+        userId: session.user.id,
+        userEmail: session.user.email ?? "",
+      },
       businessProfile: context.businessProfile,
       knowledgeDocuments: context.knowledgeDocuments,
       learnedReplyProfile: context.learnedProfile,
@@ -179,26 +166,17 @@ export async function POST(
     })
     if (cached) return cached
 
-    const businessModel = process.env.OPENAI_MODEL || "gpt-5.4-mini"
-    const budgetCheck = await checkAiBudget(
-      session.user.tenantId,
-      estimateCostUsd(businessModel, estimatedPromptTokens, 500)
-    )
-    if (!budgetCheck.allowed) {
-      return NextResponse.json({ error: budgetCheck.reason }, { status: 429 })
-    }
-
     try {
       result = await generateDraftReply(draftInput)
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to generate AI draft"
-      const status = message.includes("OPENAI_API_KEY") ? 503 : 502
+      const status = message.includes("spend limit reached") ? 429 : 502
       await recordAiUsageEvent({
         tenantId: session.user.tenantId,
         feature: "draft.suggest",
-        model: process.env.OPENAI_MODEL || "gpt-5.4-mini",
+        model: "unknown",
         estimatedInputTokens: estimatedPromptTokens,
-        status: "failed",
+        status: status === 429 ? "blocked" : "failed",
       })
       return NextResponse.json({ error: message }, { status })
     }

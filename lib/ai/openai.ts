@@ -1,9 +1,14 @@
-import OpenAI from "openai"
+// Transport is OpenRouter (via lib/ai/gateway.ts's runAiJsonFeature), not the
+// OpenAI SDK. The "*WithOpenAI" names are retained as compatibility names for
+// existing callers/tests; see the note on each export below.
+import { runAiJsonFeature } from "@/lib/ai/gateway"
+import { estimateTokenCount } from "@/lib/ai/usage"
 
 import {
   buildDraftReplyPrompt,
   draftReplyJsonSchema,
   normalizeDraftReplyOutput,
+  type AiCallContext,
   type DraftReplyPromptInput,
   type DraftReplyResult,
   type PersonalStyleProfile,
@@ -44,60 +49,57 @@ import {
   type LeadScoringResult,
 } from "@/lib/ai/prompts/lead-scoring"
 
+function requireAiContext(aiContext: AiCallContext | undefined, fnName: string): AiCallContext {
+  if (!aiContext) {
+    throw new Error(
+      `AI provider is not configured: ${fnName} requires tenant/user context (aiContext) to route through OpenRouter`
+    )
+  }
+  return aiContext
+}
+
+// Compatibility name retained for existing tests/callers; transport is OpenRouter.
 export async function generateDraftReplyWithOpenAI(
   input: DraftReplyPromptInput
 ): Promise<DraftReplyResult> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured")
-  }
-
-  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
-  const client = new OpenAI({ apiKey })
+  const aiContext = requireAiContext(input.aiContext, "generateDraftReplyWithOpenAI")
   const prompt = buildDraftReplyPrompt(input)
 
-  const response = await client.responses.create({
-    model,
-    input: prompt,
-    text: {
-      format: {
-        type: "json_schema",
-        name: "flowdesk_draft_reply",
-        strict: true,
-        schema: draftReplyJsonSchema,
-      },
-    },
+  const { output, model } = await runAiJsonFeature<Record<string, unknown>>({
+    tenantId: aiContext.tenantId,
+    userId: aiContext.userId,
+    userEmail: aiContext.userEmail,
+    feature: "autopilot.draft",
+    messages: [{ role: "user", content: prompt }],
+    schemaName: "flowdesk_draft_reply",
+    schema: draftReplyJsonSchema,
+    estimatedInputTokens: estimateTokenCount(prompt),
+    estimatedOutputTokens: 500,
   })
 
-  return normalizeDraftReplyOutput(response.output_text, model)
+  return normalizeDraftReplyOutput(JSON.stringify(output), model)
 }
 
+// Compatibility name retained for existing tests/callers; transport is OpenRouter.
 export async function explainThreadWithOpenAI(
   input: ExplainThreadPromptInput
 ): Promise<ExplainThreadResult> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured")
-  }
-
-  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
-  const client = new OpenAI({ apiKey })
+  const aiContext = requireAiContext(input.aiContext, "explainThreadWithOpenAI")
   const prompt = buildExplainThreadPrompt(input)
 
-  const response = await client.responses.create({
-    model,
-    input: prompt,
-    text: {
-      format: {
-        type: "json_schema",
-        name: "flowdesk_explain_thread",
-        strict: true,
-        schema: explainThreadJsonSchema,
-      },
-    },
+  const { output, model } = await runAiJsonFeature<Record<string, unknown>>({
+    tenantId: aiContext.tenantId,
+    userId: aiContext.userId,
+    userEmail: aiContext.userEmail,
+    feature: "conversation.explain",
+    messages: [{ role: "user", content: prompt }],
+    schemaName: "flowdesk_explain_thread",
+    schema: explainThreadJsonSchema,
+    estimatedInputTokens: estimateTokenCount(prompt),
+    estimatedOutputTokens: 800,
   })
 
-  return normalizeExplainThreadOutput(response.output_text, model)
+  return normalizeExplainThreadOutput(JSON.stringify(output), model)
 }
 
 const personalStyleJsonSchema = {
@@ -125,16 +127,12 @@ const personalStyleJsonSchema = {
   },
 }
 
+// Compatibility name retained for existing tests/callers; transport is OpenRouter.
 export async function generatePersonalStyleProfileWithOpenAI(
-  messages: Array<{ body: string; createdAt: Date }>
+  messages: Array<{ body: string; createdAt: Date }>,
+  aiContext?: AiCallContext
 ): Promise<PersonalStyleProfile> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured")
-  }
-
-  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
-  const client = new OpenAI({ apiKey })
+  const context = requireAiContext(aiContext, "generatePersonalStyleProfileWithOpenAI")
 
   const messageBlock = messages
     .map((m, i) => `[${i + 1}] (${m.createdAt.toISOString()})\n${m.body}`)
@@ -168,25 +166,17 @@ export async function generatePersonalStyleProfileWithOpenAI(
     messageBlock,
   ].join("\n")
 
-  const response = await client.responses.create({
-    model,
-    input: prompt,
-    text: {
-      format: {
-        type: "json_schema",
-        name: "flowdesk_personal_style",
-        strict: true,
-        schema: personalStyleJsonSchema,
-      },
-    },
+  const { output: parsed } = await runAiJsonFeature<Record<string, unknown>>({
+    tenantId: context.tenantId,
+    userId: context.userId,
+    userEmail: context.userEmail,
+    feature: "personal_profile.train",
+    messages: [{ role: "user", content: prompt }],
+    schemaName: "flowdesk_personal_style",
+    schema: personalStyleJsonSchema,
+    estimatedInputTokens: estimateTokenCount(prompt),
+    estimatedOutputTokens: 400,
   })
-
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(response.output_text)
-  } catch {
-    throw new Error("AI response was not valid JSON")
-  }
 
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new Error("AI response was not an object")
@@ -209,104 +199,91 @@ export async function generatePersonalStyleProfileWithOpenAI(
   }
 }
 
+// Compatibility name retained for existing tests/callers; transport is OpenRouter.
 export async function summarizeLearnedReplyProfileWithOpenAI(
-  samples: ReplyLearningSample[]
+  samples: ReplyLearningSample[],
+  aiContext?: AiCallContext
 ): Promise<LearnedReplyProfileResult> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured")
-  }
-
-  const model = process.env.OPENAI_LEARNING_MODEL || process.env.OPENAI_MODEL || "gpt-5.4-mini"
-  const client = new OpenAI({ apiKey })
+  const context = requireAiContext(aiContext, "summarizeLearnedReplyProfileWithOpenAI")
   const prompt = buildLearnedReplyProfilePrompt(samples)
 
-  const response = await client.responses.create({
-    model,
-    input: prompt,
-    text: {
-      format: {
-        type: "json_schema",
-        name: "flowdesk_learned_reply_profile",
-        strict: true,
-        schema: learnedReplyProfileJsonSchema,
-      },
-    },
+  const { output, model } = await runAiJsonFeature<Record<string, unknown>>({
+    tenantId: context.tenantId,
+    userId: context.userId,
+    userEmail: context.userEmail,
+    feature: "reply_learning.summarize",
+    messages: [{ role: "user", content: prompt }],
+    schemaName: "flowdesk_learned_reply_profile",
+    schema: learnedReplyProfileJsonSchema,
+    estimatedInputTokens: estimateTokenCount(prompt),
+    estimatedOutputTokens: 800,
   })
 
-  return normalizeLearnedReplyProfileOutput(response.output_text, model, samples, prompt)
+  return normalizeLearnedReplyProfileOutput(JSON.stringify(output), model, samples, prompt)
 }
 
+// Compatibility name retained for existing tests/callers; transport is OpenRouter.
 export async function generateMeetingPrepWithOpenAI(
   input: MeetingPrepPromptInput
 ): Promise<MeetingPrepResult> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured")
-  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
-  const client = new OpenAI({ apiKey })
+  const aiContext = requireAiContext(input.aiContext, "generateMeetingPrepWithOpenAI")
   const prompt = buildMeetingPrepPrompt(input)
-  const response = await client.responses.create({
-    model,
-    input: prompt,
-    text: {
-      format: {
-        type: "json_schema",
-        name: "flowdesk_meeting_prep",
-        strict: true,
-        schema: meetingPrepJsonSchema,
-      },
-    },
+
+  const { output, model } = await runAiJsonFeature<Record<string, unknown>>({
+    tenantId: aiContext.tenantId,
+    userId: aiContext.userId,
+    userEmail: aiContext.userEmail,
+    feature: "meeting.prep",
+    messages: [{ role: "user", content: prompt }],
+    schemaName: "flowdesk_meeting_prep",
+    schema: meetingPrepJsonSchema,
+    estimatedInputTokens: estimateTokenCount(prompt),
+    estimatedOutputTokens: 800,
   })
-  return normalizeMeetingPrepOutput(response.output_text, model)
+
+  return normalizeMeetingPrepOutput(JSON.stringify(output), model)
 }
 
+// Compatibility name retained for existing tests/callers; transport is OpenRouter.
 export async function generateMeetingFollowUpWithOpenAI(
   input: MeetingFollowUpPromptInput
 ): Promise<MeetingFollowUpResult> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured")
-  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
-  const client = new OpenAI({ apiKey })
+  const aiContext = requireAiContext(input.aiContext, "generateMeetingFollowUpWithOpenAI")
   const prompt = buildMeetingFollowUpPrompt(input)
-  const response = await client.responses.create({
-    model,
-    input: prompt,
-    text: {
-      format: {
-        type: "json_schema",
-        name: "flowdesk_meeting_follow_up",
-        strict: true,
-        schema: meetingFollowUpJsonSchema,
-      },
-    },
+
+  const { output, model } = await runAiJsonFeature<Record<string, unknown>>({
+    tenantId: aiContext.tenantId,
+    userId: aiContext.userId,
+    userEmail: aiContext.userEmail,
+    feature: "meeting.follow_up",
+    messages: [{ role: "user", content: prompt }],
+    schemaName: "flowdesk_meeting_follow_up",
+    schema: meetingFollowUpJsonSchema,
+    estimatedInputTokens: estimateTokenCount(prompt),
+    estimatedOutputTokens: 600,
   })
-  return normalizeMeetingFollowUpOutput(response.output_text, model)
+
+  return normalizeMeetingFollowUpOutput(JSON.stringify(output), model)
 }
 
+// Compatibility name retained for existing tests/callers; transport is OpenRouter.
 export async function scoreLeadWithOpenAI(
   input: LeadScoringPromptInput
 ): Promise<LeadScoringResult> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured")
-  }
-
-  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
-  const client = new OpenAI({ apiKey })
+  const aiContext = requireAiContext(input.aiContext, "scoreLeadWithOpenAI")
   const prompt = buildLeadScoringPrompt(input)
 
-  const response = await client.responses.create({
-    model,
-    input: prompt,
-    text: {
-      format: {
-        type: "json_schema",
-        name: "flowdesk_lead_scoring",
-        strict: true,
-        schema: leadScoringJsonSchema,
-      },
-    },
+  const { output, model } = await runAiJsonFeature<Record<string, unknown>>({
+    tenantId: aiContext.tenantId,
+    userId: aiContext.userId,
+    userEmail: aiContext.userEmail,
+    feature: "lead.score",
+    messages: [{ role: "user", content: prompt }],
+    schemaName: "flowdesk_lead_scoring",
+    schema: leadScoringJsonSchema,
+    estimatedInputTokens: estimateTokenCount(prompt),
+    estimatedOutputTokens: 500,
   })
 
-  return normalizeLeadScoringOutput(response.output_text, model)
+  return normalizeLeadScoringOutput(JSON.stringify(output), model)
 }

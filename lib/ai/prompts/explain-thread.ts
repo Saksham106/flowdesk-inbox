@@ -14,7 +14,10 @@ export type ExplainThreadResult = {
   model: string
 }
 
+export type AiCallContext = { tenantId: string; userId: string; userEmail: string }
+
 export type ExplainThreadPromptInput = {
+  aiContext?: AiCallContext
   contactName?: string | null
   conversationStatus?: string | null
   messages: Array<{

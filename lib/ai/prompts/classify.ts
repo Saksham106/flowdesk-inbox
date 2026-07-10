@@ -25,7 +25,10 @@ export type ClassifyResult = {
   requiresApproval: boolean
 }
 
+export type AiCallContext = { tenantId: string; userId: string; userEmail: string }
+
 export type ClassifyPromptInput = {
+  aiContext?: AiCallContext
   accountType?: "personal" | "business" | null
   businessProfile: {
     businessName?: string | null

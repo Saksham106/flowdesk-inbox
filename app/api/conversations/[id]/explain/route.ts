@@ -3,9 +3,6 @@ import { getServerSession } from "next-auth"
 
 import { authOptions } from "@/lib/auth"
 import { explainThread } from "@/lib/ai/provider"
-import { buildExplainThreadPrompt } from "@/lib/ai/prompts/explain-thread"
-import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
-import { checkAiBudget, estimateCostUsd } from "@/lib/ai/budget"
 import { prisma } from "@/lib/prisma"
 
 export const runtime = "nodejs"
@@ -43,44 +40,26 @@ export async function POST(
   }
 
   const input = {
+    aiContext: {
+      tenantId: session.user.tenantId,
+      userId: session.user.id,
+      userEmail: session.user.email ?? "",
+    },
     contactName: conversation.contact?.name ?? null,
     conversationStatus: conversation.status,
     messages: conversation.messages,
   }
 
-  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
-  const promptTokens = estimateTokenCount(buildExplainThreadPrompt(input))
-  const budgetCheck = await checkAiBudget(
-    session.user.tenantId,
-    estimateCostUsd(model, promptTokens, 800)
-  )
-  if (!budgetCheck.allowed) {
-    return NextResponse.json({ error: budgetCheck.reason }, { status: 429 })
-  }
-
+  // Budget checks and AiUsageEvent recording happen inside runAiJsonFeature
+  // (via explainThread -> explainThreadWithOpenAI), keyed by "conversation.explain".
   let result: Awaited<ReturnType<typeof explainThread>>
   try {
     result = await explainThread(input)
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to explain thread"
-    const status = message.includes("OPENAI_API_KEY") ? 503 : 502
-    await recordAiUsageEvent({
-      tenantId: session.user.tenantId,
-      feature: "explain_thread",
-      model: process.env.OPENAI_MODEL || "gpt-5.4-mini",
-      status: "failed",
-    })
+    const status = message.includes("spend limit reached") ? 429 : 502
     return NextResponse.json({ error: message }, { status })
   }
-
-  await recordAiUsageEvent({
-    tenantId: session.user.tenantId,
-    feature: "explain_thread",
-    model: result.model,
-    estimatedInputTokens: estimateTokenCount(buildExplainThreadPrompt(input)),
-    estimatedOutputTokens: estimateTokenCount(JSON.stringify(result)),
-    status: "succeeded",
-  })
 
   await prisma.auditLog.create({
     data: {

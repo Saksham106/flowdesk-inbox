@@ -2,40 +2,34 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const {
   mockContactFindFirst,
+  mockUserFindFirst,
   mockPersonMemoryFindUnique,
   mockPersonMemoryUpsert,
   mockAuditCreate,
   mockAiUsageCreate,
-  mockOpenAiCreate,
-  mockCheckAiBudgetForTokens,
+  mockRunAiJsonFeature,
 } = vi.hoisted(() => ({
   mockContactFindFirst: vi.fn(),
+  mockUserFindFirst: vi.fn(),
   mockPersonMemoryFindUnique: vi.fn(),
   mockPersonMemoryUpsert: vi.fn(),
   mockAuditCreate: vi.fn(),
   mockAiUsageCreate: vi.fn(),
-  mockOpenAiCreate: vi.fn(),
-  mockCheckAiBudgetForTokens: vi.fn(),
+  mockRunAiJsonFeature: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     contact: { findFirst: mockContactFindFirst },
+    user: { findFirst: mockUserFindFirst },
     personMemory: { findUnique: mockPersonMemoryFindUnique, upsert: mockPersonMemoryUpsert },
     auditLog: { create: mockAuditCreate },
     aiUsageEvent: { create: mockAiUsageCreate },
   },
 }))
 
-vi.mock("openai", () => ({
-  default: vi.fn().mockImplementation(() => ({
-    responses: { create: mockOpenAiCreate },
-  })),
-}))
-
-vi.mock("@/lib/ai/budget", () => ({
-  checkAiBudgetForTokens: mockCheckAiBudgetForTokens,
-  estimateCostUsd: () => 0.01,
+vi.mock("@/lib/ai/gateway", () => ({
+  runAiJsonFeature: mockRunAiJsonFeature,
 }))
 
 import {
@@ -44,6 +38,7 @@ import {
 } from "@/lib/agent/person-memory"
 
 const now = new Date("2026-06-15T12:00:00.000Z")
+const owner = { id: "owner-1", email: "owner@example.com" }
 const contact = {
   id: "contact-1",
   tenantId: "tenant-1",
@@ -64,22 +59,22 @@ const contact = {
 describe("person memory AI cache", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    process.env.OPENAI_API_KEY = "test-key"
-    process.env.OPENAI_MODEL = "gpt-test"
+    mockUserFindFirst.mockResolvedValue(owner)
     mockContactFindFirst.mockResolvedValue(contact)
     mockPersonMemoryFindUnique.mockResolvedValue(null)
     mockPersonMemoryUpsert.mockResolvedValue({})
     mockAuditCreate.mockResolvedValue({})
     mockAiUsageCreate.mockResolvedValue({})
-    mockOpenAiCreate.mockResolvedValue({
-      output_text: JSON.stringify({
+    mockRunAiJsonFeature.mockResolvedValue({
+      output: {
         summary: "Alice is discussing a proposal.",
         preferences: "Prefers concise updates.",
         openQuestions: null,
         promisedActions: "Send the proposal.",
-      }),
+      },
+      model: "anthropic/claude-sonnet-4.5",
+      providerGenerationId: "gen-1",
     })
-    mockCheckAiBudgetForTokens.mockResolvedValue({ allowed: true, reason: "Within budget" })
   })
 
   it("builds a stable hash from cleaned message content", () => {
@@ -94,7 +89,7 @@ describe("person memory AI cache", () => {
     expect(hashA).toMatch(/^[a-f0-9]{64}$/)
   })
 
-  it("returns cache_hit and avoids OpenAI when the content hash has not changed", async () => {
+  it("returns cache_hit and avoids the AI gateway when the content hash has not changed", async () => {
     const contentHash = buildPersonMemoryContentHash(
       contact.conversations.flatMap((conversation) => conversation.messages)
     )
@@ -107,7 +102,7 @@ describe("person memory AI cache", () => {
     const result = await syncPersonMemoryWithLLM("tenant-1", "contact-1")
 
     expect(result.status).toBe("cache_hit")
-    expect(mockOpenAiCreate).not.toHaveBeenCalled()
+    expect(mockRunAiJsonFeature).not.toHaveBeenCalled()
     expect(mockAiUsageCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -118,34 +113,64 @@ describe("person memory AI cache", () => {
     )
   })
 
-  it("calls OpenAI and stores cache metadata when content changed", async () => {
+  it("calls the AI gateway and stores cache metadata when content changed", async () => {
     const result = await syncPersonMemoryWithLLM("tenant-1", "contact-1")
 
     expect(result.status).toBe("llm_completed")
-    expect(mockOpenAiCreate).toHaveBeenCalledOnce()
+    expect(mockRunAiJsonFeature).toHaveBeenCalledOnce()
+    expect(mockRunAiJsonFeature).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        userId: owner.id,
+        userEmail: owner.email,
+        feature: "person_memory.llm",
+      })
+    )
     expect(mockPersonMemoryUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
           source: "llm",
           contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
-          model: "gpt-test",
+          model: "anthropic/claude-sonnet-4.5",
           llmSyncedAt: expect.any(Date),
         }),
         update: expect.objectContaining({
           source: "llm",
           contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
-          model: "gpt-test",
+          model: "anthropic/claude-sonnet-4.5",
           llmSyncedAt: expect.any(Date),
         }),
       })
     )
   })
 
-  it("returns llm_failed without calling OpenAI when AI budget would be exceeded", async () => {
-    mockCheckAiBudgetForTokens.mockResolvedValue({
-      allowed: false,
-      reason: "Daily AI spend limit reached",
-    })
+  it("uses a dynamic feature key when featureContext is provided", async () => {
+    await syncPersonMemoryWithLLM("tenant-1", "contact-1", { featureContext: "onboarding" })
+
+    expect(mockRunAiJsonFeature).toHaveBeenCalledWith(
+      expect.objectContaining({ feature: "person_memory.onboarding" })
+    )
+  })
+
+  it("returns llm_failed without calling the AI gateway when the tenant has no user", async () => {
+    mockUserFindFirst.mockResolvedValue(null)
+
+    const result = await syncPersonMemoryWithLLM("tenant-1", "contact-1")
+
+    expect(result.status).toBe("deterministic")
+    expect(mockRunAiJsonFeature).not.toHaveBeenCalled()
+    expect(mockAiUsageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          feature: "person_memory.deterministic_fallback",
+          status: "skipped",
+        }),
+      })
+    )
+  })
+
+  it("falls back to a deterministic summary when the AI gateway throws (e.g. budget exceeded)", async () => {
+    mockRunAiJsonFeature.mockRejectedValue(new Error("Daily AI spend limit reached"))
 
     const result = await syncPersonMemoryWithLLM("tenant-1", "contact-1")
 
@@ -153,13 +178,10 @@ describe("person memory AI cache", () => {
     if (result.status === "llm_failed") {
       expect(result.reason).toBe("Daily AI spend limit reached")
     }
-    expect(mockOpenAiCreate).not.toHaveBeenCalled()
-    expect(mockAiUsageCreate).toHaveBeenCalledWith(
+    // Falls back to the deterministic summary rather than leaving no memory.
+    expect(mockPersonMemoryUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          feature: "person_memory.llm",
-          status: "blocked",
-        }),
+        create: expect.objectContaining({ source: "deterministic" }),
       })
     )
   })

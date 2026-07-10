@@ -36,7 +36,10 @@ export type MeetingPrepAttendee = {
   recentMessages: Array<{ direction: string; body: string; createdAt: Date }>
 }
 
+export type AiCallContext = { tenantId: string; userId: string; userEmail: string }
+
 export type MeetingPrepPromptInput = {
+  aiContext?: AiCallContext
   eventTitle: string
   eventStart: Date
   attendees: MeetingPrepAttendee[]

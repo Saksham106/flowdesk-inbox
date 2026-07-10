@@ -1,6 +1,6 @@
-import OpenAI from "openai"
-import { checkAiBudgetForTokens } from "@/lib/ai/budget"
-import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
+import { runAiJsonFeature } from "@/lib/ai/gateway"
+import { estimateTokenCount } from "@/lib/ai/usage"
+import { prisma } from "@/lib/prisma"
 
 export type CompiledRule = {
   ruleType: string
@@ -57,16 +57,34 @@ function tryRegexCompile(plainText: string): CompiledRule | null {
   return null
 }
 
+const ruleCompileJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["ruleType", "conditionsJson", "actionJson", "confidence"],
+  properties: {
+    ruleType: { type: "string" },
+    conditionsJson: { type: "object", additionalProperties: true },
+    actionJson: { type: "object", additionalProperties: true },
+    confidence: { type: "number" },
+  },
+}
+
 export async function compileRule(tenantId: string, plainText: string): Promise<CompiledRule> {
   // Try fast regex path first
   const regexResult = tryRegexCompile(plainText)
   if (regexResult) return regexResult
 
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
-    throw new RuleCompileError("OPENAI_API_KEY is not configured", 503)
+  // Background/API caller has no session user in scope here — resolve the
+  // tenant's earliest user as the owner for OpenRouter key + budget
+  // attribution, and fail clearly if the tenant somehow has no user.
+  const owner = await prisma.user.findFirst({
+    where: { tenantId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, email: true },
+  })
+  if (!owner) {
+    throw new RuleCompileError("No user found for tenant; cannot compile rule", 503)
   }
-  const model = process.env.OPENAI_MODEL || "gpt-5.4-mini"
 
   const sanitizedText = plainText.replace(/["\n\r]/g, " ").slice(0, 500)
 
@@ -82,76 +100,41 @@ User rule: "${sanitizedText}"
 Respond with ONLY valid JSON matching this shape:
 { "ruleType": "attention", "conditionsJson": {...}, "actionJson": {...}, "confidence": 0.0 }`
 
-  const estimatedInputTokens = estimateTokenCount(prompt)
-  const budgetCheck = await checkAiBudgetForTokens({
-    tenantId,
-    model,
-    estimatedInputTokens,
-    estimatedOutputTokens: 200,
-  })
-  if (!budgetCheck.allowed) {
-    await recordAiUsageEvent({
-      tenantId,
-      feature: "agent_rule.compile",
-      model,
-      estimatedInputTokens,
-      status: "blocked",
-    })
-    throw new RuleCompileError(budgetCheck.reason, 429)
-  }
-
-  const client = new OpenAI({ apiKey })
-  let completion
-  try {
-    completion = await client.chat.completions.create({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0,
-      max_tokens: 200,
-    })
-  } catch (err) {
-    await recordAiUsageEvent({
-      tenantId,
-      feature: "agent_rule.compile",
-      model,
-      estimatedInputTokens,
-      status: "failed",
-    })
-    throw err
-  }
-
   const validRuleTypes = ["attention"]
   const validTargetAttentions = ["needs_reply","needs_action","review_soon","read_later","waiting_on","fyi_done","quiet"]
 
-  const raw = completion.choices[0]?.message?.content?.trim() ?? ""
-
-  await recordAiUsageEvent({
-    tenantId,
-    feature: "agent_rule.compile",
-    model,
-    estimatedInputTokens,
-    estimatedOutputTokens: estimateTokenCount(raw),
-    status: "succeeded",
-  })
+  let parsed: Record<string, unknown>
   try {
-    const parsed = JSON.parse(raw)
-    const ruleType = validRuleTypes.includes(parsed.ruleType) ? parsed.ruleType : "attention"
-    const targetAttention = parsed.actionJson?.targetAttention
-    const safeTargetAttention = validTargetAttentions.includes(targetAttention)
-      ? targetAttention
-      : undefined
-    return {
-      ruleType,
-      conditionsJson: parsed.conditionsJson ?? {},
-      actionJson: safeTargetAttention ? { targetAttention: safeTargetAttention } : {},
-      confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.5,
-    }
-  } catch {
-    return {
-      ruleType: "attention",
-      conditionsJson: {},
-      actionJson: {},
-      confidence: 0,
-    }
+    const { output } = await runAiJsonFeature<Record<string, unknown>>({
+      tenantId,
+      userId: owner.id,
+      userEmail: owner.email,
+      feature: "agent_rule.compile",
+      messages: [{ role: "user", content: prompt }],
+      schemaName: "flowdesk_rule_compile",
+      schema: ruleCompileJsonSchema,
+      temperature: 0,
+      maxTokens: 200,
+      estimatedInputTokens: estimateTokenCount(prompt),
+      estimatedOutputTokens: 200,
+    })
+    parsed = output
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to compile rule"
+    const status = message.includes("spend limit reached") ? 429 : 503
+    throw new RuleCompileError(message, status)
+  }
+
+  const ruleType = validRuleTypes.includes(parsed.ruleType as string) ? (parsed.ruleType as string) : "attention"
+  const actionJson = parsed.actionJson as Record<string, unknown> | undefined
+  const targetAttention = actionJson?.targetAttention
+  const safeTargetAttention = validTargetAttentions.includes(targetAttention as string)
+    ? (targetAttention as string)
+    : undefined
+  return {
+    ruleType,
+    conditionsJson: (parsed.conditionsJson as Record<string, unknown>) ?? {},
+    actionJson: safeTargetAttention ? { targetAttention: safeTargetAttention } : {},
+    confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.5,
   }
 }

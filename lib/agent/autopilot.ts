@@ -236,8 +236,21 @@ export async function attemptAutopilotSend(
     return { sent: false, reason: autonomy.reason }
   }
 
+  // Autopilot runs as a background job with no session user — resolve the
+  // tenant's earliest user as the owner for OpenRouter key + budget
+  // attribution, and fail clearly (no auto-send) if the tenant has no user.
+  const owner = await prisma.user.findFirst({
+    where: { tenantId: job.tenantId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, email: true },
+  })
+  if (!owner) {
+    return { sent: false, reason: "No user found for tenant; cannot generate autopilot draft" }
+  }
+
   const slots = Array.isArray(job.slotsJson) ? (job.slotsJson as string[]) : undefined
   const draftInput = {
+    aiContext: { tenantId: job.tenantId, userId: owner.id, userEmail: owner.email },
     businessProfile: context.businessProfile,
     knowledgeDocuments: context.knowledgeDocuments,
     learnedReplyProfile: context.learnedProfile,

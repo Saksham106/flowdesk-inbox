@@ -6,9 +6,6 @@ import { extractEmail } from "@/lib/google"
 import { checkPolicy } from "@/lib/agent/policy"
 import { checkAvailability, formatSlots, type AvailableSlot } from "@/lib/agent/availability"
 import { attemptAutopilotSend } from "@/lib/agent/autopilot"
-import { buildClassifyPrompt } from "@/lib/ai/prompts/classify"
-import { checkAiBudgetForTokens } from "@/lib/ai/budget"
-import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import type { AgentJob, Prisma } from "@prisma/client"
 import type { ClassifyResult } from "@/lib/ai/prompts/classify"
 import type { StaticRuleMatch } from "@/lib/agent/static-rules"
@@ -214,27 +211,33 @@ async function _executeJob(
       },
     })
   } else {
+    // Background job, no session user in scope — resolve the tenant's
+    // earliest user as the owner for OpenRouter key + budget attribution.
+    // Fail clearly (job fails) rather than silently skipping AI classification.
+    const owner = await prisma.user.findFirst({
+      where: { tenantId: job.tenantId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, email: true },
+    })
+    if (!owner) {
+      const message = "No user found for tenant; cannot run AI classification"
+      await prisma.agentToolCall.update({
+        where: { id: classifyToolCall.id },
+        data: { status: "failed", completedAt: new Date(), outputJson: { error: message } },
+      })
+      throw new Error(message)
+    }
+
     const classifyInput = {
+      aiContext: { tenantId: job.tenantId, userId: owner.id, userEmail: owner.email },
       messages: conversation.messages,
       businessProfile: businessContext.profile,
       accountType: accountModeFor(tenant),
     }
-    const classifyPrompt = buildClassifyPrompt(classifyInput)
-    const classifyModel = process.env.OPENAI_MODEL || "gpt-4o-mini"
-    const classifyInputTokens = estimateTokenCount(classifyPrompt)
-    let classifyUsageStatus = "failed"
-    try {
-      const budgetCheck = await checkAiBudgetForTokens({
-        tenantId: job.tenantId,
-        model: classifyModel,
-        estimatedInputTokens: classifyInputTokens,
-        estimatedOutputTokens: 800,
-      })
-      if (!budgetCheck.allowed) {
-        classifyUsageStatus = "blocked"
-        throw new Error(budgetCheck.reason)
-      }
 
+    // Budget checks and AiUsageEvent recording happen inside
+    // runAiJsonFeature (via classifyConversation), keyed by "agent.classify".
+    try {
       classification = await classifyConversation(classifyInput)
 
       await prisma.agentToolCall.update({
@@ -245,14 +248,6 @@ async function _executeJob(
           outputJson: classification as unknown as Prisma.InputJsonValue,
         },
       })
-      await recordAiUsageEvent({
-        tenantId: job.tenantId,
-        feature: "agent.classify",
-        model: classifyModel,
-        estimatedInputTokens: classifyInputTokens,
-        estimatedOutputTokens: estimateTokenCount(JSON.stringify(classification)),
-        status: "succeeded",
-      })
     } catch (err) {
       await prisma.agentToolCall.update({
         where: { id: classifyToolCall.id },
@@ -261,13 +256,6 @@ async function _executeJob(
           completedAt: new Date(),
           outputJson: { error: err instanceof Error ? err.message : "Unknown error" },
         },
-      })
-      await recordAiUsageEvent({
-        tenantId: job.tenantId,
-        feature: "agent.classify",
-        model: classifyModel,
-        estimatedInputTokens: classifyInputTokens,
-        status: classifyUsageStatus,
       })
       throw err
     }
