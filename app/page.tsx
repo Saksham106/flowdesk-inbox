@@ -33,18 +33,6 @@ export default function Home() {
           {/* Footer nav columns */}
           <div className="flex gap-14">
             <div className="flex flex-col gap-2.5">
-              <p className="text-[13px] font-semibold text-[#141a3d]">Social</p>
-              <div className="h-1.5" />
-              {[
-                { label: "GitHub", href: "#" },
-                { label: "X (formerly Twitter)", href: "#" },
-                { label: "LinkedIn", href: "#" },
-              ].map((item) => (
-                <a key={item.label} href={item.href} className="text-[13px] text-[#595961] hover:text-black transition-colors">{item.label}</a>
-              ))}
-            </div>
-
-            <div className="flex flex-col gap-2.5">
               <p className="text-[13px] font-semibold text-[#141a3d]">Company</p>
               <div className="h-1.5" />
               {[
@@ -55,17 +43,6 @@ export default function Home() {
                 <Link key={item.label} href={item.href} className="text-[13px] text-[#595961] hover:text-black transition-colors">
                   {item.label}
                 </Link>
-              ))}
-            </div>
-
-            <div className="flex flex-col gap-2.5">
-              <p className="text-[13px] font-semibold text-[#141a3d]">Tools</p>
-              <div className="h-1.5" />
-              {[
-                { label: "Gmail", href: "#" },
-                { label: "Google Calendar", href: "#" },
-              ].map((item) => (
-                <a key={item.label} href={item.href} className="text-[13px] text-[#595961] hover:text-black transition-colors">{item.label}</a>
               ))}
             </div>
           </div>
