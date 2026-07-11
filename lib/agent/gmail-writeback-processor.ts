@@ -152,11 +152,7 @@ async function handleCreateDraft(job: WritebackJob): Promise<WritebackResolution
   // A legacy draft (or a newly suggested draft with a newer source) is
   // replaced atomically from FlowDesk's recorded id, keeping one draft/thread.
   if (existingDraftId) {
-    try {
-      await deleteGmailDraft(job.channelId, existingDraftId)
-    } catch (err) {
-      console.error("[gmail-writeback] stale draft delete failed:", err)
-    }
+    await deleteGmailDraft(job.channelId, existingDraftId)
   }
 
   const gmailDraftId = await createGmailDraftForThread(job.channelId, {

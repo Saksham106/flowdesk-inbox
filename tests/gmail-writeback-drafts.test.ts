@@ -287,6 +287,29 @@ describe("Gmail writeback cron — draft jobs", () => {
     })
   })
 
+  it("retries without creating a replacement when deleting the existing Gmail draft fails", async () => {
+    mockWritebackFindMany.mockResolvedValue(createDraftJob())
+    mockDraftFindUnique.mockResolvedValue({
+      ...PROPOSED_DRAFT,
+      metadataJson: { gmailDraftId: "old-draft" },
+    })
+    mockDeleteGmailDraft.mockRejectedValue(new Error("Gmail draft delete failed"))
+
+    const res = await runGmailWriteback(cronRequest())
+    const body = await res.json()
+
+    expect(body).toEqual({ processed: 0, errors: 1 })
+    expect(mockCreateGmailDraftForThread).not.toHaveBeenCalled()
+    expect(mockWritebackUpdate).toHaveBeenCalledWith({
+      where: { id: "job-1" },
+      data: expect.objectContaining({
+        status: "pending",
+        attempts: 1,
+        lastError: "Gmail draft delete failed",
+      }),
+    })
+  })
+
   it("withdraws a Gmail draft and clears its recorded id", async () => {
     mockWritebackFindMany.mockResolvedValue([
       {
