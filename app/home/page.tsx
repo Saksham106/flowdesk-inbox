@@ -11,11 +11,10 @@ import AppRail from "@/app/components/AppRail";
 import AskFlowDeskPanel from "@/app/components/AskFlowDeskPanel";
 import HomeCommandCenter from "@/app/components/HomeCommandCenter";
 import GmailSyncControl from "@/app/components/GmailSyncControl";
-import { buildDailyCommandCenter, buildBillsSection, CommandCenterInputConversation, PersistedCommandCenterState, CommandCenterState, CommandCenterPriority, type AgentSummary, type BillsSection } from "@/lib/agent/command-center";
-import { analyzeRevenueAtRisk } from "@/lib/agent/revenue-at-risk";
-import { getAutomationLevel } from "@/lib/agent/automation-level";
+import { buildDailyCommandCenter, buildBillsSection, CommandCenterInputConversation, PersistedCommandCenterState, CommandCenterState, CommandCenterPriority, type AgentSummary, type BillsSection, type CommandCenterConversation } from "@/lib/agent/command-center";
 import { AppNavigationItem, getInboxNavigation } from "@/lib/app-navigation";
 import { getAppShellContext, isDbStartingError } from "@/lib/app-shell";
+import { buildHomeActionFeed, type HomeConversationInput } from "@/lib/home-action-feed";
 
 export const revalidate = 60;
 
@@ -45,19 +44,22 @@ async function renderHomePage(tenantId: string) {
     pendingApprovals,
     gmailSyncChannels,
   } = await getAppShellContext(tenantId);
+  const now = new Date();
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
 
   // Every query here is independent, so they run in one parallel batch
   // instead of a chain of serialized DB round-trips.
   const [
     commandCenterConversations,
-    revenueAtRisk,
     upcomingTasks,
     followUpSetting,
     classifiedLast24h,
     draftedLast24h,
     learnedProfile,
-    automationLevel,
-    activeRulesCount,
+    receivedToday,
+    handledToday,
+    pendingApprovalItems,
   ] = await Promise.all([
     prisma.conversation.findMany({
       where: { tenantId },
@@ -103,7 +105,6 @@ async function renderHomePage(tenantId: string) {
         },
       },
     }),
-    isBusiness ? analyzeRevenueAtRisk(tenantId) : Promise.resolve([]),
     prisma.inboxTask.findMany({
       where: {
         tenantId,
@@ -136,8 +137,31 @@ async function renderHomePage(tenantId: string) {
       where: { tenantId, updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
       select: { id: true },
     }),
-    getAutomationLevel(tenantId),
-    prisma.agentRule.count({ where: { tenantId, status: "active" } }),
+    prisma.message.count({
+      where: {
+        direction: "inbound",
+        createdAt: { gte: startOfToday },
+        conversation: { tenantId },
+      },
+    }),
+    prisma.conversationState.count({
+      where: {
+        tenantId,
+        updatedAt: { gte: startOfToday },
+        source: { notIn: ["user_override", "gmail_label"] },
+        OR: [
+          { state: { in: ["done", "read_later", "fyi_only"] } },
+          { attentionCategory: { in: ["quiet", "fyi_done"] } },
+        ],
+        conversation: { approvalRequests: { none: { status: "pending" } } },
+      },
+    }),
+    prisma.approvalRequest.findMany({
+      where: { tenantId, status: "pending" },
+      orderBy: { createdAt: "asc" },
+      take: 20,
+      include: { conversation: { include: { contact: true } } },
+    }),
   ]);
 
   type ConversationForBrief = CommandCenterInputConversation & {
@@ -185,7 +209,7 @@ async function renderHomePage(tenantId: string) {
 
   const commandCenter = buildDailyCommandCenter(
     mappedConvs,
-    new Date(),
+    now,
     accountType,
     persistedStatesMap
   );
@@ -197,6 +221,40 @@ async function renderHomePage(tenantId: string) {
     draftedLast24h,
     learnedRecentlyUpdated: learnedProfile !== null,
   };
+
+  const toHomeConversation = (item: CommandCenterConversation): HomeConversationInput => ({
+    id: item.id,
+    title: item.nextAction || item.reason || `Review ${item.displayName}`,
+    subtitle: `${item.displayName} · ${relativeConversationAge(item.lastMessageAt, now)}`,
+    lastMessageAt: item.lastMessageAt,
+  });
+  const staleDays = followUpSetting?.staleAfterDays ?? 3;
+  const staleCutoff = new Date(now.getTime() - staleDays * 24 * 60 * 60 * 1000);
+  const feed = buildHomeActionFeed({
+    approvals: pendingApprovalItems.map((approval) => ({
+      id: approval.id,
+      conversationId: approval.conversationId,
+      title: approval.step === "send" ? "Approve the prepared reply" : `Review ${approval.step}`,
+      subtitle: approval.conversation.contact?.name ?? approval.conversation.externalThreadId,
+      createdAt: approval.createdAt,
+    })),
+    topActions: commandCenter.topActions.map(toHomeConversation),
+    needsAction: commandCenter.sections.needsAction.map(toHomeConversation),
+    deadlines: billsSection.items
+      .filter((item): item is typeof item & { taskId: string } => Boolean(item.taskId))
+      .map((item) => ({
+        taskId: item.taskId,
+        conversationId: item.conversationId,
+        title: item.title,
+        subtitle: `${item.displayName}${item.dueAt ? ` · Due ${item.dueAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}`,
+        href: item.href,
+        dueAt: item.dueAt,
+      })),
+    followUps: commandCenter.sections.waitingOnThem
+      .filter((item) => item.lastMessageAt <= staleCutoff)
+      .map(toHomeConversation),
+    now,
+  });
 
   const appNavigation = getInboxNavigation({ salesCrm: isBusiness });
 
@@ -242,22 +300,14 @@ async function renderHomePage(tenantId: string) {
       <div className="hidden lg:flex h-screen overflow-hidden bg-slate-50">
         <AppRail needsReplyCount={needsReplyCount} pendingApprovals={pendingApprovals} />
         <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-3xl px-6 py-8">
-            <HomeCommandCenter
-              commandCenter={commandCenter}
-              revenueAtRisk={revenueAtRisk as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>}
-              accountType={accountType}
-              date={new Date()}
-              agentSummary={agentSummary}
-              gmailChannels={gmailSyncChannels}
-              billsSection={billsSection}
-              followUpDelayBusinessDays={followUpSetting?.staleAfterDays}
-              automationLevel={automationLevel}
-              pendingApprovals={pendingApprovals}
-              activeRulesCount={activeRulesCount}
-              hasGmail={gmailSyncChannels.length > 0}
-            />
-          </div>
+          <HomeCommandCenter
+            date={now}
+            metrics={{ receivedToday, handledToday }}
+            feed={feed}
+            agentSummary={agentSummary}
+            quietlyHandledBreakdown={commandCenter.quietlyHandledBreakdown}
+            gmailChannels={gmailSyncChannels}
+          />
         </div>
       </div>
 
@@ -288,20 +338,14 @@ async function renderHomePage(tenantId: string) {
           </div>
         </header>
 
-        <main className="mx-auto max-w-5xl px-4 sm:px-6 py-6">
+        <main>
           <HomeCommandCenter
-            commandCenter={commandCenter}
-            revenueAtRisk={revenueAtRisk as Awaited<ReturnType<typeof analyzeRevenueAtRisk>>}
-            accountType={accountType}
-            date={new Date()}
+            date={now}
+            metrics={{ receivedToday, handledToday }}
+            feed={feed}
             agentSummary={agentSummary}
+            quietlyHandledBreakdown={commandCenter.quietlyHandledBreakdown}
             gmailChannels={gmailSyncChannels}
-            billsSection={billsSection}
-            followUpDelayBusinessDays={followUpSetting?.staleAfterDays}
-            automationLevel={automationLevel}
-            pendingApprovals={pendingApprovals}
-            activeRulesCount={activeRulesCount}
-            hasGmail={gmailSyncChannels.length > 0}
           />
         </main>
       </div>
@@ -309,4 +353,11 @@ async function renderHomePage(tenantId: string) {
       <AskFlowDeskPanel />
     </>
   );
+}
+
+function relativeConversationAge(date: Date, now: Date) {
+  const hours = Math.max(0, Math.round((now.getTime() - date.getTime()) / (60 * 60 * 1000)));
+  if (hours < 1) return "Just now";
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
 }

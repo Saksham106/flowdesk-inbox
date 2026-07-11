@@ -7,6 +7,28 @@ function source(path: string): string {
 }
 
 describe("dashboard and inbox UI source contracts", () => {
+  it("renders one action-first dashboard instead of permanent competing sections", () => {
+    const home = source("app/components/HomeCommandCenter.tsx")
+
+    expect(home).toContain("Received today")
+    expect(home).toContain("Handled by FlowDesk")
+    expect(home).toContain("Need you")
+    expect(home).toContain("Your action items")
+    expect(home).toContain("What FlowDesk did today")
+    expect(home).toContain("You’re caught up")
+    expect(home).not.toContain("What needs you")
+    expect(home).not.toContain("Tasks & Deadlines")
+  })
+
+  it("uses existing completion routes in the unified action feed", () => {
+    const feed = source("app/components/HomeActionFeed.tsx")
+
+    expect(feed).toContain('/api/conversations/${item.conversationId}/workflow-status')
+    expect(feed).toContain('/api/tasks/${item.taskId}/status')
+    expect(feed).toContain("Undo")
+    expect(feed).toContain('aria-live="polite"')
+  })
+
   it("NeedsActionSection persists manual dismissal through workflow-status", () => {
     const s = source("app/components/NeedsActionSection.tsx")
 

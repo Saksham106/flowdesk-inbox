@@ -1,199 +1,107 @@
 import Link from "next/link"
-import type { DailyCommandCenter, AgentSummary, BillsSection } from "@/lib/agent/command-center"
-import type { RevenueAtRiskItem } from "@/lib/agent/revenue-at-risk"
-import ControlRoomHeader from "@/app/components/ControlRoomHeader"
-import HandleFirstSection from "@/app/components/HandleFirstSection"
-import NeedsActionSection from "@/app/components/NeedsActionSection"
-import ReadLaterSection from "@/app/components/ReadLaterSection"
-import WaitingOnSection from "@/app/components/WaitingOnSection"
-import AgentActivitySection from "@/app/components/AgentActivitySection"
-import QuietlyHandledBanner from "@/app/components/QuietlyHandledBanner"
-import BillsDeadlinesList from "@/app/components/BillsDeadlinesList"
+
+import HomeActionFeed from "@/app/components/HomeActionFeed"
+import type { AgentSummary, QuietlyHandledBreakdown } from "@/lib/agent/command-center"
+import type { GmailSyncChannel } from "@/lib/app-shell"
+import type { HomeActionItem } from "@/lib/home-action-feed"
 
 interface Props {
-  commandCenter: DailyCommandCenter
-  revenueAtRisk: RevenueAtRiskItem[]
-  agentSummary: AgentSummary
-  accountType: string | null
   date: Date
-  gmailChannels?: unknown[]
-  billsSection: BillsSection
-  followUpDelayBusinessDays?: number
-  automationLevel: number
-  pendingApprovals: number
-  activeRulesCount: number
-  hasGmail: boolean
-}
-
-/** Top-level pillar heading: one per column, sets the accent color for the
- *  whole pillar. Sub-sections inside a pillar use SubHeading (neutral, no
- *  color) so the accent reads as "this whole area is about X" rather than
- *  each sub-section competing for its own attention. */
-function PillarHeading({
-  icon,
-  label,
-  count,
-  tone,
-}: {
-  icon: string
-  label: string
-  count?: number
-  tone: "danger" | "accent"
-}) {
-  const color = tone === "danger" ? "text-red-600" : "text-blue-600"
-  return (
-    <div className="flex items-center gap-2">
-      <p className={`text-[11px] font-bold uppercase tracking-wide ${color}`}>
-        {icon} {label}
-      </p>
-      {count !== undefined && count > 0 && (
-        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
-          {count}
-        </span>
-      )}
-    </div>
-  )
-}
-
-/** Neutral sub-heading for a group within a pillar (e.g. "Handle first"
- *  inside "What needs you"). Deliberately un-colored so it doesn't compete
- *  with the pillar's accent color above it. An optional `href` (e.g. the full
- *  audit log) keeps deeper power-user views one click away without needing a
- *  permanent nav rail icon. */
-function SubHeading({ label, badge, href, hrefLabel }: { label: string; badge?: string; href?: string; hrefLabel?: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
-      {badge && (
-        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-50 text-slate-500 border border-slate-200">
-          {badge}
-        </span>
-      )}
-      {href && (
-        <Link href={href} className="text-[10px] font-medium text-blue-500 hover:underline">
-          {hrefLabel ?? "View all →"}
-        </Link>
-      )}
-    </div>
-  )
+  metrics: { receivedToday: number; handledToday: number }
+  feed: { items: HomeActionItem[]; total: number }
+  agentSummary: AgentSummary
+  quietlyHandledBreakdown: QuietlyHandledBreakdown
+  gmailChannels: GmailSyncChannel[]
 }
 
 export default function HomeCommandCenter({
-  commandCenter,
-  agentSummary,
   date,
-  billsSection,
-  followUpDelayBusinessDays,
-  automationLevel,
-  pendingApprovals,
-  activeRulesCount,
-  hasGmail,
+  metrics,
+  feed,
+  agentSummary,
+  quietlyHandledBreakdown,
+  gmailChannels,
 }: Props) {
-  const { counts, topActions, sections, quietlyHandledBreakdown } = commandCenter
-
-  const needsYouCount = pendingApprovals + topActions.length + billsSection.count
+  const activity = activitySummary(agentSummary, quietlyHandledBreakdown)
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="px-5 py-5 max-w-5xl mx-auto">
-
-        {/* Control-room identity + Gmail hand-off */}
-        <ControlRoomHeader
-          automationLevel={automationLevel}
-          pendingReview={pendingApprovals}
-          hasGmail={hasGmail}
-          date={date}
-        />
-
-        {/* Two pillars: everything that needs a decision from you, and a
-            compact summary of what the agent has been doing/learning. */}
-        <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
-
-          {/* What needs you */}
-          <div className="flex flex-col gap-4">
-            <PillarHeading icon="✋" label="What needs you" count={needsYouCount} tone="danger" />
-
-            {pendingApprovals > 0 && (
-              <Link
-                href="/approvals"
-                className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 transition hover:bg-red-100"
-              >
-                <div>
-                  <p className="text-sm font-semibold text-red-700">
-                    {pendingApprovals} {pendingApprovals === 1 ? "item" : "items"} to approve
-                  </p>
-                  <p className="text-xs text-red-500">Drafts and actions waiting on your decision</p>
-                </div>
-                <span className="text-xs font-medium text-red-600">Review →</span>
-              </Link>
-            )}
-
-            <div className="flex flex-col gap-2">
-              <SubHeading label="⚡ Handle first" />
-              <HandleFirstSection items={topActions} />
-            </div>
-
-            <NeedsActionSection
-              items={sections.needsAction}
-              excludeIds={new Set(topActions.map((item) => item.id))}
-            />
-
-            {billsSection.count > 0 && (
-              <div className="flex flex-col gap-2">
-                <SubHeading label="Tasks & Deadlines" badge={String(billsSection.count)} href="/tasks" hrefLabel="View all →" />
-                <BillsDeadlinesList items={billsSection.items} />
-              </div>
-            )}
-          </div>
-
-          {/* The agent: what it did, what it learned, who you're waiting on,
-              what's saved for later — one pillar instead of three. */}
-          <div className="flex flex-col gap-4">
-            <PillarHeading icon="✦" label="The agent" tone="accent" />
-
-            <div className="flex flex-col gap-2">
-              <SubHeading label="What it did" href="/audit" hrefLabel="Full activity log →" />
-              <AgentActivitySection
-                agentSummary={agentSummary}
-                quietlyHandledBreakdown={quietlyHandledBreakdown}
-              />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <SubHeading label="What it learned" />
-              <Link
-                href="/settings/training"
-                className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition hover:bg-slate-50"
-              >
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-700">
-                    {activeRulesCount} active {activeRulesCount === 1 ? "rule" : "rules"}
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    {agentSummary.learnedRecentlyUpdated
-                      ? "Updated from your recent feedback"
-                      : "Learning your reply style"}
-                  </p>
-                </div>
-                <span className="text-[11px] font-medium text-slate-400">Tune →</span>
-              </Link>
-            </div>
-
-            <WaitingOnSection
-              items={sections.waitingOnThem}
-              staleAfterBusinessDays={followUpDelayBusinessDays}
-            />
-            <ReadLaterSection items={sections.readLater} />
-          </div>
+    <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Good morning</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })} · Here’s what needs your attention.
+          </p>
         </div>
+        <SyncBadge channels={gmailChannels} />
+      </header>
 
-        {/* Full-width bottom: Quietly Handled */}
-        <QuietlyHandledBanner
-          count={counts.safelyIgnored}
-          breakdown={quietlyHandledBreakdown}
-        />
+      <section aria-label="Today’s overview" className="mb-7 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Metric label="Received today" value={metrics.receivedToday} />
+        <Metric label="Handled by FlowDesk" value={metrics.handledToday} />
+        <Metric label="Need you" value={feed.total} emphasized />
+      </section>
 
-      </div>
+      <section>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-slate-900">Your action items</h2>
+            {feed.total > 0 && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{feed.total}</span>}
+          </div>
+          <Link href="/mail" className="text-xs font-medium text-blue-600 hover:underline">View all in Mail →</Link>
+        </div>
+        {feed.items.length > 0 ? (
+          <HomeActionFeed items={feed.items} />
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center shadow-sm">
+            <p className="text-sm font-semibold text-slate-900">You’re caught up</p>
+            <p className="mt-1 text-xs text-slate-500">FlowDesk will surface new decisions here when they need you.</p>
+          </div>
+        )}
+      </section>
+
+      {activity && (
+        <details className="mt-6 border-t border-slate-200 pt-4 text-xs text-slate-500">
+          <summary className="cursor-pointer font-semibold text-slate-600">What FlowDesk did today</summary>
+          <p className="mt-2">{activity}</p>
+          <Link href="/audit" className="mt-2 inline-block font-medium text-blue-600 hover:underline">Full activity log →</Link>
+        </details>
+      )}
     </div>
   )
+}
+
+function Metric({ label, value, emphasized = false }: { label: string; value: number; emphasized?: boolean }) {
+  return (
+    <div className={`rounded-xl border px-4 py-3 shadow-sm ${emphasized ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white"}`}>
+      <p className={`text-2xl font-semibold ${emphasized ? "text-blue-700" : "text-slate-900"}`}>{value.toLocaleString()}</p>
+      <p className={`text-xs ${emphasized ? "text-blue-600" : "text-slate-500"}`}>{label}</p>
+    </div>
+  )
+}
+
+function SyncBadge({ channels }: { channels: GmailSyncChannel[] }) {
+  if (channels.length === 0) return <Link href="/settings/connect" className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-700">Connect Gmail</Link>
+  const latest = channels.reduce<Date | null>((best, channel) => !best || (channel.lastSyncedAt && channel.lastSyncedAt > best) ? channel.lastSyncedAt : best, null)
+  const hasError = channels.some((channel) => channel.lastSyncError || channel.lastSyncStatus === "failed")
+  if (hasError) return <Link href="/settings/connect" className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-700">Gmail sync needs attention</Link>
+  return <Link href="/settings/connect" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500">● {latest ? `Gmail synced ${relativeAge(latest)}` : "Waiting for first sync"}</Link>
+}
+
+function relativeAge(date: Date) {
+  const minutes = Math.max(0, Math.round((Date.now() - date.getTime()) / 60_000))
+  if (minutes < 1) return "just now"
+  if (minutes < 60) return `${minutes}m ago`
+  return `${Math.round(minutes / 60)}h ago`
+}
+
+function activitySummary(summary: AgentSummary, breakdown: QuietlyHandledBreakdown) {
+  const quiet = Object.values(breakdown).reduce((sum, value) => sum + value, 0)
+  const parts = [
+    summary.classifiedLast24h > 0 ? `Classified ${summary.classifiedLast24h} emails` : null,
+    summary.draftedLast24h > 0 ? `prepared ${summary.draftedLast24h} drafts` : null,
+    quiet > 0 ? `quietly handled ${quiet}` : null,
+    summary.learnedRecentlyUpdated ? "learned from recent feedback" : null,
+  ].filter((part): part is string => Boolean(part))
+  return parts.join(" · ")
 }
