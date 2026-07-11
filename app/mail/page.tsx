@@ -18,6 +18,7 @@ import MailInboxTable from "@/app/components/MailInboxTable";
 import type { InboxListItem } from "@/app/components/ClientFilteredInboxList";
 import BulkCloseButton from "@/app/inbox/BulkCloseButton";
 import GmailSyncControl from "@/app/components/GmailSyncControl";
+import AccountScopePicker from "@/app/components/AccountScopePicker";
 import { AppNavigationItem, getInboxNavigation } from "@/lib/app-navigation";
 import { buildConversationHref } from "@/lib/client-navigation";
 import { stripHtmlToText } from "@/lib/email-body";
@@ -47,7 +48,7 @@ const ALL_STATUSES = Object.keys(STATUS_LABELS) as ConversationStatus[];
 const MOBILE_LIST_LIMIT = 50;
 
 interface Props {
-  searchParams: { status?: string; q?: string; sales?: string; attention?: string; type?: string; page?: string; label?: string; tab?: string };
+  searchParams: { status?: string; q?: string; sales?: string; attention?: string; type?: string; page?: string; label?: string; tab?: string; account?: string };
 }
 
 export default async function MailPage({ searchParams }: Props) {
@@ -87,13 +88,16 @@ async function renderMailPage(
     needsReplyCount,
     pendingApprovals,
     gmailSyncChannels,
-  } = await getAppShellContext(tenantId);
+    mailboxAccounts,
+    activeChannelId,
+  } = await getAppShellContext(tenantId, searchParams.account);
 
   // Mobile conversation list (the mobile layout renders its own list rather
   // than reusing the desktop AppListColumn).
   const mobileConversations = await prisma.conversation.findMany({
     where: {
       tenantId,
+      ...(activeChannelId ? { channelId: activeChannelId } : {}),
       ...(activeStatus ? { status: activeStatus } : {}),
       ...(salesFilter && isBusiness ? { stateRecord: { is: { isSalesLead: true } } } : {}),
       ...(attentionFilter && attentionFilter !== "life_admin" && attentionFilter !== "snoozed"
@@ -154,6 +158,7 @@ async function renderMailPage(
       params.set("status", status);
     }
     if (q) params.set("q", q);
+    if (activeChannelId) params.set("account", activeChannelId);
     const qs = params.toString();
     return qs ? `/mail?${qs}` : "/mail";
   }
@@ -171,6 +176,7 @@ async function renderMailPage(
     const params = new URLSearchParams();
     params.set("attention", category);
     if (q) params.set("q", q);
+    if (activeChannelId) params.set("account", activeChannelId);
     return `/mail?${params.toString()}`;
   }
 
@@ -178,6 +184,7 @@ async function renderMailPage(
     const params = new URLSearchParams();
     params.set("type", value);
     if (q) params.set("q", q);
+    if (activeChannelId) params.set("account", activeChannelId);
     return `/mail?${params.toString()}`;
   }
 
@@ -241,6 +248,7 @@ async function renderMailPage(
   const returnTo = currentMailHref();
   const [desktopConversations] = await getCachedListData({
     tenantId,
+    channelId: activeChannelId,
     status: contentTypeFilter ? null : activeStatus,
     contentType: contentTypeFilter || undefined,
     q: q || undefined,
@@ -301,6 +309,7 @@ async function renderMailPage(
     if (salesFilter) p.set("sales", "1");
     if (attentionFilter) p.set("attention", attentionFilter);
     if (contentTypeFilter) p.set("type", contentTypeFilter);
+    if (activeChannelId) p.set("account", activeChannelId);
     p.set("page", String(mobilePage + 1));
     return `/mail?${p.toString()}`;
   })();
@@ -315,9 +324,10 @@ async function renderMailPage(
         <div className="flex flex-1 flex-col overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
             <h1 className="text-lg font-semibold text-slate-900">Mail</h1>
-            <Suspense>
-              <SearchInput defaultValue={q} />
-            </Suspense>
+            <div className="flex items-center gap-3">
+              <AccountScopePicker accounts={mailboxAccounts} activeAccountId={activeChannelId} />
+              <Suspense><SearchInput defaultValue={q} /></Suspense>
+            </div>
           </div>
           <MailTopTabs
             activeLabel={activeLabelTab}
@@ -325,7 +335,7 @@ async function renderMailPage(
             // Only `q` is preserved across tab switches; status/type/sales are
             // intentionally dropped since the desktop label tabs replace those
             // filters here rather than layering on top of them.
-            preserveQuery={{ q: q || undefined }}
+            preserveQuery={{ q: q || undefined, account: activeChannelId || undefined }}
           />
           <MailInboxTable items={desktopFilteredItems} emptyMessage="No conversations match this view." />
         </div>
@@ -350,6 +360,7 @@ async function renderMailPage(
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                <AccountScopePicker accounts={mailboxAccounts} activeAccountId={activeChannelId} />
                 <GmailSyncControl channels={gmailSyncChannels} compact />
                 <div className="hidden items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 sm:flex">
                   {appNavigation.primary.map((item) => navLink(item))}

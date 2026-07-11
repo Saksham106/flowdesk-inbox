@@ -10,6 +10,7 @@ import AutoRefresh from "@/app/components/AutoRefresh";
 import AppRail from "@/app/components/AppRail";
 import AskFlowDeskPanel from "@/app/components/AskFlowDeskPanel";
 import HomeCommandCenter from "@/app/components/HomeCommandCenter";
+import AccountScopePicker from "@/app/components/AccountScopePicker";
 import GmailSyncControl from "@/app/components/GmailSyncControl";
 import { buildDailyCommandCenter, buildBillsSection, CommandCenterInputConversation, PersistedCommandCenterState, CommandCenterState, CommandCenterPriority, type AgentSummary, type BillsSection, type CommandCenterConversation } from "@/lib/agent/command-center";
 import { AppNavigationItem, getInboxNavigation } from "@/lib/app-navigation";
@@ -22,7 +23,7 @@ const HOME_CONVERSATION_LIMIT = 25;
 const HOME_MESSAGE_LIMIT = 5;
 const HOME_APPROVAL_LIMIT = 20;
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: { searchParams: { account?: string } }) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.tenantId) {
@@ -30,21 +31,24 @@ export default async function HomePage() {
   }
 
   try {
-    return await renderHomePage(session.user.tenantId);
+    return await renderHomePage(session.user.tenantId, searchParams.account);
   } catch (err) {
     if (isDbStartingError(err)) return <WarmingUp />;
     throw err;
   }
 }
 
-async function renderHomePage(tenantId: string) {
+async function renderHomePage(tenantId: string, requestedChannelId?: string) {
   const {
     isBusiness,
     accountType,
     needsReplyCount,
     pendingApprovals,
     gmailSyncChannels,
-  } = await getAppShellContext(tenantId);
+    mailboxAccounts,
+    activeChannelId,
+  } = await getAppShellContext(tenantId, requestedChannelId);
+  const conversationScope = { tenantId, ...(activeChannelId ? { channelId: activeChannelId } : {}) };
   const now = new Date();
   const startOfToday = new Date(now);
   startOfToday.setHours(0, 0, 0, 0);
@@ -63,7 +67,7 @@ async function renderHomePage(tenantId: string) {
     pendingApprovalItems,
   ] = await Promise.all([
     prisma.conversation.findMany({
-      where: { tenantId },
+      where: conversationScope,
       orderBy: { lastMessageAt: "desc" },
       take: HOME_CONVERSATION_LIMIT,
       include: {
@@ -109,6 +113,7 @@ async function renderHomePage(tenantId: string) {
     prisma.inboxTask.findMany({
       where: {
         tenantId,
+        ...(activeChannelId ? { conversation: { channelId: activeChannelId } } : {}),
         status: "open",
         dueAt: { lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
       },
@@ -125,11 +130,11 @@ async function renderHomePage(tenantId: string) {
       select: { staleAfterDays: true },
     }),
     prisma.conversationState.count({
-      where: { tenantId, updatedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+      where: { tenantId, updatedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, ...(activeChannelId ? { conversation: { channelId: activeChannelId } } : {}) },
     }),
     prisma.draft.count({
       where: {
-        conversation: { tenantId },
+        conversation: conversationScope,
         status: "proposed",
         updatedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
       },
@@ -142,7 +147,7 @@ async function renderHomePage(tenantId: string) {
       where: {
         direction: "inbound",
         createdAt: { gte: startOfToday },
-        conversation: { tenantId },
+        conversation: conversationScope,
       },
     }),
     prisma.conversationState.count({
@@ -154,11 +159,14 @@ async function renderHomePage(tenantId: string) {
           { state: { in: ["done", "read_later", "fyi_only"] } },
           { attentionCategory: { in: ["quiet", "fyi_done"] } },
         ],
-        conversation: { approvalRequests: { none: { status: "pending" } } },
+        conversation: {
+          ...(activeChannelId ? { channelId: activeChannelId } : {}),
+          approvalRequests: { none: { status: "pending" } },
+        },
       },
     }),
     prisma.approvalRequest.findMany({
-      where: { tenantId, status: "pending" },
+      where: { tenantId, status: "pending", ...(activeChannelId ? { conversation: { channelId: activeChannelId } } : {}) },
       orderBy: { createdAt: "asc" },
       take: HOME_APPROVAL_LIMIT,
       include: { conversation: { include: { contact: true } } },
@@ -301,6 +309,9 @@ async function renderHomePage(tenantId: string) {
       <div className="hidden lg:flex h-screen overflow-hidden bg-slate-50">
         <AppRail needsReplyCount={needsReplyCount} pendingApprovals={pendingApprovals} />
         <div className="flex-1 overflow-y-auto">
+          <div className="flex justify-end border-b border-slate-200 bg-white px-6 py-3">
+            <AccountScopePicker accounts={mailboxAccounts} activeAccountId={activeChannelId} />
+          </div>
           <HomeCommandCenter
             date={now}
             metrics={{ receivedToday, handledToday }}
@@ -321,6 +332,7 @@ async function renderHomePage(tenantId: string) {
                 <h1 className="text-xl font-semibold">Control room</h1>
               </div>
               <div className="flex items-center gap-2">
+                <AccountScopePicker accounts={mailboxAccounts} activeAccountId={activeChannelId} />
                 <GmailSyncControl channels={gmailSyncChannels} compact />
                 <div className="hidden items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 sm:flex">
                   {appNavigation.primary.map((item) => navLink(item))}

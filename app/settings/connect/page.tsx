@@ -38,6 +38,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   userinfo_failed: "Could not retrieve account info.",
   no_email: "No email address was returned by the provider.",
   invalid_callback: "Invalid callback. Please try connecting again.",
+  account_already_connected: "That mailbox is already connected to another FlowDesk account.",
 };
 
 export default async function ConnectSettingsPage({ searchParams }: Props) {

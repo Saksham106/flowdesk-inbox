@@ -169,6 +169,7 @@ async function getCachedStatusCounts(tenantId: string) {
 
 export function getCachedListData(input: {
   tenantId: string
+  channelId?: string | null
   status?: string | null
   contentType?: string | null
   q?: string
@@ -178,6 +179,7 @@ export function getCachedListData(input: {
   const key = [
     "app-list-column",
     input.tenantId,
+    input.channelId ?? "all-accounts",
     input.status ?? "all",
     input.contentType ?? "all",
     input.labelTab ?? "no-label-tab",
@@ -189,7 +191,10 @@ export function getCachedListData(input: {
 
   return unstable_cache(
     async () => {
-      const where: Record<string, unknown> = { tenantId: input.tenantId }
+      const where: Record<string, unknown> = {
+        tenantId: input.tenantId,
+        ...(input.channelId ? { channelId: input.channelId } : {}),
+      }
       const andFilters: Record<string, unknown>[] = []
       if (input.status) where.status = input.status
       if (contentEmailTypes) {

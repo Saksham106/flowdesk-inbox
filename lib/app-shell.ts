@@ -41,6 +41,8 @@ export interface AppShellContext {
   needsReplyCount: number;
   pendingApprovals: number;
   gmailSyncChannels: GmailSyncChannel[];
+  mailboxAccounts: { id: string; emailAddress: string | null; provider: string }[];
+  activeChannelId: string | null;
 }
 
 /**
@@ -51,7 +53,17 @@ export interface AppShellContext {
  * fetch pattern both pages now share instead of the previous copy-pasted
  * blocks (and Mail's previously-serialized pendingApprovals await).
  */
-export async function getAppShellContext(tenantId: string): Promise<AppShellContext> {
+export async function getAppShellContext(tenantId: string, requestedChannelId?: string | null): Promise<AppShellContext> {
+  const mailboxAccounts = await prisma.channel.findMany({
+    where: { tenantId, type: "email", provider: { in: ["google", "microsoft"] } },
+    select: { id: true, emailAddress: true, provider: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const activeChannelId = mailboxAccounts.some((account) => account.id === requestedChannelId)
+    ? requestedChannelId ?? null
+    : null;
+  const conversationScope = { tenantId, ...(activeChannelId ? { channelId: activeChannelId } : {}) };
+
   const [tenant, statusCounts, gmailChannels, pendingApprovals] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: tenantId },
@@ -59,7 +71,7 @@ export async function getAppShellContext(tenantId: string): Promise<AppShellCont
     }),
     prisma.conversation.groupBy({
       by: ["status"],
-      where: { tenantId },
+      where: conversationScope,
       _count: { status: true },
     }),
     prisma.channel.findMany({
@@ -82,7 +94,11 @@ export async function getAppShellContext(tenantId: string): Promise<AppShellCont
       orderBy: { createdAt: "asc" },
     }),
     prisma.approvalRequest.count({
-      where: { tenantId, status: "pending" },
+      where: {
+        tenantId,
+        status: "pending",
+        ...(activeChannelId ? { conversation: { channelId: activeChannelId } } : {}),
+      },
     }),
   ]);
 
@@ -118,5 +134,7 @@ export async function getAppShellContext(tenantId: string): Promise<AppShellCont
     needsReplyCount,
     pendingApprovals,
     gmailSyncChannels,
+    mailboxAccounts,
+    activeChannelId,
   };
 }
