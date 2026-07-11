@@ -754,6 +754,32 @@ describe("syncConversationWorkItems", () => {
     expect(updatedMeta.attentionCategory).toBe("needs_action")
   })
 
+  it("uses the stored subject when classifying a newly synced email", async () => {
+    mockConversationFindFirst.mockResolvedValue({
+      ...conversation,
+      messages: [
+        {
+          id: "msg-promo",
+          direction: "inbound",
+          fromE164: "hello@example.com",
+          subject: "50% off today only",
+          body: "Hello.",
+          createdAt: now,
+        },
+      ],
+    })
+
+    await syncConversationWorkItems({ tenantId: "tenant-1", conversationId: "conv-1", now })
+
+    const classificationUpdate = mockStateUpdate.mock.calls.find(
+      ([call]) => call.data?.metadataJson?.emailType !== undefined
+    )
+    expect(classificationUpdate?.[0].data.metadataJson).toMatchObject({
+      emailType: "marketing",
+      attentionCategory: "quiet",
+    })
+  })
+
   it("can skip rich AI relationship work while still syncing deterministic state", async () => {
     mockConversationFindFirst.mockResolvedValue({
       ...conversation,

@@ -456,6 +456,36 @@ describe("classifyEmailType", () => {
     expect(result.emailType).toBe("needs_reply")
   })
 
+  it("classifies an image-heavy flower promotion as marketing", () => {
+    const result = classifyEmailType({
+      fromEmail: "hello@flowers.example",
+      subject: "Goddess special day coming soon? 💗",
+      body: '<html><body><a href="https://flowers.example/shop"><img src="hero.jpg" alt="Flowers for her"></a><img src="bouquet.jpg" alt="Shop bouquets"></body></html>',
+    })
+    expect(result.emailType).toBe("marketing")
+    expect(result.attentionCategory).toBe("quiet")
+  })
+
+  it("classifies one-way career strategy outreach as marketing", () => {
+    const result = classifyEmailType({
+      fromEmail: "advisor@careers.example",
+      subject: "Exploring careers in finance or consulting",
+      body: "We know you worked with us in the past. Book a time here to schedule a complimentary career strategy call.",
+    })
+    expect(result.emailType).toBe("marketing")
+    expect(result.attentionCategory).toBe("quiet")
+  })
+
+  it("classifies an order receipt as completed notification even when it contains a promotion", () => {
+    const result = classifyEmailType({
+      fromEmail: "orders@domains.example",
+      subject: "Receipt for your domain order #1842",
+      body: "Payment received. Your domain registration is complete. Save 20% on email hosting with your next order.",
+    })
+    expect(result.emailType).toBe("notification")
+    expect(result.attentionCategory).toBe("fyi_done")
+  })
+
   it("extracts a numeric OTP from HTML with surrounding boilerplate", () => {
     const htmlBody = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><title>Security Code</title></head>

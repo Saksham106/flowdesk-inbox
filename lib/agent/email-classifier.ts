@@ -131,6 +131,18 @@ const LINKEDIN_JOB_ALERT_PATTERN =
 const FYI_DONE_PATTERN =
   /\b(no action (is )?(needed|required)|for your records|receipt|payment received|all set|completed successfully|successfully updated|confirmed)\b/i
 
+const RECEIPT_PATTERN =
+  /\b(receipt|order confirmation|order #?\w+|payment received|paid invoice|invoice paid|purchase confirmation|registration (is )?complete)\b/i
+
+const SALES_OUTREACH_CTA_PATTERN =
+  /\b(book (a |your )?(time|call|consultation)|schedule (a |your )?(call|consultation|strategy session)|reserve (a |your )?(time|spot))\b/i
+const SALES_OUTREACH_OFFER_PATTERN =
+  /\b(career strategy|career (advice|coaching)|complimentary (call|consultation|session)|free consultation|exploring careers? in|strategy call)\b/i
+
+const IMAGE_TAG_PATTERN = /<img\b[^>]*>/gi
+const IMAGE_PROMO_PATTERN =
+  /\b(flowers?|bouquets?|gifts? for (her|him|mom|dad)|shop (flowers?|bouquets?|gifts?)|special day|mother'?s day|father'?s day|valentine'?s day)\b/i
+
 // Promotional / commercial intent = "Marketing" (Inbox Zero's definition:
 // "Promotional emails about products, services, sales, or offers"). Kept
 // high-precision — commercial phrases only, not bare words like "sale" or
@@ -412,6 +424,12 @@ export function classifyEmailType(input: EmailClassifierInput): EmailClassifierR
     return result("marketing", "quiet", "Automated LinkedIn job alert.", 0.85)
   }
 
+  // Completed transactions take precedence over cross-sell copy commonly
+  // appended to receipts and order confirmations.
+  if (RECEIPT_PATTERN.test(text)) {
+    return result("notification", "fyi_done", "Completed order or payment receipt.", 0.9)
+  }
+
   // ---- Content-type classification ----
   // Ordering is deliberate: promotional intent (marketing) is checked BEFORE
   // any "has an unsubscribe link -> newsletter" signal and before the
@@ -424,6 +442,21 @@ export function classifyEmailType(input: EmailClassifierInput): EmailClassifierR
   // 1. Promotional / sales content -> Marketing.
   if (MARKETING_PATTERN.test(text)) {
     return result("marketing", "quiet", "Promotional or sales email.", 0.85)
+  }
+
+  // Image-led retail campaigns can contain almost no visible text. Require
+  // multiple image tags plus commercial context so ordinary HTML signatures
+  // and personal photo messages are not swept into Marketing.
+  const imageCount = body.match(IMAGE_TAG_PATTERN)?.length ?? 0
+  if (imageCount >= 2 && IMAGE_PROMO_PATTERN.test(text)) {
+    return result("marketing", "quiet", "Image-heavy retail promotion.", 0.84)
+  }
+
+  // One-way lead-generation mail often avoids discount language but still has
+  // a sales CTA. Both an offer and booking CTA are required to protect genuine
+  // human scheduling requests.
+  if (SALES_OUTREACH_CTA_PATTERN.test(text) && SALES_OUTREACH_OFFER_PATTERN.test(text)) {
+    return result("marketing", "quiet", "One-way promotional outreach with a booking call to action.", 0.82)
   }
 
   // 2. Editorial / subscribed content -> Newsletter.
