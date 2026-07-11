@@ -27,7 +27,7 @@ export default function Hero() {
 
           <ScrollReveal delay={120}>
             <p className="text-base font-medium text-[#404040] max-w-lg leading-relaxed">
-              Automatically manages conversations, drafts responses, and keeps follow-ups moving without lifting a finger.
+              Flowdesk connects securely to your Gmail to organize your inbox, draft replies in your voice, and keep follow-ups moving — you stay in control of every send.
             </p>
           </ScrollReveal>
 
