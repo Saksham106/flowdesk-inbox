@@ -36,8 +36,16 @@ export type CleanupAnalytics = {
 
 export type CleanupSummary = {
   groups: CleanupGroupView[]
+  labelGroups: CleanupLabelGroupView[]
   unsubscribeGroups: CleanupGroupView[]
   analytics: CleanupAnalytics
+}
+
+export type CleanupLabelGroupView = {
+  label: string
+  count: number
+  sampleSenders: string[]
+  conversationIds: string[]
 }
 
 export type CleanupConnectionIssue = "not_connected" | "auth_error" | "sync_error" | "never_synced"
@@ -88,6 +96,7 @@ export function summarizeCleanupCandidates(candidates: CleanupCandidate[]): Clea
   // from the same actionable population the groups represent, not raw candidates.
   const actionableIds = new Set(groups.flatMap((g) => g.conversationIds))
   const actionable = candidates.filter((c) => actionableIds.has(c.id))
+  const labelGroups = groupCleanupByLabel(actionable)
 
   const byEmailType = new Map<string, number>()
   const byDomain = new Map<string, number>()
@@ -106,6 +115,7 @@ export function summarizeCleanupCandidates(candidates: CleanupCandidate[]): Clea
 
   return {
     groups,
+    labelGroups,
     unsubscribeGroups: groups.filter((g) => g.hasUnsubscribe),
     analytics: {
       totalCandidates: candidates.length,
@@ -122,6 +132,34 @@ export function summarizeCleanupCandidates(candidates: CleanupCandidate[]): Clea
       topDomains: [...byDomain.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20),
     },
   }
+}
+
+function groupCleanupByLabel(candidates: CleanupCandidate[]): CleanupLabelGroupView[] {
+  const groups = new Map<string, { conversationIds: string[]; senders: string[] }>()
+  for (const candidate of candidates) {
+    const label = cleanupLabel(candidate.emailType)
+    const group = groups.get(label) ?? { conversationIds: [], senders: [] }
+    group.conversationIds.push(candidate.id)
+    const sender = candidate.senderName?.trim() || candidate.senderEmail?.trim()
+    if (sender && !group.senders.includes(sender) && group.senders.length < 3) group.senders.push(sender)
+    groups.set(label, group)
+  }
+  return [...groups.entries()]
+    .map(([label, group]) => ({
+      label,
+      count: group.conversationIds.length,
+      sampleSenders: group.senders,
+      conversationIds: group.conversationIds,
+    }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+}
+
+function cleanupLabel(emailType: string | null): string {
+  if (emailType === "newsletter") return "Newsletter"
+  if (emailType === "marketing") return "Marketing"
+  if (emailType === "notification" || emailType === "fyi") return "Notification"
+  if (emailType === "calendar") return "Calendar"
+  return "Other"
 }
 
 export type CleanupSourceHealth = {

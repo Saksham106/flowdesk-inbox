@@ -27,6 +27,10 @@ describe("summarizeCleanupCandidates", () => {
 
     expect(result.groups).toHaveLength(2)
     expect(result.unsubscribeGroups).toHaveLength(1)
+    expect(result.labelGroups.map((group) => [group.label, group.count])).toEqual([
+      ["Marketing", 1],
+      ["Newsletter", 1],
+    ])
     expect(result.analytics.totalCleanable).toBe(2)
     expect(result.analytics.protectedOrSkipped).toBe(1)
     expect(result.analytics.noUnsubscribeLinkCount).toBe(1)
