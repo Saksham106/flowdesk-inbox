@@ -20,6 +20,7 @@ export const revalidate = 60;
 
 const HOME_CONVERSATION_LIMIT = 25;
 const HOME_MESSAGE_LIMIT = 5;
+const HOME_APPROVAL_LIMIT = 20;
 
 export default async function HomePage() {
   const session = await getServerSession(authOptions);
@@ -159,7 +160,7 @@ async function renderHomePage(tenantId: string) {
     prisma.approvalRequest.findMany({
       where: { tenantId, status: "pending" },
       orderBy: { createdAt: "asc" },
-      take: 20,
+      take: HOME_APPROVAL_LIMIT,
       include: { conversation: { include: { contact: true } } },
     }),
   ]);
