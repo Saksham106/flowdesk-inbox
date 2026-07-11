@@ -24,6 +24,8 @@ import { detectSchedulingRequest } from "@/lib/agent/scheduling"
 import { handleSchedulingConfirmationForInboundReply } from "@/lib/agent/scheduling-booking"
 import { projectFlowDeskLabelsForConversation } from "@/lib/email-labels"
 import { hasGmailLabelOverride } from "@/lib/agent/gmail-label-override"
+import { proposeDraftForConversation } from "@/lib/agent/draft-generation"
+import { getAutomationLevel } from "@/lib/agent/automation-level"
 import {
   clearWaitingOnForInboundReply,
   markConversationWaitingOn,
@@ -575,6 +577,32 @@ export async function syncConversationWorkItems(
           source: "deterministic",
         },
       })
+    }
+  }
+
+  // Automatic Gmail draft creation (Level 3+): mirrors the label-projection
+  // trigger above. Only fires for conversations that newly need a reply, with
+  // no existing draft — proposeDraftForConversation's own idempotency (draft
+  // cache key, source-inbound tracking) prevents duplicate work on re-sync.
+  // Placed after email classification above (rather than immediately after
+  // the label-projection block) because detectedAttentionCategory is only
+  // assigned there.
+  if (
+    !hasUserOverrideOrLabelHold &&
+    detectedAttentionCategory === "needs_reply" &&
+    !conversation.draft
+  ) {
+    try {
+      const automationLevel = await getAutomationLevel(conversation.tenantId)
+      if (automationLevel >= 3) {
+        await proposeDraftForConversation({
+          tenantId: conversation.tenantId,
+          conversationId: conversation.id,
+          source: "automatic",
+        })
+      }
+    } catch (err) {
+      console.error("[work-item-sync] automatic draft proposal failed:", err)
     }
   }
 

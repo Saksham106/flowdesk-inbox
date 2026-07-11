@@ -180,5 +180,18 @@ export async function PATCH(request: Request) {
       : []),
   ])
 
-  return NextResponse.json({ setting })
+  const crossedIntoLevel3 =
+    automationLevel !== undefined &&
+    automationLevel >= 3 &&
+    (existing?.automationLevel ?? 0) < 3
+
+  if (!crossedIntoLevel3) {
+    return NextResponse.json({ setting })
+  }
+
+  const backfillEligibleCount = await prisma.conversation.count({
+    where: { tenantId: session.user.tenantId, status: "needs_reply", draft: null },
+  })
+
+  return NextResponse.json({ setting, backfillAvailable: true, backfillEligibleCount })
 }

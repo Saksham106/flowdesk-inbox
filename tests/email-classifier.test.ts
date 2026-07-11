@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { classifyEmailType } from "@/lib/agent/email-classifier"
+import { classifyEmailType, BULK_LIST_PATTERN } from "@/lib/agent/email-classifier"
 
 describe("classifyEmailType", () => {
   it("classifies OTP email as needs_action and extracts the code", () => {
@@ -471,5 +471,12 @@ describe("classifyEmailType", () => {
       body: htmlBody,
     })
     expect(result.action?.detectedCode).toBe("392817")
+  })
+})
+
+describe("BULK_LIST_PATTERN", () => {
+  it("is exported and matches common unsubscribe footer language", () => {
+    expect(BULK_LIST_PATTERN.test("Click here to unsubscribe from this list")).toBe(true)
+    expect(BULK_LIST_PATTERN.test("Thanks for the quick reply, see you Tuesday")).toBe(false)
   })
 })

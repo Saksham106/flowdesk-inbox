@@ -148,7 +148,7 @@ const NEWSLETTER_EDITORIAL_PATTERN =
 // newsletter" AFTER the promotional and editorial checks, because marketing
 // mail carries these (legally required) footers too. Checking this first — as
 // the classifier used to — mislabeled every sale/offer email as a newsletter.
-const BULK_LIST_PATTERN =
+export const BULK_LIST_PATTERN =
   /\b(unsubscribe|manage (your )?(email )?(preferences|subscription)|update your (email )?preferences|email preferences|if you no longer wish to receive|to stop receiving (these|this)|you('re| are) receiving this (email )?because|opt.out|view (this email )?in (your )?browser|do not reply to this email|this is an automated)\b/i
 
 function extractDomain(email: string): string {

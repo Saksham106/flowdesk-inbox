@@ -451,6 +451,46 @@ describe('POST /api/conversations/[id]/draft/suggest', () => {
     })
   })
 
+  it('returns 422 with validationFailures when a manual draft violates writing preferences on both the initial attempt and the retry', async () => {
+    mockConversationFindFirst.mockResolvedValue(emailConversation)
+    mockGetReplyGenerationContext.mockResolvedValue({
+      accountType: 'business',
+      businessProfile: { businessName: 'Glow Studio' },
+      knowledgeDocuments: [{ id: 'doc1', title: 'Pricing', content: 'Botox starts at $12/unit.' }],
+      learnedProfile: null,
+      writingPreferences: {
+        forbidEmDash: true,
+        preferredGreetings: [],
+        avoidedPhrases: [],
+        preferredSignoffs: [],
+        formality: null,
+        replyLength: null,
+        customInstruction: null,
+      },
+    })
+    mockGenerateDraftReply.mockResolvedValue({
+      draftText: 'Thanks for reaching out — Botox starts at $12/unit.',
+      intent: 'pricing',
+      confidence: 0.91,
+      riskLevel: 'low',
+      suggestedLabel: 'Pricing',
+      escalationReason: null,
+      model: 'gpt-test',
+    })
+
+    const res = await suggestDraft(makeReq() as never, { params: { id: 'conv1' } })
+
+    expect(res.status).toBe(422)
+    expect(await res.json()).toEqual({
+      error: 'Draft requires review because it violates writing preferences.',
+      validationFailures: [
+        'Draft contains an em dash, which is prohibited by your writing preferences.',
+      ],
+    })
+    expect(mockGenerateDraftReply).toHaveBeenCalledTimes(2)
+    expect(mockDraftUpsert).not.toHaveBeenCalled()
+  })
+
   it('rejects overlong rough user instructions', async () => {
     mockConversationFindFirst.mockResolvedValue(emailConversation)
 

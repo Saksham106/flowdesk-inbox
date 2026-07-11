@@ -82,6 +82,9 @@ export default function AutopilotSettingsForm({
   const [pendingLevel, setPendingLevel] = useState<number | null>(null)
   const [levelSaving, setLevelSaving] = useState(false)
   const [levelError, setLevelError] = useState<string | null>(null)
+  const [backfillOffer, setBackfillOffer] = useState<{ eligibleCount: number } | null>(null)
+  const [backfillRunning, setBackfillRunning] = useState(false)
+  const [backfillSummary, setBackfillSummary] = useState<string | null>(null)
   const [enabled, setEnabled] = useState(initial?.enabled ?? false)
   const [threshold, setThreshold] = useState(String(initial?.confidenceThreshold ?? 0.85))
   const [maxSends, setMaxSends] = useState(String(initial?.maxAutoSendsPerDay ?? 10))
@@ -152,10 +155,35 @@ export default function AutopilotSettingsForm({
       if (!res.ok) throw new Error(data.error ?? "Failed to change level")
       setCurrentLevel(pendingLevel)
       setPendingLevel(null)
+      if (data.backfillAvailable) {
+        setBackfillOffer({ eligibleCount: data.backfillEligibleCount ?? 0 })
+      }
     } catch (err) {
       setLevelError(err instanceof Error ? err.message : "Failed to change level")
     } finally {
       setLevelSaving(false)
+    }
+  }
+
+  async function runBackfill(scope: "all" | "last_n") {
+    setBackfillRunning(true)
+    setBackfillSummary(null)
+    try {
+      const res = await fetch("/api/autopilot-settings/backfill-drafts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(scope === "last_n" ? { scope, n: 10 } : { scope }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Backfill failed")
+      const drafted = (data.results ?? []).filter((r: { status: string }) => r.status === "drafted").length
+      const skipped = (data.results ?? []).length - drafted
+      setBackfillSummary(`Created ${drafted} draft${drafted === 1 ? "" : "s"}, skipped ${skipped} that didn't need a reply.`)
+      setBackfillOffer(null)
+    } catch (err) {
+      setBackfillSummary(err instanceof Error ? err.message : "Backfill failed")
+    } finally {
+      setBackfillRunning(false)
     }
   }
 
@@ -256,6 +284,43 @@ export default function AutopilotSettingsForm({
       )}
 
       {levelError && <p className="text-xs text-red-600">{levelError}</p>}
+
+      {backfillOffer && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800">
+          <p className="font-medium">
+            Create drafts for your {backfillOffer.eligibleCount} existing conversation
+            {backfillOffer.eligibleCount === 1 ? "" : "s"} that need a reply?
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            FlowDesk will skip anything that turns out not to need one, like newsletters.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={() => runBackfill("all")}
+              disabled={backfillRunning}
+              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+            >
+              {backfillRunning ? "Working..." : "Create for all"}
+            </button>
+            <button
+              onClick={() => runBackfill("last_n")}
+              disabled={backfillRunning}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+            >
+              Last 10 only
+            </button>
+            <button
+              onClick={() => setBackfillOffer(null)}
+              disabled={backfillRunning}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {backfillSummary && <p className="text-xs text-slate-600">{backfillSummary}</p>}
 
       {isDisabled && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">

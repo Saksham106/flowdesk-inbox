@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { evaluateAutonomy } from "@/lib/agent/autonomy"
 import { getReplyGenerationContext } from "@/lib/agent/reply-context"
 import { generateDraftReply } from "@/lib/ai/provider"
+import { sanitizeDraftText } from "@/lib/agent/draft-sanitizer"
 import { sendConversationMessage, ConversationSendError } from "@/lib/conversations/send-message"
 import { resolveDraftApprovalRequests } from "@/lib/agent/approvals"
 import { isActionAllowedAtLevel } from "@/lib/agent/automation-level"
@@ -262,9 +263,12 @@ export async function attemptAutopilotSend(
   // budget-block and a generation failure, so a single catch here covers
   // both — recording our own AiUsageEvent on top would double-count spend.
   let draftText: string
+  let sanitizerFlags: string[] = []
   try {
     const result = await generateDraftReply(draftInput)
-    draftText = result.draftText
+    const sanitized = sanitizeDraftText(result.draftText)
+    draftText = sanitized.text
+    sanitizerFlags = sanitized.flagged
   } catch (err) {
     await recordAutopilotFailure(job.tenantId)
     await prisma.auditLog.create({
@@ -294,6 +298,18 @@ export async function attemptAutopilotSend(
       status: "approved",
     },
   })
+
+  if (sanitizerFlags.length > 0) {
+    await prisma.draft.update({ where: { id: draft.id }, data: { status: "proposed" } })
+    await prisma.auditLog.create({
+      data: {
+        tenantId: job.tenantId,
+        action: "autopilot.draft_held_for_sanitizer",
+        payloadJson: { jobId, conversationId: job.conversationId, draftId: draft.id, flags: sanitizerFlags },
+      },
+    })
+    return { sent: false, reason: `Draft held for review: sanitizer flagged ${sanitizerFlags.join(", ")}` }
+  }
 
   await prisma.auditLog.create({
     data: {
