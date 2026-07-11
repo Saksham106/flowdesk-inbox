@@ -26,6 +26,9 @@ export const metadata: Metadata = {
     description: "AI inbox for small business support",
     images: ["/images/landing/product-screenshot.png"],
   },
+  verification: {
+    google: "pyMDQ5KOTxYPA_gLE5zLvUOzSdEPLNHEnSKfemlVV2c",
+  },
 };
 
 export default function RootLayout({
