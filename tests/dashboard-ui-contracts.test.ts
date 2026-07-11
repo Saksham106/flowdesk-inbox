@@ -29,6 +29,16 @@ describe("dashboard and inbox UI source contracts", () => {
     expect(feed).toContain('aria-live="polite"')
   })
 
+  it("action feed offers Draft reply on conversation items via draft/suggest", () => {
+    const feed = source("app/components/HomeActionFeed.tsx")
+
+    expect(feed).toContain('/api/conversations/${item.conversationId}/draft/suggest')
+    expect(feed).toContain("Draft reply")
+    expect(feed).toContain("Drafting…")
+    expect(feed).toContain("isConversationItem(item)")
+    expect(feed).toContain('item.kind === "reply" || item.kind === "action" || item.kind === "follow_up"')
+  })
+
   it("NeedsActionSection persists manual dismissal through workflow-status", () => {
     const s = source("app/components/NeedsActionSection.tsx")
 
