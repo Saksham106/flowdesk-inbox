@@ -10,6 +10,7 @@ import { inboxTag } from "@/lib/cache-tags"
 import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status"
 import { CONTENT_TYPE_FILTERS, emailTypesForContentFilter } from "@/lib/content-type-filters"
 import { buildMailLabelTabWhere, matchesMailLabelTab, type MailLabelTabValue } from "@/lib/mail-label-tabs"
+import { supportsMailboxWriteback } from "@/lib/email/provider-support"
 
 interface Props {
   tenantId: string
@@ -100,7 +101,9 @@ export function mapConversationRowToListItem(
     attentionCategory: attention,
     contentType: conv.stateRecord?.emailType ?? null,
     isPersonal,
-    isGmail: conv.channel.provider === "google",
+    // Archive/trash/read/labels are provider-neutral writeback ops (Gmail + Outlook);
+    // this drives those affordances in the row components.
+    supportsMailboxActions: supportsMailboxWriteback(conv.channel.provider),
     isVip,
     vipLabel,
     snoozeUntil,

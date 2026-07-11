@@ -79,6 +79,18 @@ function classificationWhy(p: Payload): TimelineWhy {
   return { kind: "ai", confidence: num(p.confidence), intent: str(p.intent) }
 }
 
+/** Shared renderer for `{gmail,outlook}.labels.queued` — same shape, provider-named wording. */
+function labelsQueuedEntry(p: Payload, providerLabel: "Gmail" | "Outlook"): Omit<TimelineEntry, "id" | "createdAt"> {
+  const labels = strList(p.labels)
+  return {
+    icon: "🏷",
+    title: `Queued ${providerLabel} labels`,
+    detail: labels.length > 0 ? labels.join(", ") : "Remove FlowDesk labels",
+    why: null,
+    tone: "muted",
+  }
+}
+
 /** One mapper per meaningful audit action; anything unmapped is omitted. */
 const MAPPERS: Record<
   string,
@@ -157,16 +169,8 @@ const MAPPERS: Record<
     why: null,
     tone: "warning",
   }),
-  "gmail.labels.queued": (p) => {
-    const labels = strList(p.labels)
-    return {
-      icon: "🏷",
-      title: "Queued Gmail labels",
-      detail: labels.length > 0 ? labels.join(", ") : "Remove FlowDesk labels",
-      why: null,
-      tone: "muted",
-    }
-  },
+  "gmail.labels.queued": (p) => labelsQueuedEntry(p, "Gmail"),
+  "outlook.labels.queued": (p) => labelsQueuedEntry(p, "Outlook"),
   "gmail.writeback.completed": (p) => {
     const action = str(p.action)
     const labels = strList(p.labels)

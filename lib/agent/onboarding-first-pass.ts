@@ -83,7 +83,8 @@ export async function runOnboardingFirstPass(tenantId: string): Promise<Onboardi
   }
 
   // Capture the boundary before projecting so the proof summary reads only the
-  // label writebacks this pass produced (each projection audits gmail.labels.queued).
+  // label writebacks this pass produced (each projection audits gmail.labels.queued
+  // or outlook.labels.queued, per the channel's provider).
   const startedAt = new Date()
 
   let errors = 0

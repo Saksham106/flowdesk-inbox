@@ -35,7 +35,8 @@ import EmailBody from "@/app/components/EmailBody";
 import { resolveAccountMode } from "@/lib/account-mode";
 import { accountModeFor } from "@/lib/tenant-capabilities";
 import { getSafeInboxReturnPath } from "@/lib/client-navigation";
-import { markGmailThreadRead } from "@/lib/google"
+import { getWritebackAdapter } from "@/lib/email/writeback-adapter"
+import { supportsMailboxWriteback } from "@/lib/email/provider-support"
 import PhishingWarningBanner from "@/app/conversations/[id]/PhishingWarningBanner";
 import UnsubscribeButton from "@/app/conversations/[id]/UnsubscribeButton";
 import SnoozeButton from "@/app/conversations/[id]/SnoozeButton";
@@ -203,17 +204,21 @@ export default async function ConversationPage({
     }),
   ])
 
-  if (conversation.channel.provider === "google") {
-    markGmailThreadRead(
-      conversation.channelId,
-      conversation.messages.map((message) => message.providerMessageId),
-      { tenantId: session.user.tenantId, conversationId: conversation.id }
-    ).catch((err) => {
-      console.warn("Failed to mark Gmail thread read on open", {
-        conversationId: conversation.id,
-        message: err instanceof Error ? err.message : "Unknown error",
+  const supportsMailboxActions = supportsMailboxWriteback(conversation.channel.provider)
+  if (supportsMailboxActions) {
+    getWritebackAdapter(conversation.channel.provider)
+      ?.markConversationRead(
+        conversation.channelId,
+        conversation.messages.map((message) => message.providerMessageId),
+        { tenantId: session.user.tenantId, conversationId: conversation.id }
+      )
+      .catch((err) => {
+        console.warn("Failed to mark thread read on open", {
+          conversationId: conversation.id,
+          provider: conversation.channel.provider,
+          message: err instanceof Error ? err.message : "Unknown error",
+        })
       })
-    })
   }
 
   const accountType = tenant ? accountModeFor(tenant) : (sessionAccountType ?? "personal");
@@ -706,7 +711,7 @@ export default async function ConversationPage({
                   isPersonal={isPersonal}
                   isAutoEmail={isAutoEmailConversation}
                   isRead={Boolean(conversation.readAt)}
-                  isGmail={conversation.channel.provider === "google"}
+                  supportsMailboxActions={supportsMailboxActions}
                 />
               </div>
 

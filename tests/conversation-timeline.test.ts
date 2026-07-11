@@ -96,6 +96,26 @@ describe("buildConversationTimeline", () => {
     expect(entry.detail).toContain("Needs Reply")
   })
 
+  it("renders queued labels for both Gmail and Outlook with provider-appropriate wording", () => {
+    const [gmailEntry] = buildConversationTimeline([
+      row({
+        action: "gmail.labels.queued",
+        payloadJson: { conversationId: "conv-1", labels: ["Needs Reply"] },
+      }),
+    ])
+    const [outlookEntry] = buildConversationTimeline([
+      row({
+        action: "outlook.labels.queued",
+        payloadJson: { conversationId: "conv-1", labels: ["Needs Reply"] },
+      }),
+    ])
+
+    expect(gmailEntry.title).toBe("Queued Gmail labels")
+    expect(outlookEntry.title).toBe("Queued Outlook labels")
+    expect(gmailEntry.detail).toBe("Needs Reply")
+    expect(outlookEntry.detail).toBe("Needs Reply")
+  })
+
   it("marks a failed writeback as danger and surfaces the error", () => {
     const [entry] = buildConversationTimeline([
       row({

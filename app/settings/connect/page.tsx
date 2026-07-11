@@ -61,7 +61,7 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
     outlookSyncEventsFailed,
   ] = await Promise.all([
     prisma.channel.findMany({
-      where: { tenantId: session.user.tenantId, type: "email" },
+      where: { tenantId: session.user.tenantId, type: "email", provider: "google" },
       include: {
         gmailCredential: {
           select: {
@@ -168,16 +168,15 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
   const isPersonal = !salesCrmEnabled(tenant);
 
   const gmailOperatorHealth = summarizeGmailOperatorHealth({
-    channels: gmailChannels
-      .filter((channel) => channel.provider === "google")
-      .map((channel) => ({
-        emailAddress: channel.emailAddress,
-        lastSyncedAt: channel.gmailCredential?.lastSyncedAt ?? null,
-        lastSyncStatus: channel.gmailCredential?.lastSyncStatus ?? null,
-        lastSyncError: channel.gmailCredential?.lastSyncError ?? null,
-        watchExpiresAt: channel.gmailCredential?.watchExpiresAt ?? null,
-        watchRenewalError: channel.gmailCredential?.watchRenewalError ?? null,
-      })),
+    // gmailChannels is already scoped to provider: "google" in the query above.
+    channels: gmailChannels.map((channel) => ({
+      emailAddress: channel.emailAddress,
+      lastSyncedAt: channel.gmailCredential?.lastSyncedAt ?? null,
+      lastSyncStatus: channel.gmailCredential?.lastSyncStatus ?? null,
+      lastSyncError: channel.gmailCredential?.lastSyncError ?? null,
+      watchExpiresAt: channel.gmailCredential?.watchExpiresAt ?? null,
+      watchRenewalError: channel.gmailCredential?.watchRenewalError ?? null,
+    })),
     writeback: {
       pending: pendingWritebacks,
       processing: processingWritebacks,
@@ -216,9 +215,18 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
   const googleConfigured = !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
   const microsoftConfigured = !!process.env.MICROSOFT_CLIENT_ID && !!process.env.MICROSOFT_CLIENT_SECRET;
 
-  const gmailError = searchParams.error
+  // Some error codes (invalid_state, token_exchange_failed, userinfo_failed, no_email,
+  // invalid_callback) are shared between the Gmail and Outlook callback routes, so the
+  // provider can't always be inferred — fall back to a neutral "Connection" prefix
+  // rather than assuming Gmail.
+  const connectError = searchParams.error
     ? (ERROR_MESSAGES[searchParams.error] ?? "An error occurred. Please try again.")
     : null;
+  const connectErrorPrefix = searchParams.error?.startsWith("google")
+    ? "Google"
+    : searchParams.error?.startsWith("outlook")
+      ? "Outlook"
+      : "Connection";
 
   const calError = searchParams.cal_error
     ? (ERROR_MESSAGES[searchParams.cal_error] ?? "An error occurred. Please try again.")
@@ -228,9 +236,9 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
     <>
       {/* Success / error banners */}
       <div className="space-y-3 empty:hidden">
-        {gmailError && (
+        {connectError && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            Gmail: {gmailError}
+            {connectErrorPrefix}: {connectError}
           </div>
         )}
         {searchParams.connected && (
@@ -359,6 +367,7 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
                   <p className="text-sm font-medium">Outlook / Microsoft 365</p>
                   <p className="text-xs text-slate-500">
                     Read your inbox and reply to emails directly from FlowDesk.
+                    FlowDesk labels appear as Outlook categories.
                   </p>
                 </div>
               </div>
