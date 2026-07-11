@@ -27,6 +27,7 @@ describe("getOpenRouterApiKeyForUser", () => {
     vi.clearAllMocks()
     process.env.OPENROUTER_MANAGEMENT_API_KEY = "mgmt"
     process.env.OPENROUTER_CHILD_KEY_MONTHLY_LIMIT_USD = "10"
+    delete process.env.OPENROUTER_WORKSPACE_ID
   })
 
   it("returns an existing active child key", async () => {
@@ -58,6 +59,7 @@ describe("getOpenRouterApiKeyForUser", () => {
     )
     const requestBody = JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body)
     expect(requestBody.name).toBe("flowdesk-a-u1")
+    expect(requestBody).not.toHaveProperty("workspace_id")
     expect(mockUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { userId: "u1" },
@@ -66,6 +68,22 @@ describe("getOpenRouterApiKeyForUser", () => {
       })
     )
     expect(mockCreate).not.toHaveBeenCalled()
+  })
+
+  it("includes workspace_id in the provisioning request when OPENROUTER_WORKSPACE_ID is configured", async () => {
+    process.env.OPENROUTER_WORKSPACE_ID = "ws-abc-123"
+    mockFindUnique.mockResolvedValue(null)
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ key: "sk-or-new", hash: "hash2", label: "sk-or-v1-new" }),
+    }))
+    mockUpsert.mockResolvedValue({ encryptedApiKey: "enc:sk-or-new", keyHash: "hash2", disabled: false })
+
+    const { getOpenRouterApiKeyForUser } = await import("@/lib/ai/openrouter-keys")
+    await getOpenRouterApiKeyForUser({ tenantId: "t1", userId: "u1", email: "a@example.com" })
+
+    const requestBody = JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body)
+    expect(requestBody.workspace_id).toBe("ws-abc-123")
   })
 
   it("re-provisions and upserts (not create) when the existing row is disabled", async () => {

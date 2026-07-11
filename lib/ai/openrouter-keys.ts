@@ -29,6 +29,10 @@ export function buildOpenRouterKeyName(email: string, userId: string): string {
  *   child key via the OpenRouter management API and persist it.
  * - If no management key is configured, fall back to a single shared
  *   OPENROUTER_API_KEY, but ONLY outside production. Production fails closed.
+ *
+ * If OPENROUTER_WORKSPACE_ID is set, new child keys are created in that
+ * OpenRouter workspace; otherwise OpenRouter creates them in the default
+ * workspace for the account that owns OPENROUTER_MANAGEMENT_API_KEY.
  */
 export async function getOpenRouterApiKeyForUser(input: {
   tenantId: string
@@ -64,6 +68,9 @@ export async function getOpenRouterApiKeyForUser(input: {
       name: buildOpenRouterKeyName(input.email, input.userId),
       limit: Number.isFinite(limit) ? limit : 10,
       limit_reset: "monthly",
+      // Omitted entirely (rather than sent as undefined/null) so OpenRouter
+      // falls back to its own default workspace when unset.
+      ...(process.env.OPENROUTER_WORKSPACE_ID ? { workspace_id: process.env.OPENROUTER_WORKSPACE_ID } : {}),
     }),
   })
 
