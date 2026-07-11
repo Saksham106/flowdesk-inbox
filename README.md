@@ -10,6 +10,7 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 - **Gmail and Outlook sync** — connect an email account and import email threads into FlowDesk for supervision, review, and automation context
 - **Manual and automatic Gmail refresh controls** — the inbox shell exposes real Gmail sync with last-synced/error status, app-load sync, tab-return sync, and periodic sync while open
 - **Idempotent Gmail sync with local overrides** — duplicate syncs are locked per account, Gmail read/unread is imported separately from local read/done state, and user actions win over AI classification
+- **Gmail-first label feedback** — adding or removing a FlowDesk label in Gmail becomes durable user intent; a cleared workflow label stays clear until a genuinely new inbound email arrives
 - **Gmail label/read/archive/trash writeback** — workflow labels, read, archive, and trash actions update Gmail where supported while preserving local override metadata
 - **Agent control room** — review email threads with status, drafts, assistant context, settings, approvals, and audit history without replacing Gmail
 - **Email-style thread view** — opened conversations read top-to-bottom like an email client, with sender/recipient/timestamp metadata and a reply composer below the thread
@@ -20,6 +21,7 @@ FlowDesk is a Gmail-native AI email operator for individuals and small businesse
 - **Cost-aware AI usage** — deterministic rules handle low-value automated mail first; richer AI is skipped, deferred, or cached for drafts and relationship memory when it does not add user value
 - **Handle This** — ask FlowDesk to draft the next step from a thread-level assistant panel
 - **AI draft suggestions (human-approved)** — generate, edit, approve, and send replies through the email provider
+- **Writing preferences** — train from verified native sent replies only, then explicitly control greetings, sign-offs, formality, length, phrases to avoid, and a strict “never use em dashes” rule
 - **Personal mode by default** — personal/work-email accounts use personal writing style and inbox classification without CRM or sales language
 - **Business mode** — business accounts can use business profile, knowledge base, CRM labels, sales/support signals, lead scoring, and revenue reporting
 - **Google Calendar support for business accounts** — connect Google Calendar for availability and calendar holds

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status"
 import { getAutomationLevel, isActionAllowedAtLevel } from "@/lib/agent/automation-level"
 import { classifyEmailType } from "@/lib/agent/email-classifier"
-import { hasGmailLabelOverride } from "@/lib/agent/gmail-label-feedback"
+import { hasGmailLabelOverride } from "@/lib/agent/gmail-label-override"
 
 // Labels are flat, top-level Gmail labels named exactly for what they mean
 // ("Needs Reply", "Waiting On", …) with no "FlowDesk/" namespace prefix.

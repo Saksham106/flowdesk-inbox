@@ -23,7 +23,7 @@ import { userEditedFieldsFromMetadata } from "@/lib/agent/user-edited-fields"
 import { detectSchedulingRequest } from "@/lib/agent/scheduling"
 import { handleSchedulingConfirmationForInboundReply } from "@/lib/agent/scheduling-booking"
 import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
-import { hasGmailLabelOverride } from "@/lib/agent/gmail-label-feedback"
+import { hasGmailLabelOverride } from "@/lib/agent/gmail-label-override"
 import {
   clearWaitingOnForInboundReply,
   markConversationWaitingOn,

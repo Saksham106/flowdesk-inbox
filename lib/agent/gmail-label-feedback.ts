@@ -2,7 +2,10 @@ import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@prisma/client"
 import { labelToState } from "@/lib/conversation-labels"
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
+import { hasGmailLabelOverride } from "@/lib/agent/gmail-label-override"
 import { isFlowDeskGmailLabelName, type FlowDeskGmailLabelName } from "@/lib/gmail-labels"
+
+export { hasGmailLabelOverride } from "@/lib/agent/gmail-label-override"
 
 type GmailLabelOverride = {
   workflow: FlowDeskGmailLabelName | null
@@ -16,18 +19,6 @@ const WORKFLOW_LABELS = new Set<FlowDeskGmailLabelName>([
 const CONTENT_LABELS = new Set<FlowDeskGmailLabelName>([
   "Newsletter", "Marketing", "Notification", "Calendar",
 ])
-
-export function hasGmailLabelOverride(metadata: unknown): boolean {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return false
-  const override = (metadata as Record<string, unknown>).gmailLabelOverride
-  if (!override || typeof override !== "object" || Array.isArray(override)) return false
-  const value = override as Record<string, unknown>
-  return (
-    typeof value.workflow === "string" ||
-    typeof value.contentType === "string" ||
-    typeof value.updatedAt === "string"
-  )
-}
 
 /** Removes a Gmail-label hold after a genuinely new inbound message resets the thread context. */
 export async function clearGmailLabelOverride(input: {

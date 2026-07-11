@@ -5,11 +5,13 @@ const {
   mockBusinessProfileFindUnique,
   mockKnowledgeFindMany,
   mockProfileFindFirst,
+  mockWritingPreferenceFindUnique,
 } = vi.hoisted(() => ({
   mockTenantFindUnique: vi.fn(),
   mockBusinessProfileFindUnique: vi.fn(),
   mockKnowledgeFindMany: vi.fn(),
   mockProfileFindFirst: vi.fn(),
+  mockWritingPreferenceFindUnique: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -18,6 +20,7 @@ vi.mock('@/lib/prisma', () => ({
     businessProfile: { findUnique: mockBusinessProfileFindUnique },
     knowledgeDocument: { findMany: mockKnowledgeFindMany },
     learnedReplyProfile: { findFirst: mockProfileFindFirst },
+    writingPreference: { findUnique: mockWritingPreferenceFindUnique },
   },
 }))
 
