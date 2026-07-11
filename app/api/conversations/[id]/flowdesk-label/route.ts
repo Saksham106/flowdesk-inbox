@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { isFlowDeskGmailLabelName } from "@/lib/gmail-labels"
+import { isFlowDeskGmailLabelName } from "@/lib/email-labels"
 import { setConversationFlowDeskLabel } from "@/lib/conversation-labels"
 
 // The unified manual-label-correction endpoint: the single place a user

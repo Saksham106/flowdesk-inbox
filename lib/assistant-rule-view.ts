@@ -1,4 +1,4 @@
-import type { FlowDeskGmailLabelName } from "@/lib/gmail-labels"
+import type { FlowDeskGmailLabelName } from "@/lib/email-labels"
 
 // Pure view helpers for the /assistant pages (Rules summary tiles, Test
 // Rules planned-label preview). No Prisma here — callers fetch/map rows,

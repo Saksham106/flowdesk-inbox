@@ -12,7 +12,7 @@ import {
 import {
   flowDeskLabelsForConversationState,
   queueFlowDeskLabelWriteback,
-} from "@/lib/gmail-labels"
+} from "@/lib/email-labels"
 import { queueGmailDraftWithdrawal } from "@/lib/gmail-drafts"
 
 const SETTABLE_STATUSES = new Set(["needs_reply", "waiting_on", "read_later", "done"])
@@ -85,6 +85,7 @@ export async function PATCH(
         emailType: conversation.stateRecord?.emailType,
       }),
       reason: `workflow_status.${settableWorkflowStatus}`,
+      provider: conversation.channel.provider,
     })
 
     // If we just cleared the draft, withdraw any Gmail-native draft too so a
@@ -94,6 +95,7 @@ export async function PATCH(
         tenantId: session.user.tenantId,
         channelId: conversation.channelId,
         conversationId: params.id,
+        provider: conversation.channel.provider,
       })
     }
   }

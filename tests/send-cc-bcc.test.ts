@@ -41,8 +41,8 @@ vi.mock("@/lib/google", async (importOriginal) => {
   }
 })
 
-vi.mock("@/lib/gmail-labels", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/gmail-labels")>()
+vi.mock("@/lib/email-labels", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/email-labels")>()
   return {
     ...actual,
     projectFlowDeskLabelsForConversation: mockProjectLabels,

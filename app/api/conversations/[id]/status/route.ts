@@ -10,7 +10,7 @@ import { conversationUpdateForWorkflowStatus } from "@/lib/workflow-status-trans
 import {
   flowDeskLabelsForConversationState,
   queueFlowDeskLabelWriteback,
-} from "@/lib/gmail-labels";
+} from "@/lib/email-labels";
 
 const VALID_STATUSES = ["needs_reply", "in_progress", "closed"] as const;
 type Status = (typeof VALID_STATUSES)[number];
@@ -132,6 +132,7 @@ export async function PATCH(
         draftStatus: status === "closed" ? null : conversation.draft?.status,
       }),
       reason: `conversation_status.${status}`,
+      provider: conversation.channel.provider,
     });
   }
 

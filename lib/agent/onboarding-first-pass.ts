@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { reconcileGmailLabelsForChannel } from "@/lib/agent/gmail-label-reconcile"
 import { getAutomationLevel, isActionAllowedAtLevel, MIN_LEVEL_FOR_ACTION } from "@/lib/agent/automation-level"
-import { isFlowDeskGmailLabelName } from "@/lib/gmail-labels"
+import { isFlowDeskGmailLabelName } from "@/lib/email-labels"
 
 // Onboarding first-pass: the moment a user connects Gmail, classify and label a
 // batch of their EXISTING inbox threads so their real inbox is visibly

@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client"
 import { labelToState } from "@/lib/conversation-labels"
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
 import { hasGmailLabelOverride } from "@/lib/agent/gmail-label-override"
-import { isFlowDeskGmailLabelName, type FlowDeskGmailLabelName } from "@/lib/gmail-labels"
+import { isFlowDeskGmailLabelName, type FlowDeskGmailLabelName } from "@/lib/email-labels"
 
 export { hasGmailLabelOverride } from "@/lib/agent/gmail-label-override"
 

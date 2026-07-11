@@ -8,7 +8,7 @@ import {
   FLOWDESK_LABEL_NAMES,
   isFlowDeskLabelName,
   type FlowDeskLabelName,
-} from "@/lib/gmail-labels"
+} from "@/lib/email-labels"
 
 // Outlook has no thread-level mutation API: every operation fans out over the
 // conversation's messages. Cap the fan-out so a 500-message newsletter thread

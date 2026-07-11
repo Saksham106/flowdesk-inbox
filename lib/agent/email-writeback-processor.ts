@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client"
 
-import { normalizeFlowDeskLabelPayload } from "@/lib/gmail-labels"
+import { normalizeFlowDeskLabelPayload } from "@/lib/email-labels"
 import {
   GMAIL_DRAFT_CREATE_ACTION,
   GMAIL_DRAFT_WITHDRAW_ACTION,

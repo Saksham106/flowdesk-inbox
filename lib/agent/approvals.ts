@@ -127,6 +127,7 @@ export async function projectDecisionOntoDraft(input: {
       tenantId: input.tenantId,
       channelId: conversation.channelId,
       conversationId: input.conversationId,
+      provider: conversation.channel.provider,
     })
   }
 }

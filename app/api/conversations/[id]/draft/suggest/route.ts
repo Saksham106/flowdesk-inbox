@@ -18,7 +18,7 @@ import {
   providerDraftIdFromMetadata,
   queueGmailDraftWriteback,
 } from "@/lib/gmail-drafts"
-import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
+import { projectFlowDeskLabelsForConversation } from "@/lib/email-labels"
 import { ensureDraftApprovalRequest } from "@/lib/agent/approvals"
 import { validateDraftWritingPreferences } from "@/lib/agent/writing-preferences"
 
@@ -323,9 +323,9 @@ export async function POST(
     })
   }
 
-  // Push the draft into the user's Gmail so it's waiting when they open the
-  // thread, and project the Autodrafted/Needs Reply labels. Best-effort: a Gmail
-  // hiccup must not fail the draft suggestion the user just requested.
+  // Push the draft into the user's mailbox so it's waiting when they open the
+  // thread, and project the Autodrafted/Needs Reply labels. Best-effort: a
+  // provider hiccup must not fail the draft suggestion the user just requested.
   if (conversation.channel.provider === "google" && conversation.externalThreadId) {
     try {
       await queueGmailDraftWriteback({
@@ -333,6 +333,7 @@ export async function POST(
         channelId: conversation.channelId,
         conversationId: conversation.id,
         threadId: conversation.externalThreadId,
+        provider: conversation.channel.provider,
       })
       await projectFlowDeskLabelsForConversation({
         tenantId: session.user.tenantId,

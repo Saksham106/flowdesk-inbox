@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import type { FlowDeskGmailLabelName } from "@/lib/gmail-labels"
+import type { FlowDeskGmailLabelName } from "@/lib/email-labels"
 import { deriveWorkflowStatus, aiCategoryLabel } from "@/lib/workflow-status"
 import { FLOWDESK_LABEL_OPTIONS, currentFlowDeskLabel } from "@/lib/flowdesk-label-display"
 

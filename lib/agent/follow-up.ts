@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma"
-import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
+import { projectFlowDeskLabelsForConversation } from "@/lib/email-labels"
 import { DEFAULT_FOLLOW_UP_BUSINESS_DAYS, followUpDueAt } from "@/lib/business-days"
 import type { MessageDirection, Prisma } from "@prisma/client"
 

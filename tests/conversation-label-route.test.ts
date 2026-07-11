@@ -18,8 +18,8 @@ vi.mock("@/lib/prisma", () => ({
     classificationCorrection: { create: mockCorrectionCreate },
   },
 }))
-vi.mock("@/lib/gmail-labels", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/gmail-labels")>("@/lib/gmail-labels")
+vi.mock("@/lib/email-labels", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/email-labels")>("@/lib/email-labels")
   return { ...actual, queueFlowDeskLabelWriteback: mockQueue }
 })
 vi.mock("@/lib/cache-tags", () => ({ revalidateInboxViews: vi.fn() }))

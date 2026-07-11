@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma"
-import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
+import { projectFlowDeskLabelsForConversation } from "@/lib/email-labels"
 import { ensureFlowDeskLabels } from "@/lib/google"
 
 export type GmailLabelReconcileResult = {

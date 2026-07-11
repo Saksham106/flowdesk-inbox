@@ -42,7 +42,7 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
-vi.mock('@/lib/gmail-labels', () => ({
+vi.mock('@/lib/email-labels', () => ({
   projectFlowDeskLabelsForConversation: mockProjectLabels,
 }))
 

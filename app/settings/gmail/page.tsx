@@ -6,7 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import FixGmailLabelsButton from "@/app/settings/FixGmailLabelsButton";
 import GmailLabelSettingsPanel from "@/app/settings/GmailLabelSettingsPanel";
-import { FLOWDESK_GMAIL_LABEL_NAMES } from "@/lib/gmail-labels";
+import { FLOWDESK_GMAIL_LABEL_NAMES } from "@/lib/email-labels";
 
 export const dynamic = "force-dynamic";
 

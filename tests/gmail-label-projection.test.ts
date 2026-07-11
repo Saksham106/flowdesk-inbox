@@ -39,7 +39,7 @@ vi.mock("@/lib/agent/email-writeback-processor", () => ({
 import {
   filterEnabledFlowDeskLabels,
   projectFlowDeskLabelsForConversation,
-} from "@/lib/gmail-labels"
+} from "@/lib/email-labels"
 
 const GOOGLE_CONVERSATION = {
   id: "conv-1",
@@ -238,10 +238,30 @@ describe("projectFlowDeskLabelsForConversation", () => {
     )
   })
 
-  it("no-ops for non-Google channels", async () => {
+  it("queues an apply_labels writeback for a Microsoft (Outlook) conversation and audits outlook.labels.queued", async () => {
     mockConversationFindFirst.mockResolvedValue({
       ...GOOGLE_CONVERSATION,
       channel: { provider: "microsoft" },
+    })
+
+    const job = await projectFlowDeskLabelsForConversation({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+    })
+
+    expect(job).toEqual({ id: "job-1" })
+    expect(mockWritebackUpsert).toHaveBeenCalledTimes(1)
+    expect(mockAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "outlook.labels.queued" }),
+      })
+    )
+  })
+
+  it("no-ops for channels without mailbox writeback support (e.g. twilio)", async () => {
+    mockConversationFindFirst.mockResolvedValue({
+      ...GOOGLE_CONVERSATION,
+      channel: { provider: "twilio" },
     })
     const job = await projectFlowDeskLabelsForConversation({
       tenantId: "tenant-1",

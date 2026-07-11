@@ -16,7 +16,7 @@ vi.mock("@/lib/google", () => ({
   ensureFlowDeskLabels: mockEnsureFlowDeskLabels,
 }))
 
-vi.mock("@/lib/gmail-labels", () => ({
+vi.mock("@/lib/email-labels", () => ({
   projectFlowDeskLabelsForConversation: mockProjectLabels,
 }))
 

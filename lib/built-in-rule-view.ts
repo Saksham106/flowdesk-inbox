@@ -1,4 +1,4 @@
-import { FLOWDESK_GMAIL_LABEL_NAMES, type FlowDeskGmailLabelName } from "@/lib/gmail-labels"
+import { FLOWDESK_GMAIL_LABEL_NAMES, type FlowDeskGmailLabelName } from "@/lib/email-labels"
 
 const DESCRIPTION: Record<FlowDeskGmailLabelName, string> = {
   "Needs Reply": "Messages waiting for you to reply.",

@@ -18,7 +18,7 @@ import {
   restoreOutlookConversation,
   trashOutlookConversation,
 } from "@/lib/outlook-mailbox"
-import type { FlowDeskLabelName } from "@/lib/gmail-labels"
+import type { FlowDeskLabelName } from "@/lib/email-labels"
 
 export type EmailWritebackAdapter = {
   provider: "google" | "microsoft"

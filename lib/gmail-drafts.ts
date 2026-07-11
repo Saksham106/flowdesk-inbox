@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { getAutomationLevel, isActionAllowedAtLevel } from "@/lib/agent/automation-level"
+import { auditPrefixForProvider } from "@/lib/email/provider-support"
 
 export const GMAIL_DRAFT_CREATE_ACTION = "create_draft"
 export const GMAIL_DRAFT_WITHDRAW_ACTION = "withdraw_draft"
@@ -63,13 +64,13 @@ export function draftSourceFromMetadata(metadataJson: unknown): InboundDraftSour
 }
 
 /**
- * Queues creation of a Gmail-native draft for a conversation. Idempotent via the
- * (conversationId, action) unique key — re-queuing just refreshes the job. Any
- * pending withdrawal for the same conversation is dropped, since we now want a
- * draft to exist.
+ * Queues creation of a provider-native draft for a conversation. Idempotent via
+ * the (conversationId, action) unique key — re-queuing just refreshes the job.
+ * Any pending withdrawal for the same conversation is dropped, since we now
+ * want a draft to exist.
  *
  * No-ops below automation Level 3: the draft still exists in the dashboard,
- * but FlowDesk does not write into the user's Gmail drafts folder. Withdrawal
+ * but FlowDesk does not write into the user's mailbox drafts folder. Withdrawal
  * (queueGmailDraftWithdrawal) is deliberately NOT level-gated — cleanup must
  * keep working after a tenant lowers their level.
  */
@@ -78,6 +79,7 @@ export async function queueGmailDraftWriteback(input: {
   channelId: string
   conversationId: string
   threadId: string
+  provider: string
 }) {
   const automationLevel = await getAutomationLevel(input.tenantId)
   if (!isActionAllowedAtLevel(automationLevel, "create_gmail_drafts")) return null
@@ -118,7 +120,7 @@ export async function queueGmailDraftWriteback(input: {
   await prisma.auditLog.create({
     data: {
       tenantId: input.tenantId,
-      action: "gmail.draft.queued",
+      action: `${auditPrefixForProvider(input.provider)}.draft.queued`,
       payloadJson: {
         conversationId: input.conversationId,
         channelId: input.channelId,
@@ -131,14 +133,15 @@ export async function queueGmailDraftWriteback(input: {
 }
 
 /**
- * Queues withdrawal (deletion) of any Gmail-native draft for a conversation —
- * used when the draft is cleared or the user has replied manually. Drops any
+ * Queues withdrawal (deletion) of any provider-native draft for a conversation
+ * — used when the draft is cleared or the user has replied manually. Drops any
  * pending create job so we don't recreate a draft we're trying to remove.
  */
 export async function queueGmailDraftWithdrawal(input: {
   tenantId: string
   channelId: string
   conversationId: string
+  provider: string
 }) {
   await prisma.emailWritebackQueue.deleteMany({
     where: { conversationId: input.conversationId, action: GMAIL_DRAFT_CREATE_ACTION },
@@ -173,7 +176,7 @@ export async function queueGmailDraftWithdrawal(input: {
   await prisma.auditLog.create({
     data: {
       tenantId: input.tenantId,
-      action: "gmail.draft.withdraw_queued",
+      action: `${auditPrefixForProvider(input.provider)}.draft.withdraw_queued`,
       payloadJson: {
         conversationId: input.conversationId,
         channelId: input.channelId,

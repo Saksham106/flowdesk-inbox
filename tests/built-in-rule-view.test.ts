@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { builtInRuleRows } from "@/lib/built-in-rule-view"
-import { FLOWDESK_GMAIL_LABEL_NAMES } from "@/lib/gmail-labels"
+import { FLOWDESK_GMAIL_LABEL_NAMES } from "@/lib/email-labels"
 
 describe("builtInRuleRows", () => {
   it("returns every canonical label in canonical order with descriptions", () => {
