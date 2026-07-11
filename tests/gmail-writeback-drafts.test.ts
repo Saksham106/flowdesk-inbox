@@ -170,6 +170,123 @@ describe("Gmail writeback cron — draft jobs", () => {
     expect(mockCreateGmailDraftForThread).toHaveBeenCalled()
   })
 
+  it("invalidates a FlowDesk Gmail draft when a newer meaningful inbound message arrives", async () => {
+    mockWritebackFindMany.mockResolvedValue(createDraftJob())
+    mockDraftFindUnique.mockResolvedValue({
+      ...PROPOSED_DRAFT,
+      metadataJson: {
+        gmailDraftId: "old-draft",
+        sourceInboundMessageId: "message-1",
+        sourceInboundAt: "2026-07-10T10:00:00.000Z",
+      },
+      conversation: {
+        ...PROPOSED_DRAFT.conversation,
+        messages: [
+          {
+            direction: "inbound",
+            providerMessageId: "message-2",
+            createdAt: new Date("2026-07-10T11:00:00.000Z"),
+            body: "A meaningful follow-up",
+          },
+          {
+            direction: "inbound",
+            providerMessageId: "message-1",
+            createdAt: new Date("2026-07-10T10:00:00.000Z"),
+            body: "Original request",
+          },
+        ],
+      },
+    })
+
+    await runGmailWriteback(cronRequest())
+
+    expect(mockDeleteGmailDraft).toHaveBeenCalledWith("channel-1", "old-draft")
+    expect(mockCreateGmailDraftForThread).not.toHaveBeenCalled()
+    expect(mockDraftUpdate).toHaveBeenCalledWith({
+      where: { conversationId: "conv-1" },
+      data: {
+        metadataJson: {
+          sourceInboundMessageId: "message-1",
+          sourceInboundAt: "2026-07-10T10:00:00.000Z",
+        },
+      },
+    })
+  })
+
+  it("preserves an existing FlowDesk Gmail draft when the inbound source is unchanged", async () => {
+    mockWritebackFindMany.mockResolvedValue(createDraftJob())
+    mockDraftFindUnique.mockResolvedValue({
+      ...PROPOSED_DRAFT,
+      metadataJson: {
+        gmailDraftId: "current-draft",
+        gmailDraftSourceInboundMessageId: "message-1",
+        gmailDraftSourceInboundAt: "2026-07-10T10:00:00.000Z",
+        sourceInboundMessageId: "message-1",
+        sourceInboundAt: "2026-07-10T10:00:00.000Z",
+      },
+      conversation: {
+        ...PROPOSED_DRAFT.conversation,
+        messages: [
+          {
+            direction: "inbound",
+            providerMessageId: "message-1",
+            createdAt: new Date("2026-07-10T10:00:00.000Z"),
+            body: "Original request",
+          },
+        ],
+      },
+    })
+
+    await runGmailWriteback(cronRequest())
+
+    expect(mockDeleteGmailDraft).not.toHaveBeenCalled()
+    expect(mockCreateGmailDraftForThread).not.toHaveBeenCalled()
+    expect(mockDraftUpdate).not.toHaveBeenCalled()
+  })
+
+  it("withdraws a FlowDesk Gmail draft when a newer manual outbound reply is synced", async () => {
+    mockWritebackFindMany.mockResolvedValue(createDraftJob())
+    mockDraftFindUnique.mockResolvedValue({
+      ...PROPOSED_DRAFT,
+      metadataJson: {
+        gmailDraftId: "current-draft",
+        sourceInboundMessageId: "message-1",
+        sourceInboundAt: "2026-07-10T10:00:00.000Z",
+      },
+      conversation: {
+        ...PROPOSED_DRAFT.conversation,
+        messages: [
+          {
+            direction: "outbound",
+            providerMessageId: "message-2",
+            createdAt: new Date("2026-07-10T11:00:00.000Z"),
+            body: "I have replied manually.",
+          },
+          {
+            direction: "inbound",
+            providerMessageId: "message-1",
+            createdAt: new Date("2026-07-10T10:00:00.000Z"),
+            body: "Original request",
+          },
+        ],
+      },
+    })
+
+    await runGmailWriteback(cronRequest())
+
+    expect(mockDeleteGmailDraft).toHaveBeenCalledWith("channel-1", "current-draft")
+    expect(mockCreateGmailDraftForThread).not.toHaveBeenCalled()
+    expect(mockDraftUpdate).toHaveBeenCalledWith({
+      where: { conversationId: "conv-1" },
+      data: {
+        metadataJson: {
+          sourceInboundMessageId: "message-1",
+          sourceInboundAt: "2026-07-10T10:00:00.000Z",
+        },
+      },
+    })
+  })
+
   it("withdraws a Gmail draft and clears its recorded id", async () => {
     mockWritebackFindMany.mockResolvedValue([
       {

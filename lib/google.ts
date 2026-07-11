@@ -5,6 +5,7 @@ import { stripHtmlToText } from "@/lib/email-body";
 import { prisma } from "@/lib/prisma";
 import { syncConversationWorkItems } from "@/lib/agent/work-item-sync";
 import { applyGmailLabelFeedback, clearGmailLabelOverride } from "@/lib/agent/gmail-label-feedback";
+import { draftSourceFromMetadata, gmailDraftIdFromMetadata, queueGmailDraftWithdrawal } from "@/lib/gmail-drafts";
 import {
   FLOWDESK_GMAIL_LABEL_NAMES,
   LEGACY_FLOWDESK_LABEL_PREFIX,
@@ -379,7 +380,7 @@ async function upsertGmailMessage({
   conversationId: string;
   channelEmail: string;
   msg: GmailMessage;
-}) {
+}): Promise<{ insertedInbound: boolean; insertedOutboundAt: Date | null }> {
   const providerMessageId = `gmail_${msg.id}`;
   const isOutbound = extractEmail(msg.from) === channelEmail.toLowerCase();
   const isRead = !msg.labelIds.includes("UNREAD");
@@ -408,7 +409,10 @@ async function upsertGmailMessage({
         ...(isRead ? { isRead: true } : {}),
       },
     });
-    return !existing && !isOutbound;
+    return {
+      insertedInbound: !existing && !isOutbound,
+      insertedOutboundAt: !existing && isOutbound ? msg.date : null,
+    };
   } catch (err) {
     if (!isPrismaUniqueConflict(err)) throw err;
     const existing = await prisma.message.findUnique({
@@ -416,7 +420,7 @@ async function upsertGmailMessage({
       select: { id: true, conversationId: true },
     });
     if (!existing) throw err;
-    return false;
+    return { insertedInbound: false, insertedOutboundAt: null };
   }
 }
 
@@ -478,8 +482,13 @@ async function syncFetchedGmailThread({
   });
 
   let hasNewInboundMessage = false;
+  let newestInsertedOutboundAt: Date | null = null;
   for (const msg of messages) {
-    hasNewInboundMessage = (await upsertGmailMessage({ conversationId: conversation.id, channelEmail, msg })) || hasNewInboundMessage;
+    const result = await upsertGmailMessage({ conversationId: conversation.id, channelEmail, msg });
+    hasNewInboundMessage = result.insertedInbound || hasNewInboundMessage;
+    if (result.insertedOutboundAt && (!newestInsertedOutboundAt || result.insertedOutboundAt > newestInsertedOutboundAt)) {
+      newestInsertedOutboundAt = result.insertedOutboundAt;
+    }
   }
 
   if (hasNewInboundMessage) {
@@ -490,6 +499,25 @@ async function syncFetchedGmailThread({
         message: err instanceof Error ? err.message : "Unknown error",
       });
     });
+  }
+
+  if (newestInsertedOutboundAt) {
+    const draft = await prisma.draft.findUnique({
+      where: { conversationId: conversation.id },
+      select: { metadataJson: true },
+    });
+    const source = draftSourceFromMetadata(draft?.metadataJson)
+    const flowDeskDraftId = draft ? gmailDraftIdFromMetadata(draft.metadataJson) : null
+    if (source && flowDeskDraftId && newestInsertedOutboundAt > source.createdAt) {
+      queueGmailDraftWithdrawal({ tenantId, channelId, conversationId: conversation.id }).catch((err) => {
+        console.warn("Failed to queue Gmail draft withdrawal after manual reply", {
+          tenantId,
+          channelId,
+          conversationId: conversation.id,
+          message: err instanceof Error ? err.message : "Unknown error",
+        });
+      });
+    }
   }
 
   syncConversationWorkItems({ tenantId, conversationId: conversation.id }).catch((err) => {

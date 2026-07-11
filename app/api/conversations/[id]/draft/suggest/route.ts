@@ -13,7 +13,7 @@ import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import { prisma } from "@/lib/prisma"
 import { revalidateInboxViews } from "@/lib/cache-tags"
 import { conversationUpdateForDraftReady } from "@/lib/workflow-status-transitions"
-import { queueGmailDraftWriteback } from "@/lib/gmail-drafts"
+import { latestMeaningfulInboundMessage, queueGmailDraftWriteback } from "@/lib/gmail-drafts"
 import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
 import { ensureDraftApprovalRequest } from "@/lib/agent/approvals"
 import { validateDraftWritingPreferences } from "@/lib/agent/writing-preferences"
@@ -232,6 +232,13 @@ export async function POST(
   const conversationText = conversation.messages.map((m) => m.body).join("\n")
   const sensitiveMatches = detectSensitiveMatches(conversationText)
 
+  const sourceInbound = latestMeaningfulInboundMessage(conversation.messages)
+  const existingDraftMetadata =
+    conversation.draft?.metadataJson &&
+    typeof conversation.draft.metadataJson === "object" &&
+    !Array.isArray(conversation.draft.metadataJson)
+      ? (conversation.draft.metadataJson as Record<string, unknown>)
+      : {}
   const metadataJson = {
     intent: result.intent,
     confidence: result.confidence,
@@ -249,6 +256,21 @@ export async function POST(
     knowledgeDocumentIds,
     ...(userInstruction ? { userInstruction } : {}),
     ...(sensitiveMatches.length > 0 ? { sensitiveMatches } : {}),
+    ...(sourceInbound
+      ? {
+          sourceInboundMessageId: sourceInbound.providerMessageId,
+          sourceInboundAt: sourceInbound.createdAt.toISOString(),
+        }
+      : {}),
+    ...(typeof existingDraftMetadata.gmailDraftId === "string"
+      ? { gmailDraftId: existingDraftMetadata.gmailDraftId }
+      : {}),
+    ...(typeof existingDraftMetadata.gmailDraftSourceInboundMessageId === "string"
+      ? { gmailDraftSourceInboundMessageId: existingDraftMetadata.gmailDraftSourceInboundMessageId }
+      : {}),
+    ...(typeof existingDraftMetadata.gmailDraftSourceInboundAt === "string"
+      ? { gmailDraftSourceInboundAt: existingDraftMetadata.gmailDraftSourceInboundAt }
+      : {}),
   }
 
   const draft = await prisma.draft.upsert({

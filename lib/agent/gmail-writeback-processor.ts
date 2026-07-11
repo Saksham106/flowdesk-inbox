@@ -4,7 +4,9 @@ import { normalizeFlowDeskLabelPayload } from "@/lib/gmail-labels"
 import {
   GMAIL_DRAFT_CREATE_ACTION,
   GMAIL_DRAFT_WITHDRAW_ACTION,
+  draftSourceFromMetadata,
   gmailDraftIdFromMetadata,
+  latestMeaningfulInboundMessage,
 } from "@/lib/gmail-drafts"
 import {
   GMAIL_WRITEBACK_MAX_ATTEMPTS,
@@ -75,8 +77,7 @@ async function handleCreateDraft(job: WritebackJob): Promise<WritebackResolution
           channel: { select: { provider: true, emailAddress: true } },
           messages: {
             orderBy: { createdAt: "desc" },
-            take: 1,
-            select: { direction: true },
+            select: { direction: true, providerMessageId: true, createdAt: true, body: true },
           },
         },
       },
@@ -90,15 +91,66 @@ async function handleCreateDraft(job: WritebackJob): Promise<WritebackResolution
   if (conversation.channel?.provider !== "google" || !conversation.externalThreadId) {
     return { result: "skipped", detail: { reason: "not a Gmail thread" } }
   }
-  // Manual-reply detection: the latest message being outbound means the user
-  // already replied, so a waiting draft would be noise — don't create one.
-  if (conversation.messages[0]?.direction === "outbound") {
+  const metadata = asMetadataObject(draft.metadataJson)
+  const existingDraftId = gmailDraftIdFromMetadata(draft.metadataJson)
+  const source = draftSourceFromMetadata(draft.metadataJson)
+  const latestInbound = latestMeaningfulInboundMessage(conversation.messages)
+  const latestOutbound = source
+    ? conversation.messages
+        .filter((message) => message.direction === "outbound")
+        .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0]
+    : undefined
+
+  // Preserve the pre-source safety behavior for legacy draft metadata.
+  if (!source && conversation.messages[0]?.direction === "outbound") {
     return { result: "skipped", detail: { reason: "user already replied manually" } }
   }
 
-  // Dedup: remove any prior Gmail draft before creating a fresh one so the
-  // content stays current and we never leave duplicates behind.
-  const existingDraftId = gmailDraftIdFromMetadata(draft.metadataJson)
+  // A synced outbound after the source draft means the user replied in Gmail.
+  // The stored id is only ever set after FlowDesk creates a Gmail draft, so we
+  // never delete an untracked user-created draft.
+  if (source && latestOutbound && latestOutbound.createdAt > source.createdAt) {
+    if (!existingDraftId) return { result: "skipped", detail: { reason: "user already replied manually" } }
+    await deleteGmailDraft(job.channelId, existingDraftId)
+    delete metadata.gmailDraftId
+    delete metadata.gmailDraftSourceInboundMessageId
+    delete metadata.gmailDraftSourceInboundAt
+    await prisma.draft.update({
+      where: { conversationId: job.conversationId },
+      data: { metadataJson: metadata as Prisma.InputJsonValue },
+    })
+    return { result: "draft_withdrawn", detail: { reason: "user replied manually", gmailDraftId: existingDraftId } }
+  }
+
+  // Do not surface a response written against an earlier inbound message. The
+  // next draft suggestion will carry the newer source and replace it safely.
+  if (
+    source &&
+    latestInbound &&
+    latestInbound.providerMessageId !== source.providerMessageId &&
+    latestInbound.createdAt >= source.createdAt
+  ) {
+    if (!existingDraftId) return { result: "skipped", detail: { reason: "new inbound message requires a fresh draft" } }
+    await deleteGmailDraft(job.channelId, existingDraftId)
+    delete metadata.gmailDraftId
+    delete metadata.gmailDraftSourceInboundMessageId
+    delete metadata.gmailDraftSourceInboundAt
+    await prisma.draft.update({
+      where: { conversationId: job.conversationId },
+      data: { metadataJson: metadata as Prisma.InputJsonValue },
+    })
+    return { result: "draft_invalidated", detail: { reason: "new inbound message", gmailDraftId: existingDraftId } }
+  }
+
+  const createdForSourceId = typeof metadata.gmailDraftSourceInboundMessageId === "string"
+    ? metadata.gmailDraftSourceInboundMessageId
+    : null
+  if (existingDraftId && source && createdForSourceId === source.providerMessageId) {
+    return { result: "draft_current", detail: { gmailDraftId: existingDraftId } }
+  }
+
+  // A legacy draft (or a newly suggested draft with a newer source) is
+  // replaced atomically from FlowDesk's recorded id, keeping one draft/thread.
   if (existingDraftId) {
     try {
       await deleteGmailDraft(job.channelId, existingDraftId)
@@ -117,8 +169,14 @@ async function handleCreateDraft(job: WritebackJob): Promise<WritebackResolution
     where: { conversationId: job.conversationId },
     data: {
       metadataJson: {
-        ...asMetadataObject(draft.metadataJson),
+        ...metadata,
         gmailDraftId,
+        ...(source
+          ? {
+              gmailDraftSourceInboundMessageId: source.providerMessageId,
+              gmailDraftSourceInboundAt: source.createdAt.toISOString(),
+            }
+          : {}),
       } as Prisma.InputJsonValue,
     },
   })

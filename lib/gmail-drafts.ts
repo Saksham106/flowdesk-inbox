@@ -4,6 +4,11 @@ import { getAutomationLevel, isActionAllowedAtLevel } from "@/lib/agent/automati
 export const GMAIL_DRAFT_CREATE_ACTION = "create_draft"
 export const GMAIL_DRAFT_WITHDRAW_ACTION = "withdraw_draft"
 
+export type InboundDraftSource = {
+  providerMessageId: string
+  createdAt: Date
+}
+
 /**
  * Reads the stored Gmail draft id off a Draft's metadata, if one exists.
  * FlowDesk records the id it gets back from users.drafts.create so it can update
@@ -15,6 +20,41 @@ export function gmailDraftIdFromMetadata(metadataJson: unknown): string | null {
   }
   const value = (metadataJson as Record<string, unknown>).gmailDraftId
   return typeof value === "string" && value.length > 0 ? value : null
+}
+
+/**
+ * Finds the newest inbound message that contains authored content. Empty Gmail
+ * transport stubs and label-only sync artifacts must not invalidate a draft.
+ */
+export function latestMeaningfulInboundMessage<T extends {
+  direction: string
+  providerMessageId: string
+  createdAt: Date
+  body: string
+}>(messages: T[]): InboundDraftSource | null {
+  return messages.reduce<InboundDraftSource | null>((latest, message) => {
+    if (message.direction !== "inbound" || typeof message.body !== "string" || !message.body.trim()) {
+      return latest
+    }
+    if (!latest || message.createdAt > latest.createdAt) {
+      return { providerMessageId: message.providerMessageId, createdAt: message.createdAt }
+    }
+    return latest
+  }, null)
+}
+
+export function draftSourceFromMetadata(metadataJson: unknown): InboundDraftSource | null {
+  if (!metadataJson || typeof metadataJson !== "object" || Array.isArray(metadataJson)) return null
+
+  const metadata = metadataJson as Record<string, unknown>
+  const providerMessageId = metadata.sourceInboundMessageId
+  const sourceInboundAt = metadata.sourceInboundAt
+  if (typeof providerMessageId !== "string" || !providerMessageId || typeof sourceInboundAt !== "string") {
+    return null
+  }
+
+  const createdAt = new Date(sourceInboundAt)
+  return Number.isNaN(createdAt.getTime()) ? null : { providerMessageId, createdAt }
 }
 
 /**

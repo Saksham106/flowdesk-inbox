@@ -20,6 +20,8 @@ const {
   mockGmailCredentialUpdate,
   mockApplyGmailLabelFeedback,
   mockClearGmailLabelOverride,
+  mockDraftFindUnique,
+  mockQueueGmailDraftWithdrawal,
 } = vi.hoisted(() => ({
   mockChannelFindUnique:    vi.fn(),
   mockCredFindUnique:       vi.fn(),
@@ -37,6 +39,8 @@ const {
   mockGmailCredentialUpdate: vi.fn(),
   mockApplyGmailLabelFeedback: vi.fn(),
   mockClearGmailLabelOverride: vi.fn(),
+  mockDraftFindUnique: vi.fn(),
+  mockQueueGmailDraftWithdrawal: vi.fn(),
 }))
 
 // ---------------------------------------------------------------------------
@@ -50,6 +54,7 @@ vi.mock('@/lib/prisma', () => ({
     contact: { findUnique: mockContactFindUnique, create: mockContactCreate },
     conversation: { upsert: mockConversationUpsert, findMany: mockConversationFindMany },
     message: { upsert: mockMessageUpsert, findUnique: mockMessageFindUnique },
+    draft: { findUnique: mockDraftFindUnique },
   },
 }))
 
@@ -84,6 +89,19 @@ vi.mock('@/lib/agent/work-item-sync', () => ({
 vi.mock('@/lib/agent/gmail-label-feedback', () => ({
   applyGmailLabelFeedback: mockApplyGmailLabelFeedback,
   clearGmailLabelOverride: mockClearGmailLabelOverride,
+}))
+
+vi.mock('@/lib/gmail-drafts', () => ({
+  gmailDraftIdFromMetadata: (metadata: unknown) => {
+    const value = metadata as Record<string, unknown> | null
+    return typeof value?.gmailDraftId === 'string' && value.gmailDraftId ? value.gmailDraftId : null
+  },
+  draftSourceFromMetadata: (metadata: unknown) => {
+    const value = metadata as Record<string, unknown> | null
+    if (typeof value?.sourceInboundMessageId !== 'string' || typeof value.sourceInboundAt !== 'string') return null
+    return { providerMessageId: value.sourceInboundMessageId, createdAt: new Date(value.sourceInboundAt) }
+  },
+  queueGmailDraftWithdrawal: mockQueueGmailDraftWithdrawal,
 }))
 
 import { syncGmailChannel, syncGmailChannelIncremental } from '@/lib/google'
@@ -291,6 +309,32 @@ describe('syncGmailChannel', () => {
 
     const msgArg = mockMessageUpsert.mock.calls[0][0].create
     expect(msgArg.direction).toBe('inbound')
+  })
+
+  it('queues withdrawal when a newly synced manual outbound reply is newer than the FlowDesk draft source', async () => {
+    const thread = makeThread('thread-manual-reply', CHANNEL_EMAIL, 'customer@example.com')
+    thread.data.messages[0].internalDate = '1700003600000'
+    mockThreadsList.mockResolvedValue({ data: { threads: [{ id: 'thread-manual-reply' }] } })
+    mockThreadsGet.mockResolvedValue(thread)
+    mockContactFindUnique.mockResolvedValue({ id: 'contact-1', phoneE164: 'customer@example.com' })
+    mockConversationUpsert.mockResolvedValue({ id: 'conv-manual-reply' })
+    mockMessageFindUnique.mockResolvedValue(null)
+    mockDraftFindUnique.mockResolvedValue({
+      metadataJson: {
+        gmailDraftId: 'flowdesk-draft-1',
+        sourceInboundMessageId: 'gmail_original',
+        sourceInboundAt: '2023-11-14T22:13:20.000Z',
+      },
+    })
+    mockQueueGmailDraftWithdrawal.mockResolvedValue({ id: 'withdraw-job-1' })
+
+    await syncGmailChannel(CHANNEL_ID, TENANT_ID)
+
+    expect(mockQueueGmailDraftWithdrawal).toHaveBeenCalledWith({
+      tenantId: TENANT_ID,
+      channelId: CHANNEL_ID,
+      conversationId: 'conv-manual-reply',
+    })
   })
 
   it('stores the HTML alternative for newsletter-style Gmail messages instead of plain-text CSS junk', async () => {
