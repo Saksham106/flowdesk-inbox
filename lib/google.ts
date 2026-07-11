@@ -1061,7 +1061,6 @@ export async function syncGmailChannelIncremental(
       startHistoryId,
       pageToken,
       maxResults: 100,
-      labelId: "INBOX",
     });
 
     const history = historyRes.data.history ?? [];
@@ -1225,8 +1224,6 @@ export async function watchGmailChannel(
     userId: "me",
     requestBody: {
       topicName,
-      labelIds: ["INBOX"],
-      labelFilterBehavior: "INCLUDE",
     },
   });
 

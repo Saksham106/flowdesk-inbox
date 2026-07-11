@@ -14,7 +14,7 @@ type GmailLabelOverride = {
 }
 
 const WORKFLOW_LABELS = new Set<FlowDeskGmailLabelName>([
-  "Needs Reply", "Needs Action", "Waiting On", "Read Later", "Handled",
+  "Needs Reply", "Needs Action", "Waiting On", "Read Later", "Handled", "Autodrafted",
 ])
 const CONTENT_LABELS = new Set<FlowDeskGmailLabelName>([
   "Newsletter", "Marketing", "Notification", "Calendar",

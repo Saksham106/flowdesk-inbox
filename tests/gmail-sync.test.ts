@@ -192,6 +192,7 @@ describe('syncGmailChannel', () => {
       tenantId: TENANT_ID, conversationId: 'conv-1', added: ['Read Later'], removed: ['Needs Reply'],
     })
     expect(mockClearGmailLabelOverride).toHaveBeenCalledWith({ tenantId: TENANT_ID, conversationId: 'conv-1' })
+    expect(mockHistoryList).toHaveBeenCalledWith(expect.not.objectContaining({ labelId: 'INBOX' }))
   })
 
   it('returns 0 when there are no threads', async () => {

@@ -97,6 +97,35 @@ describe("applyGmailLabelFeedback", () => {
     }))
   })
 
+  it("keeps an Autodrafted removal as a durable workflow override", async () => {
+    mockConversationFindFirst.mockResolvedValue({
+      ...conversation,
+      draft: { status: "proposed" },
+      stateRecord: { ...conversation.stateRecord, metadataJson: { gmailLabelOverride: { workflow: "Autodrafted", contentType: null } } },
+    })
+
+    await expect(applyGmailLabelFeedback({ tenantId: "t1", conversationId: "c1", added: [], removed: ["Autodrafted"] }))
+      .resolves.toEqual({ applied: true, kind: "removal" })
+
+    expect(mockConversationUpdate).toHaveBeenCalledWith({
+      where: { id: "c1" },
+      data: expect.objectContaining({ userState: null, userStateSource: "gmail_label" }),
+    })
+    expect(mockStateUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      update: expect.objectContaining({ metadataJson: expect.objectContaining({
+        gmailLabelOverride: expect.objectContaining({ workflow: null }),
+      }) }),
+    }))
+  })
+
+  it("does not accept an Autodrafted addition without an existing draft", async () => {
+    await expect(applyGmailLabelFeedback({ tenantId: "t1", conversationId: "c1", added: ["Autodrafted"], removed: [] }))
+      .resolves.toEqual({ applied: false, kind: "ignored" })
+
+    expect(mockConversationUpdate).not.toHaveBeenCalled()
+    expect(mockStateUpsert).not.toHaveBeenCalled()
+  })
+
   it("clears only the content override when a content label is removed", async () => {
     mockConversationFindFirst.mockResolvedValue({
       ...conversation,

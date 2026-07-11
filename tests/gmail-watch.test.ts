@@ -73,5 +73,9 @@ describe("watchGmailChannel", () => {
         lastSyncError: null,
       }),
     })
+    expect(mockWatch).toHaveBeenCalledWith({
+      userId: "me",
+      requestBody: { topicName: "projects/demo/topics/gmail" },
+    })
   })
 })
