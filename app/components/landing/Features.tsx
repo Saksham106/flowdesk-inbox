@@ -8,24 +8,24 @@ const features: Array<{
   imageLeft: boolean;
 }> = [
   {
-    title: "Automatic follow-up",
+    title: "A tidy inbox, automatically",
     description:
-      "Flowdesk sends timely follow-ups so prospects do not disappear just because you got busy.",
-    cta: "Never miss a follow-up",
+      "FlowDesk reads every incoming email and sorts it with Gmail labels — what needs you rises to the top, and the noise quietly steps aside.",
+    cta: "Get a tidier inbox",
     imageLeft: true,
   },
   {
-    title: "Replies with context",
+    title: "Replies drafted in your voice",
     description:
-      "Flowdesk understands replies, answers common questions, and keeps momentum moving toward a meeting.",
-    cta: "Watch conversations move",
+      "It learns how you write from the emails you've already sent, then leaves ready-to-go drafts right in Gmail. You tweak or just hit send.",
+    cta: "See drafts that sound like you",
     imageLeft: false,
   },
   {
-    title: "Meetings on your calendar",
+    title: "Follow-ups that remember for you",
     description:
-      "Once there is intent, Flowdesk coordinates availability and books the meeting directly so the opportunity does not stall.",
-    cta: "Book meetings 24/7",
+      "FlowDesk keeps track of who still owes you a reply and nudges the thread at the right moment — and when someone proposes a time, it can put it straight on your calendar.",
+    cta: "Stop dropping threads",
     imageLeft: true,
   },
 ];
@@ -77,9 +77,12 @@ export default function Features() {
       <div className="max-w-6xl mx-auto flex flex-col gap-10">
         <ScrollReveal>
           <div className="flex flex-col gap-2">
-            <p className="text-sm text-black font-normal">{"// How it works"}</p>
-            <h2 className="text-[36px] leading-[1] font-normal text-black">
-              Never let a conversation die again
+            <p className="text-xs uppercase tracking-[0.14em] text-[#6b6f76] font-medium">What it does</p>
+            <h2
+              className="text-[36px] leading-[1.15] font-normal text-black"
+              style={{ fontFamily: "var(--font-lora), Georgia, serif" }}
+            >
+              Your email, handled the way you would
             </h2>
           </div>
         </ScrollReveal>
@@ -87,7 +90,7 @@ export default function Features() {
         {features.map((feature, i) => (
           <ScrollReveal key={i} delay={i * 80}>
             <div
-              className="flex flex-col lg:flex-row gap-16 items-stretch bg-[#f5f5f4] rounded-lg p-4 overflow-hidden"
+              className="landing-card flex flex-col lg:flex-row gap-16 items-stretch bg-[#f5f5f4] rounded-lg p-4 overflow-hidden"
               style={{ minHeight: 500 }}
             >
               {feature.imageLeft ? (

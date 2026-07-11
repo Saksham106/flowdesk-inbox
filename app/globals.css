@@ -37,10 +37,37 @@ body {
   opacity: 1;
   transform: translateY(0);
 }
+
+/* Larger elements (hero screenshot, CTA panel) settle in with a slight scale */
+.reveal.reveal-scale {
+  transform: translateY(28px) scale(0.975);
+  transition-duration: 0.9s;
+}
+.reveal.reveal-scale.revealed {
+  transform: translateY(0) scale(1);
+}
+
+/* Gentle lift on landing cards */
+.landing-card {
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.landing-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.14);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .reveal {
+  .reveal,
+  .reveal.reveal-scale {
     opacity: 1;
     transform: none;
+    transition: none;
+  }
+  .landing-card,
+  .landing-card:hover {
+    transform: none;
+    box-shadow: none;
     transition: none;
   }
 }

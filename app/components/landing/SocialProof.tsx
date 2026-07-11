@@ -7,10 +7,10 @@ export default function SocialProof() {
         <ScrollReveal>
           <div className="flex flex-col gap-[4px] items-center w-full">
             <p className="text-xl font-normal text-black">
-              Built for teams that live in conversations
+              Works inside the Gmail you already use
             </p>
             <p className="text-base text-[#6b6f76]">
-              Used by founders, sales teams, recruiters, agencies, and consultants
+              Labels, drafts, and threads stay in Gmail — nothing to migrate, nothing new to learn
             </p>
           </div>
         </ScrollReveal>
