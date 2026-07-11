@@ -592,17 +592,17 @@ export async function syncConversationWorkItems(
     detectedAttentionCategory === "needs_reply" &&
     !conversation.draft
   ) {
-    const automationLevel = await getAutomationLevel(conversation.tenantId)
-    if (automationLevel >= 3) {
-      try {
+    try {
+      const automationLevel = await getAutomationLevel(conversation.tenantId)
+      if (automationLevel >= 3) {
         await proposeDraftForConversation({
           tenantId: conversation.tenantId,
           conversationId: conversation.id,
           source: "automatic",
         })
-      } catch (err) {
-        console.error("[work-item-sync] automatic draft proposal failed:", err)
       }
+    } catch (err) {
+      console.error("[work-item-sync] automatic draft proposal failed:", err)
     }
   }
 
