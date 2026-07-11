@@ -104,6 +104,10 @@ export function filterAuthenticOutboundSamples(samples: OutboundReplySample[]): 
   }
 
   for (const sample of samples) {
+    if (sample.provenance?.source === "flowdesk_database") {
+      exclude("unverified_database")
+      continue
+    }
     if (FORWARDED_SUBJECT.test(sample.subject ?? "")) {
       exclude("forwarded_subject")
       continue
@@ -174,9 +178,8 @@ export async function trainLearnedReplyProfile(input: {
     provenance: { source: "flowdesk_database" as const },
   }))
 
-  const filteredDb = filterAuthenticOutboundSamples(dbCandidates)
   let gmailCandidates: OutboundReplySample[] = []
-  if (filteredDb.samples.length < 5 && input.channelId) {
+  if (input.channelId) {
     gmailCandidates = (await fetchGmailSentSamples(input.channelId, 60)).map((sample) => ({
       ...sample,
       // Kept for compatibility with already-stored test fixtures while every
@@ -185,8 +188,10 @@ export async function trainLearnedReplyProfile(input: {
     }))
   }
 
-  // Gmail supplements local outbound history. Filtering after the merge also
-  // catches near-duplicates that appear in both sources before the minimum.
+  // Gmail Sent samples are the only trainable source: FlowDesk's persisted
+  // outbound messages lack the subject and headers needed to reliably reject
+  // forwards, list mail, and automated replies. Keep DB candidates here only
+  // so source stats explain their exclusion.
   const filtered = filterAuthenticOutboundSamples([...dbCandidates, ...gmailCandidates])
   const samples = filtered.samples
   const fromDb = samples.filter((sample) => sample.provenance?.source === "flowdesk_database").length

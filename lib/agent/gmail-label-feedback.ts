@@ -85,10 +85,17 @@ export async function applyGmailLabelFeedback(input: {
 
   const latestWriteback = await prisma.gmailWritebackQueue.findUnique({
     where: { conversationId_action: { conversationId: input.conversationId, action: "apply_labels" } },
-    select: { status: true, providerMessageIdsJson: true },
+    select: { id: true, status: true, providerMessageIdsJson: true },
   })
   if (latestWriteback?.status === "completed" && ownWritebackMatches(latestWriteback.providerMessageIdsJson, added, removed)) {
-    return { applied: false, kind: "ignored" }
+    // A completed label job can remain in the queue indefinitely. Atomically
+    // consume its one expected history echo so a later identical user edit is
+    // still learned as feedback.
+    const consumed = await prisma.gmailWritebackQueue.updateMany({
+      where: { id: latestWriteback.id, status: "completed" },
+      data: { status: "acknowledged" },
+    })
+    if (consumed.count > 0) return { applied: false, kind: "ignored" }
   }
 
   const conversation = await prisma.conversation.findFirst({

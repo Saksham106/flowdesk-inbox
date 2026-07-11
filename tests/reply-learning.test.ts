@@ -159,6 +159,16 @@ function makeBody(index: number) {
   return `Hey Alex, sounds good. I will send this over today. Sample ${index + 1}.`
 }
 
+function makeGmailSample(index: number) {
+  return {
+    text: makeBody(index),
+    createdAt: new Date(`2026-05-0${index + 1}T12:00:00Z`),
+    subject: 'Re: Project update',
+    headers: { From: 'sam@example.com', To: 'maya@example.com' },
+    provenance: { source: 'gmail_sent' as const, messageId: `gmail-${index}` },
+  }
+}
+
 describe('trainLearnedReplyProfile', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -176,7 +186,7 @@ describe('trainLearnedReplyProfile', () => {
     mockProfileFindFirst.mockResolvedValue(null)
     mockProfileCreate.mockResolvedValue({ id: 'profile-1' })
     mockUsageCreate.mockResolvedValue({})
-    mockFetchGmailSentSamples.mockResolvedValue([])
+    mockFetchGmailSentSamples.mockResolvedValue(Array.from({ length: 5 }, (_, index) => makeGmailSample(index)))
 
     await trainLearnedReplyProfile({
       tenantId: 'tenant-A',
@@ -195,6 +205,22 @@ describe('trainLearnedReplyProfile', () => {
     expect(mockUsageCreate).not.toHaveBeenCalled()
   })
 
+  it('does not train from database-only outbound messages without Gmail provenance', async () => {
+    mockMessageFindMany.mockResolvedValue(
+      Array.from({ length: 5 }, (_, index) => ({
+        body: makeBody(index),
+        createdAt: new Date(`2026-06-0${index + 1}T12:00:00Z`),
+      }))
+    )
+    mockFetchGmailSentSamples.mockResolvedValue([])
+
+    await expect(
+      trainLearnedReplyProfile({ tenantId: 'tenant-A', channelId: 'channel-1', profileType: 'business' })
+    ).rejects.toThrow(/Not enough sent emails/)
+
+    expect(mockSummarize).not.toHaveBeenCalled()
+  })
+
   it('propagates the gateway budget-block error without a local pre-check', async () => {
     // Budget gating now happens inside the gateway (via
     // summarizeLearnedReplyProfile -> runAiJsonFeature), which throws when
@@ -209,6 +235,7 @@ describe('trainLearnedReplyProfile', () => {
     )
     mockFetchGmailSentSamples.mockResolvedValue([])
     mockSummarize.mockRejectedValue(new Error('Daily AI spend limit reached'))
+    mockFetchGmailSentSamples.mockResolvedValue(Array.from({ length: 5 }, (_, index) => makeGmailSample(index)))
     mockUsageCreate.mockResolvedValue({})
 
     await expect(
@@ -247,7 +274,7 @@ describe('trainLearnedReplyProfile', () => {
     })
 
     expect(mockFetchGmailSentSamples).toHaveBeenCalledWith('channel-1', 60)
-    expect(result.fromDb).toBe(2)
+    expect(result.fromDb).toBe(0)
     expect(result.fromGmail).toBeGreaterThan(0)
     expect(result.sampleCount).toBeGreaterThanOrEqual(5)
   })
@@ -257,7 +284,7 @@ describe('trainLearnedReplyProfile', () => {
       { body: makeBody(0), createdAt: new Date('2026-06-01T12:00:00Z') },
     ])
     mockFetchGmailSentSamples.mockResolvedValue([
-      ...Array.from({ length: 4 }, (_, index) => ({
+      ...Array.from({ length: 5 }, (_, index) => ({
         text: `Hi Maya, I wrote this native response with enough detail for style learning. ${index}`,
         createdAt: new Date(`2026-05-0${index + 1}T12:00:00Z`),
         subject: 'Re: Project update',
@@ -284,7 +311,7 @@ describe('trainLearnedReplyProfile', () => {
 
     expect(mockProfileCreate.mock.calls[0][0].data.sourceStatsJson).toMatchObject({
       accepted: 5,
-      excluded: { forwarded_subject: 1 },
+      excluded: { unverified_database: 1, forwarded_subject: 1 },
     })
   })
 
@@ -307,7 +334,7 @@ describe('trainLearnedReplyProfile', () => {
     ).rejects.toThrow(/Gmail sent history/)
   })
 
-  it('does not call fetchGmailSentSamples when DB already has 5+ samples', async () => {
+  it('uses Gmail Sent samples even when FlowDesk has enough outbound history', async () => {
     mockMessageFindMany.mockResolvedValue(
       Array.from({ length: 6 }, (_, index) => ({
         body: makeBody(index),
@@ -318,9 +345,10 @@ describe('trainLearnedReplyProfile', () => {
     mockProfileFindFirst.mockResolvedValue(null)
     mockProfileCreate.mockResolvedValue({ id: 'profile-3' })
     mockUsageCreate.mockResolvedValue({})
+    mockFetchGmailSentSamples.mockResolvedValue(Array.from({ length: 5 }, (_, index) => makeGmailSample(index)))
 
     await trainLearnedReplyProfile({ tenantId: 'tenant-A', channelId: 'channel-1', profileType: 'business' })
 
-    expect(mockFetchGmailSentSamples).not.toHaveBeenCalled()
+    expect(mockFetchGmailSentSamples).toHaveBeenCalledWith('channel-1', 60)
   })
 })

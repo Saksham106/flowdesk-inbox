@@ -7,6 +7,7 @@ const {
   mockStateUpdate,
   mockStateFindUnique,
   mockWritebackFindUnique,
+  mockWritebackUpdateMany,
   mockAuditCreate,
   mockCorrectionCreate,
   mockMessageFindFirst,
@@ -17,6 +18,7 @@ const {
   mockStateUpdate: vi.fn(),
   mockStateFindUnique: vi.fn(),
   mockWritebackFindUnique: vi.fn(),
+  mockWritebackUpdateMany: vi.fn(),
   mockAuditCreate: vi.fn(),
   mockCorrectionCreate: vi.fn(),
   mockMessageFindFirst: vi.fn(),
@@ -26,7 +28,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     conversation: { findFirst: mockConversationFindFirst, update: mockConversationUpdate },
     conversationState: { upsert: mockStateUpsert, update: mockStateUpdate, findUnique: mockStateFindUnique },
-    gmailWritebackQueue: { findUnique: mockWritebackFindUnique },
+    gmailWritebackQueue: { findUnique: mockWritebackFindUnique, updateMany: mockWritebackUpdateMany },
     auditLog: { create: mockAuditCreate },
     classificationCorrection: { create: mockCorrectionCreate },
     message: { findFirst: mockMessageFindFirst },
@@ -52,6 +54,7 @@ describe("applyGmailLabelFeedback", () => {
     vi.clearAllMocks()
     mockConversationFindFirst.mockResolvedValue(conversation)
     mockWritebackFindUnique.mockResolvedValue(null)
+    mockWritebackUpdateMany.mockResolvedValue({ count: 1 })
     mockConversationUpdate.mockResolvedValue({})
     mockStateUpsert.mockResolvedValue({})
     mockAuditCreate.mockResolvedValue({})
@@ -116,6 +119,7 @@ describe("applyGmailLabelFeedback", () => {
 
   it("ignores a history event from FlowDesk's completed label writeback", async () => {
     mockWritebackFindUnique.mockResolvedValue({
+      id: "writeback-1",
       status: "completed",
       providerMessageIdsJson: { labels: ["Read Later"] },
     })
@@ -123,6 +127,28 @@ describe("applyGmailLabelFeedback", () => {
     await expect(applyGmailLabelFeedback({ tenantId: "t1", conversationId: "c1", added: ["Read Later"], removed: [] }))
       .resolves.toEqual({ applied: false, kind: "ignored" })
     expect(mockConversationUpdate).not.toHaveBeenCalled()
+  })
+
+  it("learns a later matching manual label edit after consuming FlowDesk's writeback event", async () => {
+    mockWritebackFindUnique.mockResolvedValue({
+      id: "writeback-1",
+      status: "completed",
+      providerMessageIdsJson: { labels: ["Read Later"] },
+    })
+    mockWritebackUpdateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 })
+
+    await expect(applyGmailLabelFeedback({ tenantId: "t1", conversationId: "c1", added: ["Read Later"], removed: [] }))
+      .resolves.toEqual({ applied: false, kind: "ignored" })
+    await expect(applyGmailLabelFeedback({ tenantId: "t1", conversationId: "c1", added: ["Read Later"], removed: [] }))
+      .resolves.toEqual({ applied: true, kind: "addition" })
+
+    expect(mockWritebackUpdateMany).toHaveBeenNthCalledWith(1, {
+      where: { id: "writeback-1", status: "completed" },
+      data: { status: "acknowledged" },
+    })
+    expect(mockConversationUpdate).toHaveBeenCalledTimes(1)
   })
 })
 
