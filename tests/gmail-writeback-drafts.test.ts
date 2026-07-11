@@ -4,6 +4,7 @@ const {
   mockWritebackFindMany,
   mockWritebackUpdate,
   mockWritebackUpdateMany,
+  mockChannelFindUnique,
   mockDraftFindUnique,
   mockDraftUpdate,
   mockAuditCreate,
@@ -13,6 +14,7 @@ const {
   mockWritebackFindMany: vi.fn(),
   mockWritebackUpdate: vi.fn(),
   mockWritebackUpdateMany: vi.fn(),
+  mockChannelFindUnique: vi.fn(),
   mockDraftFindUnique: vi.fn(),
   mockDraftUpdate: vi.fn(),
   mockAuditCreate: vi.fn(),
@@ -27,6 +29,7 @@ vi.mock("@/lib/prisma", () => ({
       update: mockWritebackUpdate,
       updateMany: mockWritebackUpdateMany,
     },
+    channel: { findUnique: mockChannelFindUnique },
     draft: { findUnique: mockDraftFindUnique, update: mockDraftUpdate },
     auditLog: { create: mockAuditCreate },
   },
@@ -98,6 +101,7 @@ describe("Gmail writeback cron — draft jobs", () => {
     process.env.CRON_SECRET = "cron-secret"
     mockWritebackUpdate.mockResolvedValue({})
     mockWritebackUpdateMany.mockResolvedValue({ count: 1 })
+    mockChannelFindUnique.mockResolvedValue({ provider: "google" })
     mockDraftUpdate.mockResolvedValue({})
     mockAuditCreate.mockResolvedValue({})
     mockCreateGmailDraftForThread.mockResolvedValue("gmail-draft-1")
@@ -119,13 +123,13 @@ describe("Gmail writeback cron — draft jobs", () => {
     })
     expect(mockDraftUpdate).toHaveBeenCalledWith({
       where: { conversationId: "conv-1" },
-      data: { metadataJson: { gmailDraftId: "gmail-draft-1" } },
+      data: { metadataJson: { providerDraftId: "gmail-draft-1" } },
     })
     expect(mockAuditCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           action: "gmail.writeback.completed",
-          payloadJson: expect.objectContaining({ result: "draft_created", gmailDraftId: "gmail-draft-1" }),
+          payloadJson: expect.objectContaining({ result: "draft_created", providerDraftId: "gmail-draft-1" }),
         }),
       })
     )

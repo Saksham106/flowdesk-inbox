@@ -4,6 +4,7 @@ const {
   mockWritebackFindMany,
   mockWritebackUpdate,
   mockWritebackUpdateMany,
+  mockChannelFindUnique,
   mockAuditCreate,
   mockApplyFlowDeskLabelsToGmailThread,
   mockMarkGmailThreadRead,
@@ -11,6 +12,7 @@ const {
   mockWritebackFindMany: vi.fn(),
   mockWritebackUpdate: vi.fn(),
   mockWritebackUpdateMany: vi.fn(),
+  mockChannelFindUnique: vi.fn(),
   mockAuditCreate: vi.fn(),
   mockApplyFlowDeskLabelsToGmailThread: vi.fn(),
   mockMarkGmailThreadRead: vi.fn(),
@@ -23,6 +25,7 @@ vi.mock("@/lib/prisma", () => ({
       update: mockWritebackUpdate,
       updateMany: mockWritebackUpdateMany,
     },
+    channel: { findUnique: mockChannelFindUnique },
     auditLog: { create: mockAuditCreate },
   },
 }))
@@ -84,6 +87,7 @@ describe("Gmail writeback cron label jobs", () => {
     mockApplyFlowDeskLabelsToGmailThread.mockResolvedValue(undefined)
     mockWritebackUpdate.mockResolvedValue({})
     mockWritebackUpdateMany.mockResolvedValue({ count: 1 })
+    mockChannelFindUnique.mockResolvedValue({ provider: "google" })
     mockAuditCreate.mockResolvedValue({})
   })
 
@@ -232,7 +236,7 @@ describe("Gmail writeback cron label jobs", () => {
       data: {
         status: "failed",
         attempts: { increment: 1 },
-        lastError: "Unknown Gmail writeback action: mystery_action",
+        lastError: "Unknown email writeback action: mystery_action",
       },
     })
     expect(mockAuditCreate).toHaveBeenCalledWith(

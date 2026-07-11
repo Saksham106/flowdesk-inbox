@@ -216,8 +216,8 @@ export async function queueFlowDeskLabelWriteback(input: {
   // whatever this inline attempt can't finish (Gmail hiccup, etc). Dynamic
   // import avoids a static circular dependency: the processor depends on
   // lib/google.ts, which itself depends on this file for label constants.
-  const { processGmailWritebackJobById } = await import("@/lib/agent/gmail-writeback-processor")
-  await processGmailWritebackJobById(job.id).catch((err) => {
+  const { processEmailWritebackJobById } = await import("@/lib/agent/email-writeback-processor")
+  await processEmailWritebackJobById(job.id).catch((err) => {
     console.error("[gmail-labels] inline writeback drain failed, will retry via cron:", err)
   })
 

@@ -9,17 +9,22 @@ export type InboundDraftSource = {
   createdAt: Date
 }
 
+/** Neutral draft-id accessor: new writes use providerDraftId; legacy Gmail rows used gmailDraftId. */
+export function providerDraftIdFromMetadata(metadataJson: unknown): string | null {
+  if (!metadataJson || typeof metadataJson !== "object" || Array.isArray(metadataJson)) return null
+  const record = metadataJson as Record<string, unknown>
+  const value = record.providerDraftId ?? record.gmailDraftId
+  return typeof value === "string" && value.length > 0 ? value : null
+}
+
 /**
- * Reads the stored Gmail draft id off a Draft's metadata, if one exists.
- * FlowDesk records the id it gets back from users.drafts.create so it can update
- * or withdraw the same draft later instead of creating duplicates.
+ * Reads the stored provider draft id off a Draft's metadata, if one exists.
+ * FlowDesk records the id it gets back from the provider so it can update
+ * or withdraw the same draft later instead of creating duplicates. Retained for
+ * existing UI/tests; delegates to the neutral accessor.
  */
 export function gmailDraftIdFromMetadata(metadataJson: unknown): string | null {
-  if (!metadataJson || typeof metadataJson !== "object" || Array.isArray(metadataJson)) {
-    return null
-  }
-  const value = (metadataJson as Record<string, unknown>).gmailDraftId
-  return typeof value === "string" && value.length > 0 ? value : null
+  return providerDraftIdFromMetadata(metadataJson)
 }
 
 /**

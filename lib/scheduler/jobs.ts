@@ -1,5 +1,5 @@
 import { processAgentJobWork } from "@/lib/agent/job-executor"
-import { processPendingGmailWritebackJobs } from "@/lib/agent/gmail-writeback-processor"
+import { processPendingEmailWritebackJobs } from "@/lib/agent/email-writeback-processor"
 import { runGmailPushRetryCron } from "@/lib/agent/gmail-push-retry"
 import { runSnoozeCheckCron } from "@/lib/agent/snooze-check"
 import { runDueWorkflows } from "@/lib/agent/workflow-runner"
@@ -41,10 +41,10 @@ export function buildJobRegistry(): ScheduledJob[] {
       run: () => processAgentJobWork(),
     },
     {
-      name: "gmail-writeback",
+      name: "email-writeback",
       intervalMs: MINUTE,
       runOnStart: true,
-      run: () => processPendingGmailWritebackJobs(25),
+      run: () => processPendingEmailWritebackJobs(25),
     },
     {
       name: "gmail-push-retry",
