@@ -6,16 +6,18 @@ import AskFlowDeskPanel from "@/app/components/AskFlowDeskPanel"
 import { getAppShellContext } from "@/lib/app-shell"
 import { getCleanupOverview } from "@/lib/cleanup-candidates"
 import CleanupTabNav from "@/app/clean-inbox/CleanupTabNav"
+import { parseCleanupRange } from "@/lib/cleanup-range"
 
 export const dynamic = "force-dynamic"
 
-export default async function CleanupAnalyticsPage() {
+export default async function CleanupAnalyticsPage({ searchParams }: { searchParams: { range?: string } }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.tenantId) redirect("/login")
   const tenantId = session.user.tenantId
 
   const { needsReplyCount, pendingApprovals } = await getAppShellContext(tenantId)
-  const { groups, analytics } = await getCleanupOverview(tenantId)
+  const range = parseCleanupRange(searchParams.range)
+  const { groups, analytics } = await getCleanupOverview(tenantId, range)
 
   return (
     <>
@@ -25,7 +27,7 @@ export default async function CleanupAnalyticsPage() {
         </div>
         <div className="flex flex-1 flex-col overflow-hidden lg:overflow-y-auto">
           <div className="mx-auto max-w-2xl px-4 pt-8">
-            <CleanupTabNav />
+            <CleanupTabNav range={range} />
           </div>
           <main className="mx-auto max-w-5xl px-6 pb-8">
             <h1 className="text-xl font-semibold text-slate-900">Cleanup Analytics</h1>

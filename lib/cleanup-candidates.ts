@@ -12,6 +12,7 @@
 
 import { prisma } from "@/lib/prisma"
 import { groupCleanupBySender, type CleanupCandidate } from "@/lib/agent/sender-cleanup"
+import { cleanupRangeCutoff, type CleanupRange } from "@/lib/cleanup-range"
 
 export type CleanupGroupView = {
   senderEmail: string
@@ -196,7 +197,8 @@ export function stillNeedsCleanup(source: CleanupSourceHealth): boolean {
   return true
 }
 
-export async function getCleanupOverview(tenantId: string): Promise<CleanupOverview> {
+export async function getCleanupOverview(tenantId: string, range: CleanupRange = "quarter"): Promise<CleanupOverview> {
+  const cutoff = cleanupRangeCutoff(range)
   const channels = await prisma.channel.findMany({
     where: { tenantId, type: "email" },
     select: {
@@ -222,6 +224,7 @@ export async function getCleanupOverview(tenantId: string): Promise<CleanupOverv
   const fetched = await prisma.conversation.findMany({
     where: {
       tenantId,
+      ...(cutoff ? { lastMessageAt: { gte: cutoff } } : {}),
       OR: [
         { stateRecord: { emailType: { in: ["newsletter", "marketing"] } } },
         { stateRecord: { attentionCategory: { in: ["quiet", "fyi_done"] } } },

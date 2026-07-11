@@ -3,8 +3,9 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { CLEANUP_TABS } from "@/lib/cleanup-tabs"
+import type { CleanupRange } from "@/lib/cleanup-range"
 
-export default function CleanupTabNav() {
+export default function CleanupTabNav({ range = "quarter" }: { range?: CleanupRange }) {
   const pathname = usePathname()
 
   return (
@@ -14,7 +15,7 @@ export default function CleanupTabNav() {
         return (
           <Link
             key={tab.slug}
-            href={tab.href}
+            href={`${tab.href}?range=${range}`}
             aria-current={isActive ? "page" : undefined}
             className={`border-b-2 px-3 py-2 text-sm font-medium ${
               isActive ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-800"

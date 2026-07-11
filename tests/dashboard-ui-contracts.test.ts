@@ -249,6 +249,21 @@ describe("dashboard and inbox UI source contracts", () => {
     expect(rail).toContain('isActive: (p) => p === "/clean-inbox" || p.startsWith("/clean-inbox/")')
   })
 
+  it("cleanup table uses matching styled range, grouping, and multi-select controls", () => {
+    const client = source("app/clean-inbox/CleanInboxClient.tsx")
+    expect(client).toContain("Time range")
+    expect(client).toContain("appearance-none")
+    expect(client).toContain("h-9 w-full")
+    expect(client).toContain("rounded-lg border border-slate-200")
+    expect(client).toContain("focus-visible:ring-2 focus-visible:ring-blue-500")
+    expect(client).toContain("Select all visible groups")
+    expect(client).toContain("From")
+    expect(client).toContain("Emails ↓")
+    expect(client).toContain("Archive selected")
+    expect(client).toContain("Unsubscribe selected")
+    expect(client).toContain("By {value}")
+  })
+
   it("new app-shell pages mount the Ask FlowDesk panel with the rail trigger", () => {
     const shellPages = [
       "app/assistant/layout.tsx",
