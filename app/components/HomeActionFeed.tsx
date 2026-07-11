@@ -22,12 +22,36 @@ const KIND_STYLE: Record<HomeActionItem["kind"], string> = {
   follow_up: "bg-cyan-50 text-cyan-700",
 }
 
+type ConversationActionItem = Extract<HomeActionItem, { kind: "reply" | "action" | "follow_up" }>
+
+function isConversationItem(item: HomeActionItem): item is ConversationActionItem {
+  return item.kind === "reply" || item.kind === "action" || item.kind === "follow_up"
+}
+
 export default function HomeActionFeed({ items }: { items: HomeActionItem[] }) {
   const router = useRouter()
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   const [pending, setPending] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [lastCompleted, setLastCompleted] = useState<HomeActionItem | null>(null)
+  const [drafting, setDrafting] = useState<string | null>(null)
+
+  async function draftReply(item: ConversationActionItem) {
+    setDrafting(item.key)
+    setError(null)
+    try {
+      const response = await fetch(`/api/conversations/${item.conversationId}/draft/suggest`, {
+        method: "POST",
+      }).catch(() => null)
+      if (!response?.ok) {
+        setError("Could not draft a reply. Please try again.")
+        return
+      }
+      router.push(item.href)
+    } finally {
+      setDrafting(null)
+    }
+  }
 
   async function complete(item: HomeActionItem) {
     if (!item.canComplete) return
@@ -89,6 +113,17 @@ export default function HomeActionFeed({ items }: { items: HomeActionItem[] }) {
               <p className="truncate text-xs text-slate-500">{item.subtitle}</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              {isConversationItem(item) && (
+                <button
+                  type="button"
+                  onClick={() => draftReply(item)}
+                  disabled={drafting === item.key}
+                  aria-label={`Draft reply to ${item.title}`}
+                  className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                >
+                  {drafting === item.key ? "Drafting…" : "Draft reply"}
+                </button>
+              )}
               <Link href={item.href} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
                 {item.kind === "approval" ? "Review" : "Open"}
               </Link>
