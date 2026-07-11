@@ -213,7 +213,7 @@ describe('checkAutopilotEligibility', () => {
   })
 
   it('fails closed when automationLevel is missing from the setting row', async () => {
-    const { automationLevel: _omitted, ...withoutLevel } = enabledSetting
+    const { automationLevel, ...withoutLevel } = enabledSetting
     mockAutopilotSettingFindUnique.mockResolvedValue(withoutLevel)
     const result = await checkAutopilotEligibility(TENANT, classification, policyOk)
     expect(result.eligible).toBe(false)

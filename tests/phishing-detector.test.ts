@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { detectPhishing, type PhishingResult } from "@/lib/agent/phishing-detector"
+import { detectPhishing } from "@/lib/agent/phishing-detector"
 
 describe("detectPhishing", () => {
   it("flags likely phishing: lookalike domain + urgency + account language", () => {

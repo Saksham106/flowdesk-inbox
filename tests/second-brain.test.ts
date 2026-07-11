@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { extractFacts, type ExtractedFact } from "@/lib/agent/second-brain"
+import { extractFacts } from "@/lib/agent/second-brain"
 
 describe("extractFacts", () => {
   it("extracts birthday fact", () => {
