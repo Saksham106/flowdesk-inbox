@@ -1,9 +1,13 @@
 import { randomUUID } from "crypto"
 
 import { clearGmailLabelOverride } from "@/lib/agent/gmail-label-feedback"
-import { applyOutlookCategoryFeedback } from "@/lib/agent/outlook-category-feedback"
+import {
+  applyOutlookCategoryFeedback,
+  type OutlookProjectionSnapshot,
+} from "@/lib/agent/outlook-category-feedback"
 import { syncConversationWorkItems } from "@/lib/agent/work-item-sync"
 import { decryptString, encryptString } from "@/lib/crypto"
+import { normalizeFlowDeskLabelPayload } from "@/lib/email-labels"
 import {
   getOutlookAccessToken,
   graphGet,
@@ -81,6 +85,26 @@ async function persistCursor(channelId: string, leaseId: string, cursor: string)
     },
   })
   if (updated.count !== 1) throw new Error("Outlook sync lease lost")
+}
+
+// Pre-run view of a conversation's apply_labels projection job, read BEFORE
+// work-item sync can rewrite it during this run. Null when FlowDesk never
+// projected labels for the thread or the payload is unreadable — either way
+// there is nothing trustworthy to diff a user edit against.
+async function snapshotProjectionJob(
+  conversationId: string
+): Promise<OutlookProjectionSnapshot | null> {
+  const job = await prisma.emailWritebackQueue.findUnique({
+    where: { conversationId_action: { conversationId, action: "apply_labels" } },
+    select: { status: true, providerMessageIdsJson: true },
+  })
+  if (!job) return null
+  const payload = normalizeFlowDeskLabelPayload(job.providerMessageIdsJson)
+  if (!payload) return null
+  return {
+    settled: job.status !== "pending" && job.status !== "processing",
+    labels: payload.labels,
+  }
 }
 
 async function applyRemovedMessage(
@@ -246,10 +270,6 @@ export async function runOutlookDeltaSync({
   requestedMode: RequestedSyncMode
   maxPages?: number
 }): Promise<OutlookDeltaSyncResult> {
-  // Timestamp before any work-item projection can (re)write an apply_labels job
-  // during this run. Category feedback compares the delta snapshot against the
-  // job payload; if the job was rewritten this run, the snapshot is stale.
-  const runStartedAt = new Date()
   const channel = await prisma.channel.findUnique({ where: { id: channelId } })
   if (
     !channel ||
@@ -354,6 +374,22 @@ export async function runOutlookDeltaSync({
       break
     }
 
+    // Snapshot each feedback candidate's apply_labels projection BEFORE
+    // work-item sync runs: re-projection during this run always rewrites the
+    // job (queueFlowDeskLabelWriteback's upsert replaces the payload), so a
+    // post-run read would diff the delta's category snapshot against a payload
+    // NEWER than it — fabricating phantom "user removed X" corrections while
+    // never seeing the edit itself. Diffing against the pre-run payload — what
+    // FlowDesk had actually projected when the user edited — kills the phantom
+    // and keeps genuine edits learnable in the same run.
+    const priorProjections = new Map<string, OutlookProjectionSnapshot | null>()
+    for (const conversationId of feedbackCandidates.keys()) {
+      priorProjections.set(
+        conversationId,
+        await snapshotProjectionJob(conversationId).catch(() => null)
+      )
+    }
+
     await Promise.all(
       [...affectedConversationIds].map((conversationId) =>
         syncConversationWorkItems({ tenantId, conversationId }).catch(() => undefined)
@@ -367,7 +403,7 @@ export async function runOutlookDeltaSync({
         tenantId,
         conversationId: item.conversationId,
         messageCategories: item.categories,
-        jobNotUpdatedSince: runStartedAt,
+        priorJob: priorProjections.get(item.conversationId) ?? null,
       }).catch(() => undefined)
     }
 

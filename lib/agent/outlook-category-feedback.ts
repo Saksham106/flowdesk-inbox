@@ -1,47 +1,36 @@
-import { prisma } from "@/lib/prisma"
 import { applyLabelFeedbackCore } from "@/lib/agent/label-feedback-core"
-import {
-  FLOWDESK_LABEL_NAMES,
-  normalizeFlowDeskLabelPayload,
-} from "@/lib/email-labels"
+import { FLOWDESK_LABEL_NAMES, type FlowDeskLabelName } from "@/lib/email-labels"
 
 const FLOWDESK_SET = new Set<string>(FLOWDESK_LABEL_NAMES)
 
+// Snapshot of a conversation's apply_labels projection job as it stood BEFORE
+// the current delta run's work-item sync. The sync captures this (see
+// runOutlookDeltaSync) because work-item sync re-projects during the same run:
+// queueFlowDeskLabelWriteback's upsert rewrites the job payload, so a post-run
+// read would diff the delta's category snapshot against a payload NEWER than
+// it and fabricate phantom "user removed X" corrections. `settled` is false
+// while the pre-run job was still pending/processing — the mailbox
+// legitimately lags the desired set then, and any diff would be noise.
+export type OutlookProjectionSnapshot = {
+  settled: boolean
+  labels: FlowDeskLabelName[]
+}
+
 // Outlook's delta feed reports each changed message's full current categories
 // rather than add/remove events, so user edits are detected by diffing the
-// message's FlowDesk categories against the set FlowDesk last projected (the
-// conversation's apply_labels queue payload). Only runs once that job has
-// settled (completed/acknowledged/failed): while a projection is pending or
-// processing, the mailbox legitimately lags the desired set and any diff
-// would be a phantom "user edit". No settled projection → nothing to diff
-// against (FlowDesk never labeled this thread) → ignore.
+// message's FlowDesk categories against the set FlowDesk had projected when
+// the user edited — the PRE-RUN apply_labels payload supplied by the sync.
+// No settled pre-run projection (null snapshot, or job still in flight) →
+// nothing trustworthy to diff against → ignore.
 export async function applyOutlookCategoryFeedback(input: {
   tenantId: string
   conversationId: string
   messageCategories: string[]
-  // Start of the delta run that captured `messageCategories`. If the projection
-  // job was (re)written at/after this instant, it settled during this same run
-  // with a payload that post-dates the snapshot — diffing the two would
-  // fabricate phantom corrections, so skip. Tradeoff: a genuine user edit
-  // landing in the same delta page as a classification change is skipped this
-  // run (correctness over completeness); the next delta re-observes it.
-  jobNotUpdatedSince?: Date
+  priorJob: OutlookProjectionSnapshot | null
 }): Promise<{ applied: boolean }> {
-  const job = await prisma.emailWritebackQueue.findUnique({
-    where: {
-      conversationId_action: { conversationId: input.conversationId, action: "apply_labels" },
-    },
-    select: { status: true, providerMessageIdsJson: true, updatedAt: true },
-  })
-  if (!job || job.status === "pending" || job.status === "processing") return { applied: false }
-  if (input.jobNotUpdatedSince && job.updatedAt >= input.jobNotUpdatedSince) {
-    return { applied: false }
-  }
+  if (!input.priorJob || !input.priorJob.settled) return { applied: false }
 
-  const payload = normalizeFlowDeskLabelPayload(job.providerMessageIdsJson)
-  if (!payload) return { applied: false }
-
-  const desired = new Set<string>(payload.labels)
+  const desired = new Set<string>(input.priorJob.labels)
   const actual = input.messageCategories.filter((category) => FLOWDESK_SET.has(category))
   const added = actual.filter((category) => !desired.has(category))
   const removed = [...desired].filter((category) => !actual.includes(category))

@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   syncWorkItems: vi.fn(),
   applyCategoryFeedback: vi.fn(),
   clearLabelOverride: vi.fn(),
+  writebackFindUnique: vi.fn(),
+  applyCore: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -40,6 +42,7 @@ vi.mock("@/lib/prisma", () => ({
       findFirst: mocks.messageFindFirst,
       count: mocks.messageCount,
     },
+    emailWritebackQueue: { findUnique: mocks.writebackFindUnique },
   },
 }));
 
@@ -71,6 +74,13 @@ vi.mock("@/lib/agent/outlook-category-feedback", () => ({
 
 vi.mock("@/lib/agent/gmail-label-feedback", () => ({
   clearGmailLabelOverride: mocks.clearLabelOverride,
+}));
+
+// Mocked so the pre-run-snapshot integration tests can delegate the feedback
+// mock to the REAL applyOutlookCategoryFeedback and observe which corrections
+// it would record without touching further prisma models.
+vi.mock("@/lib/agent/label-feedback-core", () => ({
+  applyLabelFeedbackCore: mocks.applyCore,
 }));
 
 import { runOutlookDeltaSync } from "@/lib/outlook-sync";
@@ -117,6 +127,8 @@ describe("runOutlookDeltaSync", () => {
     mocks.syncWorkItems.mockResolvedValue(undefined);
     mocks.applyCategoryFeedback.mockResolvedValue({ applied: false });
     mocks.clearLabelOverride.mockResolvedValue(true);
+    mocks.writebackFindUnique.mockResolvedValue(null);
+    mocks.applyCore.mockResolvedValue({ applied: true, kind: "addition" });
   });
 
   it("processes nextLink pages and persists the final encrypted deltaLink", async () => {
@@ -231,8 +243,12 @@ describe("runOutlookDeltaSync", () => {
     });
   });
 
-  it("runs category feedback for an updated pre-existing inbound message", async () => {
+  it("runs category feedback for an updated pre-existing inbound message with the pre-run job snapshot", async () => {
     mocks.messageFindUnique.mockResolvedValue({ id: "local-message" });
+    mocks.writebackFindUnique.mockResolvedValue({
+      status: "completed",
+      providerMessageIdsJson: { threadId: "graph-thread-1", labels: ["Needs Reply"] },
+    });
     mocks.graphGet.mockResolvedValueOnce({
       value: [message("message-1", "2026-06-24T12:00:00.000Z", { categories: ["Handled"] })],
       "@odata.deltaLink": "https://graph.microsoft.com/final",
@@ -248,8 +264,91 @@ describe("runOutlookDeltaSync", () => {
       tenantId: "tenant-1",
       conversationId: "conversation-1",
       messageCategories: ["Handled"],
-      jobNotUpdatedSince: expect.any(Date),
+      priorJob: { settled: true, labels: ["Needs Reply"] },
     });
+  });
+
+  it("learns a genuine pre-run edit even when projection rewrites the job during the run", async () => {
+    // Delegate to the real implementation so the test observes the correction
+    // it records, not just the arguments it receives.
+    const actual = await vi.importActual<
+      typeof import("@/lib/agent/outlook-category-feedback")
+    >("@/lib/agent/outlook-category-feedback");
+    mocks.applyCategoryFeedback.mockImplementation(actual.applyOutlookCategoryFeedback);
+
+    mocks.messageFindUnique.mockResolvedValue({ id: "local-message" });
+    // Pre-run: FlowDesk had projected Needs Reply; the user then added Handled.
+    mocks.writebackFindUnique.mockResolvedValue({
+      status: "completed",
+      providerMessageIdsJson: { threadId: "graph-thread-1", labels: ["Needs Reply"] },
+    });
+    // In-run: work-item sync re-projects, replacing the job payload. The sync
+    // must have snapshotted the job BEFORE this runs.
+    mocks.syncWorkItems.mockImplementation(async () => {
+      mocks.writebackFindUnique.mockResolvedValue({
+        status: "pending",
+        providerMessageIdsJson: { threadId: "graph-thread-1", labels: ["Handled"] },
+      });
+    });
+    mocks.graphGet.mockResolvedValueOnce({
+      value: [
+        message("message-1", "2026-06-24T12:00:00.000Z", {
+          categories: ["Needs Reply", "Handled"],
+        }),
+      ],
+      "@odata.deltaLink": "https://graph.microsoft.com/final",
+    });
+
+    await runOutlookDeltaSync({
+      channelId: "channel-1",
+      tenantId: "tenant-1",
+      requestedMode: "manual",
+    });
+
+    // The feedback received the PRE-run snapshot, not the rewritten payload...
+    expect(mocks.applyCategoryFeedback).toHaveBeenCalledWith(
+      expect.objectContaining({ priorJob: { settled: true, labels: ["Needs Reply"] } })
+    );
+    // ...so the user's added category is still learned.
+    expect(mocks.applyCore).toHaveBeenCalledWith(
+      expect.objectContaining({ added: ["Handled"], removed: [] })
+    );
+  });
+
+  it("does not fabricate corrections from a stale snapshot when projection rewrites the job in-run", async () => {
+    const actual = await vi.importActual<
+      typeof import("@/lib/agent/outlook-category-feedback")
+    >("@/lib/agent/outlook-category-feedback");
+    mocks.applyCategoryFeedback.mockImplementation(actual.applyOutlookCategoryFeedback);
+
+    mocks.messageFindUnique.mockResolvedValue({ id: "local-message" });
+    // The mailbox categories match what FlowDesk had projected pre-run — no
+    // user edit happened, this delta entry is just a classification echo.
+    mocks.writebackFindUnique.mockResolvedValue({
+      status: "completed",
+      providerMessageIdsJson: { threadId: "graph-thread-1", labels: ["Needs Reply"] },
+    });
+    // In-run re-projection produces a NEW desired set. Diffing the delta
+    // snapshot against this rewritten payload would fabricate "user removed
+    // Handled" — the reviewer's phantom-correction scenario.
+    mocks.syncWorkItems.mockImplementation(async () => {
+      mocks.writebackFindUnique.mockResolvedValue({
+        status: "pending",
+        providerMessageIdsJson: { threadId: "graph-thread-1", labels: ["Handled"] },
+      });
+    });
+    mocks.graphGet.mockResolvedValueOnce({
+      value: [message("message-1", "2026-06-24T12:00:00.000Z", { categories: ["Needs Reply"] })],
+      "@odata.deltaLink": "https://graph.microsoft.com/final",
+    });
+
+    await runOutlookDeltaSync({
+      channelId: "channel-1",
+      tenantId: "tenant-1",
+      requestedMode: "manual",
+    });
+
+    expect(mocks.applyCore).not.toHaveBeenCalled();
   });
 
   it("does not run category feedback for a brand-new inbound message", async () => {
