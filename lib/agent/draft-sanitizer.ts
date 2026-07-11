@@ -65,12 +65,15 @@ export function sanitizeDraftText(original: string): SanitizeDraftResult {
     flagged.push("markup_artifact")
   }
 
+  // Only abort stripping if BOTH the fraction is high AND the result is suspiciously short.
+  // A short reply to a long quoted thread (high fraction stripped, reasonable length remaining)
+  // is normal and should not be treated as over-aggressive stripping.
   if (strippedFraction > MAX_STRIP_FRACTION && working.length <= MIN_VIABLE_LENGTH) {
     // Include both flags if both conditions apply
     if (!flagged.includes("strip_too_aggressive")) {
       flagged.push("strip_too_aggressive")
     }
-    return { text: original, autoFixed: [], flagged }
+    return { text: trimmedOriginal, autoFixed: [], flagged }
   }
 
   return { text: working, autoFixed, flagged }
