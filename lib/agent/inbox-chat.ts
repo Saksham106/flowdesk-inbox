@@ -10,7 +10,9 @@ import { checkAiBudgetForTokens } from "@/lib/ai/budget"
 import { getOpenRouterApiKeyForUser } from "@/lib/ai/openrouter-keys"
 import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 
-const DEFAULT_MODEL = "anthropic/claude-sonnet-4.5"
+// Fallback used only when OPENROUTER_MODEL is unset — keep in sync with
+// lib/ai/gateway.ts's FALLBACK_MODEL.
+const DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
 
 export type ChatMessage = {
   role: "user" | "assistant"

@@ -3,7 +3,8 @@ import { getOpenRouterApiKeyForUser } from "@/lib/ai/openrouter-keys"
 import { callOpenRouterJson, type OpenRouterMessage } from "@/lib/ai/openrouter"
 import { recordAiUsageEvent } from "@/lib/ai/usage"
 
-const DEFAULT_MODEL = "anthropic/claude-sonnet-4.5"
+// Fallback used only when neither the caller nor OPENROUTER_MODEL specify a model.
+const FALLBACK_MODEL = "deepseek/deepseek-v4-flash"
 
 export type RunAiJsonFeatureInput = {
   tenantId: string
@@ -41,7 +42,7 @@ export type RunAiJsonFeatureResult<T> = {
  * fallbacks) — it never silently swallows an error and returns a placeholder.
  */
 export async function runAiJsonFeature<T>(input: RunAiJsonFeatureInput): Promise<RunAiJsonFeatureResult<T>> {
-  const model = input.model ?? DEFAULT_MODEL
+  const model = input.model ?? process.env.OPENROUTER_MODEL ?? FALLBACK_MODEL
 
   const recordEvent = (fields: Partial<Parameters<typeof recordAiUsageEvent>[0]>) =>
     recordAiUsageEvent({

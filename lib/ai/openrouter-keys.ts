@@ -7,6 +7,20 @@ export type OpenRouterRuntimeKey = {
 }
 
 /**
+ * Builds a human-readable OpenRouter key name so keys are identifiable by
+ * account in the OpenRouter dashboard, e.g. "flowdesk-johndoe-4x9k2p" for
+ * john.doe@gmail.com. Falls back to "user" if the email has no usable
+ * local part. The suffix is derived from the userId (not random) so the
+ * name is stable and reproducible across re-provisioning.
+ */
+export function buildOpenRouterKeyName(email: string, userId: string): string {
+  const localPart = email.split("@")[0] ?? ""
+  const slug = localPart.replace(/[^a-zA-Z0-9]/g, "").toLowerCase().slice(0, 24) || "user"
+  const suffix = userId.replace(/[^a-zA-Z0-9]/g, "").slice(-6) || "000000"
+  return `flowdesk-${slug}-${suffix}`
+}
+
+/**
  * Resolves the OpenRouter API key to use for a given FlowDesk user.
  *
  * One OpenRouter runtime child key per FlowDesk user (not per tenant):
@@ -47,7 +61,7 @@ export async function getOpenRouterApiKeyForUser(input: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      name: `flowdesk:user:${input.userId}:${input.email}`,
+      name: buildOpenRouterKeyName(input.email, input.userId),
       limit: Number.isFinite(limit) ? limit : 10,
       limit_reset: "monthly",
     }),

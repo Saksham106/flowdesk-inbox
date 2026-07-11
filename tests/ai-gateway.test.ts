@@ -167,4 +167,35 @@ describe("runAiJsonFeature", () => {
     expect(budgetOrder).toBeLessThan(keyOrder)
     expect(keyOrder).toBeLessThan(callOrderIdx)
   })
+
+  it("resolves the model in priority order: explicit input.model, then OPENROUTER_MODEL, then the built-in fallback", async () => {
+    const { runAiJsonFeature } = await import("@/lib/ai/gateway")
+
+    await runAiJsonFeature({ ...baseInput, model: "explicit/model" })
+    expect(mockCheckAiBudgetForTokens).toHaveBeenCalledWith(expect.objectContaining({ model: "explicit/model" }))
+
+    vi.clearAllMocks()
+    mockCheckAiBudgetForTokens.mockResolvedValue({ allowed: true, reason: "", estimatedCostUsd: 0.01 })
+    mockGetOpenRouterApiKeyForUser.mockResolvedValue({ apiKey: "sk-or-test", keyHash: "hash1" })
+    mockCallOpenRouterJson.mockResolvedValue({
+      output: { ok: true },
+      model: "anthropic/claude-sonnet-4.5",
+      providerGenerationId: "gen-1",
+      providerKeyHash: "hash1",
+      inputTokens: 10,
+      outputTokens: 5,
+      totalTokens: 15,
+      actualCostUsd: 0.002,
+    })
+
+    vi.stubEnv("OPENROUTER_MODEL", "deepseek/deepseek-v4-flash")
+    try {
+      await runAiJsonFeature(baseInput)
+      expect(mockCheckAiBudgetForTokens).toHaveBeenCalledWith(
+        expect.objectContaining({ model: "deepseek/deepseek-v4-flash" })
+      )
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
 })

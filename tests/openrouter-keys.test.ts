@@ -56,6 +56,8 @@ describe("getOpenRouterApiKeyForUser", () => {
       "https://openrouter.ai/api/v1/keys",
       expect.objectContaining({ method: "POST" })
     )
+    const requestBody = JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body)
+    expect(requestBody.name).toBe("flowdesk-a-u1")
     expect(mockUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { userId: "u1" },
@@ -109,5 +111,23 @@ describe("getOpenRouterApiKeyForUser", () => {
     } finally {
       vi.unstubAllEnvs()
     }
+  })
+})
+
+describe("buildOpenRouterKeyName", () => {
+  it("derives a readable name from the email local part and userId", async () => {
+    const { buildOpenRouterKeyName } = await import("@/lib/ai/openrouter-keys")
+    expect(buildOpenRouterKeyName("john.doe@gmail.com", "cljk3x9m2000008l5abcd123"))
+      .toBe("flowdesk-johndoe-bcd123")
+  })
+
+  it("strips non-alphanumeric characters and lowercases the local part", async () => {
+    const { buildOpenRouterKeyName } = await import("@/lib/ai/openrouter-keys")
+    expect(buildOpenRouterKeyName("Jane+Test_99@example.com", "u2")).toBe("flowdesk-janetest99-u2")
+  })
+
+  it("falls back to 'user' when the local part has no usable characters", async () => {
+    const { buildOpenRouterKeyName } = await import("@/lib/ai/openrouter-keys")
+    expect(buildOpenRouterKeyName("@example.com", "u3")).toBe("flowdesk-user-u3")
   })
 })
