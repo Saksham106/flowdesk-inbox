@@ -4,8 +4,6 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { salesCrmEnabled } from "@/lib/tenant-capabilities";
-import ConnectedAppsPanel from "@/app/settings/ConnectedAppsPanel";
 import AiBudgetPanel from "@/app/settings/AiBudgetPanel";
 import AiUsagePanel from "@/app/settings/AiUsagePanel";
 import { getAiBudgetStatus } from "@/lib/ai/budget";
@@ -17,15 +15,8 @@ export default async function DataSettingsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.tenantId) redirect("/login");
 
-  const [googleDriveCredential, aiBudgetStatus, tenant, aiUsageEvents] = await Promise.all([
-    prisma.googleDriveCredential.findUnique({
-      where: { tenantId: session.user.tenantId },
-    }),
+  const [aiBudgetStatus, aiUsageEvents] = await Promise.all([
     getAiBudgetStatus(session.user.tenantId),
-    prisma.tenant.findUnique({
-      where: { id: session.user.tenantId },
-      select: { salesCrmEnabled: true },
-    }),
     prisma.aiUsageEvent.findMany({
       where: { tenantId: session.user.tenantId, createdAt: { gte: startOfMonthUtc(new Date()) } },
       select: {
@@ -39,8 +30,6 @@ export default async function DataSettingsPage() {
       },
     }),
   ]);
-
-  const isPersonal = !salesCrmEnabled(tenant);
 
   const aiUsageSummary = summarizeAiUsage(aiUsageEvents, {
     dailyLimitUsd: aiBudgetStatus.dailyLimitUsd,
@@ -95,26 +84,6 @@ export default async function DataSettingsPage() {
           </p>
         </div>
       </section>
-
-      {/* Google Drive context injection is not built yet, so the connect entry
-          point is off the default path; still shown when already connected so
-          the credential stays manageable */}
-      {(!isPersonal || googleDriveCredential) && (
-        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-6 py-4">
-            <h2 className="font-semibold">Connected Apps</h2>
-            <p className="mt-0.5 text-sm text-slate-500">
-              Choose integrations that help your workflows, not just logo counts.
-            </p>
-          </div>
-          <div className="px-6 py-5">
-            <ConnectedAppsPanel
-              driveConnected={!!googleDriveCredential}
-              driveEmail={googleDriveCredential?.email}
-            />
-          </div>
-        </section>
-      )}
 
       <section id="ai-usage" className="scroll-mt-24 rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 px-6 py-4">

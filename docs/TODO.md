@@ -78,7 +78,7 @@ Close the gap with the projects we studied (`docs/flowdesk-vs-reference-gap-anal
 
 - [x] **Complete scheduling confirmation and event booking** — shipped: deterministic confirmation detection on inbound replies (`detectSchedulingConfirmation`, precision-first, no LLM), booking through the existing Google Calendar integration with calendar-hold conversion (`lib/agent/scheduling-booking.ts`), gated by the trust ladder (auto-book only at Level 5 via the new `auto_book_event` action; below that a `book_event` ApprovalRequest); calendar failures record `lastBookingError` on the session and stay retryable from the Scheduling panel.
 - [ ] Add a workflow-template builder.
-- [ ] Inject connected Google Drive context into draft generation.
+- [ ] Google Drive context in draft generation — deferred: the connector (OAuth routes, lib module, settings UI) was removed 2026-07-11 because `drive.readonly` is a restricted scope that would block OAuth verification with no shipped feature behind it. Re-adding should use the non-restricted `drive.file` scope; the `GoogleDriveCredential` table remains.
 - [ ] Add semantic knowledge/search retrieval and scheduled website recrawling.
 - [ ] Make lead-sequence timing configurable and visible.
 - [x] Add user-visible AI budget/usage visibility for inbox chat and agent-rule compilation.
