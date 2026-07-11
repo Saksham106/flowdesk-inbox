@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import SenderRulesPanel from "@/app/settings/SenderRulesPanel";
 import { actionChipsForRule, summarizeAssistantRules } from "@/lib/assistant-rule-view";
+import { builtInRuleRows } from "@/lib/built-in-rule-view";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,7 @@ export default async function AssistantRulesPage() {
   if (!session?.user?.tenantId) redirect("/login");
   const tenantId = session.user.tenantId;
 
-  const [senderRules, agentRulesRaw] = await Promise.all([
+  const [senderRules, agentRulesRaw, gmailLabelMappings] = await Promise.all([
     prisma.senderRule.findMany({
       where: { tenantId, status: { in: ["suggested", "active"] } },
       orderBy: { createdAt: "desc" },
@@ -47,7 +48,12 @@ export default async function AssistantRulesPage() {
       where: { tenantId, status: { not: "dismissed" } },
       orderBy: { updatedAt: "desc" },
     }),
+    prisma.gmailLabelMapping.findMany({
+      where: { tenantId },
+      select: { canonical: true, enabled: true },
+    }),
   ]);
+  const builtInRules = builtInRuleRows(gmailLabelMappings);
 
   const agentRules = agentRulesRaw.map((r) => ({
     id: r.id,
@@ -83,6 +89,26 @@ export default async function AssistantRulesPage() {
       <p className="mb-4 text-sm text-slate-500">
         Active, draft, and learned rules the agent uses to label and route mail.
       </p>
+
+      <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Built-in label rules</h3>
+            <p className="text-xs text-slate-500">Enabled automatically when FlowDesk connects to Gmail.</p>
+          </div>
+          <Link href="/settings/gmail" className="text-xs font-medium text-blue-600 hover:underline">Manage labels →</Link>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {builtInRules.map((rule) => (
+            <div key={rule.label} className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+              <div><p className="text-xs font-semibold text-slate-800">{rule.label}</p><p className="mt-0.5 text-[11px] text-slate-500">{rule.description}</p></div>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${rule.enabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{rule.enabled ? "Enabled" : "Disabled"}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <h3 className="mb-3 text-sm font-semibold text-slate-900">Your rules</h3>
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Active rules" value={summary.active} />
