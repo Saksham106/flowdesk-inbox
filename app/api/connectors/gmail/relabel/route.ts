@@ -17,7 +17,7 @@ export const runtime = "nodejs"
 // shared with the Outlook relabel route and the maintenance cron via
 // runRelabelCatchUp (lib/agent/email-label-reconcile.ts); this route is just
 // the session-authed, Gmail-scoped wrapper around it.
-export async function POST(_request: Request) {
+export async function POST() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.tenantId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

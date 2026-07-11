@@ -55,11 +55,6 @@ vi.mock("next/server", () => {
 
 import { POST } from "@/app/api/connectors/gmail/relabel/route"
 
-function postRequest(body: unknown = {}) {
-  return {
-    json: () => Promise.resolve(body),
-  } as unknown as Request
-}
 
 describe("POST /api/connectors/gmail/relabel", () => {
   beforeEach(() => {
@@ -78,7 +73,7 @@ describe("POST /api/connectors/gmail/relabel", () => {
 
   it("returns 401 when unauthenticated", async () => {
     mockSession = null
-    const res = await POST(postRequest())
+    const res = await POST()
     expect(res.status).toBe(401)
     expect(mockRunRelabelCatchUp).not.toHaveBeenCalled()
   })
@@ -91,12 +86,12 @@ describe("POST /api/connectors/gmail/relabel", () => {
       queued: 0,
       errors: 0,
     })
-    const res = await POST(postRequest())
+    const res = await POST()
     expect(res.status).toBe(404)
   })
 
   it("reconciles labels for every connected Gmail channel scoped to the caller's tenant", async () => {
-    const res = await POST(postRequest())
+    const res = await POST()
     const body = await res.json()
 
     expect(res.status).toBe(200)
@@ -133,7 +128,7 @@ describe("POST /api/connectors/gmail/relabel", () => {
       errors: 0,
     })
 
-    const res = await POST(postRequest())
+    const res = await POST()
     const body = await res.json()
 
     expect(body.automationLevel).toBe(1)
@@ -149,7 +144,7 @@ describe("POST /api/connectors/gmail/relabel", () => {
       queued: 100,
       errors: 0,
     })
-    const res = await POST(postRequest())
+    const res = await POST()
     const body = await res.json()
     expect(body.hasMore).toBe(true)
   })
