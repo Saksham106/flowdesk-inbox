@@ -7,7 +7,7 @@ import { buildBatchToken } from "@/lib/clean-inbox-token"
 import { isSafeUnsubscribeUrl } from "@/lib/agent/unsubscribe"
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
 import { revalidateInboxViews } from "@/lib/cache-tags"
-import { archiveConversationsInGmail } from "@/lib/clean-inbox-gmail"
+import { archiveConversationsInProviderMailbox } from "@/lib/clean-inbox-email"
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions)
@@ -103,9 +103,10 @@ export async function POST(request: Request) {
     }),
   ])
 
-  // Archive the threads in Gmail too (best-effort), so "unsubscribe + archive"
-  // clears the real inbox rather than only closing the FlowDesk row.
-  const gmailArchive = await archiveConversationsInGmail(convs)
+  // Archive the threads in the provider mailbox too (best-effort), so
+  // "unsubscribe + archive" clears the real inbox rather than only closing
+  // the FlowDesk row.
+  const gmailArchive = await archiveConversationsInProviderMailbox(convs)
 
   const batchToken = buildBatchToken(ids)
   await prisma.auditLog.create({
