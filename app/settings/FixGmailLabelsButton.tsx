@@ -76,7 +76,7 @@ export default function FixGmailLabelsButton({
       {result && !result.belowAutomationLevel && (
         <p className="mt-2 text-xs text-slate-500">
           {result.queued > 0
-            ? `Re-applying labels to ${result.queued} of ${result.scanned} recent emails. This can take a moment to show up in Gmail.`
+            ? `Re-applying labels to ${result.queued} of ${result.scanned} recent emails. This can take a moment to show up in ${providerLabel}.`
             : result.scanned > 0
               ? "Everything was already up to date."
               : "No emails found to fix yet."}

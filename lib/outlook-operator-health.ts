@@ -105,7 +105,7 @@ export function summarizeOutlookOperatorHealth(
                   label: "Outlook sync",
                   status: "warning",
                   detail: `Last sync was ${ageMinutes(now, latestSync)} minutes ago.`,
-                  action: "Check cron or run manual sync.",
+                  action: "Check the outlook-sync job or run manual sync.",
                 }
               : {
                   id: "outlook-auth-sync",
@@ -126,7 +126,7 @@ export function summarizeOutlookOperatorHealth(
         label: "Outlook subscription",
         status: "critical",
         detail: subscriptionError.subscriptionError ?? "Outlook subscription renewal failed.",
-        action: "Check outlook-subscription-renew cron and Microsoft Graph subscription setup.",
+        action: "Check the outlook-sync job and Microsoft Graph subscription setup.",
       }
     : input.syncEventsFailed > 0
       ? {
@@ -134,7 +134,7 @@ export function summarizeOutlookOperatorHealth(
           label: "Outlook subscription",
           status: "warning",
           detail: `${input.syncEventsFailed} sync notification failure${input.syncEventsFailed === 1 ? "" : "s"} in the last 24 hours.`,
-          action: "Check outlook-sync-events processing and subscription status.",
+          action: "Check the outlook-sync job and subscription status.",
         }
       : healthySubscription
         ? {
@@ -154,7 +154,7 @@ export function summarizeOutlookOperatorHealth(
                 : "No Outlook account connected.",
             action:
               connected > 0
-                ? "Check outlook-subscription-renew cron; polling is the fallback."
+                ? "Check the outlook-sync job; polling is the fallback."
                 : "Connect Outlook.",
           }
 
@@ -174,7 +174,7 @@ export function summarizeOutlookOperatorHealth(
             status: hasStaleOldest(now, input.oldestPendingWritebackAt) ? "warning" : "healthy",
             detail: `${input.writebackPending} pending writeback job${input.writebackPending === 1 ? "" : "s"}.`,
             action: hasStaleOldest(now, input.oldestPendingWritebackAt)
-              ? "Check outlook-writeback cron."
+              ? "Check the email-writeback job."
               : "No action needed unless the queue keeps growing.",
           }
         : {
