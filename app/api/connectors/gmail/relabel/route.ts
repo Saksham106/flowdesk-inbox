@@ -13,7 +13,7 @@ export const runtime = "nodejs"
 // pulls new Gmail history and never revisits unchanged conversations). Covers
 // accounts that connected before label colors/reliability fixes existed, or
 // whose label writebacks are stuck from before those fixes landed: existing
-// FlowDeskGmailWritebackQueue rows for this conversation get reset to
+// FlowDesk EmailWritebackQueue rows for this conversation get reset to
 // "pending" and re-attempted (see queueFlowDeskLabelWriteback's upsert), so a
 // job that permanently failed under old, buggy code gets a fresh shot with
 // the fixed code — no reconnect or different Gmail account required.

@@ -27,7 +27,7 @@ vi.mock("@/lib/prisma", () => ({
     draft: {
       updateMany: mockDraftUpdateMany,
     },
-    gmailWritebackQueue: {
+    emailWritebackQueue: {
       upsert: mockWritebackUpsert,
       deleteMany: mockWritebackDeleteMany,
     },

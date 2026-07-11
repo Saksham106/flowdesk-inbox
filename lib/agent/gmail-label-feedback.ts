@@ -74,7 +74,7 @@ export async function applyGmailLabelFeedback(input: {
   const removed = input.removed.filter(isFlowDeskGmailLabelName)
   if (added.length === 0 && removed.length === 0) return { applied: false, kind: "ignored" }
 
-  const latestWriteback = await prisma.gmailWritebackQueue.findUnique({
+  const latestWriteback = await prisma.emailWritebackQueue.findUnique({
     where: { conversationId_action: { conversationId: input.conversationId, action: "apply_labels" } },
     select: { id: true, status: true, providerMessageIdsJson: true },
   })
@@ -82,7 +82,7 @@ export async function applyGmailLabelFeedback(input: {
     // A completed label job can remain in the queue indefinitely. Atomically
     // consume its one expected history echo so a later identical user edit is
     // still learned as feedback.
-    const consumed = await prisma.gmailWritebackQueue.updateMany({
+    const consumed = await prisma.emailWritebackQueue.updateMany({
       where: { id: latestWriteback.id, status: "completed" },
       data: { status: "acknowledged" },
     })

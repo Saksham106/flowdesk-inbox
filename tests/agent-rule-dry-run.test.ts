@@ -33,7 +33,7 @@ vi.mock("@/lib/prisma", () => ({
     auditLog: { create: mockAuditCreate },
     autopilotSetting: { findUnique: mockAutopilotFindUnique },
     // Present only so the test can prove they are never touched:
-    gmailWritebackQueue: { upsert: mockWritebackUpsert, create: mockWritebackCreate },
+    emailWritebackQueue: { upsert: mockWritebackUpsert, create: mockWritebackCreate },
     conversationState: { update: mockConvStateUpdate },
     senderRule: { update: mockSenderRuleUpdate },
   },

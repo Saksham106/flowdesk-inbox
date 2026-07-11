@@ -9,7 +9,7 @@ const { mockDeleteMany, mockUpsert, mockAuditCreate, mockAutopilotSettingFindUni
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    gmailWritebackQueue: { deleteMany: mockDeleteMany, upsert: mockUpsert },
+    emailWritebackQueue: { deleteMany: mockDeleteMany, upsert: mockUpsert },
     auditLog: { create: mockAuditCreate },
     autopilotSetting: { findUnique: mockAutopilotSettingFindUnique },
   },

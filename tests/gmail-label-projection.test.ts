@@ -22,7 +22,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     conversation: { findFirst: mockConversationFindFirst },
     gmailLabelMapping: { findMany: mockLabelMappingFindMany },
-    gmailWritebackQueue: { upsert: mockWritebackUpsert, findUnique: mockWritebackFindUnique },
+    emailWritebackQueue: { upsert: mockWritebackUpsert, findUnique: mockWritebackFindUnique },
     auditLog: { create: mockAuditCreate },
     followUpSetting: { findUnique: mockFollowUpSettingFindUnique },
     autopilotSetting: { findUnique: mockAutopilotSettingFindUnique },

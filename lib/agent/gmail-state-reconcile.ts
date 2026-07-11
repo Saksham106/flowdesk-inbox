@@ -84,7 +84,7 @@ export async function runGmailStateReconcileCron(): Promise<GmailStateReconcileR
       continue
     }
 
-    await prisma.gmailWritebackQueue.upsert({
+    await prisma.emailWritebackQueue.upsert({
       where: {
         conversationId_action: {
           conversationId: conversation.id,

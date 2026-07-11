@@ -77,13 +77,13 @@ export async function queueGmailDraftWriteback(input: {
   const automationLevel = await getAutomationLevel(input.tenantId)
   if (!isActionAllowedAtLevel(automationLevel, "create_gmail_drafts")) return null
 
-  await prisma.gmailWritebackQueue.deleteMany({
+  await prisma.emailWritebackQueue.deleteMany({
     where: { conversationId: input.conversationId, action: GMAIL_DRAFT_WITHDRAW_ACTION },
   })
 
   const payload = { threadId: input.threadId }
 
-  const job = await prisma.gmailWritebackQueue.upsert({
+  const job = await prisma.emailWritebackQueue.upsert({
     where: {
       conversationId_action: {
         conversationId: input.conversationId,
@@ -135,11 +135,11 @@ export async function queueGmailDraftWithdrawal(input: {
   channelId: string
   conversationId: string
 }) {
-  await prisma.gmailWritebackQueue.deleteMany({
+  await prisma.emailWritebackQueue.deleteMany({
     where: { conversationId: input.conversationId, action: GMAIL_DRAFT_CREATE_ACTION },
   })
 
-  const job = await prisma.gmailWritebackQueue.upsert({
+  const job = await prisma.emailWritebackQueue.upsert({
     where: {
       conversationId_action: {
         conversationId: input.conversationId,

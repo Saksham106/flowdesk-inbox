@@ -229,7 +229,7 @@ async function runWritebackJob(job: FullWritebackJob): Promise<{ ok: boolean }> 
     } else if (job.action === "apply_labels") {
       const payload = normalizeFlowDeskLabelPayload(job.providerMessageIdsJson)
       if (!payload) {
-        await prisma.gmailWritebackQueue.update({
+        await prisma.emailWritebackQueue.update({
           where: { id: job.id },
           data: {
             status: "failed",
@@ -256,7 +256,7 @@ async function runWritebackJob(job: FullWritebackJob): Promise<{ ok: boolean }> 
     } else {
       // Retrying can never make an unknown action succeed; fail it out so it
       // doesn't sit claimed (or hot-loop as pending) forever.
-      await prisma.gmailWritebackQueue.update({
+      await prisma.emailWritebackQueue.update({
         where: { id: job.id },
         data: {
           status: "failed",
@@ -272,7 +272,7 @@ async function runWritebackJob(job: FullWritebackJob): Promise<{ ok: boolean }> 
       return { ok: false }
     }
 
-    await prisma.gmailWritebackQueue.update({
+    await prisma.emailWritebackQueue.update({
       where: { id: job.id },
       data: { status: "completed", lastError: null },
     })
@@ -284,7 +284,7 @@ async function runWritebackJob(job: FullWritebackJob): Promise<{ ok: boolean }> 
     const attempts = job.attempts + 1
     const failedOut = attempts >= GMAIL_WRITEBACK_MAX_ATTEMPTS
     const message = err instanceof Error ? err.message : "Unknown Gmail writeback error"
-    await prisma.gmailWritebackQueue
+    await prisma.emailWritebackQueue
       .update({
         where: { id: job.id },
         data: {
@@ -312,7 +312,7 @@ async function runWritebackJob(job: FullWritebackJob): Promise<{ ok: boolean }> 
 export async function processPendingGmailWritebackJobs(
   limit = 25
 ): Promise<{ processed: number; errors: number }> {
-  const jobs = await prisma.gmailWritebackQueue.findMany({
+  const jobs = await prisma.emailWritebackQueue.findMany({
     where: { status: "pending", nextAttemptAt: { lte: new Date() } },
     orderBy: { nextAttemptAt: "asc" },
     take: limit,
@@ -322,7 +322,7 @@ export async function processPendingGmailWritebackJobs(
   let errors = 0
 
   for (const job of jobs) {
-    const claim = await prisma.gmailWritebackQueue.updateMany({
+    const claim = await prisma.emailWritebackQueue.updateMany({
       where: { id: job.id, status: "pending" },
       data: { status: "processing" },
     })
@@ -343,13 +343,13 @@ export async function processPendingGmailWritebackJobs(
 // is a no-op. On failure the job is left in its normal pending/retry state
 // (or failed-out past the attempt budget) so the cron remains the backstop.
 export async function processGmailWritebackJobById(jobId: string): Promise<{ ok: boolean }> {
-  const claim = await prisma.gmailWritebackQueue.updateMany({
+  const claim = await prisma.emailWritebackQueue.updateMany({
     where: { id: jobId, status: "pending" },
     data: { status: "processing" },
   })
   if (claim.count !== 1) return { ok: false }
 
-  const job = await prisma.gmailWritebackQueue.findUnique({ where: { id: jobId } })
+  const job = await prisma.emailWritebackQueue.findUnique({ where: { id: jobId } })
   if (!job) return { ok: false }
 
   return runWritebackJob(job)

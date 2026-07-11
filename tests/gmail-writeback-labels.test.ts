@@ -18,7 +18,7 @@ const {
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    gmailWritebackQueue: {
+    emailWritebackQueue: {
       findMany: mockWritebackFindMany,
       update: mockWritebackUpdate,
       updateMany: mockWritebackUpdateMany,

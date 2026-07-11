@@ -143,7 +143,7 @@ export async function queueFlowDeskLabelWriteback(input: {
   // apply_labels queue row is the cheap proxy — so we don't spam Gmail with
   // removals for threads FlowDesk never touched.
   if (labels.length === 0) {
-    const prior = await prisma.gmailWritebackQueue.findUnique({
+    const prior = await prisma.emailWritebackQueue.findUnique({
       where: {
         conversationId_action: {
           conversationId: input.conversationId,
@@ -161,7 +161,7 @@ export async function queueFlowDeskLabelWriteback(input: {
     reason: input.reason,
   }
 
-  const job = await prisma.gmailWritebackQueue.upsert({
+  const job = await prisma.emailWritebackQueue.upsert({
     where: {
       conversationId_action: {
         conversationId: input.conversationId,

@@ -33,7 +33,7 @@ vi.mock("@/lib/prisma", () => ({
     draft: { updateMany: mockDraftUpdateMany },
     conversation: { findFirst: mockConversationFindFirst },
     auditLog: { create: mockAuditCreate },
-    gmailWritebackQueue: {
+    emailWritebackQueue: {
       upsert: mockWritebackUpsert,
       deleteMany: mockWritebackDeleteMany,
     },

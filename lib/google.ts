@@ -756,7 +756,7 @@ export async function markGmailThreadRead(
   } catch (err) {
     if (queueContext) {
       const message = errorMessage(err);
-      await prisma.gmailWritebackQueue.upsert({
+      await prisma.emailWritebackQueue.upsert({
         where: {
           conversationId_action: {
             conversationId: queueContext.conversationId,

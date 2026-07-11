@@ -80,16 +80,16 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
       where: { id: session.user.tenantId },
       select: { salesCrmEnabled: true },
     }),
-    prisma.gmailWritebackQueue.count({
+    prisma.emailWritebackQueue.count({
       where: { tenantId: session.user.tenantId, status: "pending" },
     }),
-    prisma.gmailWritebackQueue.count({
+    prisma.emailWritebackQueue.count({
       where: { tenantId: session.user.tenantId, status: "processing" },
     }),
-    prisma.gmailWritebackQueue.count({
+    prisma.emailWritebackQueue.count({
       where: { tenantId: session.user.tenantId, status: "failed" },
     }),
-    prisma.gmailWritebackQueue.findFirst({
+    prisma.emailWritebackQueue.findFirst({
       where: { tenantId: session.user.tenantId, status: "pending" },
       orderBy: { nextAttemptAt: "asc" },
       select: { nextAttemptAt: true },
