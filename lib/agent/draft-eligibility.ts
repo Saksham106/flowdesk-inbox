@@ -38,6 +38,25 @@ export async function resolveDraftEligibility(
 ): Promise<{ eligible: boolean; reason: string }> {
   const { classification } = input
 
+  const currentState = await prisma.conversationState.findUnique({
+    where: { conversationId: input.conversationId },
+    select: { metadataJson: true },
+  })
+  const currentMeta =
+    currentState?.metadataJson &&
+    typeof currentState.metadataJson === "object" &&
+    !Array.isArray(currentState.metadataJson)
+      ? (currentState.metadataJson as Record<string, unknown>)
+      : {}
+
+  // Explicit user correction always wins — the gate never overrides it.
+  if (currentMeta.attentionCorrectedByUser === true || currentMeta.userOverride === true) {
+    return {
+      eligible: true,
+      reason: "Conversation classification was explicitly corrected by the user; gate does not override it.",
+    }
+  }
+
   if (classification.emailType !== "needs_reply" || classification.confidence > FALLBACK_CONFIDENCE) {
     return { eligible: true, reason: "Classification did not hit the ambiguous fallback bucket." }
   }

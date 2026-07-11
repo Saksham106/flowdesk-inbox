@@ -152,6 +152,27 @@ describe("resolveDraftEligibility", () => {
     )
   })
 
+  it("does not override an explicit user classification correction", async () => {
+    mockFindUnique.mockResolvedValue({ metadataJson: { attentionCorrectedByUser: true } })
+
+    const result = await resolveDraftEligibility(baseInput)
+
+    expect(result.eligible).toBe(true)
+    expect(result.reason).toMatch(/explicitly corrected by the user/)
+    expect(mockRunAiJsonFeature).not.toHaveBeenCalled()
+    expect(mockUpdate).not.toHaveBeenCalled()
+  })
+
+  it("does not override a legacy userOverride correction", async () => {
+    mockFindUnique.mockResolvedValue({ metadataJson: { userOverride: true } })
+
+    const result = await resolveDraftEligibility(baseInput)
+
+    expect(result.eligible).toBe(true)
+    expect(mockRunAiJsonFeature).not.toHaveBeenCalled()
+    expect(mockUpdate).not.toHaveBeenCalled()
+  })
+
   it("respects the AI gate when it agrees a reply is needed", async () => {
     mockRunAiJsonFeature.mockResolvedValue({
       output: {

@@ -67,9 +67,12 @@ export async function proposeDraftForConversation(
   if (input.source !== "manual") {
     const firstInbound = conversation.messages.find((m) => m.direction === "inbound")
     if (firstInbound) {
+      // When a message has no body, Gmail sync stores it as "[Subject text]"
+      const bodyText = firstInbound.body
+      const subjectHint = /^\[(.+)\]$/.test(bodyText.trim()) ? bodyText.trim().slice(1, -1) : ""
       const classification = classifyEmailType({
         fromEmail: firstInbound.fromE164 ?? "",
-        subject: "",
+        subject: subjectHint,
         body: firstInbound.body,
       })
       const eligibility = await resolveDraftEligibility({
@@ -78,7 +81,7 @@ export async function proposeDraftForConversation(
         userEmail: input.userEmail ?? "",
         conversationId: conversation.id,
         classification,
-        message: { subject: "", body: firstInbound.body },
+        message: { subject: subjectHint, body: firstInbound.body },
       })
       if (!eligibility.eligible) {
         return { status: "gated_out", reason: eligibility.reason }
