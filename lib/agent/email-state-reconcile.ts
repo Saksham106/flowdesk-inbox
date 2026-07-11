@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma"
 
-export type GmailStateReconcileResult = {
+export type EmailStateReconcileResult = {
   drifted: number
   queued: number
   reconciled: number
@@ -8,21 +8,21 @@ export type GmailStateReconcileResult = {
 
 const RECONCILE_WINDOW_DAYS = 30
 
-// Local read state and raw Gmail state are stored separately (see
-// docs/CURRENT_STATE.md) so provider syncs never clobber explicit user
-// choices. That means the two can drift: a message read locally but still
-// unread in Gmail (or vice versa). Auto-reconciles drift that wasn't
-// user-initiated (userStateSource !== "user"); queues a mark_read writeback
-// for drift that was, so the user's own action reaches Gmail rather than
-// being silently overwritten.
-export async function runGmailStateReconcileCron(): Promise<GmailStateReconcileResult> {
+// Local read state and raw provider (Gmail/Outlook) state are stored
+// separately (see docs/CURRENT_STATE.md) so provider syncs never clobber
+// explicit user choices. That means the two can drift: a message read
+// locally but still unread at the provider (or vice versa). Auto-reconciles
+// drift that wasn't user-initiated (userStateSource !== "user"); queues a
+// mark_read writeback for drift that was, so the user's own action reaches
+// the provider rather than being silently overwritten.
+export async function runEmailStateReconcileCron(): Promise<EmailStateReconcileResult> {
   const cutoff = new Date(Date.now() - RECONCILE_WINDOW_DAYS * 24 * 60 * 60 * 1000)
   const driftedConversations = await prisma.conversation.findMany({
     where: {
       lastMessageAt: { gte: cutoff },
       readAt: { not: null },
       gmailUnread: true,
-      channel: { provider: "google" },
+      channel: { provider: { in: ["google", "microsoft"] } },
     },
     select: {
       id: true,
@@ -31,6 +31,7 @@ export async function runGmailStateReconcileCron(): Promise<GmailStateReconcileR
       userStateSource: true,
       readAt: true,
       gmailUnread: true,
+      channel: { select: { provider: true } },
       messages: { select: { providerMessageId: true } },
     },
     take: 100,
@@ -40,6 +41,11 @@ export async function runGmailStateReconcileCron(): Promise<GmailStateReconcileR
   let reconciled = 0
 
   for (const conversation of driftedConversations) {
+    const isMicrosoft = conversation.channel?.provider === "microsoft"
+    const driftType = isMicrosoft ? "local_read_provider_unread" : "local_read_gmail_unread"
+    const driftLastError = isMicrosoft
+      ? "Detected local read / provider unread drift"
+      : "Detected local read / Gmail unread drift"
     const providerMessageIds = conversation.messages.map((message) => message.providerMessageId)
     await prisma.auditLog.create({
       data: {
@@ -47,7 +53,7 @@ export async function runGmailStateReconcileCron(): Promise<GmailStateReconcileR
         action: "conversation_state.drift_detected",
         payloadJson: {
           conversationId: conversation.id,
-          driftType: "local_read_gmail_unread",
+          driftType,
           readAt: conversation.readAt?.toISOString(),
           gmailUnread: conversation.gmailUnread,
         },
@@ -74,7 +80,7 @@ export async function runGmailStateReconcileCron(): Promise<GmailStateReconcileR
           action: "conversation_state.auto_reconciled",
           payloadJson: {
             conversationId: conversation.id,
-            driftType: "local_read_gmail_unread",
+            driftType,
             source: conversation.userStateSource,
             reconciledAt: reconciledAt.toISOString(),
           },
@@ -98,13 +104,13 @@ export async function runGmailStateReconcileCron(): Promise<GmailStateReconcileR
         action: "mark_read",
         providerMessageIdsJson: providerMessageIds,
         attempts: 0,
-        lastError: "Detected local read / Gmail unread drift",
+        lastError: driftLastError,
         status: "pending",
         nextAttemptAt: new Date(),
       },
       update: {
         providerMessageIdsJson: providerMessageIds,
-        lastError: "Detected local read / Gmail unread drift",
+        lastError: driftLastError,
         status: "pending",
         nextAttemptAt: new Date(),
       },

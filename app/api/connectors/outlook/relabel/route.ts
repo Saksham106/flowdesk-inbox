@@ -11,22 +11,22 @@ export const runtime = "nodejs"
 
 // A one-time, user-triggered catch-up — separate from "Sync now" (which only
 // pulls new provider history and never revisits unchanged conversations).
-// Covers accounts that connected before label colors/reliability fixes
-// existed, or whose label writebacks are stuck from before those fixes
+// Covers accounts that connected before category colors/reliability fixes
+// existed, or whose category writebacks are stuck from before those fixes
 // landed. The actual per-channel work (window/batch, ensure + re-project) is
-// shared with the Outlook relabel route and the maintenance cron via
+// shared with the Gmail relabel route and the maintenance cron via
 // runRelabelCatchUp (lib/agent/email-label-reconcile.ts); this route is just
-// the session-authed, Gmail-scoped wrapper around it.
+// the session-authed, Outlook-scoped wrapper around it.
 export async function POST(_request: Request) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.tenantId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const result = await runRelabelCatchUp({ tenantId: session.user.tenantId, provider: "google" })
+  const result = await runRelabelCatchUp({ tenantId: session.user.tenantId, provider: "microsoft" })
 
   if (result.channels === 0) {
-    return NextResponse.json({ error: "No connected Gmail account found" }, { status: 404 })
+    return NextResponse.json({ error: "No connected Outlook account found" }, { status: 404 })
   }
 
   // runRelabelCatchUp/reconcileLabelsForChannel silently skips every
@@ -44,7 +44,7 @@ export async function POST(_request: Request) {
   await prisma.auditLog.create({
     data: {
       tenantId: session.user.tenantId,
-      action: "gmail.labels.relabel_requested",
+      action: "outlook.labels.relabel_requested",
       payloadJson: {
         channels: result.channels,
         labelsEnsured: result.labelsEnsured,

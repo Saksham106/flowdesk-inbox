@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma"
-import { reconcileGmailLabelsForChannel } from "@/lib/agent/gmail-label-reconcile"
+import { reconcileLabelsForChannel } from "@/lib/agent/email-label-reconcile"
 import { getAutomationLevel, isActionAllowedAtLevel, MIN_LEVEL_FOR_ACTION } from "@/lib/agent/automation-level"
 import { isFlowDeskGmailLabelName } from "@/lib/email-labels"
 
@@ -61,7 +61,7 @@ function extractQueuedLabels(payloadJson: unknown): { conversationId: string; la
 export async function runOnboardingFirstPass(tenantId: string): Promise<OnboardingFirstPassResult> {
   const channels = await prisma.channel.findMany({
     where: { tenantId, provider: "google", gmailCredential: { isNot: null } },
-    select: { id: true, tenantId: true },
+    select: { id: true, tenantId: true, provider: true },
   })
 
   if (channels.length === 0) {
@@ -82,7 +82,7 @@ export async function runOnboardingFirstPass(tenantId: string): Promise<Onboardi
 
   let errors = 0
   for (const channel of channels) {
-    const result = await reconcileGmailLabelsForChannel(channel, {
+    const result = await reconcileLabelsForChannel(channel, {
       windowDays: ONBOARDING_WINDOW_DAYS,
       batchSize: ONBOARDING_BATCH_SIZE,
     })

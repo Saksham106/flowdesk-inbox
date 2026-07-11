@@ -47,7 +47,7 @@ function request() {
   } as Request
 }
 
-describe("GET /api/cron/gmail-state-reconcile", () => {
+describe("GET /api/cron/gmail-state-reconcile (email-state-reconcile cron)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.CRON_SECRET = "cron-secret"
@@ -59,6 +59,7 @@ describe("GET /api/cron/gmail-state-reconcile", () => {
         userStateSource: "user",
         readAt: new Date("2026-06-16T00:00:00Z"),
         gmailUnread: true,
+        channel: { provider: "google" },
         messages: [{ providerMessageId: "gmail_msg-1" }],
       },
     ])
@@ -117,6 +118,7 @@ describe("GET /api/cron/gmail-state-reconcile", () => {
         userStateSource: "ai",
         readAt: new Date("2026-06-16T00:00:00Z"),
         gmailUnread: true,
+        channel: { provider: "google" },
         messages: [{ providerMessageId: "gmail_msg-2" }],
       },
     ])
@@ -149,6 +151,57 @@ describe("GET /api/cron/gmail-state-reconcile", () => {
       }),
     })
     expect(mockWritebackUpsert).not.toHaveBeenCalled()
+  })
+
+  it("queues mark_read for a user-read microsoft conversation drifted from provider unread, tagged with the provider driftType", async () => {
+    mockConversationFindMany.mockResolvedValueOnce([
+      {
+        id: "conv-3",
+        tenantId: "tenant-1",
+        channelId: "channel-2",
+        userStateSource: "user",
+        readAt: new Date("2026-06-16T00:00:00Z"),
+        gmailUnread: true,
+        channel: { provider: "microsoft" },
+        messages: [{ providerMessageId: "outlook_msg-1" }],
+      },
+    ])
+
+    const res = await GET(request())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body).toEqual({ drifted: 1, queued: 1, reconciled: 0 })
+    expect(mockAuditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tenantId: "tenant-1",
+        action: "conversation_state.drift_detected",
+        payloadJson: expect.objectContaining({
+          conversationId: "conv-3",
+          driftType: "local_read_provider_unread",
+        }),
+      }),
+    })
+    expect(mockWritebackUpsert).toHaveBeenCalledWith({
+      where: {
+        conversationId_action: {
+          conversationId: "conv-3",
+          action: "mark_read",
+        },
+      },
+      create: expect.objectContaining({
+        tenantId: "tenant-1",
+        channelId: "channel-2",
+        conversationId: "conv-3",
+        action: "mark_read",
+        providerMessageIdsJson: ["outlook_msg-1"],
+        status: "pending",
+      }),
+      update: expect.objectContaining({
+        providerMessageIdsJson: ["outlook_msg-1"],
+        status: "pending",
+      }),
+    })
   })
 
   it("rejects Bearer undefined when CRON_SECRET is unset", async () => {

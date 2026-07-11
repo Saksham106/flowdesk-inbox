@@ -22,8 +22,8 @@ vi.mock("@/lib/prisma", () => ({
   },
 }))
 
-vi.mock("@/lib/agent/gmail-label-reconcile", () => ({
-  reconcileGmailLabelsForChannel: mockReconcile,
+vi.mock("@/lib/agent/email-label-reconcile", () => ({
+  reconcileLabelsForChannel: mockReconcile,
 }))
 
 vi.mock("@/lib/agent/automation-level", () => ({

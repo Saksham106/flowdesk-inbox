@@ -53,7 +53,7 @@ vi.mock("next/server", () => {
   return { NextResponse }
 })
 
-import { POST } from "@/app/api/connectors/gmail/relabel/route"
+import { POST } from "@/app/api/connectors/outlook/relabel/route"
 
 function postRequest(body: unknown = {}) {
   return {
@@ -61,7 +61,7 @@ function postRequest(body: unknown = {}) {
   } as unknown as Request
 }
 
-describe("POST /api/connectors/gmail/relabel", () => {
+describe("POST /api/connectors/outlook/relabel", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSession = { user: { tenantId: "tenant-1" } }
@@ -83,7 +83,7 @@ describe("POST /api/connectors/gmail/relabel", () => {
     expect(mockRunRelabelCatchUp).not.toHaveBeenCalled()
   })
 
-  it("returns 404 when the tenant has no connected Gmail account", async () => {
+  it("returns 404 when the tenant has no connected Outlook account", async () => {
     mockRunRelabelCatchUp.mockResolvedValue({
       channels: 0,
       labelsEnsured: 0,
@@ -95,7 +95,7 @@ describe("POST /api/connectors/gmail/relabel", () => {
     expect(res.status).toBe(404)
   })
 
-  it("reconciles labels for every connected Gmail channel scoped to the caller's tenant", async () => {
+  it("reconciles labels for every connected Outlook channel scoped to the caller's tenant", async () => {
     const res = await POST(postRequest())
     const body = await res.json()
 
@@ -111,19 +111,16 @@ describe("POST /api/connectors/gmail/relabel", () => {
       belowAutomationLevel: false,
       minAutomationLevel: 2,
     })
-    expect(mockRunRelabelCatchUp).toHaveBeenCalledWith({ tenantId: "tenant-1", provider: "google" })
+    expect(mockRunRelabelCatchUp).toHaveBeenCalledWith({ tenantId: "tenant-1", provider: "microsoft" })
     expect(mockRevalidateInboxViews).toHaveBeenCalledWith("tenant-1")
     expect(mockAuditCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ action: "gmail.labels.relabel_requested" }),
+        data: expect.objectContaining({ action: "outlook.labels.relabel_requested" }),
       })
     )
   })
 
   it("reports belowAutomationLevel instead of a misleading 'already up to date' when the level gate is the real blocker", async () => {
-    // Regression: queued=0 was indistinguishable between "genuinely nothing to
-    // fix" and "automation level silently blocked every conversation" — the
-    // client can now tell these apart and point the user at the real fix.
     mockAutopilotSettingFindUnique.mockResolvedValue({ automationLevel: 1 })
     mockRunRelabelCatchUp.mockResolvedValue({
       channels: 1,
