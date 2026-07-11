@@ -124,6 +124,40 @@ export function summarizeCleanupCandidates(candidates: CleanupCandidate[]): Clea
   }
 }
 
+export type CleanupSourceHealth = {
+  provider: string | null
+  gmailRawState: unknown
+  stateMetadata: unknown
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+/**
+ * Whether a classified-cleanable conversation still has anything to clean in
+ * the user's real mailbox. Local `status` is NOT the signal: quiet/FYI mail is
+ * auto-closed at sync time (work-item-sync) without ever being archived in
+ * Gmail, so locally-closed conversations are usually still sitting in the
+ * user's Gmail inbox. A conversation only stops being cleanable once it was
+ * archived through Clean Inbox (`cleanInboxArchived`), archived individually
+ * (`archivedAt`), or its Gmail thread has already left INBOX.
+ */
+export function stillNeedsCleanup(source: CleanupSourceHealth): boolean {
+  const meta = asRecord(source.stateMetadata)
+  if (meta?.cleanInboxArchived === true) return false
+  if (typeof meta?.archivedAt === "string") return false
+  if (source.provider === "google") {
+    const labels = asRecord(source.gmailRawState)?.lastLabelIds
+    // Pre-gmailRawState rows have no label snapshot; keep them (archiving an
+    // already-archived thread is a harmless no-op).
+    if (Array.isArray(labels)) return labels.includes("INBOX")
+  }
+  return true
+}
+
 export async function getCleanupOverview(tenantId: string): Promise<CleanupOverview> {
   const channels = await prisma.channel.findMany({
     where: { tenantId, type: "email" },
@@ -142,12 +176,14 @@ export async function getCleanupOverview(tenantId: string): Promise<CleanupOverv
   )
 
   // Cleanable candidates: newsletters/marketing plus quietly-handled and FYI
-  // mail. The grouping helper applies the safety skip rules (never needs-reply,
+  // mail. Deliberately includes locally-closed conversations — quiet/FYI mail
+  // is auto-closed at sync time without ever leaving the user's Gmail inbox,
+  // so `stillNeedsCleanup` (not local status) decides what is still cleanable.
+  // The grouping helper applies the safety skip rules (never needs-reply,
   // waiting-on, important, or receipts), so this query stays permissive.
-  const conversations = await prisma.conversation.findMany({
+  const fetched = await prisma.conversation.findMany({
     where: {
       tenantId,
-      status: { not: "closed" },
       OR: [
         { stateRecord: { emailType: { in: ["newsletter", "marketing"] } } },
         { stateRecord: { attentionCategory: { in: ["quiet", "fyi_done"] } } },
@@ -158,6 +194,8 @@ export async function getCleanupOverview(tenantId: string): Promise<CleanupOverv
       status: true,
       userState: true,
       lastMessageAt: true,
+      gmailRawState: true,
+      channel: { select: { provider: true } },
       contact: { select: { name: true, phoneE164: true } },
       messages: { take: 1, orderBy: { createdAt: "asc" }, select: { subject: true } },
       stateRecord: {
@@ -167,6 +205,14 @@ export async function getCleanupOverview(tenantId: string): Promise<CleanupOverv
     take: 400,
     orderBy: { lastMessageAt: "desc" },
   })
+
+  const conversations = fetched.filter((c) =>
+    stillNeedsCleanup({
+      provider: c.channel?.provider ?? null,
+      gmailRawState: c.gmailRawState,
+      stateMetadata: c.stateRecord?.metadataJson,
+    })
+  )
 
   const candidates: CleanupCandidate[] = conversations.map((c) => {
     const meta =
