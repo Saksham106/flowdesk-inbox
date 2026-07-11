@@ -79,14 +79,18 @@ export default function CleanInboxClient({
 
   function navigate(next: { range?: string; group?: string }) {
     const params = new URLSearchParams(searchParams.toString())
-    for (const [key, value] of Object.entries(next)) value ? params.set(key, value) : params.delete(key)
+    for (const [key, value] of Object.entries(next)) {
+      if (value) params.set(key, value)
+      else params.delete(key)
+    }
     router.push(`${pathname}?${params.toString()}`)
   }
 
   function toggle(key: string) {
     setSelected((current) => {
       const next = new Set(current)
-      next.has(key) ? next.delete(key) : next.add(key)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }
