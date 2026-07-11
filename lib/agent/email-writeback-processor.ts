@@ -168,6 +168,12 @@ async function handleCreateDraft(
     body: draft.text,
   })
 
+  // The neutral keys below supersede any legacy Gmail-era keys still on the
+  // row; drop them so a replaced draft doesn't carry a stale gmailDraftId.
+  delete metadata.gmailDraftId
+  delete metadata.gmailDraftSourceInboundMessageId
+  delete metadata.gmailDraftSourceInboundAt
+
   await prisma.draft.update({
     where: { conversationId: job.conversationId },
     data: {

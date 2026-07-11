@@ -172,6 +172,11 @@ describe("Gmail writeback cron — draft jobs", () => {
 
     expect(mockDeleteGmailDraft).toHaveBeenCalledWith("channel-1", "old-draft")
     expect(mockCreateGmailDraftForThread).toHaveBeenCalled()
+    // The replacement writes the neutral key and drops the stale legacy id.
+    expect(mockDraftUpdate).toHaveBeenCalledWith({
+      where: { conversationId: "conv-1" },
+      data: { metadataJson: { providerDraftId: "gmail-draft-1" } },
+    })
   })
 
   it("invalidates a FlowDesk Gmail draft when a newer meaningful inbound message arrives", async () => {

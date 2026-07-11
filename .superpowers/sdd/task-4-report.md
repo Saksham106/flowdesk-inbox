@@ -121,3 +121,56 @@ leaves the same residual (`sourceInboundMessageId`/`sourceInboundAt`, or `intent
 - The HTTP cron route path is still `/api/cron/gmail-writeback` and the response header is still
   `X-Gmail-Writeback-Errors` (brief said route path unchanged). Fine for now, but a future task
   may want to rename these for provider-neutrality.
+
+---
+
+## Fix: reviewer Critical — suggest route dropped `providerDraftId` (duplicate provider drafts)
+
+### Root cause
+`app/api/conversations/[id]/draft/suggest/route.ts` rebuilds `metadataJson` from scratch on
+every (re)suggestion and only preserved the LEGACY keys (`gmailDraftId`,
+`gmailDraftSource*`). After Task 4 the writeback stamps the neutral `providerDraftId`, so a
+re-suggestion silently dropped the stored id; the next create_draft writeback found no
+existing id, skipped the delete-existing branch, and created a second mailbox draft on the
+same thread. Regression for Gmail, also hit Outlook.
+
+### Fix
+- Suggest route now computes `preservedProviderDraftId` via `providerDraftIdFromMetadata`
+  (neutral-first, legacy fallback) plus `providerDraftSourceInboundMessageId` /
+  `providerDraftSourceInboundAt` with `gmailDraftSource*` fallback, and carries them into the
+  rebuilt metadata under the NEUTRAL keys (legacy values are normalized forward). Legacy-only
+  preservation spreads removed. Round-trip (writeback stamps neutral key → suggest rebuild →
+  writeback reads it) now survives; verified by test.
+- Reviewer Minor also fixed: `handleCreateDraft`'s replace path now deletes
+  `gmailDraftId` / `gmailDraftSourceInboundMessageId` / `gmailDraftSourceInboundAt` from the
+  spread metadata before writing the neutral keys, so a replaced legacy draft doesn't retain
+  a stale `gmailDraftId` residue.
+
+### TDD evidence
+RED (before route fix), `npx vitest run tests/ai-draft-routes.test.ts`:
+```
+× preserves a neutral providerDraftId (and source keys) through the metadata rebuild on re-suggestion
+× carries a legacy gmailDraftId forward (normalized to the neutral key) on re-suggestion
+AssertionError: expected { intent: 'pricing', ... } to match object — "providerDraftId": "provider-draft-1" missing
+Tests  2 failed | 9 passed (11)
+```
+GREEN (after fix):
+```
+npx vitest run tests/ai-draft-routes.test.ts tests/gmail-writeback-drafts.test.ts tests/email-writeback-adapter.test.ts
+✓ tests/email-writeback-adapter.test.ts (6 tests)
+✓ tests/gmail-writeback-drafts.test.ts (8 tests)
+✓ tests/ai-draft-routes.test.ts (11 tests)
+Tests  25 passed (25)
+```
+
+### Covering tests added
+- `tests/ai-draft-routes.test.ts` — "preserves a neutral providerDraftId (and source keys)
+  through the metadata rebuild on re-suggestion" (asserts both `create` and `update` payloads).
+- `tests/ai-draft-routes.test.ts` — "carries a legacy gmailDraftId forward (normalized to the
+  neutral key) on re-suggestion".
+- `tests/gmail-writeback-drafts.test.ts` dedup case — new assertion that the replacement write
+  is exactly `{ providerDraftId: "gmail-draft-1" }` (stale legacy `gmailDraftId` dropped).
+
+### Verification
+- `npx tsc --noEmit` → clean.
+- `npx vitest run` → 142 files / 1194 tests pass (was 1192; +2 new suggest-route tests).

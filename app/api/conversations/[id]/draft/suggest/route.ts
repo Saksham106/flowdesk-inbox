@@ -13,7 +13,11 @@ import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import { prisma } from "@/lib/prisma"
 import { revalidateInboxViews } from "@/lib/cache-tags"
 import { conversationUpdateForDraftReady } from "@/lib/workflow-status-transitions"
-import { latestMeaningfulInboundMessage, queueGmailDraftWriteback } from "@/lib/gmail-drafts"
+import {
+  latestMeaningfulInboundMessage,
+  providerDraftIdFromMetadata,
+  queueGmailDraftWriteback,
+} from "@/lib/gmail-drafts"
 import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
 import { ensureDraftApprovalRequest } from "@/lib/agent/approvals"
 import { validateDraftWritingPreferences } from "@/lib/agent/writing-preferences"
@@ -239,6 +243,13 @@ export async function POST(
     !Array.isArray(conversation.draft.metadataJson)
       ? (conversation.draft.metadataJson as Record<string, unknown>)
       : {}
+  const preservedProviderDraftId = providerDraftIdFromMetadata(existingDraftMetadata)
+  const preservedDraftSourceInboundMessageId =
+    existingDraftMetadata.providerDraftSourceInboundMessageId ??
+    existingDraftMetadata.gmailDraftSourceInboundMessageId
+  const preservedDraftSourceInboundAt =
+    existingDraftMetadata.providerDraftSourceInboundAt ??
+    existingDraftMetadata.gmailDraftSourceInboundAt
   const metadataJson = {
     intent: result.intent,
     confidence: result.confidence,
@@ -262,14 +273,16 @@ export async function POST(
           sourceInboundAt: sourceInbound.createdAt.toISOString(),
         }
       : {}),
-    ...(typeof existingDraftMetadata.gmailDraftId === "string"
-      ? { gmailDraftId: existingDraftMetadata.gmailDraftId }
+    // Preserve the mailbox draft's recorded id + source through the rebuild
+    // (normalized to the neutral keys; legacy gmailDraft* rows fall back) so
+    // the next create_draft writeback replaces the existing provider draft
+    // instead of creating a duplicate on the same thread.
+    ...(preservedProviderDraftId ? { providerDraftId: preservedProviderDraftId } : {}),
+    ...(typeof preservedDraftSourceInboundMessageId === "string"
+      ? { providerDraftSourceInboundMessageId: preservedDraftSourceInboundMessageId }
       : {}),
-    ...(typeof existingDraftMetadata.gmailDraftSourceInboundMessageId === "string"
-      ? { gmailDraftSourceInboundMessageId: existingDraftMetadata.gmailDraftSourceInboundMessageId }
-      : {}),
-    ...(typeof existingDraftMetadata.gmailDraftSourceInboundAt === "string"
-      ? { gmailDraftSourceInboundAt: existingDraftMetadata.gmailDraftSourceInboundAt }
+    ...(typeof preservedDraftSourceInboundAt === "string"
+      ? { providerDraftSourceInboundAt: preservedDraftSourceInboundAt }
       : {}),
   }
 

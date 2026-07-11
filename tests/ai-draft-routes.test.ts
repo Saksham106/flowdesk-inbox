@@ -314,6 +314,102 @@ describe('POST /api/conversations/[id]/draft/suggest', () => {
     )
   })
 
+  it('preserves a neutral providerDraftId (and source keys) through the metadata rebuild on re-suggestion', async () => {
+    mockConversationFindFirst.mockResolvedValue({
+      ...emailConversation,
+      draft: {
+        id: 'draft1',
+        conversationId: 'conv1',
+        text: 'Old suggestion',
+        status: 'proposed',
+        metadataJson: {
+          providerDraftId: 'provider-draft-1',
+          providerDraftSourceInboundMessageId: 'message-1',
+          providerDraftSourceInboundAt: '2026-07-10T10:00:00.000Z',
+        },
+      },
+    })
+    mockGenerateDraftReply.mockResolvedValue({
+      draftText: 'Fresh reply',
+      intent: 'pricing',
+      confidence: 0.91,
+      riskLevel: 'low',
+      suggestedLabel: 'Pricing',
+      escalationReason: null,
+      model: 'gpt-test',
+    })
+    mockDraftUpsert.mockResolvedValue({
+      id: 'draft1',
+      conversationId: 'conv1',
+      text: 'Fresh reply',
+      status: 'proposed',
+      metadataJson: {},
+    })
+    mockConversationUpdate.mockResolvedValue({})
+    mockAuditCreate.mockResolvedValue({})
+
+    const res = await suggestDraft(makeReq() as never, { params: { id: 'conv1' } })
+
+    expect(res.status).toBe(200)
+    const upsertArg = mockDraftUpsert.mock.calls[0][0]
+    // The stored mailbox draft id must survive the rebuild, or the next
+    // create_draft writeback can't find/delete the existing provider draft
+    // and creates a duplicate on the same thread.
+    expect(upsertArg.create.metadataJson).toMatchObject({
+      providerDraftId: 'provider-draft-1',
+      providerDraftSourceInboundMessageId: 'message-1',
+      providerDraftSourceInboundAt: '2026-07-10T10:00:00.000Z',
+    })
+    expect(upsertArg.update.metadataJson).toMatchObject({
+      providerDraftId: 'provider-draft-1',
+    })
+  })
+
+  it('carries a legacy gmailDraftId forward (normalized to the neutral key) on re-suggestion', async () => {
+    mockConversationFindFirst.mockResolvedValue({
+      ...emailConversation,
+      draft: {
+        id: 'draft1',
+        conversationId: 'conv1',
+        text: 'Old suggestion',
+        status: 'proposed',
+        metadataJson: {
+          gmailDraftId: 'legacy-gmail-draft-1',
+          gmailDraftSourceInboundMessageId: 'message-1',
+          gmailDraftSourceInboundAt: '2026-07-10T10:00:00.000Z',
+        },
+      },
+    })
+    mockGenerateDraftReply.mockResolvedValue({
+      draftText: 'Fresh reply',
+      intent: 'pricing',
+      confidence: 0.91,
+      riskLevel: 'low',
+      suggestedLabel: 'Pricing',
+      escalationReason: null,
+      model: 'gpt-test',
+    })
+    mockDraftUpsert.mockResolvedValue({
+      id: 'draft1',
+      conversationId: 'conv1',
+      text: 'Fresh reply',
+      status: 'proposed',
+      metadataJson: {},
+    })
+    mockConversationUpdate.mockResolvedValue({})
+    mockAuditCreate.mockResolvedValue({})
+
+    const res = await suggestDraft(makeReq() as never, { params: { id: 'conv1' } })
+
+    expect(res.status).toBe(200)
+    const upsertArg = mockDraftUpsert.mock.calls[0][0]
+    expect(upsertArg.create.metadataJson).toMatchObject({
+      providerDraftId: 'legacy-gmail-draft-1',
+      providerDraftSourceInboundMessageId: 'message-1',
+      providerDraftSourceInboundAt: '2026-07-10T10:00:00.000Z',
+    })
+  })
+
   it('passes rough user instructions into generation and draft metadata', async () => {
     mockConversationFindFirst.mockResolvedValue(emailConversation)
     mockGenerateDraftReply.mockResolvedValue({
