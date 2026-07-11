@@ -18,6 +18,8 @@ const {
   mockMessageFindFirst,
   mockAgentJobUpdateMany,
   mockProjectFlowDeskLabels,
+  mockProposeDraft,
+  mockGetAutomationLevel,
 } = vi.hoisted(() => ({
   mockConversationFindFirst: vi.fn(),
   mockStateUpsert: vi.fn(),
@@ -36,6 +38,8 @@ const {
   mockMessageFindFirst: vi.fn(),
   mockAgentJobUpdateMany: vi.fn(),
   mockProjectFlowDeskLabels: vi.fn(),
+  mockProposeDraft: vi.fn(),
+  mockGetAutomationLevel: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -61,6 +65,14 @@ vi.mock("@/lib/agent/person-memory", () => ({
 
 vi.mock("@/lib/gmail-labels", () => ({
   projectFlowDeskLabelsForConversation: mockProjectFlowDeskLabels,
+}))
+
+vi.mock("@/lib/agent/draft-generation", () => ({
+  proposeDraftForConversation: mockProposeDraft,
+}))
+
+vi.mock("@/lib/agent/automation-level", () => ({
+  getAutomationLevel: mockGetAutomationLevel,
 }))
 
 import { syncConversationWorkItems } from "@/lib/agent/work-item-sync"
@@ -110,6 +122,8 @@ describe("syncConversationWorkItems", () => {
     mockMessageFindFirst.mockResolvedValue(null)
     mockAgentJobUpdateMany.mockResolvedValue({ count: 0 })
     mockProjectFlowDeskLabels.mockResolvedValue(null)
+    mockGetAutomationLevel.mockResolvedValue(2)
+    mockProposeDraft.mockResolvedValue({ status: "not_applicable", reason: "n/a" })
   })
 
   it("loads the conversation scoped to the tenant", async () => {
@@ -764,5 +778,52 @@ describe("syncConversationWorkItems", () => {
 
     expect(mockStateUpsert).toHaveBeenCalled()
     expect(mockSyncPersonMemoryWithLLM).not.toHaveBeenCalled()
+  })
+
+  describe("automatic draft trigger", () => {
+    it("proposes a draft when a conversation newly needs a reply at automation level 3+", async () => {
+      mockGetAutomationLevel.mockResolvedValue(3)
+      mockProposeDraft.mockResolvedValue({ status: "drafted", draftId: "d1" })
+      // Default fixture: firstInbound body classifies as needs_reply, and
+      // conversation.draft is null — both required for the trigger to fire.
+
+      await syncConversationWorkItems({
+        tenantId: "tenant-1",
+        conversationId: "conv-1",
+        now,
+      })
+
+      expect(mockProposeDraft).toHaveBeenCalledWith(
+        expect.objectContaining({ tenantId: "tenant-1", conversationId: "conv-1", source: "automatic" })
+      )
+    })
+
+    it("does not propose a draft below automation level 3", async () => {
+      mockGetAutomationLevel.mockResolvedValue(2)
+
+      await syncConversationWorkItems({
+        tenantId: "tenant-1",
+        conversationId: "conv-1",
+        now,
+      })
+
+      expect(mockProposeDraft).not.toHaveBeenCalled()
+    })
+
+    it("does not propose a draft when one already exists for the conversation", async () => {
+      mockGetAutomationLevel.mockResolvedValue(3)
+      mockConversationFindFirst.mockResolvedValue({
+        ...conversation,
+        draft: { id: "existing-draft" },
+      })
+
+      await syncConversationWorkItems({
+        tenantId: "tenant-1",
+        conversationId: "conv-1",
+        now,
+      })
+
+      expect(mockProposeDraft).not.toHaveBeenCalled()
+    })
   })
 })
