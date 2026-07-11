@@ -114,7 +114,8 @@ function LoginForm() {
       const result = await signIn("credentials", {
         email: signupEmail,
         password: signupPassword,
-        callbackUrl: "/home",
+        // New accounts go through the onboarding wizard; sign-in stays /home.
+        callbackUrl: "/onboarding",
         redirect: false,
       });
 
