@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   decrypt: vi.fn((value: string) => value.replace(/^enc:/, "")),
   syncWorkItems: vi.fn(),
   applyCategoryFeedback: vi.fn(),
+  clearLabelOverride: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -68,6 +69,10 @@ vi.mock("@/lib/agent/outlook-category-feedback", () => ({
   applyOutlookCategoryFeedback: mocks.applyCategoryFeedback,
 }));
 
+vi.mock("@/lib/agent/gmail-label-feedback", () => ({
+  clearGmailLabelOverride: mocks.clearLabelOverride,
+}));
+
 import { runOutlookDeltaSync } from "@/lib/outlook-sync";
 
 function message(
@@ -111,6 +116,7 @@ describe("runOutlookDeltaSync", () => {
     mocks.messageCount.mockResolvedValue(0);
     mocks.syncWorkItems.mockResolvedValue(undefined);
     mocks.applyCategoryFeedback.mockResolvedValue({ applied: false });
+    mocks.clearLabelOverride.mockResolvedValue(true);
   });
 
   it("processes nextLink pages and persists the final encrypted deltaLink", async () => {
@@ -242,6 +248,7 @@ describe("runOutlookDeltaSync", () => {
       tenantId: "tenant-1",
       conversationId: "conversation-1",
       messageCategories: ["Handled"],
+      jobNotUpdatedSince: expect.any(Date),
     });
   });
 
@@ -259,6 +266,41 @@ describe("runOutlookDeltaSync", () => {
     });
 
     expect(mocks.applyCategoryFeedback).not.toHaveBeenCalled();
+  });
+
+  it("clears the label override when a genuinely new inbound message arrives", async () => {
+    mocks.messageFindUnique.mockResolvedValue(null);
+    mocks.graphGet.mockResolvedValueOnce({
+      value: [message("message-1")],
+      "@odata.deltaLink": "https://graph.microsoft.com/final",
+    });
+
+    await runOutlookDeltaSync({
+      channelId: "channel-1",
+      tenantId: "tenant-1",
+      requestedMode: "manual",
+    });
+
+    expect(mocks.clearLabelOverride).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      conversationId: "conversation-1",
+    });
+  });
+
+  it("does not clear the label override for an updated pre-existing message", async () => {
+    mocks.messageFindUnique.mockResolvedValue({ id: "local-message" });
+    mocks.graphGet.mockResolvedValueOnce({
+      value: [message("message-1", "2026-06-24T12:00:00.000Z", { categories: ["Handled"] })],
+      "@odata.deltaLink": "https://graph.microsoft.com/final",
+    });
+
+    await runOutlookDeltaSync({
+      channelId: "channel-1",
+      tenantId: "tenant-1",
+      requestedMode: "manual",
+    });
+
+    expect(mocks.clearLabelOverride).not.toHaveBeenCalled();
   });
 
   it("flips gmailUnread to false when the last unread inbound becomes read", async () => {

@@ -17,10 +17,11 @@ vi.mock("@/lib/agent/label-feedback-core", () => ({
 
 import { applyOutlookCategoryFeedback } from "@/lib/agent/outlook-category-feedback"
 
-function settledJob(labels: string[]) {
+function settledJob(labels: string[], updatedAt = new Date("2026-06-24T11:00:00.000Z")) {
   return {
     status: "completed",
     providerMessageIdsJson: { threadId: "graph-thread-1", labels },
+    updatedAt,
   }
 }
 
@@ -91,6 +92,43 @@ describe("applyOutlookCategoryFeedback", () => {
       })
     ).resolves.toEqual({ applied: false })
     expect(mockApplyCore).not.toHaveBeenCalled()
+  })
+
+  it("skips feedback when the projection job was rewritten during the same run", async () => {
+    // Job settled at 12:00, but the delta run started at 11:00 — the payload we
+    // would diff against post-dates the snapshot and can't be trusted.
+    mockWritebackFindUnique.mockResolvedValue(
+      settledJob(["Needs Reply"], new Date("2026-06-24T12:00:00.000Z"))
+    )
+
+    await expect(
+      applyOutlookCategoryFeedback({
+        tenantId: "t1",
+        conversationId: "c1",
+        messageCategories: ["Custom"],
+        jobNotUpdatedSince: new Date("2026-06-24T11:00:00.000Z"),
+      })
+    ).resolves.toEqual({ applied: false })
+    expect(mockApplyCore).not.toHaveBeenCalled()
+  })
+
+  it("applies feedback when the job settled before the run began", async () => {
+    // Job settled at 11:00, run started at 12:00 — snapshot is trustworthy.
+    mockWritebackFindUnique.mockResolvedValue(
+      settledJob(["Needs Reply"], new Date("2026-06-24T11:00:00.000Z"))
+    )
+
+    await expect(
+      applyOutlookCategoryFeedback({
+        tenantId: "t1",
+        conversationId: "c1",
+        messageCategories: ["Custom"],
+        jobNotUpdatedSince: new Date("2026-06-24T12:00:00.000Z"),
+      })
+    ).resolves.toEqual({ applied: true })
+    expect(mockApplyCore).toHaveBeenCalledWith(
+      expect.objectContaining({ added: [], removed: ["Needs Reply"] })
+    )
   })
 
   it("does not run when the mailbox categories already match the projection", async () => {

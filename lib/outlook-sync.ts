@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto"
 
+import { clearGmailLabelOverride } from "@/lib/agent/gmail-label-feedback"
 import { applyOutlookCategoryFeedback } from "@/lib/agent/outlook-category-feedback"
 import { syncConversationWorkItems } from "@/lib/agent/work-item-sync"
 import { decryptString, encryptString } from "@/lib/crypto"
@@ -218,6 +219,17 @@ async function applyLiveMessage({
       conversationId: conversation.id,
       categories: message.categories ?? [],
     })
+  } else if (!existed && direction === "inbound") {
+    // Mirror Gmail (lib/google.ts): a genuinely NEW inbound message resets the
+    // thread context, so lift any user-edit label hold that would otherwise
+    // freeze projection forever. Best-effort; never breaks the sync run.
+    clearGmailLabelOverride({ tenantId, conversationId: conversation.id }).catch((err) => {
+      console.warn("Failed to clear label override after Outlook inbound message", {
+        tenantId,
+        conversationId: conversation.id,
+        message: err instanceof Error ? err.message : "Unknown error",
+      })
+    })
   }
   affectedConversationIds.add(conversation.id)
   return true
@@ -234,6 +246,10 @@ export async function runOutlookDeltaSync({
   requestedMode: RequestedSyncMode
   maxPages?: number
 }): Promise<OutlookDeltaSyncResult> {
+  // Timestamp before any work-item projection can (re)write an apply_labels job
+  // during this run. Category feedback compares the delta snapshot against the
+  // job payload; if the job was rewritten this run, the snapshot is stale.
+  const runStartedAt = new Date()
   const channel = await prisma.channel.findUnique({ where: { id: channelId } })
   if (
     !channel ||
@@ -351,6 +367,7 @@ export async function runOutlookDeltaSync({
         tenantId,
         conversationId: item.conversationId,
         messageCategories: item.categories,
+        jobNotUpdatedSince: runStartedAt,
       }).catch(() => undefined)
     }
 

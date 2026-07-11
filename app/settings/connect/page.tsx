@@ -103,16 +103,16 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
       select: { salesCrmEnabled: true },
     }),
     prisma.emailWritebackQueue.count({
-      where: { tenantId: session.user.tenantId, status: "pending" },
+      where: { tenantId: session.user.tenantId, status: "pending", channel: { provider: "google" } },
     }),
     prisma.emailWritebackQueue.count({
-      where: { tenantId: session.user.tenantId, status: "processing" },
+      where: { tenantId: session.user.tenantId, status: "processing", channel: { provider: "google" } },
     }),
     prisma.emailWritebackQueue.count({
-      where: { tenantId: session.user.tenantId, status: "failed" },
+      where: { tenantId: session.user.tenantId, status: "failed", channel: { provider: "google" } },
     }),
     prisma.emailWritebackQueue.findFirst({
-      where: { tenantId: session.user.tenantId, status: "pending" },
+      where: { tenantId: session.user.tenantId, status: "pending", channel: { provider: "google" } },
       orderBy: { nextAttemptAt: "asc" },
       select: { nextAttemptAt: true },
     }),

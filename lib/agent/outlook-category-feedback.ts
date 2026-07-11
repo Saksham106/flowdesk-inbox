@@ -19,14 +19,24 @@ export async function applyOutlookCategoryFeedback(input: {
   tenantId: string
   conversationId: string
   messageCategories: string[]
+  // Start of the delta run that captured `messageCategories`. If the projection
+  // job was (re)written at/after this instant, it settled during this same run
+  // with a payload that post-dates the snapshot — diffing the two would
+  // fabricate phantom corrections, so skip. Tradeoff: a genuine user edit
+  // landing in the same delta page as a classification change is skipped this
+  // run (correctness over completeness); the next delta re-observes it.
+  jobNotUpdatedSince?: Date
 }): Promise<{ applied: boolean }> {
   const job = await prisma.emailWritebackQueue.findUnique({
     where: {
       conversationId_action: { conversationId: input.conversationId, action: "apply_labels" },
     },
-    select: { status: true, providerMessageIdsJson: true },
+    select: { status: true, providerMessageIdsJson: true, updatedAt: true },
   })
   if (!job || job.status === "pending" || job.status === "processing") return { applied: false }
+  if (input.jobNotUpdatedSince && job.updatedAt >= input.jobNotUpdatedSince) {
+    return { applied: false }
+  }
 
   const payload = normalizeFlowDeskLabelPayload(job.providerMessageIdsJson)
   if (!payload) return { applied: false }
