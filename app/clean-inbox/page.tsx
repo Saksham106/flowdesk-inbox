@@ -32,6 +32,7 @@ export default async function CleanInboxPage() {
             groups={overview.groups}
             mode="archive"
             protectedOrSkipped={overview.analytics.protectedOrSkipped}
+            connectionIssue={overview.connectionIssue}
           />
         </div>
       </div>
