@@ -22,7 +22,7 @@ export default function Nav() {
   }
 
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-black/[0.08]">
+    <header className="sticky top-0 z-50 bg-white/85 backdrop-blur-md border-b border-black/[0.08]">
       <div className="max-w-6xl mx-auto px-5 sm:px-8 h-[72px] flex items-center justify-between">
         {/* Logo */}
         <Logo />
