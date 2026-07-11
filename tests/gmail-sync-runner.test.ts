@@ -62,7 +62,7 @@ const channel = {
   gmailCredential: { historyId: "history-1" },
 }
 
-function pubsubPayload(emailAddress = "owner@example.com", historyId = "history-2") {
+function pubsubPayload(emailAddress = "owner@example.com", historyId: string | number = "history-2") {
   return {
     message: {
       messageId: "pubsub-message-1",
@@ -187,6 +187,18 @@ describe("Gmail sync runner", () => {
         processedAt: expect.any(Date),
       }),
     })
+  })
+
+  it("coerces the numeric historyId Gmail actually sends to a string before persisting", async () => {
+    // Real Gmail Pub/Sub notifications carry historyId as a JSON number;
+    // GmailPushEvent.historyId is a String column.
+    await processGmailPushNotification(pubsubPayload("owner@example.com", 98765))
+
+    expect(mockPushUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ historyId: "98765" }),
+      })
+    )
   })
 
   it("does not reprocess completed Gmail push events", async () => {
