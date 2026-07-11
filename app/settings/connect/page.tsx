@@ -25,14 +25,18 @@ interface Props {
   };
 }
 
+// invalid_state / token_exchange_failed / userinfo_failed / no_email /
+// invalid_callback are emitted by BOTH the Gmail and Outlook callback routes,
+// so their copy must stay provider-neutral. Only *_denied (and missing_tokens,
+// Gmail-only) may name a provider.
 const ERROR_MESSAGES: Record<string, string> = {
   google_denied: "Google sign-in was cancelled.",
   outlook_denied: "Microsoft sign-in was cancelled.",
   invalid_state: "The authentication request expired. Please try again.",
-  token_exchange_failed: "Could not complete Google sign-in. Please try again.",
+  token_exchange_failed: "Could not complete sign-in. Please try again.",
   missing_tokens: "Google did not return the required permissions. Make sure to grant all requested scopes.",
   userinfo_failed: "Could not retrieve account info.",
-  no_email: "No email address returned from Google.",
+  no_email: "No email address was returned by the provider.",
   invalid_callback: "Invalid callback. Please try connecting again.",
 };
 

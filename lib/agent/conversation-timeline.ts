@@ -79,13 +79,70 @@ function classificationWhy(p: Payload): TimelineWhy {
   return { kind: "ai", confidence: num(p.confidence), intent: str(p.intent) }
 }
 
+type ProviderLabel = "Gmail" | "Outlook"
+
 /** Shared renderer for `{gmail,outlook}.labels.queued` — same shape, provider-named wording. */
-function labelsQueuedEntry(p: Payload, providerLabel: "Gmail" | "Outlook"): Omit<TimelineEntry, "id" | "createdAt"> {
+function labelsQueuedEntry(p: Payload, providerLabel: ProviderLabel): Omit<TimelineEntry, "id" | "createdAt"> {
   const labels = strList(p.labels)
   return {
     icon: "🏷",
     title: `Queued ${providerLabel} labels`,
     detail: labels.length > 0 ? labels.join(", ") : "Remove FlowDesk labels",
+    why: null,
+    tone: "muted",
+  }
+}
+
+/** Shared renderer for `{gmail,outlook}.writeback.completed`. */
+function writebackCompletedEntry(p: Payload, providerLabel: ProviderLabel): Omit<TimelineEntry, "id" | "createdAt"> {
+  const action = str(p.action)
+  const labels = strList(p.labels)
+  const detailParts: string[] = []
+  if (labels.length > 0) detailParts.push(labels.join(", "))
+  else if (str(p.reason)) detailParts.push(str(p.reason) as string)
+  else if (str(p.result)) detailParts.push(str(p.result) as string)
+  return {
+    icon: "🏷",
+    title: action ? `${humanize(action)} in ${providerLabel}` : `${providerLabel} action applied`,
+    detail: detailParts.length > 0 ? detailParts.join(" · ") : null,
+    why: null,
+    tone: str(p.result) === "skipped" ? "muted" : "success",
+  }
+}
+
+/** Shared renderer for `{gmail,outlook}.writeback.failed`. */
+function writebackFailedEntry(p: Payload, providerLabel: ProviderLabel): Omit<TimelineEntry, "id" | "createdAt"> {
+  const action = str(p.action)
+  const attempts = num(p.attempts)
+  const bits: string[] = []
+  if (str(p.error)) bits.push(str(p.error) as string)
+  if (attempts) bits.push(`${attempts} attempts`)
+  return {
+    icon: "⚠",
+    title: action ? `${humanize(action)} failed in ${providerLabel}` : `${providerLabel} action failed`,
+    detail: bits.length > 0 ? bits.join(" · ") : null,
+    why: null,
+    tone: "danger",
+  }
+}
+
+/** Shared renderer for `{gmail,outlook}.draft.queued`. */
+function draftQueuedEntry(providerLabel: ProviderLabel): Omit<TimelineEntry, "id" | "createdAt"> {
+  return {
+    icon: "✉",
+    title: `Draft written to ${providerLabel}`,
+    detail: null,
+    why: null,
+    tone: "muted",
+  }
+}
+
+/** Shared renderer for `{gmail,outlook}.draft.withdraw_queued`. */
+function draftWithdrawQueuedEntry(providerLabel: ProviderLabel): Omit<TimelineEntry, "id" | "createdAt"> {
+  return {
+    icon: "✉",
+    title: `Removed the ${providerLabel} draft`,
+    detail: null,
     why: null,
     tone: "muted",
   }
@@ -171,49 +228,14 @@ const MAPPERS: Record<
   }),
   "gmail.labels.queued": (p) => labelsQueuedEntry(p, "Gmail"),
   "outlook.labels.queued": (p) => labelsQueuedEntry(p, "Outlook"),
-  "gmail.writeback.completed": (p) => {
-    const action = str(p.action)
-    const labels = strList(p.labels)
-    const detailParts: string[] = []
-    if (labels.length > 0) detailParts.push(labels.join(", "))
-    else if (str(p.reason)) detailParts.push(str(p.reason) as string)
-    else if (str(p.result)) detailParts.push(str(p.result) as string)
-    return {
-      icon: "🏷",
-      title: action ? `${humanize(action)} in Gmail` : "Gmail action applied",
-      detail: detailParts.length > 0 ? detailParts.join(" · ") : null,
-      why: null,
-      tone: str(p.result) === "skipped" ? "muted" : "success",
-    }
-  },
-  "gmail.writeback.failed": (p) => {
-    const action = str(p.action)
-    const attempts = num(p.attempts)
-    const bits: string[] = []
-    if (str(p.error)) bits.push(str(p.error) as string)
-    if (attempts) bits.push(`${attempts} attempts`)
-    return {
-      icon: "⚠",
-      title: action ? `${humanize(action)} failed in Gmail` : "Gmail action failed",
-      detail: bits.length > 0 ? bits.join(" · ") : null,
-      why: null,
-      tone: "danger",
-    }
-  },
-  "gmail.draft.queued": () => ({
-    icon: "✉",
-    title: "Draft written to Gmail",
-    detail: null,
-    why: null,
-    tone: "muted",
-  }),
-  "gmail.draft.withdraw_queued": () => ({
-    icon: "✉",
-    title: "Removed the Gmail draft",
-    detail: null,
-    why: null,
-    tone: "muted",
-  }),
+  "gmail.writeback.completed": (p) => writebackCompletedEntry(p, "Gmail"),
+  "outlook.writeback.completed": (p) => writebackCompletedEntry(p, "Outlook"),
+  "gmail.writeback.failed": (p) => writebackFailedEntry(p, "Gmail"),
+  "outlook.writeback.failed": (p) => writebackFailedEntry(p, "Outlook"),
+  "gmail.draft.queued": () => draftQueuedEntry("Gmail"),
+  "outlook.draft.queued": () => draftQueuedEntry("Outlook"),
+  "gmail.draft.withdraw_queued": () => draftWithdrawQueuedEntry("Gmail"),
+  "outlook.draft.withdraw_queued": () => draftWithdrawQueuedEntry("Outlook"),
   "conversation.waiting_on_detected": () => ({
     icon: "⏳",
     title: "Marked Waiting On a reply",
