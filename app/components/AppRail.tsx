@@ -95,9 +95,9 @@ export default function AppRail(props: Props) {
         href="/home"
         aria-label="Go to FlowDesk home"
         title="FlowDesk home"
-        className="mb-3 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-blue-500 text-sm font-black text-white transition hover:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-900"
+        className="mb-3 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg transition hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-900"
       >
-        F
+        <img src="/images/landing/logo-icon.svg" alt="" className="h-8 w-8 rounded-lg" />
       </Link>
 
       {topItems.map((item) => renderItem(item.href))}

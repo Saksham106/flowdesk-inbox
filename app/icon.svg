@@ -1,3 +1,35 @@
-<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 26.6667 26.6667" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path id="Edit Square" fill-rule="evenodd" clip-rule="evenodd" d="M19.5537 0.0137803C21.4718 -0.106096 23.3631 0.559882 24.7883 1.8652C26.0937 3.29039 26.7597 5.18177 26.6531 7.1131V19.5536C26.773 21.4849 26.0937 23.3763 24.8017 24.8015C23.3765 26.1068 21.4718 26.7728 19.5537 26.6529H7.11316C5.18181 26.7728 3.29042 26.1068 1.86521 24.8015C0.559887 23.3763 -0.106096 21.4849 0.0137804 19.5536V7.1131C-0.106096 5.18177 0.559887 3.29039 1.86521 1.8652C3.29042 0.559882 5.18181 -0.106096 7.11316 0.0137803H19.5537ZM11.9748 19.7933L20.939 10.8026C21.7515 9.97681 21.7515 8.64485 20.939 7.83236L19.2074 6.10082C18.3816 5.275 17.0496 5.275 16.2238 6.10082L15.3314 7.00655C15.1982 7.13974 15.1982 7.36617 15.3314 7.49937C15.3314 7.49937 17.4492 9.60386 17.4892 9.65714C17.6357 9.81697 17.7289 10.0301 17.7289 10.2698C17.7289 10.7493 17.3427 11.1489 16.8498 11.1489C16.6234 11.1489 16.4103 11.0557 16.2638 10.9092L14.0394 8.69813C13.9328 8.59157 13.7464 8.59157 13.6398 8.69813L7.28632 15.0516C6.84677 15.4911 6.59369 16.0772 6.58037 16.7032L6.50046 19.8599C6.50046 20.0331 6.55373 20.1929 6.67361 20.3128C6.79349 20.4327 6.95332 20.4993 7.12648 20.4993H10.2566C10.8959 20.4993 11.5086 20.2462 11.9748 19.7933Z" fill="var(--fill-0, black)"/>
-</svg>
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="a-bg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#fdfdfe"></stop>
+            <stop offset="1" stop-color="#eef1f8"></stop>
+          </linearGradient>
+          <linearGradient id="a-tower" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#e8a9a4"></stop>
+            <stop offset="0.45" stop-color="#b9b4de"></stop>
+            <stop offset="1" stop-color="#9db4e0"></stop>
+          </linearGradient>
+          <linearGradient id="a-beamL" x1="1" y1="0.5" x2="0" y2="0.5">
+            <stop offset="0" stop-color="#ffd98a" stop-opacity="0.95"></stop>
+            <stop offset="1" stop-color="#ffd98a" stop-opacity="0"></stop>
+          </linearGradient>
+          <linearGradient id="a-beamR" x1="0" y1="0.5" x2="1" y2="0.5">
+            <stop offset="0" stop-color="#ffd98a" stop-opacity="0.95"></stop>
+            <stop offset="1" stop-color="#ffd98a" stop-opacity="0"></stop>
+          </linearGradient>
+          <radialGradient id="a-glow" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stop-color="#ffe9b3" stop-opacity="0.9"></stop>
+            <stop offset="1" stop-color="#ffe9b3" stop-opacity="0"></stop>
+          </radialGradient>
+        </defs>
+        <rect width="120" height="120" rx="26" fill="url(#a-bg)"></rect>
+        <polygon points="52,42 8,28 8,56" fill="url(#a-beamL)"></polygon>
+        <polygon points="68,42 112,28 112,56" fill="url(#a-beamR)"></polygon>
+        <circle cx="60" cy="42" r="26" fill="url(#a-glow)"></circle>
+        <polygon points="52,54 68,54 76,100 44,100" fill="url(#a-tower)"></polygon>
+        <rect x="49" y="34" width="22" height="16" rx="4" fill="#f3c98d"></rect>
+        <rect x="46" y="50" width="28" height="6" rx="3" fill="#a9a6d6"></rect>
+        <polygon points="60,20 72,34 48,34" fill="#e39a94"></polygon>
+        <circle cx="60" cy="42" r="4.5" fill="#fff3cf"></circle>
+        <rect x="36" y="100" width="48" height="6" rx="3" fill="#b7c6e6"></rect>
+      </svg>
