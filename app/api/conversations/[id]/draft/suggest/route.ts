@@ -19,6 +19,7 @@ import {
   queueGmailDraftWriteback,
 } from "@/lib/gmail-drafts"
 import { projectFlowDeskLabelsForConversation } from "@/lib/email-labels"
+import { supportsMailboxWriteback } from "@/lib/email/provider-support"
 import { ensureDraftApprovalRequest } from "@/lib/agent/approvals"
 import { validateDraftWritingPreferences } from "@/lib/agent/writing-preferences"
 
@@ -326,7 +327,7 @@ export async function POST(
   // Push the draft into the user's mailbox so it's waiting when they open the
   // thread, and project the Autodrafted/Needs Reply labels. Best-effort: a
   // provider hiccup must not fail the draft suggestion the user just requested.
-  if (conversation.channel.provider === "google" && conversation.externalThreadId) {
+  if (supportsMailboxWriteback(conversation.channel.provider) && conversation.externalThreadId) {
     try {
       await queueGmailDraftWriteback({
         tenantId: session.user.tenantId,

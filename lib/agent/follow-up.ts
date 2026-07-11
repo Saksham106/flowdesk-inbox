@@ -237,7 +237,7 @@ export async function runFollowUpLabelSweep(now = new Date()): Promise<FollowUpL
       OR: [{ status: "in_progress" }, { userState: "waiting_on" }],
       lastMessageAt: { lt: coarseCutoff },
       externalThreadId: { not: "" },
-      channel: { provider: "google" },
+      channel: { provider: { in: ["google", "microsoft"] } },
     },
     select: { id: true, tenantId: true, lastMessageAt: true },
     orderBy: { lastMessageAt: "asc" },

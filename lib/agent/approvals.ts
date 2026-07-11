@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { queueGmailDraftWithdrawal } from "@/lib/gmail-drafts"
+import { supportsMailboxWriteback } from "@/lib/email/provider-support"
 
 /**
  * ApprovalRequest is the single approval primitive (audit P2-3 / §9d): every
@@ -122,7 +123,7 @@ export async function projectDecisionOntoDraft(input: {
     where: { id: input.conversationId, tenantId: input.tenantId },
     select: { channelId: true, channel: { select: { provider: true } } },
   })
-  if (conversation?.channel?.provider === "google") {
+  if (conversation && supportsMailboxWriteback(conversation.channel.provider)) {
     await queueGmailDraftWithdrawal({
       tenantId: input.tenantId,
       channelId: conversation.channelId,

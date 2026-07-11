@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { markGmailThreadRead } from "@/lib/google";
+import { getWritebackAdapter } from "@/lib/email/writeback-adapter";
+import { supportsMailboxWriteback } from "@/lib/email/provider-support";
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata";
 import { revalidateInboxViews } from "@/lib/cache-tags";
 import { conversationUpdateForWorkflowStatus } from "@/lib/workflow-status-transitions";
@@ -101,7 +102,9 @@ export async function PATCH(
     },
   });
 
-  if (status === "closed" && conversation.channelId) {
+  const adapter = getWritebackAdapter(conversation.channel.provider);
+
+  if (status === "closed" && conversation.channelId && adapter) {
     const messages = await prisma.message.findMany({
       where: { conversationId: params.id },
       select: { providerMessageId: true },
@@ -110,18 +113,18 @@ export async function PATCH(
       where: { conversationId: params.id },
       data: { isRead: true },
     });
-    markGmailThreadRead(conversation.channelId, messages.map((message) => message.providerMessageId), {
+    adapter.markConversationRead(conversation.channelId, messages.map((message) => message.providerMessageId), {
       tenantId: session.user.tenantId,
       conversationId: params.id,
     }).catch((err) => {
-      console.warn("Failed to mark Gmail thread read after status update", {
+      console.warn("Failed to mark thread read after status update", {
         conversationId: params.id,
         message: err instanceof Error ? err.message : "Unknown error",
       });
     });
   }
 
-  if (conversation.channel.provider === "google") {
+  if (supportsMailboxWriteback(conversation.channel.provider) && conversation.externalThreadId) {
     await queueFlowDeskLabelWriteback({
       tenantId: session.user.tenantId,
       channelId: conversation.channelId,

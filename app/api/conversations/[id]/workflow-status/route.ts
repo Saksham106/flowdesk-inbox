@@ -14,6 +14,7 @@ import {
   queueFlowDeskLabelWriteback,
 } from "@/lib/email-labels"
 import { queueGmailDraftWithdrawal } from "@/lib/gmail-drafts"
+import { supportsMailboxWriteback } from "@/lib/email/provider-support"
 
 const SETTABLE_STATUSES = new Set(["needs_reply", "waiting_on", "read_later", "done"])
 
@@ -70,7 +71,7 @@ export async function PATCH(
     })
   }
 
-  if (conversation.channel.provider === "google") {
+  if (supportsMailboxWriteback(conversation.channel.provider) && conversation.externalThreadId) {
     await queueFlowDeskLabelWriteback({
       tenantId: session.user.tenantId,
       channelId: conversation.channelId,
