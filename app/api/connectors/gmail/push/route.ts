@@ -19,6 +19,7 @@ export async function POST(request: Request) {
     return NextResponse.json(result)
   } catch (err) {
     const message = err instanceof Error ? err.message : "Gmail push processing failed"
+    console.error("[gmail-push] processing failed:", err)
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

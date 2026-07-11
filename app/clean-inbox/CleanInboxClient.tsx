@@ -1,6 +1,7 @@
 "use client"
 import { useMemo, useState } from "react"
 import Link from "next/link"
+import type { CleanupConnectionIssue } from "@/lib/cleanup-candidates"
 
 export type SenderGroupView = {
   senderEmail: string
@@ -26,11 +27,13 @@ export default function CleanInboxClient({
   mode = "archive",
   protectedOrSkipped = 0,
   noUnsubscribeLinkCount = 0,
+  connectionIssue = null,
 }: {
   groups: SenderGroupView[]
   mode?: "archive" | "unsubscribe"
   protectedOrSkipped?: number
   noUnsubscribeLinkCount?: number
+  connectionIssue?: CleanupConnectionIssue | null
 }) {
   const [status, setStatus] = useState<Record<string, GroupStatus>>({})
 
@@ -91,6 +94,8 @@ export default function CleanInboxClient({
             {totalEmails.toLocaleString()} email{totalEmails === 1 ? "" : "s"} from{" "}
             {remainingSenders} sender{remainingSenders === 1 ? "" : "s"}.
           </p>
+        ) : connectionIssue ? (
+          <p className="mt-1 text-sm text-slate-500">Waiting for your inbox to sync.</p>
         ) : (
           <p className="mt-1 text-sm text-slate-500">Nothing left to clean up.</p>
         )}
@@ -101,7 +106,9 @@ export default function CleanInboxClient({
         </p>
       </div>
 
-      {groups.length === 0 ? (
+      {groups.length === 0 && connectionIssue ? (
+        <ConnectionIssueCard issue={connectionIssue} />
+      ) : groups.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
           <p className="text-sm font-medium text-slate-700">Your inbox looks clean.</p>
           {mode === "unsubscribe" && noUnsubscribeLinkCount > 0 ? (
@@ -140,6 +147,53 @@ export default function CleanInboxClient({
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+const CONNECTION_ISSUE_COPY: Record<
+  CleanupConnectionIssue,
+  { title: string; detail: string; cta: string; href: string }
+> = {
+  not_connected: {
+    title: "No email account connected.",
+    detail: "Connect Gmail so FlowDesk can find newsletters and marketing mail to clean up.",
+    cta: "Connect Gmail",
+    href: "/api/connectors/gmail/connect",
+  },
+  auth_error: {
+    title: "Your Gmail connection has expired.",
+    detail:
+      "FlowDesk can't see your inbox right now, so there's nothing to clean up yet. Reconnect to resume syncing.",
+    cta: "Reconnect Gmail",
+    href: "/api/connectors/gmail/connect",
+  },
+  sync_error: {
+    title: "Email sync is failing.",
+    detail: "The last sync hit an error, so this list may be empty or out of date.",
+    cta: "Open Settings",
+    href: "/settings",
+  },
+  never_synced: {
+    title: "Your inbox hasn't synced yet.",
+    detail: "Run a sync so FlowDesk can group newsletters and marketing mail by sender.",
+    cta: "Open Settings",
+    href: "/settings",
+  },
+}
+
+function ConnectionIssueCard({ issue }: { issue: CleanupConnectionIssue }) {
+  const copy = CONNECTION_ISSUE_COPY[issue]
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-8 text-center">
+      <p className="text-sm font-medium text-amber-800">{copy.title}</p>
+      <p className="mt-1 text-xs text-amber-700">{copy.detail}</p>
+      <a
+        href={copy.href}
+        className="mt-4 inline-block rounded-lg border border-amber-300 bg-white px-4 py-2 text-xs font-medium text-amber-800 hover:bg-amber-100"
+      >
+        {copy.cta}
+      </a>
     </div>
   )
 }

@@ -34,13 +34,45 @@ export type CleanupAnalytics = {
   topDomains: [string, number][]
 }
 
-export type CleanupOverview = {
+export type CleanupSummary = {
   groups: CleanupGroupView[]
   unsubscribeGroups: CleanupGroupView[]
   analytics: CleanupAnalytics
 }
 
-export function summarizeCleanupCandidates(candidates: CleanupCandidate[]): CleanupOverview {
+export type CleanupConnectionIssue = "not_connected" | "auth_error" | "sync_error" | "never_synced"
+
+export type CleanupOverview = CleanupSummary & {
+  connectionIssue: CleanupConnectionIssue | null
+}
+
+export type EmailChannelHealth = {
+  provider: string
+  lastSyncedAt: Date | null
+  lastSyncError: string | null
+}
+
+const AUTH_ERROR_PATTERN = /invalid_grant|expired|revoked/i
+
+/**
+ * Why the cleanup pages may have nothing to show even though the user's real
+ * inbox is full: no email channel, a dead OAuth grant, a failing sync, or a
+ * connection that has never completed a sync. Distinguishing these from a
+ * genuinely clean inbox lets the empty state say "reconnect Gmail" instead of
+ * the misleading "your inbox looks clean".
+ */
+export function cleanupConnectionIssue(
+  channels: EmailChannelHealth[]
+): CleanupConnectionIssue | null {
+  if (channels.length === 0) return "not_connected"
+  if (channels.some((c) => c.lastSyncedAt && !c.lastSyncError)) return null
+  const errors = channels.flatMap((c) => (c.lastSyncError ? [c.lastSyncError] : []))
+  if (errors.some((e) => AUTH_ERROR_PATTERN.test(e))) return "auth_error"
+  if (errors.length > 0) return "sync_error"
+  return "never_synced"
+}
+
+export function summarizeCleanupCandidates(candidates: CleanupCandidate[]): CleanupSummary {
   const groups: CleanupGroupView[] = groupCleanupBySender(candidates).map((g) => ({
     senderEmail: g.senderEmail,
     senderName: g.senderName,
@@ -93,6 +125,22 @@ export function summarizeCleanupCandidates(candidates: CleanupCandidate[]): Clea
 }
 
 export async function getCleanupOverview(tenantId: string): Promise<CleanupOverview> {
+  const channels = await prisma.channel.findMany({
+    where: { tenantId, type: "email" },
+    select: {
+      provider: true,
+      gmailCredential: { select: { lastSyncedAt: true, lastSyncError: true } },
+      outlookCredential: { select: { lastSyncedAt: true, lastSyncError: true } },
+    },
+  })
+  const connectionIssue = cleanupConnectionIssue(
+    channels.map((c) => ({
+      provider: c.provider,
+      lastSyncedAt: c.gmailCredential?.lastSyncedAt ?? c.outlookCredential?.lastSyncedAt ?? null,
+      lastSyncError: c.gmailCredential?.lastSyncError ?? c.outlookCredential?.lastSyncError ?? null,
+    }))
+  )
+
   // Cleanable candidates: newsletters/marketing plus quietly-handled and FYI
   // mail. The grouping helper applies the safety skip rules (never needs-reply,
   // waiting-on, important, or receipts), so this query stays permissive.
@@ -141,5 +189,5 @@ export async function getCleanupOverview(tenantId: string): Promise<CleanupOverv
     }
   })
 
-  return summarizeCleanupCandidates(candidates)
+  return { ...summarizeCleanupCandidates(candidates), connectionIssue }
 }

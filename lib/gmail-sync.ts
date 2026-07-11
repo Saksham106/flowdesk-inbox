@@ -212,10 +212,12 @@ export async function processGmailPushNotification(payload: unknown): Promise<Gm
 
   const notification = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as {
     emailAddress?: string
-    historyId?: string
+    // Gmail sends historyId as a JSON number; tests and manual pushes may send a string
+    historyId?: string | number
   }
   const emailAddress = notification.emailAddress?.toLowerCase()
   if (!emailAddress) throw new Error("Missing Gmail notification emailAddress")
+  const notifiedHistoryId = notification.historyId != null ? String(notification.historyId) : null
 
   const channel = await prisma.channel.findFirst({
     where: { emailAddress, type: "email", provider: "google" },
@@ -236,7 +238,7 @@ export async function processGmailPushNotification(payload: unknown): Promise<Gm
     create: {
       tenantId: channel.tenantId,
       channelId: channel.id,
-      historyId: notification.historyId ?? null,
+      historyId: notifiedHistoryId,
       messageId,
       status: "processing",
       error: null,
