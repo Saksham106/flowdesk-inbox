@@ -20,6 +20,10 @@ const faqs = [
     q: "Which channels does Flowdesk support?",
     a: "At launch, Flowdesk supports email and SMS/text via a dedicated phone number. More channels are on the roadmap.",
   },
+  {
+    q: "How does Flowdesk use my Gmail data?",
+    a: "Flowdesk connects to Gmail through Google OAuth to read and classify your inbox, apply labels, and create drafts and replies that you approve. Your email is never sold, never used for advertising, and never used to train AI models, and you can disconnect at any time to delete your synced data. See our Privacy Policy for the full details.",
+  },
 ];
 
 function FAQItem({ q, a }: { q: string; a: string }) {
