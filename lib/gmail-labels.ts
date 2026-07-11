@@ -70,6 +70,13 @@ export function isFlowDeskGmailLabelName(label: string): label is FlowDeskGmailL
   return FLOWDESK_GMAIL_LABEL_SET.has(label)
 }
 
+// Neutral aliases: the taxonomy applies to any mailbox provider (Gmail labels,
+// Outlook categories). New code should use these; the Gmail-suffixed names
+// remain for existing imports.
+export const FLOWDESK_LABEL_NAMES = FLOWDESK_GMAIL_LABEL_NAMES
+export type FlowDeskLabelName = FlowDeskGmailLabelName
+export const isFlowDeskLabelName = isFlowDeskGmailLabelName
+
 export function flowDeskLabelsForConversationState(input: {
   workflowStatus: WorkflowStatus
   draftStatus?: string | null
