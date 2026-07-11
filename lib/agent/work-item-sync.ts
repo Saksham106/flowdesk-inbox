@@ -458,12 +458,12 @@ export async function syncConversationWorkItems(
   let detectedEmailType: string | null = null
   let detectedAttentionCategory: string | null = null
   let emailClassification: ReturnType<typeof classifyEmailType> | null = null
-  const firstInbound = conversation.messages.find((m) => m.direction === "inbound")
+  const firstInbound = [...conversation.messages].reverse().find((m) => m.direction === "inbound")
   if (firstInbound) {
     const fromEmail = extractEmail(firstInbound.fromE164 ?? "")
     const bodyText = firstInbound.body
     // When a message has no body, Gmail sync stores it as "[Subject text]"
-    const subjectHint = /^\[(.+)\]$/.test(bodyText.trim()) ? bodyText.trim().slice(1, -1) : ""
+    const subjectHint = firstInbound.subject ?? (/^\[(.+)\]$/.test(bodyText.trim()) ? bodyText.trim().slice(1, -1) : "")
     emailClassification = classifyEmailType({
       fromEmail,
       subject: subjectHint,
