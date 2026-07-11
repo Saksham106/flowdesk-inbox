@@ -40,7 +40,7 @@ export async function resolveDraftEligibility(
 
   const currentState = await prisma.conversationState.findUnique({
     where: { conversationId: input.conversationId },
-    select: { metadataJson: true },
+    select: { metadataJson: true, attentionCategory: true },
   })
   const currentMeta =
     currentState?.metadataJson &&
@@ -51,8 +51,10 @@ export async function resolveDraftEligibility(
 
   // Explicit user correction always wins — the gate never overrides it.
   if (currentMeta.attentionCorrectedByUser === true || currentMeta.userOverride === true) {
+    const correctedToNeedsReply =
+      !currentState?.attentionCategory || currentState.attentionCategory === "needs_reply"
     return {
-      eligible: true,
+      eligible: correctedToNeedsReply,
       reason: "Conversation classification was explicitly corrected by the user; gate does not override it.",
     }
   }
@@ -127,7 +129,11 @@ async function retagConversation(
 
   await prisma.conversationState.update({
     where: { conversationId: input.conversationId },
-    data: { metadataJson: updatedMeta },
+    data: {
+      metadataJson: updatedMeta,
+      emailType: correction.emailType,
+      attentionCategory: correction.attentionCategory,
+    },
   })
 
   await projectFlowDeskLabelsForConversation({

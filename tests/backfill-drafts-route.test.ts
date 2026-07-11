@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const { mockGetServerSession, mockFindMany, mockProposeDraft } = vi.hoisted(() => ({
+const { mockGetServerSession, mockFindMany, mockProposeDraft, mockGetAutomationLevel } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockFindMany: vi.fn(),
   mockProposeDraft: vi.fn(),
+  mockGetAutomationLevel: vi.fn(),
 }))
 
 vi.mock("next-auth", () => ({ getServerSession: mockGetServerSession }))
 vi.mock("@/lib/auth", () => ({ authOptions: {} }))
 vi.mock("@/lib/prisma", () => ({ prisma: { conversation: { findMany: mockFindMany } } }))
 vi.mock("@/lib/agent/draft-generation", () => ({ proposeDraftForConversation: mockProposeDraft }))
+vi.mock("@/lib/agent/automation-level", () => ({ getAutomationLevel: mockGetAutomationLevel }))
 
 const { POST } = await import("@/app/api/autopilot-settings/backfill-drafts/route")
 
@@ -17,12 +19,20 @@ describe("POST /api/autopilot-settings/backfill-drafts", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetServerSession.mockResolvedValue({ user: { tenantId: "t1", id: "u1", email: "a@b.com" } })
+    mockGetAutomationLevel.mockResolvedValue(3)
   })
 
   it("returns 401 when unauthenticated", async () => {
     mockGetServerSession.mockResolvedValue(null)
     const res = await POST(new Request("http://x", { method: "POST", body: JSON.stringify({ scope: "all" }) }))
     expect(res.status).toBe(401)
+  })
+
+  it("returns 403 when automation level is below 3", async () => {
+    mockGetAutomationLevel.mockResolvedValue(2)
+    const res = await POST(new Request("http://x", { method: "POST", body: JSON.stringify({ scope: "all" }) }))
+    expect(res.status).toBe(403)
+    expect(mockFindMany).not.toHaveBeenCalled()
   })
 
   it("proposes a draft for each needs_reply conversation without an existing draft, scope all", async () => {

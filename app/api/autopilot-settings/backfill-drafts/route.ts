@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { proposeDraftForConversation } from "@/lib/agent/draft-generation"
+import { getAutomationLevel } from "@/lib/agent/automation-level"
 
 export const runtime = "nodejs"
 
@@ -13,6 +14,10 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.tenantId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  if (await getAutomationLevel(session.user.tenantId) < 3) {
+    return NextResponse.json({ error: "Draft backfill requires automation level 3 or higher" }, { status: 403 })
   }
 
   const body = await request.json().catch(() => ({}))

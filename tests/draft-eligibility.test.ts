@@ -109,6 +109,8 @@ describe("resolveDraftEligibility", () => {
       expect.objectContaining({
         where: { conversationId: "conv-1" },
         data: expect.objectContaining({
+          emailType: "newsletter",
+          attentionCategory: "read_later",
           metadataJson: expect.objectContaining({
             emailType: "newsletter",
             attentionCategory: "read_later",
@@ -146,6 +148,8 @@ describe("resolveDraftEligibility", () => {
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
+          emailType: "fyi",
+          attentionCategory: "quiet",
           metadataJson: expect.objectContaining({ emailType: "fyi", attentionCategory: "quiet" }),
         }),
       })
@@ -153,12 +157,28 @@ describe("resolveDraftEligibility", () => {
   })
 
   it("does not override an explicit user classification correction", async () => {
-    mockFindUnique.mockResolvedValue({ metadataJson: { attentionCorrectedByUser: true } })
+    mockFindUnique.mockResolvedValue({
+      attentionCategory: "needs_reply",
+      metadataJson: { attentionCorrectedByUser: true },
+    })
 
     const result = await resolveDraftEligibility(baseInput)
 
     expect(result.eligible).toBe(true)
     expect(result.reason).toMatch(/explicitly corrected by the user/)
+    expect(mockRunAiJsonFeature).not.toHaveBeenCalled()
+    expect(mockUpdate).not.toHaveBeenCalled()
+  })
+
+  it("does not draft when the user explicitly corrected the conversation away from needs reply", async () => {
+    mockFindUnique.mockResolvedValue({
+      attentionCategory: "read_later",
+      metadataJson: { attentionCorrectedByUser: true },
+    })
+
+    const result = await resolveDraftEligibility(baseInput)
+
+    expect(result.eligible).toBe(false)
     expect(mockRunAiJsonFeature).not.toHaveBeenCalled()
     expect(mockUpdate).not.toHaveBeenCalled()
   })

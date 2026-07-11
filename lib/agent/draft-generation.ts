@@ -64,24 +64,39 @@ export async function proposeDraftForConversation(
     return { status: "not_applicable", reason: "AI drafts are only available for email conversations" }
   }
 
+  let userId = input.userId
+  let userEmail = input.userEmail ?? ""
+  if (!userId) {
+    const tenantUser = await prisma.user.findFirst({
+      where: { tenantId: input.tenantId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, email: true },
+    })
+    if (!tenantUser) {
+      return { status: "not_applicable", reason: "No tenant user is available for AI draft generation" }
+    }
+    userId = tenantUser.id
+    userEmail = tenantUser.email
+  }
+
   if (input.source !== "manual") {
-    const firstInbound = conversation.messages.find((m) => m.direction === "inbound")
-    if (firstInbound) {
+    const latestInbound = [...conversation.messages].reverse().find((m) => m.direction === "inbound")
+    if (latestInbound) {
       // When a message has no body, Gmail sync stores it as "[Subject text]"
-      const bodyText = firstInbound.body
-      const subjectHint = /^\[(.+)\]$/.test(bodyText.trim()) ? bodyText.trim().slice(1, -1) : ""
+      const bodyText = latestInbound.body
+      const subjectHint = latestInbound.subject ?? (/^\[(.+)\]$/.test(bodyText.trim()) ? bodyText.trim().slice(1, -1) : "")
       const classification = classifyEmailType({
-        fromEmail: firstInbound.fromE164 ?? "",
+        fromEmail: latestInbound.fromE164 ?? "",
         subject: subjectHint,
-        body: firstInbound.body,
+        body: latestInbound.body,
       })
       const eligibility = await resolveDraftEligibility({
         tenantId: input.tenantId,
-        userId: input.userId ?? "",
-        userEmail: input.userEmail ?? "",
+        userId,
+        userEmail,
         conversationId: conversation.id,
         classification,
-        message: { subject: subjectHint, body: firstInbound.body },
+        message: { subject: subjectHint, body: latestInbound.body },
       })
       if (!eligibility.eligible) {
         return { status: "gated_out", reason: eligibility.reason }
@@ -135,8 +150,8 @@ export async function proposeDraftForConversation(
 
       const { output, model } = await runAiJsonFeature<Record<string, unknown>>({
         tenantId: input.tenantId,
-        userId: input.userId ?? "",
-        userEmail: input.userEmail ?? "",
+        userId,
+        userEmail,
         feature: "autopilot.draft",
         messages: [{ role: "user", content: prompt }],
         schemaName: "flowdesk_draft_reply",
@@ -161,7 +176,7 @@ export async function proposeDraftForConversation(
         : undefined
 
       const draftInput = {
-        aiContext: { tenantId: input.tenantId, userId: input.userId ?? "", userEmail: input.userEmail ?? "" },
+        aiContext: { tenantId: input.tenantId, userId, userEmail },
         businessProfile: context.businessProfile,
         knowledgeDocuments: context.knowledgeDocuments,
         learnedReplyProfile: context.learnedProfile,
@@ -205,8 +220,8 @@ export async function proposeDraftForConversation(
         })
         const { output, model } = await runAiJsonFeature<Record<string, unknown>>({
           tenantId: input.tenantId,
-          userId: input.userId ?? "",
-          userEmail: input.userEmail ?? "",
+          userId,
+          userEmail,
           feature: "autopilot.draft",
           messages: [{ role: "user", content: retryPrompt }],
           schemaName: "flowdesk_draft_reply",
@@ -217,7 +232,7 @@ export async function proposeDraftForConversation(
         result = normalizeDraftReplyOutput(JSON.stringify(output), model)
       } else if (context.businessProfile) {
         result = await generateDraftReply({
-          aiContext: { tenantId: input.tenantId, userId: input.userId ?? "", userEmail: input.userEmail ?? "" },
+          aiContext: { tenantId: input.tenantId, userId, userEmail },
           businessProfile: context.businessProfile,
           knowledgeDocuments: context.knowledgeDocuments,
           learnedReplyProfile: context.learnedProfile,

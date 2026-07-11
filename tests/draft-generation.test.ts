@@ -12,6 +12,7 @@ const {
   mockGetReplyContext,
   mockGenerateDraftReply,
   mockRunAiJsonFeature,
+  mockFindFirstUser,
 } = vi.hoisted(() => ({
   mockFindFirstConversation: vi.fn(),
   mockUpsertDraft: vi.fn(),
@@ -24,6 +25,7 @@ const {
   mockGetReplyContext: vi.fn(),
   mockGenerateDraftReply: vi.fn(),
   mockRunAiJsonFeature: vi.fn(),
+  mockFindFirstUser: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -32,6 +34,7 @@ vi.mock("@/lib/prisma", () => ({
     draft: { upsert: mockUpsertDraft },
     auditLog: { create: mockAuditCreate },
     agentJob: { findFirst: vi.fn().mockResolvedValue(null) },
+    user: { findFirst: mockFindFirstUser },
   },
 }))
 vi.mock("@/lib/agent/approvals", () => ({ ensureDraftApprovalRequest: mockEnsureApproval }))
@@ -98,6 +101,7 @@ describe("proposeDraftForConversation", () => {
       model: "test-model",
     })
     mockResolveEligibility.mockResolvedValue({ eligible: true, reason: "ok" })
+    mockFindFirstUser.mockResolvedValue({ id: "u1", email: "user@example.com" })
     mockUpsertDraft.mockResolvedValue({ id: "draft-1", text: "Tuesday works for me.", status: "proposed" })
     mockUpdateConversation.mockResolvedValue({})
     mockAuditCreate.mockResolvedValue({})
@@ -140,6 +144,69 @@ describe("proposeDraftForConversation", () => {
     expect(result.status).toBe("drafted")
     expect(mockUpsertDraft).toHaveBeenCalled()
     expect(mockQueueWriteback).toHaveBeenCalled()
+  })
+
+  it("resolves tenant user context for automatic AI calls", async () => {
+    await proposeDraftForConversation({
+      tenantId: "t1",
+      conversationId: "conv-1",
+      source: "automatic",
+    })
+
+    expect(mockFindFirstUser).toHaveBeenCalledWith({
+      where: { tenantId: "t1" },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, email: true },
+    })
+    expect(mockResolveEligibility).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "u1", userEmail: "user@example.com" })
+    )
+    expect(mockRunAiJsonFeature).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "u1", userEmail: "user@example.com" })
+    )
+  })
+
+  it("checks eligibility against the latest inbound message", async () => {
+    mockFindFirstConversation.mockResolvedValue({
+      id: "conv-1",
+      tenantId: "t1",
+      channelId: "ch1",
+      contactId: null,
+      channel: { type: "email", provider: "google" },
+      externalThreadId: "thread-1",
+      messages: [
+        {
+          direction: "inbound",
+          subject: "Old promotion",
+          body: "Shop our launch sale",
+          createdAt: new Date("2026-01-01"),
+          providerMessageId: "m1",
+        },
+        {
+          direction: "outbound",
+          subject: "Re: Old promotion",
+          body: "Thanks",
+          createdAt: new Date("2026-01-02"),
+          providerMessageId: "m2",
+        },
+        {
+          direction: "inbound",
+          subject: "Question",
+          body: "Can you send the contract?",
+          createdAt: new Date("2026-01-03"),
+          providerMessageId: "m3",
+        },
+      ],
+      draft: null,
+    })
+
+    await proposeDraftForConversation({ tenantId: "t1", conversationId: "conv-1", source: "automatic" })
+
+    expect(mockResolveEligibility).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: { subject: "Question", body: "Can you send the contract?" },
+      })
+    )
   })
 
   it("sanitizes the draft text before saving, recording auto-fixes in metadata", async () => {
