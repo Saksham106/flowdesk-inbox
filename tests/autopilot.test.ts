@@ -501,3 +501,73 @@ describe('attemptAutopilotSend', () => {
     )
   })
 })
+
+// ---------------------------------------------------------------------------
+// attemptAutopilotSend sanitizer gate
+// ---------------------------------------------------------------------------
+
+describe('attemptAutopilotSend sanitizer gate', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockJobFindUnique.mockResolvedValue(baseJob)
+    mockAutopilotSettingFindUnique.mockResolvedValue(enabledSetting)
+    mockGetReplyGenerationContext.mockResolvedValue({
+      accountType: 'business',
+      businessProfile: { id: 'bp-1', timezone: 'America/New_York' },
+      knowledgeDocuments: [],
+      learnedProfile: { id: 'learned-1', promptVersion: 'reply-learning-v1' },
+    })
+    mockAuditCount.mockResolvedValue(0)
+    mockDraftUpsert.mockResolvedValue({ id: 'draft-1' })
+    mockDraftUpdate.mockResolvedValue({})
+    mockSendConversationMessage.mockResolvedValue({ ok: true, providerMessageId: 'gmail_msg-1' })
+    mockAuditCreate.mockResolvedValue({})
+    mockAutopilotSettingUpdateMany.mockResolvedValue({})
+    mockAiUsageCreate.mockResolvedValue({})
+    mockCheckAiBudgetForTokens.mockResolvedValue({ allowed: true, reason: 'Within budget' })
+    mockApprovalUpdateMany.mockResolvedValue({ count: 0 })
+    mockUserFindFirst.mockResolvedValue({ id: 'owner-1', email: 'owner@example.com' })
+  })
+
+  it('falls back to a proposed draft instead of auto-sending when the sanitizer flags an issue', async () => {
+    mockGenerateDraftReply.mockResolvedValue({
+      draftText: 'Sure, see you then. [Client Name]',
+      intent: 'booking',
+      confidence: 0.92,
+    })
+
+    const result = await attemptAutopilotSend(JOB_ID, classification, policyOk)
+
+    expect(result).toEqual({ sent: false, reason: 'Draft held for review: sanitizer flagged unresolved_placeholder' })
+    expect(mockSendConversationMessage).not.toHaveBeenCalled()
+    expect(mockDraftUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ status: 'approved' }),
+      })
+    )
+    expect(mockDraftUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'draft-1' },
+        data: expect.objectContaining({ status: 'proposed' }),
+      })
+    )
+    expect(mockAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: 'autopilot.draft_held_for_sanitizer' }),
+      })
+    )
+  })
+
+  it('still auto-sends a clean draft (unchanged behavior)', async () => {
+    mockGenerateDraftReply.mockResolvedValue({
+      draftText: 'Sure, see you then.',
+      intent: 'booking',
+      confidence: 0.92,
+    })
+
+    const result = await attemptAutopilotSend(JOB_ID, classification, policyOk)
+
+    expect(result).toMatchObject({ sent: true })
+    expect(mockSendConversationMessage).toHaveBeenCalled()
+  })
+})
