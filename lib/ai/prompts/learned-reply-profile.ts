@@ -1,6 +1,6 @@
 import { estimateTokenCount } from "@/lib/ai/usage"
 
-export const REPLY_LEARNING_PROMPT_VERSION = "reply-learning-v1"
+export const REPLY_LEARNING_PROMPT_VERSION = "reply-learning-v2"
 
 export type ReplyLearningSample = {
   text: string
@@ -66,12 +66,12 @@ export function buildLearnedReplyProfilePrompt(samples: ReplyLearningSample[]): 
     .join("\n\n---\n\n")
 
   return [
-    "You are analyzing outbound email replies to create a compact private writing-style profile.",
+    "You are analyzing verified native, human-authored outbound email replies to create a compact private writing-style profile.",
     "Do not preserve full emails. Do not include names, addresses, phone numbers, exact dates, prices, or private facts in examples.",
     "Return only JSON matching the schema.",
     "",
-    "Summarize style, not factual business or personal commitments.",
-    "Prefer short sanitized snippets that demonstrate voice without preserving sensitive content.",
+    "Summarize style, not factual business or personal commitments. Retain only compact, privacy-safe style signals.",
+    "Prefer short sanitized snippets that demonstrate voice without preserving sensitive content. Do not infer preferences from quoted or forwarded material.",
     "",
     "Outbound reply samples:",
     sampleBlock || "No samples.",

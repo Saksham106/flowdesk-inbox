@@ -14,6 +14,12 @@ const {
   mockSyncConversationWorkItems,
   mockThreadsList,
   mockThreadsGet,
+  mockHistoryList,
+  mockLabelsList,
+  mockConversationFindMany,
+  mockGmailCredentialUpdate,
+  mockApplyGmailLabelFeedback,
+  mockClearGmailLabelOverride,
 } = vi.hoisted(() => ({
   mockChannelFindUnique:    vi.fn(),
   mockCredFindUnique:       vi.fn(),
@@ -25,6 +31,12 @@ const {
   mockSyncConversationWorkItems: vi.fn(),
   mockThreadsList:          vi.fn(),
   mockThreadsGet:           vi.fn(),
+  mockHistoryList:          vi.fn(),
+  mockLabelsList:           vi.fn(),
+  mockConversationFindMany: vi.fn(),
+  mockGmailCredentialUpdate: vi.fn(),
+  mockApplyGmailLabelFeedback: vi.fn(),
+  mockClearGmailLabelOverride: vi.fn(),
 }))
 
 // ---------------------------------------------------------------------------
@@ -34,9 +46,9 @@ const {
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     channel: { findUnique: mockChannelFindUnique },
-    gmailCredential: { findUnique: mockCredFindUnique },
+    gmailCredential: { findUnique: mockCredFindUnique, update: mockGmailCredentialUpdate },
     contact: { findUnique: mockContactFindUnique, create: mockContactCreate },
-    conversation: { upsert: mockConversationUpsert },
+    conversation: { upsert: mockConversationUpsert, findMany: mockConversationFindMany },
     message: { upsert: mockMessageUpsert, findUnique: mockMessageFindUnique },
   },
 }))
@@ -52,6 +64,8 @@ vi.mock('googleapis', () => ({
     gmail: vi.fn().mockReturnValue({
       users: {
         threads: { list: mockThreadsList, get: mockThreadsGet },
+        history: { list: mockHistoryList },
+        labels: { list: mockLabelsList },
         messages: { send: vi.fn(), modify: vi.fn() },
       },
     }),
@@ -67,7 +81,12 @@ vi.mock('@/lib/agent/work-item-sync', () => ({
   syncConversationWorkItems: mockSyncConversationWorkItems,
 }))
 
-import { syncGmailChannel } from '@/lib/google'
+vi.mock('@/lib/agent/gmail-label-feedback', () => ({
+  applyGmailLabelFeedback: mockApplyGmailLabelFeedback,
+  clearGmailLabelOverride: mockClearGmailLabelOverride,
+}))
+
+import { syncGmailChannel, syncGmailChannelIncremental } from '@/lib/google'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -120,6 +139,41 @@ describe('syncGmailChannel', () => {
       refreshTokenEncrypted: 'enc:refresh',
       tokenExpiry: null,
     })
+  })
+
+  it('groups Gmail History label changes per thread before learning the correction', async () => {
+    mockCredFindUnique.mockResolvedValue({
+      channelId: CHANNEL_ID, historyId: '100', accessTokenEncrypted: 'enc:access', refreshTokenEncrypted: 'enc:refresh', tokenExpiry: null,
+    })
+    mockHistoryList.mockResolvedValue({
+      data: {
+        historyId: '101',
+        history: [{
+          id: '101',
+          labelsAdded: [{ message: { id: 'm1', threadId: 'thread-1' }, labelIds: ['label-read-later'] }],
+          labelsRemoved: [{ message: { id: 'm2', threadId: 'thread-1' }, labelIds: ['label-needs-reply'] }],
+        }],
+      },
+    })
+    mockThreadsGet.mockResolvedValue(makeThread('thread-1', 'customer@example.com', CHANNEL_EMAIL))
+    mockContactFindUnique.mockResolvedValue({ id: 'contact-1', phoneE164: 'customer@example.com' })
+    mockConversationUpsert.mockResolvedValue({ id: 'conv-1' })
+    mockSyncConversationWorkItems.mockResolvedValue({})
+    mockConversationFindMany.mockResolvedValue([{ id: 'conv-1', externalThreadId: 'thread-1' }])
+    mockLabelsList.mockResolvedValue({ data: { labels: [
+      { id: 'label-read-later', name: 'Read Later' }, { id: 'label-needs-reply', name: 'Needs Reply' },
+    ] } })
+    mockApplyGmailLabelFeedback.mockResolvedValue({ applied: true, kind: 'addition' })
+    mockClearGmailLabelOverride.mockResolvedValue(true)
+    mockGmailCredentialUpdate.mockResolvedValue({})
+
+    await syncGmailChannelIncremental(CHANNEL_ID, TENANT_ID)
+
+    expect(mockApplyGmailLabelFeedback).toHaveBeenCalledTimes(1)
+    expect(mockApplyGmailLabelFeedback).toHaveBeenCalledWith({
+      tenantId: TENANT_ID, conversationId: 'conv-1', added: ['Read Later'], removed: ['Needs Reply'],
+    })
+    expect(mockClearGmailLabelOverride).toHaveBeenCalledWith({ tenantId: TENANT_ID, conversationId: 'conv-1' })
   })
 
   it('returns 0 when there are no threads', async () => {
@@ -390,7 +444,9 @@ describe('syncGmailChannel', () => {
     mockContactFindUnique.mockResolvedValue({ id: 'c-race', phoneE164: 'customer@example.com' })
     mockConversationUpsert.mockResolvedValue({ id: 'conv-race' })
     mockMessageUpsert.mockRejectedValueOnce(Object.assign(new Error('Unique constraint failed on providerMessageId'), { code: 'P2002' }))
-    mockMessageFindUnique.mockResolvedValueOnce({ id: 'message-race', conversationId: 'conv-race' })
+    mockMessageFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'message-race', conversationId: 'conv-race' })
 
     await expect(syncGmailChannel(CHANNEL_ID, TENANT_ID)).resolves.toBe(1)
 

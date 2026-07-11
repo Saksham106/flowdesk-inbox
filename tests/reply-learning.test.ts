@@ -47,6 +47,7 @@ vi.mock('@/lib/google', () => ({
 
 import {
   collectOutboundReplySamples,
+  filterAuthenticOutboundSamples,
   sanitizeOutboundReply,
   trainLearnedReplyProfile,
 } from '@/lib/agent/reply-learning'
@@ -76,6 +77,42 @@ describe('sanitizeOutboundReply', () => {
     expect(sanitizeOutboundReply('   ')).toBeNull()
     expect(sanitizeOutboundReply('This is an automated notification.')).toBeNull()
     expect(sanitizeOutboundReply('Please do not reply to this email.')).toBeNull()
+  })
+})
+
+describe('filterAuthenticOutboundSamples', () => {
+  const createdAt = new Date('2026-06-01T12:00:00Z')
+  const native = (text: string, overrides: Record<string, unknown> = {}) => ({
+    text,
+    createdAt,
+    subject: 'Re: Project update',
+    headers: { From: 'sam@example.com', To: 'maya@example.com' },
+    provenance: { source: 'gmail_sent' as const, messageId: `message-${text.length}` },
+    ...overrides,
+  })
+
+  it('keeps sanitized native replies and excludes forwarded, automated, quoted, and duplicate samples', () => {
+    const result = filterAuthenticOutboundSamples([
+      native('Hi Maya,\n\nI can send the update tomorrow morning.\n\nBest,\nSam'),
+      native('Forwarding this note for your review and next steps.', { subject: 'Fwd: Project update' }),
+      native('Here is the original message.\n\n---------- Forwarded message ----------\nFrom: Maya <maya@example.com>'),
+      native('Sharing the earlier note below.\n\nFrom: Maya <maya@example.com>\nTo: Sam <sam@example.com>'),
+      native('I am currently out of the office and will respond when I return.', { headers: { 'Auto-Submitted': 'auto-replied' } }),
+      native('Thanks for the note.\n\nOn Tue, Jun 9, Maya wrote:\n> Can you help?'),
+      native('Hi Maya,\n\nI can send the update tomorrow morning.\n\nBest,\nSam', { provenance: { source: 'gmail_sent', messageId: 'duplicate' } }),
+    ])
+
+    expect(result.samples).toEqual([
+      expect.objectContaining({ text: 'Hi Maya,\n\nI can send the update tomorrow morning.\n\nBest,\nSam' }),
+      expect.objectContaining({ text: 'Thanks for the note.' }),
+    ])
+    expect(result.excluded).toMatchObject({
+      forwarded_subject: 1,
+      forwarded_block: 1,
+      forwarded_headers: 1,
+      automated: 1,
+      duplicate: 1,
+    })
   })
 })
 
@@ -213,6 +250,42 @@ describe('trainLearnedReplyProfile', () => {
     expect(result.fromDb).toBe(2)
     expect(result.fromGmail).toBeGreaterThan(0)
     expect(result.sampleCount).toBeGreaterThanOrEqual(5)
+  })
+
+  it('records accepted and excluded Gmail sample reasons in source stats', async () => {
+    mockMessageFindMany.mockResolvedValue([
+      { body: makeBody(0), createdAt: new Date('2026-06-01T12:00:00Z') },
+    ])
+    mockFetchGmailSentSamples.mockResolvedValue([
+      ...Array.from({ length: 4 }, (_, index) => ({
+        text: `Hi Maya, I wrote this native response with enough detail for style learning. ${index}`,
+        createdAt: new Date(`2026-05-0${index + 1}T12:00:00Z`),
+        subject: 'Re: Project update',
+        headers: {},
+        provenance: { source: 'gmail_sent', messageId: `native-${index}` },
+      })),
+      {
+        text: 'This should not be learned because it was forwarded to another person.',
+        createdAt: new Date('2026-05-09T12:00:00Z'),
+        subject: 'Fwd: Project update',
+        headers: {},
+        provenance: { source: 'gmail_sent', messageId: 'forwarded' },
+      },
+    ])
+    mockSummarize.mockResolvedValue(mockSummarizeResult)
+    mockProfileFindFirst.mockResolvedValue(null)
+    mockProfileCreate.mockResolvedValue({ id: 'profile-accepted-stats' })
+
+    await trainLearnedReplyProfile({
+      tenantId: 'tenant-A',
+      channelId: 'channel-1',
+      profileType: 'business',
+    })
+
+    expect(mockProfileCreate.mock.calls[0][0].data.sourceStatsJson).toMatchObject({
+      accepted: 5,
+      excluded: { forwarded_subject: 1 },
+    })
   })
 
   it('throws with informative message when both DB and Gmail have fewer than 5 usable samples', async () => {

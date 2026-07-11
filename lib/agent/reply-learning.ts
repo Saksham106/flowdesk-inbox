@@ -9,6 +9,13 @@ export type ReplyProfileTypeValue = "personal" | "business"
 export type OutboundReplySample = {
   text: string
   createdAt: Date
+  subject?: string
+  headers?: Record<string, string>
+  provenance?: {
+    source: "gmail_sent" | "flowdesk_database"
+    messageId?: string
+    threadId?: string | null
+  }
 }
 
 const QUOTED_THREAD_PATTERNS = [
@@ -22,7 +29,13 @@ const AUTOMATED_PATTERNS = [
   /do not reply/i,
   /no-?reply/i,
   /unsubscribe/i,
+  /out of (the )?office/i,
+  /away from (the )?office/i,
 ]
+
+const FORWARDED_SUBJECT = /^\s*(?:fw|fwd)\s*:/i
+const FORWARDED_BLOCK = /^(?:-{2,}\s*)?(?:begin\s+)?forwarded message(?:\s*-{2,})?\s*$/im
+const FORWARDED_HEADERS = /^From:\s.+\nTo:\s.+$/im
 
 export function sanitizeOutboundReply(body: string): string | null {
   let cleaned = body.replace(/\r\n/g, "\n").trim()
@@ -74,32 +87,110 @@ export async function collectOutboundReplySamples(input: {
     .filter((sample): sample is OutboundReplySample => sample !== null)
 }
 
+/**
+ * Keeps only authored outbound text suitable for style learning. The output is
+ * intentionally limited to sanitized reply text and provenance so callers can
+ * report why a candidate was rejected without retaining raw mail bodies.
+ */
+export function filterAuthenticOutboundSamples(samples: OutboundReplySample[]): {
+  samples: OutboundReplySample[]
+  excluded: Record<string, number>
+} {
+  const accepted: OutboundReplySample[] = []
+  const excluded: Record<string, number> = {}
+  const seen = new Set<string>()
+  const exclude = (reason: string) => {
+    excluded[reason] = (excluded[reason] ?? 0) + 1
+  }
+
+  for (const sample of samples) {
+    if (FORWARDED_SUBJECT.test(sample.subject ?? "")) {
+      exclude("forwarded_subject")
+      continue
+    }
+    if (FORWARDED_BLOCK.test(sample.text)) {
+      exclude("forwarded_block")
+      continue
+    }
+    if (FORWARDED_HEADERS.test(sample.text)) {
+      exclude("forwarded_headers")
+      continue
+    }
+    if (hasAutomatedHeaders(sample.headers) || AUTOMATED_PATTERNS.some((pattern) => pattern.test(sample.text))) {
+      exclude("automated")
+      continue
+    }
+
+    const text = sanitizeOutboundReply(sample.text)
+    if (!text) {
+      exclude("unusable_text")
+      continue
+    }
+
+    const normalized = normalizeForDuplicateDetection(text)
+    if (seen.has(normalized)) {
+      exclude("duplicate")
+      continue
+    }
+    seen.add(normalized)
+    accepted.push({ ...sample, text })
+  }
+
+  return { samples: accepted, excluded }
+}
+
+function hasAutomatedHeaders(headers: Record<string, string> | undefined): boolean {
+  if (!headers) return false
+  const normalized = Object.fromEntries(
+    Object.entries(headers).map(([name, value]) => [name.toLowerCase(), value.toLowerCase()])
+  )
+  const autoSubmitted = normalized["auto-submitted"]
+  return (
+    (autoSubmitted !== undefined && autoSubmitted !== "no") ||
+    normalized["x-autoreply"] !== undefined ||
+    normalized["x-autorespond"] !== undefined ||
+    normalized["list-id"] !== undefined
+  )
+}
+
+function normalizeForDuplicateDetection(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+}
+
 export async function trainLearnedReplyProfile(input: {
   tenantId: string
   channelId?: string | null
   profileType: ReplyProfileTypeValue
   aiContext?: { userId: string; userEmail: string }
 }): Promise<{ profileId: string; sampleCount: number; fromDb: number; fromGmail: number }> {
-  const dbSamples = await collectOutboundReplySamples({
+  const dbCandidates = (await collectOutboundReplySamples({
     tenantId: input.tenantId,
     channelId: input.channelId,
-  })
+  })).map((sample) => ({
+    ...sample,
+    provenance: { source: "flowdesk_database" as const },
+  }))
 
-  let gmailSamples: OutboundReplySample[] = []
-  if (dbSamples.length < 5 && input.channelId) {
-    const raw = await fetchGmailSentSamples(input.channelId, 60)
-    gmailSamples = raw
-      .map((s) => {
-        const text = sanitizeOutboundReply(s.text)
-        return text ? { text, createdAt: s.createdAt } : null
-      })
-      .filter((s): s is OutboundReplySample => s !== null)
+  const filteredDb = filterAuthenticOutboundSamples(dbCandidates)
+  let gmailCandidates: OutboundReplySample[] = []
+  if (filteredDb.samples.length < 5 && input.channelId) {
+    gmailCandidates = (await fetchGmailSentSamples(input.channelId, 60)).map((sample) => ({
+      ...sample,
+      // Kept for compatibility with already-stored test fixtures while every
+      // live Gmail fetch provides a concrete source message id.
+      provenance: sample.provenance ?? { source: "gmail_sent" as const },
+    }))
   }
 
-  // Merge: Gmail supplements DB; deduplicate by text content
-  const seen = new Set(dbSamples.map((s) => s.text))
-  const freshGmail = gmailSamples.filter((s) => !seen.has(s.text))
-  const samples = [...dbSamples, ...freshGmail]
+  // Gmail supplements local outbound history. Filtering after the merge also
+  // catches near-duplicates that appear in both sources before the minimum.
+  const filtered = filterAuthenticOutboundSamples([...dbCandidates, ...gmailCandidates])
+  const samples = filtered.samples
+  const fromDb = samples.filter((sample) => sample.provenance?.source === "flowdesk_database").length
+  const fromGmail = samples.filter((sample) => sample.provenance?.source === "gmail_sent").length
 
   if (samples.length < 5) {
     const triedGmail = input.channelId
@@ -134,8 +225,10 @@ export async function trainLearnedReplyProfile(input: {
     sourceStatsJson: {
       ...result.sourceStatsJson,
       sampleCount: samples.length,
-      fromDb: dbSamples.length,
-      fromGmail: freshGmail.length,
+      fromDb,
+      fromGmail,
+      accepted: samples.length,
+      excluded: filtered.excluded,
     } as Prisma.InputJsonValue,
     promptVersion: result.promptVersion,
     lastTrainedAt: new Date(),
@@ -159,7 +252,7 @@ export async function trainLearnedReplyProfile(input: {
   return {
     profileId: profile.id,
     sampleCount: samples.length,
-    fromDb: dbSamples.length,
-    fromGmail: freshGmail.length,
+    fromDb,
+    fromGmail,
   }
 }

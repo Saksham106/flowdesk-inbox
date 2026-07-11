@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import type { Prisma } from "@prisma/client"
 import { extractEmail } from "@/lib/google"
 import { extractDomainFromEmail } from "@/lib/agent/preference-learning"
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
@@ -273,7 +274,7 @@ export async function setConversationFlowDeskLabel(
       : {}
   const previousAttention = typeof prevMeta.attentionCategory === "string" ? prevMeta.attentionCategory : null
 
-  const metadataJson = {
+  const metadataJson: Record<string, unknown> = {
     ...prevMeta,
     attentionCategory: resolved.attentionCategory,
     emailType: resolved.emailType,
@@ -284,6 +285,7 @@ export async function setConversationFlowDeskLabel(
     userState: resolved.userState,
     updatedAt: now.toISOString(),
   }
+  delete metadataJson.gmailLabelOverride
 
   await prisma.conversation.update({
     where: { id: conversationId },
@@ -307,7 +309,7 @@ export async function setConversationFlowDeskLabel(
       nextAction: resolved.nextAction,
       confidence: 1,
       source: "user_override",
-      metadataJson,
+      metadataJson: metadataJson as Prisma.InputJsonValue,
       ...conversationStateMetadataData(metadataJson),
     },
     update: {
@@ -317,7 +319,7 @@ export async function setConversationFlowDeskLabel(
       nextAction: resolved.nextAction,
       confidence: 1,
       source: "user_override",
-      metadataJson,
+      metadataJson: metadataJson as Prisma.InputJsonValue,
       ...conversationStateMetadataData(metadataJson),
     },
   })

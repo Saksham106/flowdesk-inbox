@@ -4,6 +4,7 @@ import { encryptString, decryptString } from "@/lib/crypto";
 import { stripHtmlToText } from "@/lib/email-body";
 import { prisma } from "@/lib/prisma";
 import { syncConversationWorkItems } from "@/lib/agent/work-item-sync";
+import { applyGmailLabelFeedback, clearGmailLabelOverride } from "@/lib/agent/gmail-label-feedback";
 import {
   FLOWDESK_GMAIL_LABEL_NAMES,
   LEGACY_FLOWDESK_LABEL_PREFIX,
@@ -382,6 +383,10 @@ async function upsertGmailMessage({
   const providerMessageId = `gmail_${msg.id}`;
   const isOutbound = extractEmail(msg.from) === channelEmail.toLowerCase();
   const isRead = !msg.labelIds.includes("UNREAD");
+  const existing = await prisma.message.findUnique({
+    where: { providerMessageId },
+    select: { id: true },
+  });
 
   try {
     await prisma.message.upsert({
@@ -403,6 +408,7 @@ async function upsertGmailMessage({
         ...(isRead ? { isRead: true } : {}),
       },
     });
+    return !existing && !isOutbound;
   } catch (err) {
     if (!isPrismaUniqueConflict(err)) throw err;
     const existing = await prisma.message.findUnique({
@@ -410,6 +416,7 @@ async function upsertGmailMessage({
       select: { id: true, conversationId: true },
     });
     if (!existing) throw err;
+    return false;
   }
 }
 
@@ -470,8 +477,19 @@ async function syncFetchedGmailThread({
     },
   });
 
+  let hasNewInboundMessage = false;
   for (const msg of messages) {
-    await upsertGmailMessage({ conversationId: conversation.id, channelEmail, msg });
+    hasNewInboundMessage = (await upsertGmailMessage({ conversationId: conversation.id, channelEmail, msg })) || hasNewInboundMessage;
+  }
+
+  if (hasNewInboundMessage) {
+    clearGmailLabelOverride({ tenantId, conversationId: conversation.id }).catch((err) => {
+      console.warn("Failed to clear Gmail label override after inbound message", {
+        tenantId,
+        conversationId: conversation.id,
+        message: err instanceof Error ? err.message : "Unknown error",
+      });
+    });
   }
 
   syncConversationWorkItems({ tenantId, conversationId: conversation.id }).catch((err) => {
@@ -1007,6 +1025,7 @@ export async function syncGmailChannelIncremental(
   let synced = 0;
   let pageToken: string | undefined;
   let processingErrors = 0;
+  const labelChangesByThread = new Map<string, { added: Set<string>; removed: Set<string> }>();
 
   do {
     const historyRes = await gmail.users.history.list({
@@ -1043,14 +1062,24 @@ export async function syncGmailChannelIncremental(
 
       if (record.labelsAdded) {
         for (const labelChange of record.labelsAdded) {
-          if (labelChange.message?.threadId) threadIdsToRefresh.add(labelChange.message.threadId);
+          const threadId = labelChange.message?.threadId;
+          if (!threadId) continue;
+          threadIdsToRefresh.add(threadId);
+          const change = labelChangesByThread.get(threadId) ?? { added: new Set(), removed: new Set() };
+          for (const labelId of labelChange.labelIds ?? []) change.added.add(labelId);
+          labelChangesByThread.set(threadId, change);
         }
       }
 
       if (record.labelsRemoved) {
         for (const labelChange of record.labelsRemoved) {
           if (!labelChange.message?.id) continue;
-          if (labelChange.message.threadId) threadIdsToRefresh.add(labelChange.message.threadId);
+          if (labelChange.message.threadId) {
+            threadIdsToRefresh.add(labelChange.message.threadId);
+            const change = labelChangesByThread.get(labelChange.message.threadId) ?? { added: new Set(), removed: new Set() };
+            for (const labelId of labelChange.labelIds ?? []) change.removed.add(labelId);
+            labelChangesByThread.set(labelChange.message.threadId, change);
+          }
 
           if (labelChange.labelIds?.includes("UNREAD")) {
             await prisma.message.updateMany({
@@ -1085,6 +1114,42 @@ export async function syncGmailChannelIncremental(
 
     synced += history.length;
   } while (pageToken);
+
+  if (processingErrors > 0) {
+    throw new Error(`Gmail incremental sync failed for ${processingErrors} changed thread${processingErrors === 1 ? "" : "s"}`);
+  }
+
+  // Gmail History reports label IDs per message. Resolve them once after every
+  // page has been processed, then apply one consolidated correction per thread
+  // so a thread-level Gmail edit is never learned as many separate edits.
+  if (labelChangesByThread.size > 0) {
+    const labelsByName = await listGmailLabels(gmail);
+    const labelNameById = new Map(Array.from(labelsByName, ([name, id]) => [id, name]));
+    const conversations = await prisma.conversation.findMany({
+      where: {
+        tenantId,
+        channelId,
+        externalThreadId: { in: Array.from(labelChangesByThread.keys()) },
+      },
+      select: { id: true, externalThreadId: true },
+    });
+    const conversationByThread = new Map(conversations.map((conversation) => [conversation.externalThreadId, conversation.id]));
+    for (const [threadId, change] of labelChangesByThread) {
+      const conversationId = conversationByThread.get(threadId);
+      if (!conversationId) continue;
+      const added = Array.from(change.added, (id) => labelNameById.get(id)).filter((name): name is string => Boolean(name));
+      const removed = Array.from(change.removed, (id) => labelNameById.get(id)).filter((name): name is string => Boolean(name));
+      try {
+        await applyGmailLabelFeedback({ tenantId, conversationId, added, removed });
+      } catch (err) {
+        processingErrors++;
+        console.warn("Failed to apply Gmail label feedback", {
+          tenantId, channelId, threadId,
+          message: err instanceof Error ? err.message : "Unknown error",
+        });
+      }
+    }
+  }
 
   if (processingErrors > 0) {
     throw new Error(`Gmail incremental sync failed for ${processingErrors} changed thread${processingErrors === 1 ? "" : "s"}`);
@@ -1398,7 +1463,7 @@ export async function patchCalendarEventStatus(
 export async function fetchGmailSentSamples(
   channelId: string,
   limit = 60
-): Promise<Array<{ text: string; createdAt: Date }>> {
+): Promise<GmailSentSample[]> {
   const gmail = await getGmailClient(channelId);
 
   const listRes = await gmail.users.messages.list({
@@ -1408,7 +1473,7 @@ export async function fetchGmailSentSamples(
   });
 
   const messages = listRes.data.messages ?? [];
-  const samples: Array<{ text: string; createdAt: Date }> = [];
+  const samples: GmailSentSample[] = [];
 
   for (const msg of messages) {
     if (!msg.id) continue;
@@ -1422,7 +1487,22 @@ export async function fetchGmailSentSamples(
       const text = extracted.textBody || extracted.cleanSnippet
       const createdAt = new Date(parseInt(res.data.internalDate ?? "0"))
       if (text.trim()) {
-        samples.push({ text, createdAt });
+        const headers = Object.fromEntries(
+          (res.data.payload?.headers ?? [])
+            .filter((header) => header.name && header.value)
+            .map((header) => [header.name!, header.value!])
+        )
+        samples.push({
+          text,
+          createdAt,
+          subject: getHeader(res.data.payload?.headers ?? [], "Subject"),
+          headers,
+          provenance: {
+            source: "gmail_sent",
+            messageId: res.data.id ?? msg.id,
+            threadId: res.data.threadId ?? msg.threadId ?? null,
+          },
+        });
       }
     } catch {
       // Skip messages that cannot be fetched
@@ -1431,3 +1511,15 @@ export async function fetchGmailSentSamples(
 
   return samples;
 }
+
+export type GmailSentSample = {
+  text: string;
+  createdAt: Date;
+  subject: string;
+  headers: Record<string, string>;
+  provenance: {
+    source: "gmail_sent";
+    messageId: string;
+    threadId: string | null;
+  };
+};

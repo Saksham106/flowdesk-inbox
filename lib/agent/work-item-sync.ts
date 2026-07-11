@@ -23,6 +23,7 @@ import { userEditedFieldsFromMetadata } from "@/lib/agent/user-edited-fields"
 import { detectSchedulingRequest } from "@/lib/agent/scheduling"
 import { handleSchedulingConfirmationForInboundReply } from "@/lib/agent/scheduling-booking"
 import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
+import { hasGmailLabelOverride } from "@/lib/agent/gmail-label-feedback"
 import {
   clearWaitingOnForInboundReply,
   markConversationWaitingOn,
@@ -102,10 +103,12 @@ export async function syncConversationWorkItems(
       : {}
   const hasUserOverride =
     initialState?.source === "user_override" ||
-    initialMeta.userOverride === true ||
-    conversation.status === "closed"
+    initialMeta.userOverride === true
+  const hasLabelOverride = hasGmailLabelOverride(initialState?.metadataJson)
+  const hasUserOverrideOrLabelHold =
+    hasUserOverride || hasLabelOverride || conversation.status === "closed"
 
-  if (!hasUserOverride) {
+  if (!hasUserOverrideOrLabelHold) {
     const metadataJson = summary.state.metadata as Prisma.InputJsonValue
     await prisma.conversationState.upsert({
       where: { conversationId: conversation.id },
@@ -160,7 +163,7 @@ export async function syncConversationWorkItems(
     select: { direction: true, body: true },
   })
   if (
-    !hasUserOverride &&
+    !hasUserOverrideOrLabelHold &&
     latestMessage?.direction === "outbound" &&
     conversation.status === "needs_reply" &&
     outboundMessageExpectsReply(latestMessage.body)
@@ -195,7 +198,7 @@ export async function syncConversationWorkItems(
   // fails the sync. Skipped when the user has overridden state manually — their
   // explicit choice is already projected by the status routes (the waiting-on
   // lifecycle transitions above re-project because they change the derived state).
-  if (!hasUserOverride || waitingOnLifecycleChanged) {
+  if ((!hasUserOverride || waitingOnLifecycleChanged) && !hasLabelOverride) {
     try {
       await projectFlowDeskLabelsForConversation({
         tenantId: conversation.tenantId,
@@ -210,7 +213,7 @@ export async function syncConversationWorkItems(
   const hasOutboundMessages = conversation.messages.some((m) => m.direction === "outbound")
   if (
     summary.state.state === "fyi_only" &&
-    !hasUserOverride &&
+    !hasUserOverrideOrLabelHold &&
     conversation.status === "needs_reply" &&
     !hasOutboundMessages
   ) {
@@ -524,15 +527,17 @@ export async function syncConversationWorkItems(
       ...(expiresIn ? { expiresIn } : {}),
     }
 
-    await prisma.conversationState.update({
-      where: { conversationId: conversation.id },
-      data: {
-        metadataJson: updatedEmailMeta as Prisma.InputJsonValue,
-        ...conversationStateMetadataData(updatedEmailMeta),
-      },
-    })
+    if (!hasLabelOverride) {
+      await prisma.conversationState.update({
+        where: { conversationId: conversation.id },
+        data: {
+          metadataJson: updatedEmailMeta as Prisma.InputJsonValue,
+          ...conversationStateMetadataData(updatedEmailMeta),
+        },
+      })
+    }
 
-    if (!hasUserOverride && attentionCategory === "needs_action") {
+    if (!hasUserOverrideOrLabelHold && attentionCategory === "needs_action") {
       await prisma.conversationState.update({
         where: { conversationId: conversation.id },
         data: {
@@ -546,7 +551,7 @@ export async function syncConversationWorkItems(
           source: "deterministic",
         },
       })
-    } else if (!hasUserOverride && attentionCategory === "review_soon") {
+    } else if (!hasUserOverrideOrLabelHold && attentionCategory === "review_soon") {
       await prisma.conversationState.update({
         where: { conversationId: conversation.id },
         data: {
@@ -558,7 +563,7 @@ export async function syncConversationWorkItems(
           source: "deterministic",
         },
       })
-    } else if (!hasUserOverride && attentionCategory === "read_later") {
+    } else if (!hasUserOverrideOrLabelHold && attentionCategory === "read_later") {
       await prisma.conversationState.update({
         where: { conversationId: conversation.id },
         data: {
@@ -850,7 +855,7 @@ export async function syncConversationWorkItems(
     detectedEmailType !== null &&
     detectedAttentionCategory !== null &&
     AUTO_CLOSE_ATTENTION_CATEGORIES.has(detectedAttentionCategory) &&
-    !hasUserOverride &&
+    !hasUserOverrideOrLabelHold &&
     summary.state.state !== "fyi_only" &&
     conversation.status === "needs_reply" &&
     !hasOutboundMessages

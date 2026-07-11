@@ -17,6 +17,7 @@ const {
   mockVipContactFindFirst,
   mockMessageFindFirst,
   mockAgentJobUpdateMany,
+  mockProjectFlowDeskLabels,
 } = vi.hoisted(() => ({
   mockConversationFindFirst: vi.fn(),
   mockStateUpsert: vi.fn(),
@@ -34,6 +35,7 @@ const {
   mockVipContactFindFirst: vi.fn(),
   mockMessageFindFirst: vi.fn(),
   mockAgentJobUpdateMany: vi.fn(),
+  mockProjectFlowDeskLabels: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -55,6 +57,10 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/agent/person-memory", () => ({
   syncPersonMemoryWithLLM: mockSyncPersonMemoryWithLLM,
+}))
+
+vi.mock("@/lib/gmail-labels", () => ({
+  projectFlowDeskLabelsForConversation: mockProjectFlowDeskLabels,
 }))
 
 import { syncConversationWorkItems } from "@/lib/agent/work-item-sync"
@@ -103,6 +109,7 @@ describe("syncConversationWorkItems", () => {
     mockVipContactFindFirst.mockResolvedValue(null)
     mockMessageFindFirst.mockResolvedValue(null)
     mockAgentJobUpdateMany.mockResolvedValue({ count: 0 })
+    mockProjectFlowDeskLabels.mockResolvedValue(null)
   })
 
   it("loads the conversation scoped to the tenant", async () => {
@@ -117,6 +124,25 @@ describe("syncConversationWorkItems", () => {
         where: { id: "conv-1", tenantId: "tenant-1" },
       })
     )
+  })
+
+  it("does not re-project labels while a Gmail label correction is active", async () => {
+    mockStateFindUnique.mockResolvedValue({
+      source: "gmail_label",
+      metadataJson: { gmailLabelOverride: { workflow: "Read Later", contentType: null } },
+    })
+
+    await syncConversationWorkItems({ tenantId: "tenant-1", conversationId: "conv-1", now })
+
+    expect(mockStateUpsert).not.toHaveBeenCalled()
+    for (const [call] of mockStateUpdate.mock.calls) {
+      if (call.data.metadataJson) {
+        expect(call.data.metadataJson).toMatchObject({
+          gmailLabelOverride: { workflow: "Read Later", contentType: null },
+        })
+      }
+    }
+    expect(mockProjectFlowDeskLabels).not.toHaveBeenCalled()
   })
 
   it("upserts conversation state, task, and lead records", async () => {

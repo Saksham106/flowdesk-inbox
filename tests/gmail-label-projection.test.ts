@@ -135,6 +135,25 @@ describe("projectFlowDeskLabelsForConversation", () => {
     expect(upsertArg.create.providerMessageIdsJson.threadId).toBe("thread-1")
   })
 
+  it("does not write labels back while a Gmail label correction is active", async () => {
+    mockConversationFindFirst.mockResolvedValue({
+      ...GOOGLE_CONVERSATION,
+      stateRecord: {
+        attentionCategory: "read_later",
+        emailType: null,
+        metadataJson: { gmailLabelOverride: { workflow: "Read Later", contentType: null } },
+      },
+    })
+
+    const job = await projectFlowDeskLabelsForConversation({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+    })
+
+    expect(job).toBeNull()
+    expect(mockWritebackUpsert).not.toHaveBeenCalled()
+  })
+
   it("falls back to deterministic classification when the conversation was never AI-classified", async () => {
     // Regression: a conversation whose ConversationState was never populated
     // (the classification job hadn't run for it — e.g. a legacy account) used

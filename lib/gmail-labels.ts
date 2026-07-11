@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status"
 import { getAutomationLevel, isActionAllowedAtLevel } from "@/lib/agent/automation-level"
 import { classifyEmailType } from "@/lib/agent/email-classifier"
+import { hasGmailLabelOverride } from "@/lib/agent/gmail-label-feedback"
 
 // Labels are flat, top-level Gmail labels named exactly for what they mean
 // ("Needs Reply", "Waiting On", …) with no "FlowDesk/" namespace prefix.
@@ -268,7 +269,7 @@ export async function projectFlowDeskLabelsForConversation(input: {
       lastMessageAt: true,
       channel: { select: { provider: true } },
       draft: { select: { status: true } },
-      stateRecord: { select: { attentionCategory: true, emailType: true } },
+      stateRecord: { select: { attentionCategory: true, emailType: true, metadataJson: true } },
       messages: {
         where: { direction: "inbound" },
         orderBy: { createdAt: "asc" },
@@ -281,6 +282,7 @@ export async function projectFlowDeskLabelsForConversation(input: {
   if (!conversation) return null
   if (conversation.channel?.provider !== "google") return null
   if (!conversation.externalThreadId) return null
+  if (hasGmailLabelOverride(conversation.stateRecord?.metadataJson)) return null
 
   // The AI classification job populates ConversationState.attentionCategory /
   // emailType, but for a conversation it has never run for (e.g. the job
