@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { encryptString } from "@/lib/crypto";
 import { createOAuth2Client, ensureFlowDeskLabels, verifyState } from "@/lib/google";
 import { runGmailSync } from "@/lib/gmail-sync";
+import { canReconnectChannel } from "@/lib/channel-ownership";
 
 export const runtime = "nodejs";
 
@@ -66,12 +67,11 @@ export async function GET(request: Request) {
   let channelId: string;
 
   if (existing) {
-    // Already connected — refresh credentials, and reassign tenant if needed
+    if (!canReconnectChannel(existing.tenantId, tenantId)) {
+      return NextResponse.redirect(`${redirectBase}?error=account_already_connected`);
+    }
+    // Already connected to this tenant — refresh credentials in place.
     channelId = existing.id;
-    await prisma.channel.update({
-      where: { id: channelId },
-      data: { tenantId },
-    });
     await prisma.gmailCredential.update({
       where: { channelId },
       data: {
