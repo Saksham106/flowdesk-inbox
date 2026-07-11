@@ -11,11 +11,13 @@ const mocks = vi.hoisted(() => ({
   messageFindUnique: vi.fn(),
   messageDelete: vi.fn(),
   messageFindFirst: vi.fn(),
+  messageCount: vi.fn(),
   getToken: vi.fn(),
   graphGet: vi.fn(),
   encrypt: vi.fn((value: string) => `enc:${value}`),
   decrypt: vi.fn((value: string) => value.replace(/^enc:/, "")),
   syncWorkItems: vi.fn(),
+  applyCategoryFeedback: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -35,6 +37,7 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mocks.messageFindUnique,
       delete: mocks.messageDelete,
       findFirst: mocks.messageFindFirst,
+      count: mocks.messageCount,
     },
   },
 }));
@@ -61,9 +64,17 @@ vi.mock("@/lib/agent/work-item-sync", () => ({
   syncConversationWorkItems: mocks.syncWorkItems,
 }));
 
+vi.mock("@/lib/agent/outlook-category-feedback", () => ({
+  applyOutlookCategoryFeedback: mocks.applyCategoryFeedback,
+}));
+
 import { runOutlookDeltaSync } from "@/lib/outlook-sync";
 
-function message(id: string, receivedDateTime = "2026-06-24T12:00:00.000Z") {
+function message(
+  id: string,
+  receivedDateTime = "2026-06-24T12:00:00.000Z",
+  overrides: { isRead?: boolean; categories?: string[] } = {}
+) {
   return {
     id,
     conversationId: "graph-conversation-1",
@@ -73,7 +84,8 @@ function message(id: string, receivedDateTime = "2026-06-24T12:00:00.000Z") {
     body: { content: "<p>Hello there</p>", contentType: "html" },
     receivedDateTime,
     internetMessageId: `<${id}@example.com>`,
-    isRead: false,
+    isRead: overrides.isRead ?? false,
+    ...(overrides.categories ? { categories: overrides.categories } : {}),
   };
 }
 
@@ -95,7 +107,10 @@ describe("runOutlookDeltaSync", () => {
     mocks.contactUpsert.mockResolvedValue({ id: "contact-1" });
     mocks.conversationUpsert.mockResolvedValue({ id: "conversation-1" });
     mocks.messageUpsert.mockResolvedValue({ id: "message-1" });
+    mocks.messageFindUnique.mockResolvedValue(null);
+    mocks.messageCount.mockResolvedValue(0);
     mocks.syncWorkItems.mockResolvedValue(undefined);
+    mocks.applyCategoryFeedback.mockResolvedValue({ applied: false });
   });
 
   it("processes nextLink pages and persists the final encrypted deltaLink", async () => {
@@ -207,6 +222,62 @@ describe("runOutlookDeltaSync", () => {
     expect(mocks.conversationUpdate).toHaveBeenCalledWith({
       where: { id: "conversation-1" },
       data: { status: "closed" },
+    });
+  });
+
+  it("runs category feedback for an updated pre-existing inbound message", async () => {
+    mocks.messageFindUnique.mockResolvedValue({ id: "local-message" });
+    mocks.graphGet.mockResolvedValueOnce({
+      value: [message("message-1", "2026-06-24T12:00:00.000Z", { categories: ["Handled"] })],
+      "@odata.deltaLink": "https://graph.microsoft.com/final",
+    });
+
+    await runOutlookDeltaSync({
+      channelId: "channel-1",
+      tenantId: "tenant-1",
+      requestedMode: "manual",
+    });
+
+    expect(mocks.applyCategoryFeedback).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      conversationId: "conversation-1",
+      messageCategories: ["Handled"],
+    });
+  });
+
+  it("does not run category feedback for a brand-new inbound message", async () => {
+    mocks.messageFindUnique.mockResolvedValue(null);
+    mocks.graphGet.mockResolvedValueOnce({
+      value: [message("message-1", "2026-06-24T12:00:00.000Z", { categories: ["Handled"] })],
+      "@odata.deltaLink": "https://graph.microsoft.com/final",
+    });
+
+    await runOutlookDeltaSync({
+      channelId: "channel-1",
+      tenantId: "tenant-1",
+      requestedMode: "manual",
+    });
+
+    expect(mocks.applyCategoryFeedback).not.toHaveBeenCalled();
+  });
+
+  it("flips gmailUnread to false when the last unread inbound becomes read", async () => {
+    mocks.messageFindUnique.mockResolvedValue({ id: "local-message" });
+    mocks.messageCount.mockResolvedValue(0);
+    mocks.graphGet.mockResolvedValueOnce({
+      value: [message("message-1", "2026-06-24T12:00:00.000Z", { isRead: true })],
+      "@odata.deltaLink": "https://graph.microsoft.com/final",
+    });
+
+    await runOutlookDeltaSync({
+      channelId: "channel-1",
+      tenantId: "tenant-1",
+      requestedMode: "manual",
+    });
+
+    expect(mocks.conversationUpdate).toHaveBeenCalledWith({
+      where: { id: "conversation-1" },
+      data: expect.objectContaining({ gmailUnread: false }),
     });
   });
 

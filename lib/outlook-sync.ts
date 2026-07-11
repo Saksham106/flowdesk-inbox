@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto"
 
+import { applyOutlookCategoryFeedback } from "@/lib/agent/outlook-category-feedback"
 import { syncConversationWorkItems } from "@/lib/agent/work-item-sync"
 import { decryptString, encryptString } from "@/lib/crypto"
 import {
@@ -48,7 +49,10 @@ const DELTA_FIELDS = [
   "receivedDateTime",
   "internetMessageId",
   "isRead",
+  "categories",
 ].join(",")
+
+type FeedbackCandidate = { conversationId: string; categories: string[] }
 
 function initialDeltaPath(): string {
   const params = new URLSearchParams({ $select: DELTA_FIELDS })
@@ -109,12 +113,14 @@ async function applyLiveMessage({
   tenantId,
   myEmail,
   affectedConversationIds,
+  feedbackCandidates,
 }: {
   message: GraphMessage
   channelId: string
   tenantId: string
   myEmail: string
   affectedConversationIds: Set<string>
+  feedbackCandidates: Map<string, FeedbackCandidate>
 }): Promise<boolean> {
   if (!message.id || !message.conversationId || !message.from?.emailAddress?.address) {
     return false
@@ -160,6 +166,15 @@ async function applyLiveMessage({
   })
 
   const direction = fromEmail === myEmail ? "outbound" : "inbound"
+  const providerMessageId = `outlook_${message.id}`
+  // Distinguish a genuine user category edit (on a message we already had) from
+  // categories set by FlowDesk's own projection on first ingest: only messages
+  // that already existed can carry a user edit. Cheap existence probe before the
+  // upsert, mirroring how applyRemovedMessage reads by providerMessageId.
+  const existed = !!(await prisma.message.findUnique({
+    where: { providerMessageId },
+    select: { id: true },
+  }))
   const values = {
     conversationId: conversation.id,
     direction,
@@ -172,15 +187,36 @@ async function applyLiveMessage({
   } as const
 
   await prisma.message.upsert({
-    where: { providerMessageId: `outlook_${message.id}` },
-    create: { ...values, providerMessageId: `outlook_${message.id}` },
+    where: { providerMessageId },
+    create: { ...values, providerMessageId },
     update: values,
   })
 
-  if (!(conversation.lastMessageAt instanceof Date) || receivedAt > conversation.lastMessageAt) {
-    await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { lastMessageAt: receivedAt },
+  // Recompute the provider-unread flag after the upsert. `gmailUnread`, despite
+  // the name, is the generic "unread in the provider mailbox" flag shared by
+  // Gmail and Outlook: true when any inbound message is still unread. Folded
+  // into the lastMessageAt bump so a live message costs a single conversation
+  // write.
+  const unreadInbound = await prisma.message.count({
+    where: { conversationId: conversation.id, direction: "inbound", isRead: false },
+  })
+  const bumpsLastMessage =
+    !(conversation.lastMessageAt instanceof Date) || receivedAt > conversation.lastMessageAt
+  await prisma.conversation.update({
+    where: { id: conversation.id },
+    data: {
+      gmailUnread: unreadInbound > 0,
+      ...(bumpsLastMessage ? { lastMessageAt: receivedAt } : {}),
+    },
+  })
+
+  // Only pre-existing inbound messages can reflect a user's manual category
+  // edit; brand-new messages get their categories from FlowDesk's projection.
+  // Last write per conversation wins.
+  if (existed && direction === "inbound") {
+    feedbackCandidates.set(conversation.id, {
+      conversationId: conversation.id,
+      categories: message.categories ?? [],
     })
   }
   affectedConversationIds.add(conversation.id)
@@ -242,6 +278,7 @@ export async function runOutlookDeltaSync({
       ? decryptString(credential.deltaLinkEncrypted)
       : initialDeltaPath()
     const affectedConversationIds = new Set<string>()
+    const feedbackCandidates = new Map<string, FeedbackCandidate>()
 
     while (pages < Math.max(1, maxPages)) {
       let page: GraphDeltaPage
@@ -278,6 +315,7 @@ export async function runOutlookDeltaSync({
             tenantId,
             myEmail: channel.emailAddress.toLowerCase(),
             affectedConversationIds,
+            feedbackCandidates,
           })
         ) {
           synced++
@@ -305,6 +343,16 @@ export async function runOutlookDeltaSync({
         syncConversationWorkItems({ tenantId, conversationId }).catch(() => undefined)
       )
     )
+
+    // Learn user category edits after work-item sync has settled the projection.
+    // Failures are swallowed so feedback never breaks the sync run itself.
+    for (const item of feedbackCandidates.values()) {
+      await applyOutlookCategoryFeedback({
+        tenantId,
+        conversationId: item.conversationId,
+        messageCategories: item.categories,
+      }).catch(() => undefined)
+    }
 
     const released = await prisma.outlookCredential.updateMany({
       where: { channelId, syncLeaseId: leaseId },
