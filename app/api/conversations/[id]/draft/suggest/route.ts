@@ -36,6 +36,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const status = result.message.includes("spend limit reached") ? 429 : 502
     return NextResponse.json({ error: result.message }, { status })
   }
+  if (result.status === "writing_preference_violation") {
+    return NextResponse.json(
+      { error: result.message, validationFailures: result.validationFailures },
+      { status: 422 }
+    )
+  }
   if (result.status === "gated_out") {
     return NextResponse.json({ error: result.reason }, { status: 422 })
   }

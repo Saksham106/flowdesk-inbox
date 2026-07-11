@@ -45,6 +45,7 @@ export type ProposeDraftResult =
   | { status: "gated_out"; reason: string }
   | { status: "not_applicable"; reason: string }
   | { status: "error"; message: string }
+  | { status: "writing_preference_violation"; message: string; validationFailures: string[] }
 
 export async function proposeDraftForConversation(
   input: ProposeDraftInput
@@ -238,8 +239,9 @@ export async function proposeDraftForConversation(
       const remaining = validateDraftWritingPreferences(result.draftText, context.writingPreferences)
       if (remaining.length > 0) {
         return {
-          status: "error",
-          message: `Draft requires review because it violates writing preferences: ${remaining.join("; ")}`,
+          status: "writing_preference_violation",
+          message: "Draft requires review because it violates writing preferences.",
+          validationFailures: remaining,
         }
       }
     }
