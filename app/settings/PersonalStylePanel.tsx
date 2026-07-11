@@ -105,6 +105,15 @@ export default function PersonalStylePanel({
   const phrasesToAvoid = initial?.recurringPhrasesToAvoid ?? []
   const lastTrainingTokens = initial?.lastTrainingTokens ?? null
 
+  function updatePreferenceList(
+    field: "preferredGreetings" | "avoidedPhrases" | "preferredSignoffs",
+    value: string
+  ) {
+    const entries = [...new Set(value.split(",").map((entry) => entry.trim()).filter(Boolean))]
+    setWritingPreferences((current) => ({ ...current, [field]: entries }))
+    setPreferencesSaved(false)
+  }
+
   return (
     <div className="space-y-4">
       {error && (
@@ -220,6 +229,73 @@ export default function PersonalStylePanel({
             className="h-4 w-4 rounded border-slate-300"
           />
         </label>
+        <label className="mt-4 block text-sm font-medium text-slate-800">
+          Preferred greetings
+          <input
+            type="text"
+            value={writingPreferences.preferredGreetings.join(", ")}
+            onChange={(event) => updatePreferenceList("preferredGreetings", event.target.value)}
+            placeholder="Hi, Hello"
+            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal"
+          />
+          <span className="mt-1 block text-xs font-normal text-slate-500">Separate options with commas.</span>
+        </label>
+        <label className="mt-4 block text-sm font-medium text-slate-800">
+          Phrases to avoid
+          <input
+            type="text"
+            value={writingPreferences.avoidedPhrases.join(", ")}
+            onChange={(event) => updatePreferenceList("avoidedPhrases", event.target.value)}
+            placeholder="circle back, touch base"
+            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal"
+          />
+          <span className="mt-1 block text-xs font-normal text-slate-500">Separate options with commas.</span>
+        </label>
+        <label className="mt-4 block text-sm font-medium text-slate-800">
+          Preferred sign-offs
+          <input
+            type="text"
+            value={writingPreferences.preferredSignoffs.join(", ")}
+            onChange={(event) => updatePreferenceList("preferredSignoffs", event.target.value)}
+            placeholder="Thanks, Best"
+            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal"
+          />
+          <span className="mt-1 block text-xs font-normal text-slate-500">Separate options with commas.</span>
+        </label>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <label className="block text-sm font-medium text-slate-800">
+            Formality
+            <select
+              value={writingPreferences.formality ?? ""}
+              onChange={(event) => {
+                setWritingPreferences((current) => ({ ...current, formality: event.target.value || null }))
+                setPreferencesSaved(false)
+              }}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal"
+            >
+              <option value="">Use learned style</option>
+              <option value="casual">Casual</option>
+              <option value="semi-formal">Semi-formal</option>
+              <option value="formal">Formal</option>
+            </select>
+          </label>
+          <label className="block text-sm font-medium text-slate-800">
+            Reply length
+            <select
+              value={writingPreferences.replyLength ?? ""}
+              onChange={(event) => {
+                setWritingPreferences((current) => ({ ...current, replyLength: event.target.value || null }))
+                setPreferencesSaved(false)
+              }}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal"
+            >
+              <option value="">Use learned style</option>
+              <option value="brief">Brief</option>
+              <option value="standard">Standard</option>
+              <option value="detailed">Detailed</option>
+            </select>
+          </label>
+        </div>
         <label className="mt-4 block text-sm font-medium text-slate-800">
           Additional drafting instruction
           <textarea
