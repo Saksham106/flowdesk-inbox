@@ -51,7 +51,6 @@ export async function processOutlookSyncWork() {
   }
 
   for (const [channelId, events] of byChannel) {
-    processedChannels.add(channelId)
     const ids = events.map((event) => event.id)
     try {
       const result = await runOutlookDeltaSync({
@@ -59,6 +58,7 @@ export async function processOutlookSyncWork() {
         tenantId: events[0].tenantId,
         requestedMode: "webhook",
       })
+      processedChannels.add(channelId)
       const skipped = "skipped" in result ? result.skipped : undefined
       const hasMore = "hasMore" in result && result.hasMore
       if (skipped || hasMore) {
@@ -96,15 +96,34 @@ export async function processOutlookSyncWork() {
     },
     orderBy: { subscriptionExpiresAt: "asc" },
     take: BATCH_SIZE,
-    select: { channelId: true },
+    select: { channelId: true, channel: { select: { tenantId: true } } },
   })
   let renewed = 0
   for (const credential of renewable) {
     try {
       const result = await ensureOutlookSubscription(credential.channelId)
       if ("renewed" in result && result.renewed) renewed++
-    } catch {
+    } catch (error) {
       errors++
+      const message = error instanceof Error ? error.message : "Unknown Outlook renewal error"
+      await prisma.outlookCredential
+        .update({
+          where: { channelId: credential.channelId },
+          data: {
+            subscriptionError: message,
+            subscriptionLastRenewalAttempt: new Date(),
+          },
+        })
+        .catch(() => {})
+      await prisma.auditLog
+        .create({
+          data: {
+            tenantId: credential.channel.tenantId,
+            action: "outlook.subscription.renewal_failed",
+            payloadJson: { channelId: credential.channelId, error: message },
+          },
+        })
+        .catch(() => {})
     }
   }
 
@@ -131,8 +150,21 @@ export async function processOutlookSyncWork() {
         requestedMode: "cron",
       })
       fallbackSyncs++
-    } catch {
+    } catch (error) {
       errors++
+      // runOutlookDeltaSync already records lastSyncStatus/lastSyncError on
+      // the credential in its own catch before rethrowing — only the audit
+      // trail is this worker's responsibility.
+      const message = error instanceof Error ? error.message : "Unknown Outlook sync error"
+      await prisma.auditLog
+        .create({
+          data: {
+            tenantId: credential.channel.tenantId,
+            action: "outlook.sync.failed",
+            payloadJson: { channelId: credential.channelId, error: message },
+          },
+        })
+        .catch(() => {})
     }
   }
 
