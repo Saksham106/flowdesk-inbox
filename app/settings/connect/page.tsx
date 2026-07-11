@@ -9,7 +9,9 @@ import SyncGmailButton from "@/app/settings/SyncGmailButton";
 import DisconnectOutlookButton from "@/app/settings/DisconnectOutlookButton";
 import SyncOutlookButton from "@/app/settings/SyncOutlookButton";
 import GmailOperatorHealthPanel from "@/app/settings/GmailOperatorHealthPanel";
+import FixGmailLabelsButton from "@/app/settings/FixGmailLabelsButton";
 import { summarizeGmailOperatorHealth } from "@/lib/gmail-operator-health";
+import { summarizeOutlookOperatorHealth } from "@/lib/outlook-operator-health";
 import { salesCrmEnabled } from "@/lib/tenant-capabilities";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +54,10 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
     failedAgentJobs,
     oldestPendingAgentJob,
     recentPushFailures,
+    outlookWritebackPending,
+    outlookWritebackFailed,
+    oldestPendingOutlookWriteback,
+    outlookSyncEventsFailed,
   ] = await Promise.all([
     prisma.channel.findMany({
       where: { tenantId: session.user.tenantId, type: "email" },
@@ -73,7 +79,18 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
     }),
     prisma.channel.findMany({
       where: { tenantId: session.user.tenantId, provider: "microsoft" },
-      include: { outlookCredential: { select: { createdAt: true, lastSyncedAt: true, lastSyncError: true } } },
+      include: {
+        outlookCredential: {
+          select: {
+            createdAt: true,
+            lastSyncedAt: true,
+            lastSyncStatus: true,
+            lastSyncError: true,
+            subscriptionExpiresAt: true,
+            subscriptionError: true,
+          },
+        },
+      },
       orderBy: { createdAt: "asc" },
     }),
     prisma.tenant.findUnique({
@@ -115,6 +132,36 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
         createdAt: { gte: recentPushFailureCutoff },
       },
     }),
+    prisma.emailWritebackQueue.count({
+      where: {
+        tenantId: session.user.tenantId,
+        status: "pending",
+        channel: { provider: "microsoft" },
+      },
+    }),
+    prisma.emailWritebackQueue.count({
+      where: {
+        tenantId: session.user.tenantId,
+        status: "failed",
+        channel: { provider: "microsoft" },
+      },
+    }),
+    prisma.emailWritebackQueue.findFirst({
+      where: {
+        tenantId: session.user.tenantId,
+        status: "pending",
+        channel: { provider: "microsoft" },
+      },
+      orderBy: { nextAttemptAt: "asc" },
+      select: { nextAttemptAt: true },
+    }),
+    prisma.outlookSyncEvent.count({
+      where: {
+        tenantId: session.user.tenantId,
+        status: "failed",
+        createdAt: { gte: recentPushFailureCutoff },
+      },
+    }),
   ]);
 
   const isPersonal = !salesCrmEnabled(tenant);
@@ -143,6 +190,26 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
       oldestPendingAt: oldestPendingAgentJob?.createdAt ?? null,
     },
     recentPushFailures,
+  });
+
+  // Assembled only meaningfully when microsoft channels exist; summarizer
+  // returns a benign "not connected" summary otherwise, and the panel below
+  // only renders when outlookChannels.length > 0.
+  const outlookOperatorHealth = summarizeOutlookOperatorHealth({
+    now: new Date(),
+    channels: outlookChannels.map((channel) => ({
+      id: channel.id,
+      emailAddress: channel.emailAddress,
+      lastSyncedAt: channel.outlookCredential?.lastSyncedAt ?? null,
+      lastSyncStatus: channel.outlookCredential?.lastSyncStatus ?? null,
+      lastSyncError: channel.outlookCredential?.lastSyncError ?? null,
+      subscriptionExpiresAt: channel.outlookCredential?.subscriptionExpiresAt ?? null,
+      subscriptionError: channel.outlookCredential?.subscriptionError ?? null,
+    })),
+    writebackPending: outlookWritebackPending,
+    writebackFailed: outlookWritebackFailed,
+    oldestPendingWritebackAt: oldestPendingOutlookWriteback?.nextAttemptAt ?? null,
+    syncEventsFailed: outlookSyncEventsFailed,
   });
 
   const googleConfigured = !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
@@ -324,6 +391,12 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
 
             {outlookChannels.length > 0 && (
               <div className="mt-4 space-y-3">
+                <GmailOperatorHealthPanel
+                  summary={outlookOperatorHealth}
+                  title="Outlook operator health"
+                  description="Tracks sync, subscription, and writeback."
+                />
+                <FixGmailLabelsButton provider="outlook" providerLabel="Outlook" />
                 {outlookChannels.map((channel) => (
                   <div
                     key={channel.id}
