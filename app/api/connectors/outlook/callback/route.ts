@@ -8,6 +8,7 @@ import {
 } from "@/lib/microsoft"
 import { runOutlookDeltaSync } from "@/lib/outlook-sync"
 import { ensureOutlookSubscription } from "@/lib/outlook-subscriptions"
+import { ensureFlowDeskCategories } from "@/lib/outlook-mailbox"
 
 export const runtime = "nodejs"
 
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
 
   const redirectBase = `${process.env.NEXTAUTH_URL}/settings/connect`
 
-  if (error) return NextResponse.redirect(`${redirectBase}?error=google_denied`)
+  if (error) return NextResponse.redirect(`${redirectBase}?error=outlook_denied`)
   if (!code || !state) return NextResponse.redirect(`${redirectBase}?error=invalid_callback`)
 
   const tenantId = verifyOutlookState(state)
@@ -42,6 +43,7 @@ export async function GET(request: Request) {
   if (!outlookEmail) return NextResponse.redirect(`${redirectBase}?error=no_email`)
 
   const existing = await prisma.channel.findUnique({ where: { emailAddress: outlookEmail } })
+  const isNewConnection = !existing
   let channelId: string
 
   if (existing) {
@@ -82,6 +84,20 @@ export async function GET(request: Request) {
     await ensureOutlookSubscription(channelId)
   } catch {
     console.error("[outlook/callback] subscription setup failed", { channelId })
+  }
+  try {
+    await ensureFlowDeskCategories(channelId)
+  } catch (err) {
+    console.error("[outlook/callback] category bootstrap failed:", err)
+  }
+
+  // A fresh connection goes to the onboarding proof screen, which runs the
+  // first-pass over existing mail and shows what was organized. A reconnect
+  // (credential refresh on an already-known account) skips it and returns to
+  // Settings — that inbox is already organized. Mirrors the gmail callback's
+  // new-vs-reconnect decision.
+  if (isNewConnection) {
+    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/onboarding?connected=outlook`)
   }
 
   return NextResponse.redirect(`${redirectBase}?connected=${encodeURIComponent(outlookEmail)}`)

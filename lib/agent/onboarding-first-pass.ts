@@ -25,7 +25,7 @@ export type OnboardingFirstPassSample = {
 }
 
 export type OnboardingFirstPassResult = {
-  hadGmail: boolean
+  hadEmailChannel: boolean
   belowAutomationLevel: boolean
   minAutomationLevel: number
   organizedCount: number
@@ -36,7 +36,7 @@ export type OnboardingFirstPassResult = {
 
 function emptyResult(overrides: Partial<OnboardingFirstPassResult>): OnboardingFirstPassResult {
   return {
-    hadGmail: false,
+    hadEmailChannel: false,
     belowAutomationLevel: false,
     minAutomationLevel: MIN_LEVEL_FOR_ACTION.apply_gmail_labels,
     organizedCount: 0,
@@ -60,12 +60,18 @@ function extractQueuedLabels(payloadJson: unknown): { conversationId: string; la
 
 export async function runOnboardingFirstPass(tenantId: string): Promise<OnboardingFirstPassResult> {
   const channels = await prisma.channel.findMany({
-    where: { tenantId, provider: "google", gmailCredential: { isNot: null } },
+    where: {
+      tenantId,
+      OR: [
+        { provider: "google", gmailCredential: { isNot: null } },
+        { provider: "microsoft", outlookCredential: { isNot: null } },
+      ],
+    },
     select: { id: true, tenantId: true, provider: true },
   })
 
   if (channels.length === 0) {
-    return emptyResult({ hadGmail: false })
+    return emptyResult({ hadEmailChannel: false })
   }
 
   // Labels are the first rung of the automation ladder; new tenants default to
@@ -73,7 +79,7 @@ export async function runOnboardingFirstPass(tenantId: string): Promise<Onboardi
   // gate gets an honest "raise your level" message instead of a silent no-op.
   const automationLevel = await getAutomationLevel(tenantId)
   if (!isActionAllowedAtLevel(automationLevel, "apply_gmail_labels")) {
-    return emptyResult({ hadGmail: true, belowAutomationLevel: true })
+    return emptyResult({ hadEmailChannel: true, belowAutomationLevel: true })
   }
 
   // Capture the boundary before projecting so the proof summary reads only the
@@ -90,7 +96,11 @@ export async function runOnboardingFirstPass(tenantId: string): Promise<Onboardi
   }
 
   const queuedAudits = await prisma.auditLog.findMany({
-    where: { tenantId, action: "gmail.labels.queued", createdAt: { gte: startedAt } },
+    where: {
+      tenantId,
+      action: { in: ["gmail.labels.queued", "outlook.labels.queued"] },
+      createdAt: { gte: startedAt },
+    },
     select: { payloadJson: true },
   })
 
@@ -137,7 +147,7 @@ export async function runOnboardingFirstPass(tenantId: string): Promise<Onboardi
   }))
 
   return emptyResult({
-    hadGmail: true,
+    hadEmailChannel: true,
     organizedCount: labelsByConversation.size,
     byLabel,
     samples,

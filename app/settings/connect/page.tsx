@@ -27,6 +27,7 @@ interface Props {
 
 const ERROR_MESSAGES: Record<string, string> = {
   google_denied: "Google sign-in was cancelled.",
+  outlook_denied: "Microsoft sign-in was cancelled.",
   invalid_state: "The authentication request expired. Please try again.",
   token_exchange_failed: "Could not complete Google sign-in. Please try again.",
   missing_tokens: "Google did not return the required permissions. Make sure to grant all requested scopes.",

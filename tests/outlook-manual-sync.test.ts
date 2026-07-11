@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   channelFindFirst: vi.fn(),
   runDelta: vi.fn(),
   revalidate: vi.fn(),
+  ensureFlowDeskCategories: vi.fn(),
 }))
 vi.mock("next-auth", () => ({ getServerSession: mocks.session }))
 vi.mock("@/lib/auth", () => ({ authOptions: {} }))
@@ -12,6 +13,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: { channel: { findFirst: mocks.channelFindFirst } },
 }))
 vi.mock("@/lib/outlook-sync", () => ({ runOutlookDeltaSync: mocks.runDelta }))
+vi.mock("@/lib/outlook-mailbox", () => ({ ensureFlowDeskCategories: mocks.ensureFlowDeskCategories }))
 vi.mock("@/lib/cache-tags", () => ({ revalidateInboxViews: mocks.revalidate }))
 
 import { POST } from "@/app/api/connectors/outlook/sync/route"
@@ -40,6 +42,18 @@ describe("Outlook manual sync", () => {
       tenantId: "tenant-1",
       requestedMode: "manual",
     })
+  })
+
+  it("best-effort ensures FlowDesk categories before running delta sync", async () => {
+    await POST(syncRequest())
+    expect(mocks.ensureFlowDeskCategories).toHaveBeenCalledWith("channel-1")
+  })
+
+  it("does not let a category-ensure failure block the sync", async () => {
+    mocks.ensureFlowDeskCategories.mockRejectedValueOnce(new Error("graph down"))
+    const response = await POST(syncRequest())
+    expect(response.status).toBe(200)
+    expect(mocks.runDelta).toHaveBeenCalled()
   })
 
   it("returns 202 when another delta worker holds the credential lease", async () => {
