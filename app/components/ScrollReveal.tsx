@@ -19,6 +19,14 @@ export default function ScrollReveal({ children, className = "", delay = 0 }: Pr
       return;
     }
 
+    // Reveal synchronously when already in view at mount — above-the-fold
+    // content must never stay hidden waiting on an observer callback
+    const rect = el.getBoundingClientRect();
+    if (rect.top < window.innerHeight && rect.bottom > 0) {
+      const t = setTimeout(() => el.classList.add("revealed"), delay);
+      return () => clearTimeout(t);
+    }
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {

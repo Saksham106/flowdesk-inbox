@@ -79,12 +79,11 @@ export default function FAQ() {
             </div>
           </ScrollReveal>
 
-          {/* Right: FAQ list */}
+          {/* Right: FAQ list — rendered plainly (no per-item reveal) so the
+              list never shows gaps while staggered animations are pending */}
           <div className="flex-1 min-w-0 flex flex-col gap-3 w-full">
-            {faqs.map((item, i) => (
-              <ScrollReveal key={item.q} delay={i * 80}>
-                <FAQItem q={item.q} a={item.a} />
-              </ScrollReveal>
+            {faqs.map((item) => (
+              <FAQItem key={item.q} q={item.q} a={item.a} />
             ))}
           </div>
         </div>

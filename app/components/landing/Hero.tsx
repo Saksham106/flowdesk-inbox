@@ -24,7 +24,7 @@ export default function Hero() {
               className="text-[40px] sm:text-[56px] leading-[1.15] font-normal text-black w-full"
               style={{ fontFamily: "var(--font-lora), Georgia, serif" }}
             >
-              Open your inbox without the dread
+              Your inbox, on autopilot
             </h1>
           </ScrollReveal>
 
