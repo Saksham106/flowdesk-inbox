@@ -23,6 +23,7 @@ vi.mock("@/lib/agent/availability", () => ({ checkAvailability: vi.fn(), formatS
 vi.mock("@/lib/google", () => ({ extractEmail: (value: string) => value }))
 
 import { runAgentJob } from "@/lib/agent/jobs"
+import { normalizePersistedAttentionCategory } from "@/lib/ai/prompts/classify"
 
 describe("runAgentJob Gmail overrides", () => {
   beforeEach(() => {
@@ -45,6 +46,21 @@ describe("runAgentJob Gmail overrides", () => {
     const result = await runAgentJob("job-1")
 
     expect(result).toEqual({ status: "completed", intent: "gmail_label_override", confidence: 1, requiresApproval: false, autopilotSent: false })
+    expect(mockClassify).not.toHaveBeenCalled()
+  })
+
+  it("falls back safely when a Gmail override has an invalid persisted attention category", async () => {
+    mockConvFindFirst.mockResolvedValue({
+      id: "conv-1", tenantId: "tenant-1", messages: [],
+      stateRecord: {
+        attentionCategory: "not_a_category",
+        metadataJson: { gmailLabelOverride: { workflow: "Read Later", contentType: null } },
+      },
+    })
+
+    await runAgentJob("job-1")
+
+    expect(normalizePersistedAttentionCategory("not_a_category")).toBe("quiet")
     expect(mockClassify).not.toHaveBeenCalled()
   })
 })

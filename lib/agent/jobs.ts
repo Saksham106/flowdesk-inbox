@@ -8,7 +8,7 @@ import { checkPolicy } from "@/lib/agent/policy"
 import { checkAvailability, formatSlots, type AvailableSlot } from "@/lib/agent/availability"
 import { attemptAutopilotSend } from "@/lib/agent/autopilot"
 import type { AgentJob, Prisma } from "@prisma/client"
-import type { ClassifyResult } from "@/lib/ai/prompts/classify"
+import { normalizePersistedAttentionCategory, type ClassifyResult } from "@/lib/ai/prompts/classify"
 import type { StaticRuleMatch } from "@/lib/agent/static-rules"
 
 const SCHEDULING_KEYWORDS = /book|appointment|schedul|reschedul|availab|slot|time|when|visit/i
@@ -173,7 +173,7 @@ async function _executeJob(
       requiresApproval: false,
       classification: {
         intent: "gmail_label_override",
-        attentionCategory: (conversation.stateRecord?.attentionCategory as ClassifyResult["attentionCategory"]) ?? "quiet",
+        attentionCategory: normalizePersistedAttentionCategory(conversation.stateRecord?.attentionCategory),
         emailType,
         evidence: ["active_gmail_label_override"],
         classificationReason: "Skipped because a Gmail label override is active.",

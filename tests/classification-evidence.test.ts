@@ -18,6 +18,36 @@ describe("buildClassificationEvidence", () => {
     expect(evidence.deterministicSignals).toContain("list_unsubscribe")
   })
 
+  it("does not treat an ordinary body mention of unsubscribe as List-Unsubscribe evidence", () => {
+    const evidence = buildClassificationEvidence({
+      messages: [{
+        direction: "inbound",
+        fromE164: "Alex <alex@example.com>",
+        body: "Could you unsubscribe me from the gym mailing list when you have a moment?",
+        createdAt: new Date("2026-07-10T09:00:00Z"),
+      }],
+    })
+
+    expect(evidence.unsubscribe).toBe(false)
+    expect(evidence.deterministicSignals).not.toContain("list_unsubscribe")
+  })
+
+  it("caps oversized inbound bodies before retaining classification evidence", () => {
+    const body = `${"a".repeat(12_000)} UNIQUE_TRAILING_CONTENT`
+    const evidence = buildClassificationEvidence({
+      messages: [{
+        direction: "inbound",
+        fromE164: "Alex <alex@example.com>",
+        body,
+        createdAt: new Date("2026-07-10T09:00:00Z"),
+      }],
+    })
+
+    expect(evidence.latestInbound?.body.length).toBeLessThanOrEqual(2_000)
+    expect(evidence.recentReciprocalReplies[0]?.body.length).toBeLessThanOrEqual(800)
+    expect(JSON.stringify(evidence)).not.toContain("UNIQUE_TRAILING_CONTENT")
+  })
+
   it("captures calendar and notification header evidence", () => {
     const evidence = buildClassificationEvidence({
       messages: [{

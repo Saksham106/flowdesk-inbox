@@ -428,6 +428,27 @@ describe('runAgentJob', () => {
 })
 
 describe("personal vs business classify prompt", () => {
+  it("caps supplied evidence before prompt serialization", () => {
+    const prompt = buildClassifyPrompt({
+      accountType: "personal",
+      businessProfile: null,
+      messages: [{ direction: "inbound", body: "Hello", createdAt: new Date() }],
+      evidence: {
+        sender: { email: "alex@example.com", domain: "example.com" },
+        latestInbound: { body: `${"a".repeat(12_000)} UNIQUE_TRAILING_CONTENT`, subject: null, createdAt: "2026-07-10T09:00:00Z" },
+        recentReciprocalReplies: [],
+        unsubscribe: false,
+        calendarInvite: false,
+        notificationHeaders: [],
+        deterministicSignals: [],
+        priorCorrection: null,
+        priorRuleEvidence: [],
+      },
+    })
+
+    expect(prompt).not.toContain("UNIQUE_TRAILING_CONTENT")
+  })
+
   it("personal account prompt does not mention sales or leads", () => {
     // buildClassifyPrompt imported at top of file
     const prompt = buildClassifyPrompt({

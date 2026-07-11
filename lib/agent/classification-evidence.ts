@@ -26,6 +26,14 @@ export type ClassificationEvidence = {
   hasGmailOverride: boolean
 }
 
+const MAX_LATEST_INBOUND_BODY_CHARS = 2_000
+const MAX_AGGREGATE_INBOUND_BODY_CHARS = 6_000
+const MAX_RECIPROCAL_REPLY_BODY_CHARS = 800
+
+function truncate(value: string, maxChars: number): string {
+  return value.slice(0, maxChars)
+}
+
 function metadataRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -52,10 +60,16 @@ export function buildClassificationEvidence(input: {
   const inbound = ordered.filter((message) => message.direction === "inbound")
   const latestInboundMessage = [...inbound].reverse().find((message) => message.body.trim()) ?? null
   const senderEmail = extractEmail(latestInboundMessage?.fromE164)
-  const body = inbound.map((message) => message.body).join("\n")
+  // Inspect only a bounded aggregate so unusually large message bodies cannot
+  // inflate the deterministic evidence or the downstream model prompt.
+  const body = truncate(inbound.map((message) => message.body).join("\n"), MAX_AGGREGATE_INBOUND_BODY_CHARS)
   const notificationHeaders = [...body.matchAll(/^\s*(x-(?:github|gitlab|slack|ms|notification)[\w-]*|precedence|auto-submitted)\s*:/gim)]
     .map((match) => match[1].toLowerCase())
-  const unsubscribe = /(?:^|\n)\s*list-unsubscribe\s*:|\bunsubscribe\b/i.test(body)
+  // A user asking to "unsubscribe" is not a List-Unsubscribe signal. Raw
+  // headers are preserved in some provider payloads, so accept that explicit
+  // header evidence only; parsed unsubscribe URLs are handled separately by
+  // the unsubscribe workflow.
+  const unsubscribe = /(?:^|\n)\s*list-unsubscribe\s*:/i.test(body)
   const calendarInvite = /begin:vcalendar|content-type:\s*text\/calendar|\bmethod:(?:request|reply|cancel)\b|\.ics\b/i.test(body)
   const signals = [
     ...(unsubscribe ? ["list_unsubscribe"] : []),
@@ -78,12 +92,12 @@ export function buildClassificationEvidence(input: {
       domain: senderEmail?.split("@")[1] ?? null,
     },
     latestInbound: latestInboundMessage
-      ? { body: latestInboundMessage.body.trim(), subject: latestInboundMessage.subject ?? null, createdAt: timestamp(latestInboundMessage.createdAt) }
+      ? { body: truncate(latestInboundMessage.body.trim(), MAX_LATEST_INBOUND_BODY_CHARS), subject: latestInboundMessage.subject ?? null, createdAt: timestamp(latestInboundMessage.createdAt) }
       : null,
     recentReciprocalReplies: ordered
       .filter((message) => (message.direction === "inbound" || message.direction === "outbound") && message.body.trim())
       .slice(-6)
-      .map((message) => ({ direction: message.direction as "inbound" | "outbound", body: message.body.trim().slice(0, 800) })),
+      .map((message) => ({ direction: message.direction as "inbound" | "outbound", body: truncate(message.body.trim(), MAX_RECIPROCAL_REPLY_BODY_CHARS) })),
     unsubscribe,
     calendarInvite,
     notificationHeaders,

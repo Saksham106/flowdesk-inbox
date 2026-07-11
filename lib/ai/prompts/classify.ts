@@ -14,6 +14,12 @@ export type ClassifyLabel = (typeof ALLOWED_LABELS)[number]
 export type ClassifyRiskLevel = (typeof RISK_LEVELS)[number]
 export type AttentionCategory = (typeof ATTENTION_CATEGORIES)[number]
 
+export function normalizePersistedAttentionCategory(value: unknown): AttentionCategory {
+  return ATTENTION_CATEGORIES.includes(value as AttentionCategory)
+    ? value as AttentionCategory
+    : "quiet"
+}
+
 export type ClassifyResult = {
   intent: string
   attentionCategory: AttentionCategory
@@ -89,8 +95,38 @@ export const classifyJsonSchema = {
   },
 }
 
+const MAX_EVIDENCE_LATEST_BODY_CHARS = 2_000
+const MAX_EVIDENCE_REPLY_BODY_CHARS = 800
+const MAX_EVIDENCE_STRING_CHARS = 500
+
+function truncateEvidence(value: string, maxChars: number): string {
+  return value.slice(0, maxChars)
+}
+
+function evidenceForPrompt(evidence: ClassifyPromptInput["evidence"]): ClassifyPromptInput["evidence"] {
+  if (!evidence) return undefined
+  return {
+    ...evidence,
+    latestInbound: evidence.latestInbound
+      ? {
+          ...evidence.latestInbound,
+          body: truncateEvidence(evidence.latestInbound.body, MAX_EVIDENCE_LATEST_BODY_CHARS),
+          subject: evidence.latestInbound.subject ? truncateEvidence(evidence.latestInbound.subject, MAX_EVIDENCE_STRING_CHARS) : null,
+        }
+      : null,
+    recentReciprocalReplies: evidence.recentReciprocalReplies.slice(-6).map((reply) => ({
+      ...reply,
+      body: truncateEvidence(reply.body, MAX_EVIDENCE_REPLY_BODY_CHARS),
+    })),
+    notificationHeaders: evidence.notificationHeaders.slice(0, 12).map((header) => truncateEvidence(header, MAX_EVIDENCE_STRING_CHARS)),
+    deterministicSignals: evidence.deterministicSignals.slice(0, 12).map((signal) => truncateEvidence(signal, MAX_EVIDENCE_STRING_CHARS)),
+    priorRuleEvidence: evidence.priorRuleEvidence.slice(0, 12).map((rule) => truncateEvidence(rule, MAX_EVIDENCE_STRING_CHARS)),
+  }
+}
+
 export function buildClassifyPrompt(input: ClassifyPromptInput): string {
   const isPersonal = input.accountType === "personal"
+  const evidence = evidenceForPrompt(input.evidence)
   const messages = input.messages
     .slice(-12)
     .map((m) => {
@@ -133,7 +169,7 @@ export function buildClassifyPrompt(input: ClassifyPromptInput): string {
       messages || "No messages.",
       "",
       "Known deterministic evidence (treat this as authoritative; preserve a prior correction and choose safe uncertainty when signals conflict):",
-      JSON.stringify(input.evidence ?? null),
+      JSON.stringify(evidence ?? null),
     ].join("\n")
   }
 
@@ -174,7 +210,7 @@ export function buildClassifyPrompt(input: ClassifyPromptInput): string {
     messages || "No messages.",
     "",
     "Known deterministic evidence:",
-    JSON.stringify(input.evidence ?? null),
+    JSON.stringify(evidence ?? null),
   ].join("\n")
 }
 
