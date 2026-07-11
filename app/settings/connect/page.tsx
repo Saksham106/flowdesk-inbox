@@ -20,8 +20,6 @@ interface Props {
     error?: string;
     cal_connected?: string;
     cal_error?: string;
-    drive_connected?: string;
-    drive_error?: string;
   };
 }
 
@@ -158,10 +156,6 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
     ? (ERROR_MESSAGES[searchParams.cal_error] ?? "An error occurred. Please try again.")
     : null;
 
-  const driveError = searchParams.drive_error
-    ? (ERROR_MESSAGES[searchParams.drive_error] ?? "An error occurred connecting Google Drive. Please try again.")
-    : null;
-
   return (
     <>
       {/* Success / error banners */}
@@ -186,17 +180,6 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
           <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
             <span className="font-medium">{decodeURIComponent(searchParams.cal_connected)}</span> calendar
             connected successfully.
-          </div>
-        )}
-        {driveError && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            Google Drive: {driveError}
-          </div>
-        )}
-        {searchParams.drive_connected && (
-          <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-            Google Drive connected as{" "}
-            <span className="font-medium">{decodeURIComponent(searchParams.drive_connected)}</span>.
           </div>
         )}
       </div>
