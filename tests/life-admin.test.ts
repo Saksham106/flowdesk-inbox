@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { detectLifeAdminType, type LifeAdminResult } from "@/lib/agent/life-admin"
+import { detectLifeAdminType } from "@/lib/agent/life-admin"
 
 describe("detectLifeAdminType", () => {
   it("detects bill due with amount and date", () => {

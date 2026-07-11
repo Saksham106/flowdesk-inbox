@@ -9,7 +9,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }))
 
-import { advanceWorkflowStep, computeNextRunAt } from "@/lib/agent/workflow-runner"
+import { computeNextRunAt } from "@/lib/agent/workflow-runner"
 
 describe("computeNextRunAt", () => {
   it("returns null for send_draft step (no wait)", () => {

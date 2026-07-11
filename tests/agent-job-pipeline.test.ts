@@ -140,7 +140,7 @@ describe('normalizeClassifyOutput', () => {
   })
 
   it('defaults requiresApproval to true when missing', () => {
-    const { requiresApproval: _, ...rest } = goodClassification
+    const { requiresApproval, ...rest } = goodClassification
     expect(normalizeClassifyOutput(JSON.stringify(rest)).requiresApproval).toBe(true)
   })
 })
