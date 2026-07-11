@@ -139,7 +139,7 @@ Optional real-time sync:
 - Set `GMAIL_PUSH_TOPIC` to the topic name and `GMAIL_PUSH_SECRET` to the same secret used in the push URL.
 - Schedule `GET /api/cron/gmail-watch` daily with `Authorization: Bearer <CRON_SECRET>` so Gmail watches renew before their 7-day expiration.
 - Schedule `GET /api/cron/gmail-push-retry`, `GET /api/cron/gmail-writeback`, and `GET /api/cron/gmail-state-reconcile` with the same bearer token to retry failed push syncs, retry Gmail label/read writebacks, and detect local/Gmail read-state drift.
-- Schedule `GET /api/cron/gmail-label-reconcile` (daily is enough) with the same bearer token as label maintenance: it re-creates any FlowDesk labels the user deleted in Gmail and re-projects labels for a bounded batch of recently-active conversations whose Gmail labels drifted (manual label moves, writebacks that failed out of retries). It only enqueues through `GmailWritebackQueue`; the `gmail-writeback` cron performs the actual mutations. Returns `500` with `X-Gmail-Label-Reconcile-Errors: <count>` when anything fails.
+- Schedule `GET /api/cron/gmail-label-reconcile` (daily is enough) with the same bearer token as label maintenance: it re-creates any FlowDesk labels the user deleted in Gmail and re-projects labels for a bounded batch of recently-active conversations whose Gmail labels drifted (manual label moves, writebacks that failed out of retries). It only enqueues through `EmailWritebackQueue` (shared with Outlook writeback); the `gmail-writeback` cron performs the actual mutations. Returns `500` with `X-Gmail-Label-Reconcile-Errors: <count>` when anything fails.
 
 Gmail cron monitoring:
 - Treat non-2xx responses from `GET /api/cron/gmail-watch` as alerts. The endpoint returns `500` and `X-Gmail-Watch-Errors: <count>` when any channel renewal fails.
@@ -153,7 +153,7 @@ Inbox sync behavior:
 - Overlapping server requests return `202 { skipped: "sync_in_progress" }`.
 - Gmail raw state (`gmailUnread`, `gmailRawState`, `gmailLabelIds`) is stored separately from local user/read state (`userState`, `readAt`, `isRead`). Sync imports Gmail read/unread, but user actions such as Mark Done and local reads are not overwritten by AI classification.
 - Sync observability is stored on `GmailCredential.lastSyncMode`, `lastSyncStatus`, `lastSyncError`, `lastSyncedAt`, `watchExpiresAt`, `watchRenewalError`, `watchLastRenewalAttempt`, and `lastHistoryFallbackAt`.
-- Workflow/status changes queue FlowDesk Gmail label projection through `GmailWritebackQueue`. The cron applies the current flat, colored FlowDesk labels to the Gmail thread and removes stale FlowDesk labels from that managed label set.
+- Workflow/status changes queue FlowDesk Gmail label projection through `EmailWritebackQueue`. The cron applies the current flat, colored FlowDesk labels to the Gmail thread and removes stale FlowDesk labels from that managed label set.
 - Opening or marking a Gmail conversation read updates local state immediately, retries Gmail `UNREAD` removal, and queues failed writeback for cron retry without blocking the UI.
 - If Gmail push is configured, Pub/Sub notifications trigger incremental sync server-side; push events are persisted by Pub/Sub `messageId` for idempotency and retry.
 - Inbox auto-refresh polls `GET /api/inbox/summary` once per minute for lightweight status data instead of calling `router.refresh()` on the whole page.

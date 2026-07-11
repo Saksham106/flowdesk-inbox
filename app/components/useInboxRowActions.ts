@@ -6,7 +6,7 @@ import type { WorkflowStatus } from "@/lib/workflow-status"
 // Type-only import — safe from a client component since it's erased at
 // compile time and never pulls lib/gmail-labels.ts's server-only runtime
 // (prisma, etc.) into the browser bundle.
-import type { FlowDeskGmailLabelName } from "@/lib/gmail-labels"
+import type { FlowDeskGmailLabelName } from "@/lib/email-labels"
 import { FLOWDESK_LABEL_OPTIONS, currentFlowDeskLabel } from "@/lib/flowdesk-label-display"
 
 export { FLOWDESK_LABEL_OPTIONS }

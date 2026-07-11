@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { runOutlookDeltaSync } from "@/lib/outlook-sync"
+import { ensureFlowDeskCategories } from "@/lib/outlook-mailbox"
 import { revalidateInboxViews } from "@/lib/cache-tags"
 
 export const runtime = "nodejs"
@@ -23,6 +24,14 @@ export async function POST(request: Request) {
   })
   if (!channel) {
     return NextResponse.json({ error: "Channel not found" }, { status: 404 })
+  }
+
+  // Backfill the FlowDesk category set for mailboxes connected before
+  // bootstrap-on-connect existed. Idempotent and best-effort; never blocks sync.
+  try {
+    await ensureFlowDeskCategories(channelId)
+  } catch (err) {
+    console.error("[outlook/sync] category backfill failed:", err)
   }
 
   try {

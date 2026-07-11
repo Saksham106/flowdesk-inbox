@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { trashGmailThread } from "@/lib/google";
+import { getWritebackAdapter } from "@/lib/email/writeback-adapter";
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata";
 import { revalidateInboxViews } from "@/lib/cache-tags";
 
@@ -29,12 +29,15 @@ export async function PATCH(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (conversation.channel.provider !== "google") {
-    return NextResponse.json({ error: "Trash is only supported for Gmail accounts" }, { status: 400 });
+  const adapter = getWritebackAdapter(conversation.channel.provider);
+  if (!adapter || !conversation.externalThreadId) {
+    return NextResponse.json(
+      { error: "Trash is not supported for this channel" },
+      { status: 400 }
+    );
   }
 
-  // Gmail writeback — moves thread to Trash (not permanent deletion)
-  await trashGmailThread(conversation.channelId, conversation.externalThreadId);
+  await adapter.trashConversation(conversation.channelId, conversation.externalThreadId);
 
   const now = new Date();
 

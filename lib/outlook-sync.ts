@@ -1,7 +1,13 @@
 import { randomUUID } from "crypto"
 
+import { clearGmailLabelOverride } from "@/lib/agent/gmail-label-feedback"
+import {
+  applyOutlookCategoryFeedback,
+  type OutlookProjectionSnapshot,
+} from "@/lib/agent/outlook-category-feedback"
 import { syncConversationWorkItems } from "@/lib/agent/work-item-sync"
 import { decryptString, encryptString } from "@/lib/crypto"
+import { normalizeFlowDeskLabelPayload } from "@/lib/email-labels"
 import {
   getOutlookAccessToken,
   graphGet,
@@ -48,7 +54,10 @@ const DELTA_FIELDS = [
   "receivedDateTime",
   "internetMessageId",
   "isRead",
+  "categories",
 ].join(",")
+
+type FeedbackCandidate = { conversationId: string; categories: string[] }
 
 function initialDeltaPath(): string {
   const params = new URLSearchParams({ $select: DELTA_FIELDS })
@@ -76,6 +85,26 @@ async function persistCursor(channelId: string, leaseId: string, cursor: string)
     },
   })
   if (updated.count !== 1) throw new Error("Outlook sync lease lost")
+}
+
+// Pre-run view of a conversation's apply_labels projection job, read BEFORE
+// work-item sync can rewrite it during this run. Null when FlowDesk never
+// projected labels for the thread or the payload is unreadable — either way
+// there is nothing trustworthy to diff a user edit against.
+async function snapshotProjectionJob(
+  conversationId: string
+): Promise<OutlookProjectionSnapshot | null> {
+  const job = await prisma.emailWritebackQueue.findUnique({
+    where: { conversationId_action: { conversationId, action: "apply_labels" } },
+    select: { status: true, providerMessageIdsJson: true },
+  })
+  if (!job) return null
+  const payload = normalizeFlowDeskLabelPayload(job.providerMessageIdsJson)
+  if (!payload) return null
+  return {
+    settled: job.status !== "pending" && job.status !== "processing",
+    labels: payload.labels,
+  }
 }
 
 async function applyRemovedMessage(
@@ -109,12 +138,14 @@ async function applyLiveMessage({
   tenantId,
   myEmail,
   affectedConversationIds,
+  feedbackCandidates,
 }: {
   message: GraphMessage
   channelId: string
   tenantId: string
   myEmail: string
   affectedConversationIds: Set<string>
+  feedbackCandidates: Map<string, FeedbackCandidate>
 }): Promise<boolean> {
   if (!message.id || !message.conversationId || !message.from?.emailAddress?.address) {
     return false
@@ -160,6 +191,15 @@ async function applyLiveMessage({
   })
 
   const direction = fromEmail === myEmail ? "outbound" : "inbound"
+  const providerMessageId = `outlook_${message.id}`
+  // Distinguish a genuine user category edit (on a message we already had) from
+  // categories set by FlowDesk's own projection on first ingest: only messages
+  // that already existed can carry a user edit. Cheap existence probe before the
+  // upsert, mirroring how applyRemovedMessage reads by providerMessageId.
+  const existed = !!(await prisma.message.findUnique({
+    where: { providerMessageId },
+    select: { id: true },
+  }))
   const values = {
     conversationId: conversation.id,
     direction,
@@ -172,15 +212,47 @@ async function applyLiveMessage({
   } as const
 
   await prisma.message.upsert({
-    where: { providerMessageId: `outlook_${message.id}` },
-    create: { ...values, providerMessageId: `outlook_${message.id}` },
+    where: { providerMessageId },
+    create: { ...values, providerMessageId },
     update: values,
   })
 
-  if (!(conversation.lastMessageAt instanceof Date) || receivedAt > conversation.lastMessageAt) {
-    await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { lastMessageAt: receivedAt },
+  // Recompute the provider-unread flag after the upsert. `gmailUnread`, despite
+  // the name, is the generic "unread in the provider mailbox" flag shared by
+  // Gmail and Outlook: true when any inbound message is still unread. Folded
+  // into the lastMessageAt bump so a live message costs a single conversation
+  // write.
+  const unreadInbound = await prisma.message.count({
+    where: { conversationId: conversation.id, direction: "inbound", isRead: false },
+  })
+  const bumpsLastMessage =
+    !(conversation.lastMessageAt instanceof Date) || receivedAt > conversation.lastMessageAt
+  await prisma.conversation.update({
+    where: { id: conversation.id },
+    data: {
+      gmailUnread: unreadInbound > 0,
+      ...(bumpsLastMessage ? { lastMessageAt: receivedAt } : {}),
+    },
+  })
+
+  // Only pre-existing inbound messages can reflect a user's manual category
+  // edit; brand-new messages get their categories from FlowDesk's projection.
+  // Last write per conversation wins.
+  if (existed && direction === "inbound") {
+    feedbackCandidates.set(conversation.id, {
+      conversationId: conversation.id,
+      categories: message.categories ?? [],
+    })
+  } else if (!existed && direction === "inbound") {
+    // Mirror Gmail (lib/google.ts): a genuinely NEW inbound message resets the
+    // thread context, so lift any user-edit label hold that would otherwise
+    // freeze projection forever. Best-effort; never breaks the sync run.
+    clearGmailLabelOverride({ tenantId, conversationId: conversation.id }).catch((err) => {
+      console.warn("Failed to clear label override after Outlook inbound message", {
+        tenantId,
+        conversationId: conversation.id,
+        message: err instanceof Error ? err.message : "Unknown error",
+      })
     })
   }
   affectedConversationIds.add(conversation.id)
@@ -242,6 +314,7 @@ export async function runOutlookDeltaSync({
       ? decryptString(credential.deltaLinkEncrypted)
       : initialDeltaPath()
     const affectedConversationIds = new Set<string>()
+    const feedbackCandidates = new Map<string, FeedbackCandidate>()
 
     while (pages < Math.max(1, maxPages)) {
       let page: GraphDeltaPage
@@ -278,6 +351,7 @@ export async function runOutlookDeltaSync({
             tenantId,
             myEmail: channel.emailAddress.toLowerCase(),
             affectedConversationIds,
+            feedbackCandidates,
           })
         ) {
           synced++
@@ -300,11 +374,38 @@ export async function runOutlookDeltaSync({
       break
     }
 
+    // Snapshot each feedback candidate's apply_labels projection BEFORE
+    // work-item sync runs: re-projection during this run always rewrites the
+    // job (queueFlowDeskLabelWriteback's upsert replaces the payload), so a
+    // post-run read would diff the delta's category snapshot against a payload
+    // NEWER than it — fabricating phantom "user removed X" corrections while
+    // never seeing the edit itself. Diffing against the pre-run payload — what
+    // FlowDesk had actually projected when the user edited — kills the phantom
+    // and keeps genuine edits learnable in the same run.
+    const priorProjections = new Map<string, OutlookProjectionSnapshot | null>()
+    for (const conversationId of feedbackCandidates.keys()) {
+      priorProjections.set(
+        conversationId,
+        await snapshotProjectionJob(conversationId).catch(() => null)
+      )
+    }
+
     await Promise.all(
       [...affectedConversationIds].map((conversationId) =>
         syncConversationWorkItems({ tenantId, conversationId }).catch(() => undefined)
       )
     )
+
+    // Learn user category edits after work-item sync has settled the projection.
+    // Failures are swallowed so feedback never breaks the sync run itself.
+    for (const item of feedbackCandidates.values()) {
+      await applyOutlookCategoryFeedback({
+        tenantId,
+        conversationId: item.conversationId,
+        messageCategories: item.categories,
+        priorJob: priorProjections.get(item.conversationId) ?? null,
+      }).catch(() => undefined)
+    }
 
     const released = await prisma.outlookCredential.updateMany({
       where: { channelId, syncLeaseId: leaseId },

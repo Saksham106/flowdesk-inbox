@@ -3,7 +3,7 @@ import { extractEmail, fetchThread, getGmailClient, sendGmailReply } from "@/lib
 import { normalizeRecipientList, RecipientValidationError } from "@/lib/conversations/recipients"
 import { sendOutlookReply } from "@/lib/microsoft"
 import { conversationUpdateForWorkflowStatus } from "@/lib/workflow-status-transitions"
-import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
+import { projectFlowDeskLabelsForConversation } from "@/lib/email-labels"
 
 type ConversationForSend = NonNullable<
   Awaited<

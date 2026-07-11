@@ -2,7 +2,7 @@ import { BULK_LIST_PATTERN } from "@/lib/agent/email-classifier"
 import { extractListUnsubscribeHeader } from "@/lib/agent/unsubscribe"
 import { prisma } from "@/lib/prisma"
 import { runAiJsonFeature } from "@/lib/ai/gateway"
-import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
+import { projectFlowDeskLabelsForConversation } from "@/lib/email-labels"
 import {
   buildDraftEligibilityPrompt,
   draftEligibilityJsonSchema,

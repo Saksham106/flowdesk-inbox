@@ -63,7 +63,7 @@ vi.mock("@/lib/agent/person-memory", () => ({
   syncPersonMemoryWithLLM: mockSyncPersonMemoryWithLLM,
 }))
 
-vi.mock("@/lib/gmail-labels", () => ({
+vi.mock("@/lib/email-labels", () => ({
   projectFlowDeskLabelsForConversation: mockProjectFlowDeskLabels,
 }))
 

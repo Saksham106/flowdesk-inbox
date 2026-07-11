@@ -11,11 +11,16 @@ const mocks = vi.hoisted(() => ({
   messageFindUnique: vi.fn(),
   messageDelete: vi.fn(),
   messageFindFirst: vi.fn(),
+  messageCount: vi.fn(),
   getToken: vi.fn(),
   graphGet: vi.fn(),
   encrypt: vi.fn((value: string) => `enc:${value}`),
   decrypt: vi.fn((value: string) => value.replace(/^enc:/, "")),
   syncWorkItems: vi.fn(),
+  applyCategoryFeedback: vi.fn(),
+  clearLabelOverride: vi.fn(),
+  writebackFindUnique: vi.fn(),
+  applyCore: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -35,7 +40,9 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mocks.messageFindUnique,
       delete: mocks.messageDelete,
       findFirst: mocks.messageFindFirst,
+      count: mocks.messageCount,
     },
+    emailWritebackQueue: { findUnique: mocks.writebackFindUnique },
   },
 }));
 
@@ -61,9 +68,28 @@ vi.mock("@/lib/agent/work-item-sync", () => ({
   syncConversationWorkItems: mocks.syncWorkItems,
 }));
 
+vi.mock("@/lib/agent/outlook-category-feedback", () => ({
+  applyOutlookCategoryFeedback: mocks.applyCategoryFeedback,
+}));
+
+vi.mock("@/lib/agent/gmail-label-feedback", () => ({
+  clearGmailLabelOverride: mocks.clearLabelOverride,
+}));
+
+// Mocked so the pre-run-snapshot integration tests can delegate the feedback
+// mock to the REAL applyOutlookCategoryFeedback and observe which corrections
+// it would record without touching further prisma models.
+vi.mock("@/lib/agent/label-feedback-core", () => ({
+  applyLabelFeedbackCore: mocks.applyCore,
+}));
+
 import { runOutlookDeltaSync } from "@/lib/outlook-sync";
 
-function message(id: string, receivedDateTime = "2026-06-24T12:00:00.000Z") {
+function message(
+  id: string,
+  receivedDateTime = "2026-06-24T12:00:00.000Z",
+  overrides: { isRead?: boolean; categories?: string[] } = {}
+) {
   return {
     id,
     conversationId: "graph-conversation-1",
@@ -73,7 +99,8 @@ function message(id: string, receivedDateTime = "2026-06-24T12:00:00.000Z") {
     body: { content: "<p>Hello there</p>", contentType: "html" },
     receivedDateTime,
     internetMessageId: `<${id}@example.com>`,
-    isRead: false,
+    isRead: overrides.isRead ?? false,
+    ...(overrides.categories ? { categories: overrides.categories } : {}),
   };
 }
 
@@ -95,7 +122,13 @@ describe("runOutlookDeltaSync", () => {
     mocks.contactUpsert.mockResolvedValue({ id: "contact-1" });
     mocks.conversationUpsert.mockResolvedValue({ id: "conversation-1" });
     mocks.messageUpsert.mockResolvedValue({ id: "message-1" });
+    mocks.messageFindUnique.mockResolvedValue(null);
+    mocks.messageCount.mockResolvedValue(0);
     mocks.syncWorkItems.mockResolvedValue(undefined);
+    mocks.applyCategoryFeedback.mockResolvedValue({ applied: false });
+    mocks.clearLabelOverride.mockResolvedValue(true);
+    mocks.writebackFindUnique.mockResolvedValue(null);
+    mocks.applyCore.mockResolvedValue({ applied: true, kind: "addition" });
   });
 
   it("processes nextLink pages and persists the final encrypted deltaLink", async () => {
@@ -207,6 +240,185 @@ describe("runOutlookDeltaSync", () => {
     expect(mocks.conversationUpdate).toHaveBeenCalledWith({
       where: { id: "conversation-1" },
       data: { status: "closed" },
+    });
+  });
+
+  it("runs category feedback for an updated pre-existing inbound message with the pre-run job snapshot", async () => {
+    mocks.messageFindUnique.mockResolvedValue({ id: "local-message" });
+    mocks.writebackFindUnique.mockResolvedValue({
+      status: "completed",
+      providerMessageIdsJson: { threadId: "graph-thread-1", labels: ["Needs Reply"] },
+    });
+    mocks.graphGet.mockResolvedValueOnce({
+      value: [message("message-1", "2026-06-24T12:00:00.000Z", { categories: ["Handled"] })],
+      "@odata.deltaLink": "https://graph.microsoft.com/final",
+    });
+
+    await runOutlookDeltaSync({
+      channelId: "channel-1",
+      tenantId: "tenant-1",
+      requestedMode: "manual",
+    });
+
+    expect(mocks.applyCategoryFeedback).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      conversationId: "conversation-1",
+      messageCategories: ["Handled"],
+      priorJob: { settled: true, labels: ["Needs Reply"] },
+    });
+  });
+
+  it("learns a genuine pre-run edit even when projection rewrites the job during the run", async () => {
+    // Delegate to the real implementation so the test observes the correction
+    // it records, not just the arguments it receives.
+    const actual = await vi.importActual<
+      typeof import("@/lib/agent/outlook-category-feedback")
+    >("@/lib/agent/outlook-category-feedback");
+    mocks.applyCategoryFeedback.mockImplementation(actual.applyOutlookCategoryFeedback);
+
+    mocks.messageFindUnique.mockResolvedValue({ id: "local-message" });
+    // Pre-run: FlowDesk had projected Needs Reply; the user then added Handled.
+    mocks.writebackFindUnique.mockResolvedValue({
+      status: "completed",
+      providerMessageIdsJson: { threadId: "graph-thread-1", labels: ["Needs Reply"] },
+    });
+    // In-run: work-item sync re-projects, replacing the job payload. The sync
+    // must have snapshotted the job BEFORE this runs.
+    mocks.syncWorkItems.mockImplementation(async () => {
+      mocks.writebackFindUnique.mockResolvedValue({
+        status: "pending",
+        providerMessageIdsJson: { threadId: "graph-thread-1", labels: ["Handled"] },
+      });
+    });
+    mocks.graphGet.mockResolvedValueOnce({
+      value: [
+        message("message-1", "2026-06-24T12:00:00.000Z", {
+          categories: ["Needs Reply", "Handled"],
+        }),
+      ],
+      "@odata.deltaLink": "https://graph.microsoft.com/final",
+    });
+
+    await runOutlookDeltaSync({
+      channelId: "channel-1",
+      tenantId: "tenant-1",
+      requestedMode: "manual",
+    });
+
+    // The feedback received the PRE-run snapshot, not the rewritten payload...
+    expect(mocks.applyCategoryFeedback).toHaveBeenCalledWith(
+      expect.objectContaining({ priorJob: { settled: true, labels: ["Needs Reply"] } })
+    );
+    // ...so the user's added category is still learned.
+    expect(mocks.applyCore).toHaveBeenCalledWith(
+      expect.objectContaining({ added: ["Handled"], removed: [] })
+    );
+  });
+
+  it("does not fabricate corrections from a stale snapshot when projection rewrites the job in-run", async () => {
+    const actual = await vi.importActual<
+      typeof import("@/lib/agent/outlook-category-feedback")
+    >("@/lib/agent/outlook-category-feedback");
+    mocks.applyCategoryFeedback.mockImplementation(actual.applyOutlookCategoryFeedback);
+
+    mocks.messageFindUnique.mockResolvedValue({ id: "local-message" });
+    // The mailbox categories match what FlowDesk had projected pre-run — no
+    // user edit happened, this delta entry is just a classification echo.
+    mocks.writebackFindUnique.mockResolvedValue({
+      status: "completed",
+      providerMessageIdsJson: { threadId: "graph-thread-1", labels: ["Needs Reply"] },
+    });
+    // In-run re-projection produces a NEW desired set. Diffing the delta
+    // snapshot against this rewritten payload would fabricate "user removed
+    // Handled" — the reviewer's phantom-correction scenario.
+    mocks.syncWorkItems.mockImplementation(async () => {
+      mocks.writebackFindUnique.mockResolvedValue({
+        status: "pending",
+        providerMessageIdsJson: { threadId: "graph-thread-1", labels: ["Handled"] },
+      });
+    });
+    mocks.graphGet.mockResolvedValueOnce({
+      value: [message("message-1", "2026-06-24T12:00:00.000Z", { categories: ["Needs Reply"] })],
+      "@odata.deltaLink": "https://graph.microsoft.com/final",
+    });
+
+    await runOutlookDeltaSync({
+      channelId: "channel-1",
+      tenantId: "tenant-1",
+      requestedMode: "manual",
+    });
+
+    expect(mocks.applyCore).not.toHaveBeenCalled();
+  });
+
+  it("does not run category feedback for a brand-new inbound message", async () => {
+    mocks.messageFindUnique.mockResolvedValue(null);
+    mocks.graphGet.mockResolvedValueOnce({
+      value: [message("message-1", "2026-06-24T12:00:00.000Z", { categories: ["Handled"] })],
+      "@odata.deltaLink": "https://graph.microsoft.com/final",
+    });
+
+    await runOutlookDeltaSync({
+      channelId: "channel-1",
+      tenantId: "tenant-1",
+      requestedMode: "manual",
+    });
+
+    expect(mocks.applyCategoryFeedback).not.toHaveBeenCalled();
+  });
+
+  it("clears the label override when a genuinely new inbound message arrives", async () => {
+    mocks.messageFindUnique.mockResolvedValue(null);
+    mocks.graphGet.mockResolvedValueOnce({
+      value: [message("message-1")],
+      "@odata.deltaLink": "https://graph.microsoft.com/final",
+    });
+
+    await runOutlookDeltaSync({
+      channelId: "channel-1",
+      tenantId: "tenant-1",
+      requestedMode: "manual",
+    });
+
+    expect(mocks.clearLabelOverride).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      conversationId: "conversation-1",
+    });
+  });
+
+  it("does not clear the label override for an updated pre-existing message", async () => {
+    mocks.messageFindUnique.mockResolvedValue({ id: "local-message" });
+    mocks.graphGet.mockResolvedValueOnce({
+      value: [message("message-1", "2026-06-24T12:00:00.000Z", { categories: ["Handled"] })],
+      "@odata.deltaLink": "https://graph.microsoft.com/final",
+    });
+
+    await runOutlookDeltaSync({
+      channelId: "channel-1",
+      tenantId: "tenant-1",
+      requestedMode: "manual",
+    });
+
+    expect(mocks.clearLabelOverride).not.toHaveBeenCalled();
+  });
+
+  it("flips gmailUnread to false when the last unread inbound becomes read", async () => {
+    mocks.messageFindUnique.mockResolvedValue({ id: "local-message" });
+    mocks.messageCount.mockResolvedValue(0);
+    mocks.graphGet.mockResolvedValueOnce({
+      value: [message("message-1", "2026-06-24T12:00:00.000Z", { isRead: true })],
+      "@odata.deltaLink": "https://graph.microsoft.com/final",
+    });
+
+    await runOutlookDeltaSync({
+      channelId: "channel-1",
+      tenantId: "tenant-1",
+      requestedMode: "manual",
+    });
+
+    expect(mocks.conversationUpdate).toHaveBeenCalledWith({
+      where: { id: "conversation-1" },
+      data: expect.objectContaining({ gmailUnread: false }),
     });
   });
 

@@ -4,23 +4,26 @@ const {
   mockWritebackFindUnique,
   mockWritebackUpdate,
   mockWritebackUpdateMany,
+  mockChannelFindUnique,
   mockAuditCreate,
   mockApplyFlowDeskLabelsToGmailThread,
 } = vi.hoisted(() => ({
   mockWritebackFindUnique: vi.fn(),
   mockWritebackUpdate: vi.fn(),
   mockWritebackUpdateMany: vi.fn(),
+  mockChannelFindUnique: vi.fn(),
   mockAuditCreate: vi.fn(),
   mockApplyFlowDeskLabelsToGmailThread: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    gmailWritebackQueue: {
+    emailWritebackQueue: {
       findUnique: mockWritebackFindUnique,
       update: mockWritebackUpdate,
       updateMany: mockWritebackUpdateMany,
     },
+    channel: { findUnique: mockChannelFindUnique },
     auditLog: { create: mockAuditCreate },
   },
 }))
@@ -35,7 +38,7 @@ vi.mock("@/lib/google", () => ({
   deleteGmailDraft: vi.fn(),
 }))
 
-import { processGmailWritebackJobById } from "@/lib/agent/gmail-writeback-processor"
+import { processEmailWritebackJobById } from "@/lib/agent/email-writeback-processor"
 
 const JOB = {
   id: "job-1",
@@ -47,18 +50,19 @@ const JOB = {
   providerMessageIdsJson: { threadId: "thread-1", labels: ["Needs Reply"] },
 }
 
-describe("processGmailWritebackJobById (inline drain)", () => {
+describe("processEmailWritebackJobById (inline drain)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockWritebackUpdateMany.mockResolvedValue({ count: 1 })
     mockWritebackFindUnique.mockResolvedValue(JOB)
+    mockChannelFindUnique.mockResolvedValue({ provider: "google" })
     mockApplyFlowDeskLabelsToGmailThread.mockResolvedValue(undefined)
     mockWritebackUpdate.mockResolvedValue({})
     mockAuditCreate.mockResolvedValue({})
   })
 
   it("claims a pending job, applies it to Gmail, and marks it completed", async () => {
-    const result = await processGmailWritebackJobById("job-1")
+    const result = await processEmailWritebackJobById("job-1")
 
     expect(result).toEqual({ ok: true })
     expect(mockWritebackUpdateMany).toHaveBeenCalledWith({
@@ -79,7 +83,7 @@ describe("processGmailWritebackJobById (inline drain)", () => {
   it("no-ops without touching Gmail when the job was already claimed by the cron", async () => {
     mockWritebackUpdateMany.mockResolvedValue({ count: 0 })
 
-    const result = await processGmailWritebackJobById("job-1")
+    const result = await processEmailWritebackJobById("job-1")
 
     expect(result).toEqual({ ok: false })
     expect(mockApplyFlowDeskLabelsToGmailThread).not.toHaveBeenCalled()
@@ -88,7 +92,7 @@ describe("processGmailWritebackJobById (inline drain)", () => {
   it("leaves the job pending for the cron backstop when the inline attempt fails", async () => {
     mockApplyFlowDeskLabelsToGmailThread.mockRejectedValue(new Error("rate limited"))
 
-    const result = await processGmailWritebackJobById("job-1")
+    const result = await processEmailWritebackJobById("job-1")
 
     expect(result).toEqual({ ok: false })
     expect(mockWritebackUpdate).toHaveBeenCalledWith({

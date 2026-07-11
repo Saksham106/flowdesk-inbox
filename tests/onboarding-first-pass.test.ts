@@ -22,8 +22,8 @@ vi.mock("@/lib/prisma", () => ({
   },
 }))
 
-vi.mock("@/lib/agent/gmail-label-reconcile", () => ({
-  reconcileGmailLabelsForChannel: mockReconcile,
+vi.mock("@/lib/agent/email-label-reconcile", () => ({
+  reconcileLabelsForChannel: mockReconcile,
 }))
 
 vi.mock("@/lib/agent/automation-level", () => ({
@@ -42,21 +42,57 @@ describe("runOnboardingFirstPass", () => {
     mockConversationFindMany.mockResolvedValue([])
   })
 
-  it("returns hadGmail=false when no Gmail channel is connected", async () => {
+  it("returns hadEmailChannel=false when no email channel is connected", async () => {
     mockChannelFindMany.mockResolvedValue([])
     const result = await runOnboardingFirstPass("tenant-1")
-    expect(result.hadGmail).toBe(false)
+    expect(result.hadEmailChannel).toBe(false)
     expect(result.organizedCount).toBe(0)
     expect(mockReconcile).not.toHaveBeenCalled()
+  })
+
+  it("queries both google and microsoft channels", async () => {
+    mockChannelFindMany.mockResolvedValue([])
+    await runOnboardingFirstPass("tenant-1")
+    expect(mockChannelFindMany).toHaveBeenCalledWith({
+      where: {
+        tenantId: "tenant-1",
+        OR: [
+          { provider: "google", gmailCredential: { isNot: null } },
+          { provider: "microsoft", outlookCredential: { isNot: null } },
+        ],
+      },
+      select: { id: true, tenantId: true, provider: true },
+    })
   })
 
   it("flags belowAutomationLevel without projecting when the level is too low", async () => {
     mockChannelFindMany.mockResolvedValue([{ id: "chan-1", tenantId: "tenant-1" }])
     mockGetAutomationLevel.mockResolvedValue(1)
     const result = await runOnboardingFirstPass("tenant-1")
-    expect(result.hadGmail).toBe(true)
+    expect(result.hadEmailChannel).toBe(true)
     expect(result.belowAutomationLevel).toBe(true)
     expect(mockReconcile).not.toHaveBeenCalled()
+  })
+
+  it("aggregates outlook.labels.queued audits for a microsoft channel", async () => {
+    mockChannelFindMany.mockResolvedValue([
+      { id: "chan-2", tenantId: "tenant-1", provider: "microsoft" },
+    ])
+    mockAuditFindMany.mockResolvedValue([
+      { payloadJson: { conversationId: "c1", labels: ["Needs Reply"] } },
+    ])
+    const result = await runOnboardingFirstPass("tenant-1")
+    expect(mockAuditFindMany).toHaveBeenCalledWith({
+      where: {
+        tenantId: "tenant-1",
+        action: { in: ["gmail.labels.queued", "outlook.labels.queued"] },
+        createdAt: { gte: expect.any(Date) },
+      },
+      select: { payloadJson: true },
+    })
+    expect(result.hadEmailChannel).toBe(true)
+    expect(result.organizedCount).toBe(1)
+    expect(result.byLabel).toEqual({ "Needs Reply": 1 })
   })
 
   it("aggregates the proof breakdown from gmail.labels.queued audit rows", async () => {

@@ -7,7 +7,7 @@ export default function FinalCTA() {
   return (
     <section id="final-cta" className="py-20 px-5 sm:px-8">
       <div className="max-w-6xl mx-auto">
-        <ScrollReveal>
+        <ScrollReveal className="reveal-scale">
           <div className="relative rounded-lg overflow-hidden flex items-center justify-center" style={{ minHeight: 440 }}>
             {/* Background image with overlay */}
             <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
@@ -26,7 +26,7 @@ export default function FinalCTA() {
                   className="text-[36px] leading-[1.2] font-normal text-white"
                   style={{ fontFamily: "var(--font-lora), Georgia, serif" }}
                 >
-                  Ready to outsource your communication?
+                  Get your evenings back from email
                 </h2>
               </ScrollReveal>
 

@@ -96,6 +96,26 @@ describe("buildConversationTimeline", () => {
     expect(entry.detail).toContain("Needs Reply")
   })
 
+  it("renders queued labels for both Gmail and Outlook with provider-appropriate wording", () => {
+    const [gmailEntry] = buildConversationTimeline([
+      row({
+        action: "gmail.labels.queued",
+        payloadJson: { conversationId: "conv-1", labels: ["Needs Reply"] },
+      }),
+    ])
+    const [outlookEntry] = buildConversationTimeline([
+      row({
+        action: "outlook.labels.queued",
+        payloadJson: { conversationId: "conv-1", labels: ["Needs Reply"] },
+      }),
+    ])
+
+    expect(gmailEntry.title).toBe("Queued Gmail labels")
+    expect(outlookEntry.title).toBe("Queued Outlook labels")
+    expect(gmailEntry.detail).toBe("Needs Reply")
+    expect(outlookEntry.detail).toBe("Needs Reply")
+  })
+
   it("marks a failed writeback as danger and surfaces the error", () => {
     const [entry] = buildConversationTimeline([
       row({
@@ -112,6 +132,52 @@ describe("buildConversationTimeline", () => {
 
     expect(entry.tone).toBe("danger")
     expect(entry.detail).toContain("insufficient permissions")
+  })
+
+  it("renders Outlook writeback completions and failures with Outlook wording", () => {
+    const [completed] = buildConversationTimeline([
+      row({
+        action: "outlook.writeback.completed",
+        payloadJson: {
+          conversationId: "conv-1",
+          action: "apply_labels",
+          result: "applied 2 labels",
+          labels: ["Needs Reply", "Waiting On"],
+        },
+      }),
+    ])
+    const [failed] = buildConversationTimeline([
+      row({
+        action: "outlook.writeback.failed",
+        payloadJson: {
+          conversationId: "conv-1",
+          action: "mark_read",
+          result: "failed",
+          error: "insufficient permissions",
+          attempts: 5,
+        },
+      }),
+    ])
+
+    expect(completed.title).toBe("apply labels in Outlook")
+    expect(completed.tone).toBe("success")
+    expect(completed.detail).toContain("Needs Reply")
+    expect(failed.title).toBe("mark read failed in Outlook")
+    expect(failed.tone).toBe("danger")
+    expect(failed.detail).toContain("insufficient permissions")
+    expect(failed.detail).toContain("5 attempts")
+  })
+
+  it("renders draft queue and withdraw entries for both providers", () => {
+    const titles = (action: string) =>
+      buildConversationTimeline([row({ action, payloadJson: { conversationId: "conv-1" } })]).map(
+        (e) => e.title
+      )
+
+    expect(titles("gmail.draft.queued")).toEqual(["Draft written to Gmail"])
+    expect(titles("outlook.draft.queued")).toEqual(["Draft written to Outlook"])
+    expect(titles("gmail.draft.withdraw_queued")).toEqual(["Removed the Gmail draft"])
+    expect(titles("outlook.draft.withdraw_queued")).toEqual(["Removed the Outlook draft"])
   })
 
   it("labels a user correction as a manual action", () => {

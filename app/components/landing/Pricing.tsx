@@ -37,21 +37,24 @@ const plannedFeatures = [
 
 export default function Pricing() {
   return (
-    <section id="pricing" className="py-[160px] px-5 sm:px-8">
+    <section id="pricing" className="py-24 px-5 sm:px-8">
       <div className="max-w-6xl mx-auto flex flex-col gap-10">
         {/* Section heading */}
         <ScrollReveal>
           <div className="flex flex-col gap-2">
-            <p className="text-sm text-black font-normal">{"// Pricing"}</p>
-            <h2 className="text-[36px] leading-[1] font-normal text-black">
+            <p className="text-xs uppercase tracking-[0.14em] text-[#6b6f76] font-medium">Pricing</p>
+            <h2
+              className="text-[36px] leading-[1.15] font-normal text-black"
+              style={{ fontFamily: "var(--font-lora), Georgia, serif" }}
+            >
               Free during beta
             </h2>
           </div>
         </ScrollReveal>
 
         {/* Single beta plan card */}
-        <ScrollReveal className="max-w-xl">
-          <div className="bg-[#f5f5f4] rounded-lg p-8 flex flex-col gap-2">
+        <ScrollReveal className="max-w-2xl">
+          <div className="landing-card bg-[#f5f5f4] rounded-lg p-8 flex flex-col gap-2">
             {/* Plan info */}
             <div className="flex flex-col gap-1">
               <p className="text-lg font-medium text-black">Beta</p>
@@ -82,7 +85,7 @@ export default function Pricing() {
             </div>
 
             {/* Feature list */}
-            <ul className="flex flex-col gap-2">
+            <ul className="grid sm:grid-cols-2 gap-2">
               {includedFeatures.map((feature) => (
                 <li key={feature} className="flex items-start gap-2">
                   <CheckIcon />

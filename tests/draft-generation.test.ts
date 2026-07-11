@@ -41,8 +41,9 @@ vi.mock("@/lib/agent/approvals", () => ({ ensureDraftApprovalRequest: mockEnsure
 vi.mock("@/lib/gmail-drafts", () => ({
   queueGmailDraftWriteback: mockQueueWriteback,
   latestMeaningfulInboundMessage: vi.fn().mockReturnValue(null),
+  providerDraftIdFromMetadata: vi.fn().mockReturnValue(null),
 }))
-vi.mock("@/lib/gmail-labels", () => ({ projectFlowDeskLabelsForConversation: mockProjectLabels }))
+vi.mock("@/lib/email-labels", () => ({ projectFlowDeskLabelsForConversation: mockProjectLabels }))
 vi.mock("@/lib/agent/draft-eligibility", () => ({ resolveDraftEligibility: mockResolveEligibility }))
 vi.mock("@/lib/agent/reply-context", () => ({ getReplyGenerationContext: mockGetReplyContext }))
 vi.mock("@/lib/ai/provider", () => ({ generateDraftReply: mockGenerateDraftReply }))

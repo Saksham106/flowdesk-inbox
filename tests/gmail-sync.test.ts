@@ -335,6 +335,7 @@ describe('syncGmailChannel', () => {
       tenantId: TENANT_ID,
       channelId: CHANNEL_ID,
       conversationId: 'conv-manual-reply',
+      provider: 'google',
     })
   })
 

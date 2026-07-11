@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma"
-import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
+import { projectFlowDeskLabelsForConversation } from "@/lib/email-labels"
 import { DEFAULT_FOLLOW_UP_BUSINESS_DAYS, followUpDueAt } from "@/lib/business-days"
 import type { MessageDirection, Prisma } from "@prisma/client"
 
@@ -237,7 +237,7 @@ export async function runFollowUpLabelSweep(now = new Date()): Promise<FollowUpL
       OR: [{ status: "in_progress" }, { userState: "waiting_on" }],
       lastMessageAt: { lt: coarseCutoff },
       externalThreadId: { not: "" },
-      channel: { provider: "google" },
+      channel: { provider: { in: ["google", "microsoft"] } },
     },
     select: { id: true, tenantId: true, lastMessageAt: true },
     orderBy: { lastMessageAt: "asc" },
@@ -255,7 +255,7 @@ export async function runFollowUpLabelSweep(now = new Date()): Promise<FollowUpL
   // Skip conversations already re-projected recently — re-queuing them every
   // cron run would spam Gmail with redundant no-op writebacks. "Recently"
   // matches the sweep's own cadence (coarseCutoff, 24h).
-  const queuedRows = await prisma.gmailWritebackQueue.findMany({
+  const queuedRows = await prisma.emailWritebackQueue.findMany({
     where: {
       conversationId: { in: candidates.map((c) => c.id) },
       action: "apply_labels",

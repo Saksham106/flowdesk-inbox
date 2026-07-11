@@ -4,13 +4,13 @@ const {
   mockChannelFindMany,
   mockConversationFindMany,
   mockAuditCreate,
-  mockEnsureFlowDeskLabels,
+  mockGetWritebackAdapter,
   mockProjectLabels,
 } = vi.hoisted(() => ({
   mockChannelFindMany: vi.fn(),
   mockConversationFindMany: vi.fn(),
   mockAuditCreate: vi.fn(),
-  mockEnsureFlowDeskLabels: vi.fn(),
+  mockGetWritebackAdapter: vi.fn(),
   mockProjectLabels: vi.fn(),
 }))
 
@@ -22,11 +22,11 @@ vi.mock("@/lib/prisma", () => ({
   },
 }))
 
-vi.mock("@/lib/google", () => ({
-  ensureFlowDeskLabels: mockEnsureFlowDeskLabels,
+vi.mock("@/lib/email/writeback-adapter", () => ({
+  getWritebackAdapter: mockGetWritebackAdapter,
 }))
 
-vi.mock("@/lib/gmail-labels", () => ({
+vi.mock("@/lib/email-labels", () => ({
   projectFlowDeskLabelsForConversation: mockProjectLabels,
 }))
 
@@ -57,15 +57,20 @@ function request(auth?: string) {
 }
 
 describe("GET /api/cron/gmail-label-reconcile", () => {
+  let mockEnsureLabels: ReturnType<typeof vi.fn>
+
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.CRON_SECRET = "cron-secret"
-    mockChannelFindMany.mockResolvedValue([{ id: "channel-1", tenantId: "tenant-1" }])
+    mockEnsureLabels = vi.fn().mockResolvedValue(undefined)
+    mockGetWritebackAdapter.mockImplementation((provider: string) =>
+      provider === "google" || provider === "microsoft" ? { ensureLabels: mockEnsureLabels } : null
+    )
+    mockChannelFindMany.mockResolvedValue([{ id: "channel-1", tenantId: "tenant-1", provider: "google" }])
     mockConversationFindMany.mockResolvedValue([
       { id: "conv-1", tenantId: "tenant-1" },
       { id: "conv-2", tenantId: "tenant-1" },
     ])
-    mockEnsureFlowDeskLabels.mockResolvedValue(undefined)
     mockProjectLabels.mockResolvedValue({ id: "job-1" })
     mockAuditCreate.mockResolvedValue({})
   })
@@ -87,7 +92,8 @@ describe("GET /api/cron/gmail-label-reconcile", () => {
 
     expect(res.status).toBe(200)
     expect(body).toEqual({ channels: 1, labelsEnsured: 1, scanned: 2, queued: 2, errors: 0 })
-    expect(mockEnsureFlowDeskLabels).toHaveBeenCalledWith("channel-1")
+    expect(mockGetWritebackAdapter).toHaveBeenCalledWith("google")
+    expect(mockEnsureLabels).toHaveBeenCalledWith("channel-1")
     expect(mockProjectLabels).toHaveBeenCalledTimes(2)
     // Scoped to this specific channel (not a global cross-tenant query) so one
     // very active tenant can't consume every other tenant's batch slice.
@@ -108,8 +114,8 @@ describe("GET /api/cron/gmail-label-reconcile", () => {
     // consume the whole run's budget and starve everyone else. Each channel
     // now gets its own bounded batch.
     mockChannelFindMany.mockResolvedValue([
-      { id: "channel-1", tenantId: "tenant-1" },
-      { id: "channel-2", tenantId: "tenant-2" },
+      { id: "channel-1", tenantId: "tenant-1", provider: "google" },
+      { id: "channel-2", tenantId: "tenant-2", provider: "google" },
     ])
     mockConversationFindMany.mockResolvedValue([{ id: "conv-1" }])
 
@@ -127,6 +133,42 @@ describe("GET /api/cron/gmail-label-reconcile", () => {
     )
   })
 
+  it("ensures labels via the right adapter for a mixed google + microsoft channel run", async () => {
+    mockChannelFindMany.mockResolvedValue([
+      { id: "channel-1", tenantId: "tenant-1", provider: "google" },
+      { id: "channel-2", tenantId: "tenant-2", provider: "microsoft" },
+    ])
+    mockConversationFindMany.mockResolvedValue([{ id: "conv-1" }])
+
+    const res = await GET(request("Bearer cron-secret"))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body).toEqual({ channels: 2, labelsEnsured: 2, scanned: 2, queued: 2, errors: 0 })
+    expect(mockGetWritebackAdapter).toHaveBeenCalledWith("google")
+    expect(mockGetWritebackAdapter).toHaveBeenCalledWith("microsoft")
+    expect(mockEnsureLabels).toHaveBeenCalledWith("channel-1")
+    expect(mockEnsureLabels).toHaveBeenCalledWith("channel-2")
+  })
+
+  it("records an outlook-prefixed ensure failure for a microsoft channel", async () => {
+    mockChannelFindMany.mockResolvedValue([{ id: "channel-2", tenantId: "tenant-2", provider: "microsoft" }])
+    mockEnsureLabels.mockRejectedValue(new Error("expired token"))
+
+    const res = await GET(request("Bearer cron-secret"))
+    const body = await res.json()
+
+    expect(res.status).toBe(500)
+    expect(body.labelsEnsured).toBe(0)
+    expect(mockAuditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tenantId: "tenant-2",
+        action: "outlook.labels.ensure_failed",
+        payloadJson: expect.objectContaining({ error: "expired token" }),
+      }),
+    })
+  })
+
   it("does not count skipped projections (below level, non-Gmail) as queued", async () => {
     mockProjectLabels.mockResolvedValue(null)
     const res = await GET(request("Bearer cron-secret"))
@@ -136,7 +178,7 @@ describe("GET /api/cron/gmail-label-reconcile", () => {
   })
 
   it("records ensure failures per channel and returns 500 with the error header", async () => {
-    mockEnsureFlowDeskLabels.mockRejectedValue(new Error("insufficient scopes"))
+    mockEnsureLabels.mockRejectedValue(new Error("insufficient scopes"))
     const res = await GET(request("Bearer cron-secret"))
     const body = await res.json()
 

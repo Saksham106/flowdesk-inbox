@@ -27,7 +27,7 @@ export async function POST() {
       payloadJson: {
         organizedCount: result.organizedCount,
         byLabel: result.byLabel,
-        hadGmail: result.hadGmail,
+        hadEmailChannel: result.hadEmailChannel,
         belowAutomationLevel: result.belowAutomationLevel,
         errors: result.errors,
       },

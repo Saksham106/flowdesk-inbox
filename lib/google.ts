@@ -12,7 +12,7 @@ import {
   LEGACY_FLOWDESK_LABEL_RENAMES,
   isFlowDeskGmailLabelName,
   type FlowDeskGmailLabelName,
-} from "@/lib/gmail-labels";
+} from "@/lib/email-labels";
 
 export const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -509,7 +509,7 @@ async function syncFetchedGmailThread({
     const source = draftSourceFromMetadata(draft?.metadataJson)
     const flowDeskDraftId = draft ? gmailDraftIdFromMetadata(draft.metadataJson) : null
     if (source && flowDeskDraftId && newestInsertedOutboundAt > source.createdAt) {
-      queueGmailDraftWithdrawal({ tenantId, channelId, conversationId: conversation.id }).catch((err) => {
+      queueGmailDraftWithdrawal({ tenantId, channelId, conversationId: conversation.id, provider: "google" }).catch((err) => {
         console.warn("Failed to queue Gmail draft withdrawal after manual reply", {
           tenantId,
           channelId,
@@ -756,7 +756,7 @@ export async function markGmailThreadRead(
   } catch (err) {
     if (queueContext) {
       const message = errorMessage(err);
-      await prisma.gmailWritebackQueue.upsert({
+      await prisma.emailWritebackQueue.upsert({
         where: {
           conversationId_action: {
             conversationId: queueContext.conversationId,

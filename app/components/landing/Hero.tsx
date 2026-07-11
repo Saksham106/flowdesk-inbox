@@ -20,14 +20,17 @@ export default function Hero() {
         {/* Headline block */}
         <div className="pt-24 pb-16 flex flex-col items-center gap-8 w-full max-w-2xl mx-auto text-center">
           <ScrollReveal delay={0}>
-            <h1 className="text-[40px] sm:text-[56px] leading-[1.1] sm:leading-[60px] font-normal text-black w-full">
+            <h1
+              className="text-[40px] sm:text-[56px] leading-[1.15] font-normal text-black w-full"
+              style={{ fontFamily: "var(--font-lora), Georgia, serif" }}
+            >
               Your inbox, on autopilot
             </h1>
           </ScrollReveal>
 
           <ScrollReveal delay={120}>
-            <p className="text-base font-medium text-[#404040] max-w-lg leading-relaxed">
-              Flowdesk connects securely to your Gmail to organize your inbox, draft replies in your voice, and keep follow-ups moving — you stay in control of every send.
+            <p className="text-base font-medium text-[#404040] max-w-xl leading-relaxed">
+              FlowDesk is a personal AI assistant that lives inside your Gmail. It sorts what matters, drafts replies that sound like you, and remembers who still owes you an answer — and you approve every send.
             </p>
           </ScrollReveal>
 
@@ -50,7 +53,7 @@ export default function Hero() {
         </div>
 
         {/* Product screenshot */}
-        <ScrollReveal delay={360} className="w-full flex items-start justify-center pb-0">
+        <ScrollReveal delay={360} className="reveal-scale w-full flex items-start justify-center pb-0">
           <div className="border border-[#e0e1ec] shadow-[0px_8px_0px_0px_rgba(0,0,0,0.25)] rounded-t-xl overflow-hidden w-full max-w-4xl">
             <img
               src="/images/landing/product-screenshot.png"

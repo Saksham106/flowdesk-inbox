@@ -217,6 +217,7 @@ export type GraphMessage = {
   receivedDateTime: string
   internetMessageId?: string
   isRead?: boolean
+  categories?: string[]
 }
 
 type GraphMessageList = { value: GraphMessage[]; "@odata.nextLink"?: string }

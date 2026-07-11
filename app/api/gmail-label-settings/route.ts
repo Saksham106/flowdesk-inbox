@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma"
 import {
   FLOWDESK_GMAIL_LABEL_NAMES,
   isFlowDeskGmailLabelName,
-} from "@/lib/gmail-labels"
+} from "@/lib/email-labels"
 
 export const runtime = "nodejs"
 

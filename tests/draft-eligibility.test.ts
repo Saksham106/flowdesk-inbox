@@ -49,7 +49,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }))
 vi.mock("@/lib/ai/gateway", () => ({ runAiJsonFeature: mockRunAiJsonFeature }))
-vi.mock("@/lib/gmail-labels", () => ({ projectFlowDeskLabelsForConversation: mockProjectLabels }))
+vi.mock("@/lib/email-labels", () => ({ projectFlowDeskLabelsForConversation: mockProjectLabels }))
 
 // Import after mocks are registered, matching the existing convention.
 const { resolveDraftEligibility } = await import("@/lib/agent/draft-eligibility")

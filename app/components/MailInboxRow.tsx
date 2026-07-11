@@ -30,7 +30,7 @@ type MailInboxRowProps = {
   attentionCategory: string | null
   contentType?: string | null
   isPersonal: boolean
-  isGmail: boolean
+  supportsMailboxActions: boolean
   workflowStatus: WorkflowStatus
 }
 
@@ -63,7 +63,7 @@ export default function MailInboxRow({
   attentionCategory: initialAttention,
   contentType,
   isPersonal,
-  isGmail,
+  supportsMailboxActions,
   workflowStatus: initialWorkflowStatus,
 }: MailInboxRowProps) {
   const {
@@ -217,7 +217,7 @@ export default function MailInboxRow({
             </button>
           )}
 
-          {isGmail && (
+          {supportsMailboxActions && (
             <button
               type="button"
               onClick={archiveConversation}

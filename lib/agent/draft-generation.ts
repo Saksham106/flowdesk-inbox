@@ -15,8 +15,13 @@ import { summarizeConversation } from "@/lib/ai/summarize"
 import { estimateTokenCount, recordAiUsageEvent } from "@/lib/ai/usage"
 import { revalidateInboxViews } from "@/lib/cache-tags"
 import { conversationUpdateForDraftReady } from "@/lib/workflow-status-transitions"
-import { latestMeaningfulInboundMessage, queueGmailDraftWriteback } from "@/lib/gmail-drafts"
-import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
+import {
+  latestMeaningfulInboundMessage,
+  providerDraftIdFromMetadata,
+  queueGmailDraftWriteback,
+} from "@/lib/gmail-drafts"
+import { projectFlowDeskLabelsForConversation } from "@/lib/email-labels"
+import { supportsMailboxWriteback } from "@/lib/email/provider-support"
 import { ensureDraftApprovalRequest } from "@/lib/agent/approvals"
 import { validateDraftWritingPreferences } from "@/lib/agent/writing-preferences"
 import { resolveDraftEligibility } from "@/lib/agent/draft-eligibility"
@@ -277,6 +282,13 @@ export async function proposeDraftForConversation(
     !Array.isArray(conversation.draft.metadataJson)
       ? (conversation.draft.metadataJson as Record<string, unknown>)
       : {}
+  const preservedProviderDraftId = providerDraftIdFromMetadata(existingDraftMetadata)
+  const preservedDraftSourceInboundMessageId =
+    existingDraftMetadata.providerDraftSourceInboundMessageId ??
+    existingDraftMetadata.gmailDraftSourceInboundMessageId
+  const preservedDraftSourceInboundAt =
+    existingDraftMetadata.providerDraftSourceInboundAt ??
+    existingDraftMetadata.gmailDraftSourceInboundAt
 
   const metadataJson = {
     intent: result.intent,
@@ -304,14 +316,14 @@ export async function proposeDraftForConversation(
           sourceInboundAt: sourceInbound.createdAt.toISOString(),
         }
       : {}),
-    ...(typeof existingDraftMetadata.gmailDraftId === "string"
-      ? { gmailDraftId: existingDraftMetadata.gmailDraftId }
+    ...(preservedProviderDraftId
+      ? { providerDraftId: preservedProviderDraftId }
       : {}),
-    ...(typeof existingDraftMetadata.gmailDraftSourceInboundMessageId === "string"
-      ? { gmailDraftSourceInboundMessageId: existingDraftMetadata.gmailDraftSourceInboundMessageId }
+    ...(typeof preservedDraftSourceInboundMessageId === "string"
+      ? { providerDraftSourceInboundMessageId: preservedDraftSourceInboundMessageId }
       : {}),
-    ...(typeof existingDraftMetadata.gmailDraftSourceInboundAt === "string"
-      ? { gmailDraftSourceInboundAt: existingDraftMetadata.gmailDraftSourceInboundAt }
+    ...(typeof preservedDraftSourceInboundAt === "string"
+      ? { providerDraftSourceInboundAt: preservedDraftSourceInboundAt }
       : {}),
   }
 
@@ -337,13 +349,14 @@ export async function proposeDraftForConversation(
     await prisma.conversation.update({ where: { id: conversation.id }, data: conversationUpdateForDraftReady() })
   }
 
-  if (conversation.channel.provider === "google" && conversation.externalThreadId) {
+  if (supportsMailboxWriteback(conversation.channel.provider) && conversation.externalThreadId) {
     try {
       await queueGmailDraftWriteback({
         tenantId: input.tenantId,
         channelId: conversation.channelId,
         conversationId: conversation.id,
         threadId: conversation.externalThreadId,
+        provider: conversation.channel.provider,
       })
       await projectFlowDeskLabelsForConversation({ tenantId: input.tenantId, conversationId: conversation.id })
     } catch (err) {

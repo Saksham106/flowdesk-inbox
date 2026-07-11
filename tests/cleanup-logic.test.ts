@@ -4,7 +4,7 @@ import {
   groupCleanupBySender,
   type CleanupCandidate,
 } from "@/lib/agent/sender-cleanup"
-import { archivableInGmail } from "@/lib/clean-inbox-gmail"
+import { archivableInProviderMailbox } from "@/lib/clean-inbox-email"
 
 function candidate(overrides: Partial<CleanupCandidate> = {}): CleanupCandidate {
   return {
@@ -22,7 +22,7 @@ function candidate(overrides: Partial<CleanupCandidate> = {}): CleanupCandidate 
   }
 }
 
-function archivable(overrides: Partial<Parameters<typeof archivableInGmail>[0][number]> = {}) {
+function archivable(overrides: Partial<Parameters<typeof archivableInProviderMailbox>[0][number]> = {}) {
   return {
     id: "c1",
     channelId: "ch1",
@@ -112,15 +112,16 @@ describe("Clean Inbox grouping and Gmail targeting", () => {
     expect(groupCleanupBySender([])).toEqual([])
   })
 
-  it("keeps only Google-backed conversations with a thread id for Gmail archive", () => {
-    const result = archivableInGmail([
+  it("keeps Google- and Microsoft-backed conversations with a thread id for mailbox archive", () => {
+    const result = archivableInProviderMailbox([
       archivable({ id: "gmail" }),
       archivable({ id: "outlook", channel: { provider: "microsoft" } }),
+      archivable({ id: "sms", channel: { provider: "twilio" } }),
       archivable({ id: "no-thread", externalThreadId: null }),
       archivable({ id: "no-channel", channel: null }),
     ])
 
-    expect(result.map((c) => c.id)).toEqual(["gmail"])
+    expect(result.map((c) => c.id)).toEqual(["gmail", "outlook"])
   })
 })
 

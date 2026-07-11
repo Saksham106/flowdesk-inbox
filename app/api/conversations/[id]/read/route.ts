@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { markGmailThreadRead } from "@/lib/google"
+import { getWritebackAdapter } from "@/lib/email/writeback-adapter"
 import { revalidateInboxViews } from "@/lib/cache-tags"
 
 export async function PATCH(
@@ -43,17 +43,19 @@ export async function PATCH(
     },
   })
 
-  if (read && conversation.channel.provider === "google") {
+  const adapter = getWritebackAdapter(conversation.channel.provider)
+
+  if (read && adapter) {
     await prisma.message.updateMany({
       where: { conversationId: params.id },
       data: { isRead: true },
     })
-    markGmailThreadRead(
+    adapter.markConversationRead(
       conversation.channelId,
       conversation.messages.map((message) => message.providerMessageId),
       { tenantId: session.user.tenantId, conversationId: params.id }
     ).catch((err) => {
-      console.warn("Failed to mark Gmail thread read after read toggle", {
+      console.warn("Failed to mark thread read after read toggle", {
         conversationId: params.id,
         message: err instanceof Error ? err.message : "Unknown error",
       })

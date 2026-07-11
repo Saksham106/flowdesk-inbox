@@ -22,7 +22,7 @@ import { conversationStateMetadataData } from "@/lib/agent/conversation-state-me
 import { userEditedFieldsFromMetadata } from "@/lib/agent/user-edited-fields"
 import { detectSchedulingRequest } from "@/lib/agent/scheduling"
 import { handleSchedulingConfirmationForInboundReply } from "@/lib/agent/scheduling-booking"
-import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
+import { projectFlowDeskLabelsForConversation } from "@/lib/email-labels"
 import { hasGmailLabelOverride } from "@/lib/agent/gmail-label-override"
 import { proposeDraftForConversation } from "@/lib/agent/draft-generation"
 import { getAutomationLevel } from "@/lib/agent/automation-level"

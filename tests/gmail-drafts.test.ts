@@ -9,7 +9,7 @@ const { mockDeleteMany, mockUpsert, mockAuditCreate, mockAutopilotSettingFindUni
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    gmailWritebackQueue: { deleteMany: mockDeleteMany, upsert: mockUpsert },
+    emailWritebackQueue: { deleteMany: mockDeleteMany, upsert: mockUpsert },
     auditLog: { create: mockAuditCreate },
     autopilotSetting: { findUnique: mockAutopilotSettingFindUnique },
   },
@@ -52,6 +52,7 @@ describe("queueGmailDraftWriteback", () => {
       channelId: "c1",
       conversationId: "conv-1",
       threadId: "thread-1",
+      provider: "google",
     })
 
     expect(job).toBeNull()
@@ -65,6 +66,7 @@ describe("queueGmailDraftWriteback", () => {
       channelId: "c1",
       conversationId: "conv-1",
       threadId: "thread-1",
+      provider: "google",
     })
 
     expect(mockDeleteMany).toHaveBeenCalledWith({
@@ -97,6 +99,7 @@ describe("queueGmailDraftWithdrawal", () => {
       tenantId: "t1",
       channelId: "c1",
       conversationId: "conv-1",
+      provider: "google",
     })
 
     expect(mockDeleteMany).toHaveBeenCalledWith({

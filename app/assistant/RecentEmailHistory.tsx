@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useState } from "react"
 
 import { FLOWDESK_LABEL_OPTIONS } from "@/lib/flowdesk-label-display"
-import type { FlowDeskGmailLabelName } from "@/lib/gmail-labels"
+import type { FlowDeskGmailLabelName } from "@/lib/email-labels"
 
 export type RecentEmailRow = {
   id: string

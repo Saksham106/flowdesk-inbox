@@ -5,24 +5,24 @@ import ScrollReveal from "@/app/components/ScrollReveal";
 
 const faqs = [
   {
-    q: "What languages does Flowdesk support?",
-    a: "Flowdesk supports English, Spanish, French, German, Portuguese, and more. Our AI adapts to the language of the conversation automatically.",
+    q: "Will FlowDesk send emails without asking me?",
+    a: "Not unless you tell it to. By default FlowDesk works as a copilot: it drafts replies and waits for your approval on every send. If you want, you can turn up the automation for specific kinds of email — and everything it does is logged and undoable.",
   },
   {
     q: "How long does setup take?",
-    a: "Most teams are set up within 15 minutes. Connect your email accounts and claim a phone number — that's it. No engineering work required.",
+    a: "A few minutes. Sign in with Google, and FlowDesk learns your writing style from emails you've already sent. There's nothing to install and nothing to configure before it starts helping.",
   },
   {
-    q: "Can Flowdesk reply automatically on my behalf?",
-    a: "By default, Flowdesk uses Copilot mode: it drafts replies for your review and you approve every send. For specific approved categories, you can optionally enable Autopilot — but only for the workflows you define.",
+    q: "Do I have to stop using Gmail?",
+    a: "No — FlowDesk works inside your Gmail, not instead of it. Labels, drafts, and threads all live in your real inbox, so everything works exactly as before in the Gmail apps you already use.",
   },
   {
-    q: "Which channels does Flowdesk support?",
-    a: "At launch, Flowdesk supports email and SMS/text via a dedicated phone number. More channels are on the roadmap.",
+    q: "How does FlowDesk use my Gmail data?",
+    a: "FlowDesk connects to Gmail through Google OAuth to read and classify your inbox, apply labels, and create drafts and replies that you approve. Your email is never sold, never used for advertising, and never used to train AI models, and you can disconnect at any time to delete your synced data. See our Privacy Policy for the full details.",
   },
   {
-    q: "How does Flowdesk use my Gmail data?",
-    a: "Flowdesk connects to Gmail through Google OAuth to read and classify your inbox, apply labels, and create drafts and replies that you approve. Your email is never sold, never used for advertising, and never used to train AI models, and you can disconnect at any time to delete your synced data. See our Privacy Policy for the full details.",
+    q: "What happens if I disconnect?",
+    a: "Your synced data is deleted from FlowDesk, and your Gmail stays exactly as it is — your emails, labels, and drafts remain in your Google account, which always stays the source of truth.",
   },
 ];
 
@@ -68,20 +68,22 @@ export default function FAQ() {
         <div className="flex flex-col lg:flex-row gap-8 items-start">
           {/* Left: heading */}
           <ScrollReveal className="flex-1 min-w-0">
-            <div className="flex flex-col gap-1">
-              <p className="text-sm text-black font-normal">{"// FAQ"}</p>
-              <h2 className="text-[36px] leading-[1.1] font-normal text-black">
-                Questions before you hand off follow-up?
+            <div className="flex flex-col gap-2">
+              <p className="text-xs uppercase tracking-[0.14em] text-[#6b6f76] font-medium">FAQ</p>
+              <h2
+                className="text-[36px] leading-[1.15] font-normal text-black"
+                style={{ fontFamily: "var(--font-lora), Georgia, serif" }}
+              >
+                Questions before you hand over your inbox?
               </h2>
             </div>
           </ScrollReveal>
 
-          {/* Right: FAQ list */}
+          {/* Right: FAQ list — rendered plainly (no per-item reveal) so the
+              list never shows gaps while staggered animations are pending */}
           <div className="flex-1 min-w-0 flex flex-col gap-3 w-full">
-            {faqs.map((item, i) => (
-              <ScrollReveal key={item.q} delay={i * 80}>
-                <FAQItem q={item.q} a={item.a} />
-              </ScrollReveal>
+            {faqs.map((item) => (
+              <FAQItem key={item.q} q={item.q} a={item.a} />
             ))}
           </div>
         </div>

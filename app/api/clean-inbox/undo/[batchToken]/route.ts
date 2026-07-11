@@ -6,7 +6,7 @@ import { Prisma } from "@prisma/client"
 import { parseBatchToken } from "@/lib/clean-inbox-token"
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
 import { revalidateInboxViews } from "@/lib/cache-tags"
-import { restoreConversationsInGmail } from "@/lib/clean-inbox-gmail"
+import { restoreConversationsInProviderMailbox } from "@/lib/clean-inbox-email"
 
 export async function POST(
   _request: Request,
@@ -109,8 +109,9 @@ export async function POST(
     })
   )
 
-  // Bring the threads back into the Gmail inbox (re-add INBOX). Best-effort.
-  const gmailRestore = await restoreConversationsInGmail(conversations)
+  // Bring the threads back into the provider mailbox inbox (Gmail: re-add
+  // INBOX; Outlook: move back into Inbox). Best-effort.
+  const gmailRestore = await restoreConversationsInProviderMailbox(conversations)
 
   await prisma.auditLog.create({
     data: {

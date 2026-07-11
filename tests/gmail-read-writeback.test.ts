@@ -13,7 +13,7 @@ const {
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     gmailCredential: { findUnique: mockCredFindUnique },
-    gmailWritebackQueue: { upsert: mockWritebackUpsert },
+    emailWritebackQueue: { upsert: mockWritebackUpsert },
   },
 }))
 

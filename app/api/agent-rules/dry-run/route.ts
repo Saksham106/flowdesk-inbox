@@ -6,7 +6,7 @@ import { Prisma } from "@prisma/client"
 import { extractEmail } from "@/lib/google"
 import { parseStaticConditions, matchStaticConditions } from "@/lib/agent/static-rules"
 import { deriveWorkflowStatus } from "@/lib/workflow-status"
-import { flowDeskLabelsForConversationState } from "@/lib/gmail-labels"
+import { flowDeskLabelsForConversationState } from "@/lib/email-labels"
 import { getAutomationLevel, isActionAllowedAtLevel } from "@/lib/agent/automation-level"
 
 // Preview a static rule against the tenant's recent conversations before it
