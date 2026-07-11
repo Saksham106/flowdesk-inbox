@@ -1,13 +1,42 @@
-import Link from "next/link";
-import type { ReactNode } from "react";
+import Link from "next/link"
+import { redirect } from "next/navigation"
+import { getServerSession } from "next-auth"
+import type { ReactNode } from "react"
 
-import SettingsTabNav from "@/app/settings/SettingsTabNav";
+import AppRail from "@/app/components/AppRail"
+import AskFlowDeskPanel from "@/app/components/AskFlowDeskPanel"
+import SettingsTabNav from "@/app/settings/SettingsTabNav"
+import { authOptions } from "@/lib/auth"
+import { getAppShellContext } from "@/lib/app-shell"
 
-export default function SettingsLayout({ children }: { children: ReactNode }) {
+export default async function SettingsLayout({ children }: { children: ReactNode }) {
+  const session = await getServerSession(authOptions)
+  const tenantId = session?.user?.tenantId
+  if (!tenantId) redirect("/login")
+
+  const { needsReplyCount, pendingApprovals } = await getAppShellContext(tenantId)
+
   return (
-    <div className="min-h-screen bg-slate-50">
+    <>
+      <div className="hidden lg:flex lg:h-screen">
+        <AppRail needsReplyCount={needsReplyCount} pendingApprovals={pendingApprovals} />
+        <div className="flex flex-1 flex-col overflow-y-auto bg-slate-50">
+          <SettingsContent>{children}</SettingsContent>
+        </div>
+      </div>
+      <div className="min-h-screen bg-slate-50 lg:hidden">
+        <SettingsContent>{children}</SettingsContent>
+      </div>
+      <AskFlowDeskPanel />
+    </>
+  )
+}
+
+function SettingsContent({ children }: { children: ReactNode }) {
+  return (
+    <>
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
           <div>
             <Link href="/home" className="text-sm text-slate-500 hover:text-slate-700">
               &larr; Back to control room
@@ -20,10 +49,10 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+      <main className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[240px_minmax(0,1fr)]">
         <SettingsTabNav />
-        <div className="space-y-10">{children}</div>
+        <div className="min-w-0 space-y-10">{children}</div>
       </main>
-    </div>
-  );
+    </>
+  )
 }

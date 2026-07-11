@@ -203,6 +203,17 @@ describe("dashboard and inbox UI source contracts", () => {
     }
   })
 
+  it("settings routes render inside the shared desktop app shell", () => {
+    const layout = source("app/settings/layout.tsx")
+
+    expect(layout).toContain("getServerSession")
+    expect(layout).toContain("getAppShellContext")
+    expect(layout).toContain("AppRail")
+    expect(layout).toContain("AskFlowDeskPanel")
+    expect(layout).toContain("hidden lg:flex lg:h-screen")
+    expect(layout).toContain("lg:hidden")
+  })
+
   it("desktop rail uses the F logo as the only Home affordance", () => {
     const rail = source("app/components/AppRail.tsx")
     const nav = source("lib/app-navigation.ts")
