@@ -110,6 +110,7 @@ model Tenant {
   googleDriveCredential     GoogleDriveCredential?
   gmailLabelMappings        GmailLabelMapping[]
   openRouterUserKeys       OpenRouterUserKey[]
+  writingPreference        WritingPreference?
 }
 
 model User {
@@ -746,6 +747,21 @@ model PersonalProfile {
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
   tenant                  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model WritingPreference {
+  id                 String   @id @default(cuid())
+  tenantId           String   @unique
+  forbidEmDash       Boolean  @default(false)
+  preferredGreetings String[] @default([])
+  avoidedPhrases     String[] @default([])
+  preferredSignoffs  String[] @default([])
+  formality          String?
+  replyLength        String?
+  customInstruction  String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model VipContact {

@@ -19,15 +19,40 @@ interface PersonalProfile {
   lastTrainingAt?: string | Date | null
 }
 
+interface WritingPreferences {
+  forbidEmDash: boolean
+  preferredGreetings: string[]
+  avoidedPhrases: string[]
+  preferredSignoffs: string[]
+  formality: string | null
+  replyLength: string | null
+  customInstruction: string | null
+}
+
 export default function PersonalStylePanel({
   initial,
+  initialWritingPreferences,
 }: {
   initial: PersonalProfile | null
+  initialWritingPreferences: WritingPreferences | null
 }) {
   const router = useRouter()
   const [training, setTraining] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [summaryExpanded, setSummaryExpanded] = useState(false)
+  const [writingPreferences, setWritingPreferences] = useState<WritingPreferences>(
+    initialWritingPreferences ?? {
+      forbidEmDash: false,
+      preferredGreetings: [],
+      avoidedPhrases: [],
+      preferredSignoffs: [],
+      formality: null,
+      replyLength: null,
+      customInstruction: null,
+    }
+  )
+  const [savingPreferences, setSavingPreferences] = useState(false)
+  const [preferencesSaved, setPreferencesSaved] = useState(false)
 
   async function handleTrain() {
     setTraining(true)
@@ -43,6 +68,28 @@ export default function PersonalStylePanel({
       setError(err instanceof Error ? err.message : "Training failed")
     } finally {
       setTraining(false)
+    }
+  }
+
+  async function saveWritingPreferences() {
+    setSavingPreferences(true)
+    setPreferencesSaved(false)
+    setError(null)
+    try {
+      const response = await fetch("/api/writing-preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(writingPreferences),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? "Unable to save writing preferences")
+      setWritingPreferences(data.preferences)
+      setPreferencesSaved(true)
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save writing preferences")
+    } finally {
+      setSavingPreferences(false)
     }
   }
 
@@ -155,6 +202,50 @@ export default function PersonalStylePanel({
       >
         {training ? "Learning from your recent sent emails..." : "Train Style"}
       </button>
+
+      <div className="rounded-lg border border-slate-200 p-4">
+        <h3 className="text-sm font-medium text-slate-900">Writing preferences</h3>
+        <p className="mt-1 text-sm text-slate-500">
+          These choices override learned style when FlowDesk drafts a reply.
+        </p>
+        <label className="mt-4 flex cursor-pointer items-center justify-between gap-4 text-sm font-medium text-slate-800">
+          <span>Never use em dashes</span>
+          <input
+            type="checkbox"
+            checked={writingPreferences.forbidEmDash}
+            onChange={(event) => {
+              setWritingPreferences((current) => ({ ...current, forbidEmDash: event.target.checked }))
+              setPreferencesSaved(false)
+            }}
+            className="h-4 w-4 rounded border-slate-300"
+          />
+        </label>
+        <label className="mt-4 block text-sm font-medium text-slate-800">
+          Additional drafting instruction
+          <textarea
+            value={writingPreferences.customInstruction ?? ""}
+            onChange={(event) => {
+              setWritingPreferences((current) => ({ ...current, customInstruction: event.target.value || null }))
+              setPreferencesSaved(false)
+            }}
+            maxLength={1000}
+            rows={3}
+            placeholder="For example: Keep replies direct and avoid buzzwords."
+            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal"
+          />
+        </label>
+        <div className="mt-4 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={saveWritingPreferences}
+            disabled={savingPreferences}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {savingPreferences ? "Saving..." : "Save writing preferences"}
+          </button>
+          {preferencesSaved && <span className="text-sm text-green-700">Saved</span>}
+        </div>
+      </div>
     </div>
   )
 }

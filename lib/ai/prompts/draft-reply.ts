@@ -1,5 +1,6 @@
 import { stripHtmlToText } from "@/lib/email-body"
 import { summarizeConversation, formatSummaryForPrompt, selectRelevantDocs } from "@/lib/ai/summarize"
+import type { WritingPreferences } from "@/lib/agent/writing-preferences"
 
 const ALLOWED_LABELS = ["Lead", "Reschedule", "Pricing", "Complaint"] as const
 const RISK_LEVELS = ["low", "medium", "high"] as const
@@ -53,6 +54,8 @@ export type DraftReplyPromptInput = {
   } | null
   availableSlots?: string[]
   userInstruction?: string | null
+  writingPreferences?: WritingPreferences | null
+  writingPreferenceValidationFailures?: string[]
 }
 
 export const draftReplyJsonSchema = {
@@ -115,6 +118,7 @@ export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
     : "No learned reply style profile configured."
 
   const userInstruction = input.userInstruction?.trim()
+  const writingPreferences = input.writingPreferences ?? null
 
   return [
     "You are Flowdesk's AI drafting assistant for a small business inbox.",
@@ -161,6 +165,20 @@ export function buildDraftReplyPrompt(input: DraftReplyPromptInput): string {
     "Learned reply style:",
     learnedStyle,
     "",
+    ...(writingPreferences
+      ? [
+          "Explicit writing preferences (these override learned style):",
+          JSON.stringify(writingPreferences, null, 2),
+          "",
+        ]
+      : []),
+    ...(input.writingPreferenceValidationFailures?.length
+      ? [
+          "Previous draft violated these enforceable writing preferences. Correct every violation in this replacement draft:",
+          ...input.writingPreferenceValidationFailures.map((failure) => `- ${failure}`),
+          "",
+        ]
+      : []),
     ...(userInstruction
       ? [
           "User instruction:",
@@ -261,11 +279,14 @@ export type PersonalDraftReplyPromptInput = {
   }>
   conversationSummary: ReturnType<typeof summarizeConversation> | null
   userInstruction?: string | null
+  writingPreferences?: WritingPreferences | null
+  writingPreferenceValidationFailures?: string[]
 }
 
 export function buildPersonalDraftReplyPrompt(input: PersonalDraftReplyPromptInput): string {
   const profile = input.personalProfile
   const userInstruction = input.userInstruction?.trim()
+  const writingPreferences = input.writingPreferences ?? null
 
   // Summarize conversation
   const summary = input.conversationSummary ?? summarizeConversation(input.messages)
@@ -304,6 +325,20 @@ export function buildPersonalDraftReplyPrompt(input: PersonalDraftReplyPromptInp
       2
     ),
     "",
+    ...(writingPreferences
+      ? [
+          "Explicit writing preferences (these override learned style):",
+          JSON.stringify(writingPreferences, null, 2),
+          "",
+        ]
+      : []),
+    ...(input.writingPreferenceValidationFailures?.length
+      ? [
+          "Previous draft violated these enforceable writing preferences. Correct every violation in this replacement draft:",
+          ...input.writingPreferenceValidationFailures.map((failure) => `- ${failure}`),
+          "",
+        ]
+      : []),
     "Safety rules (personal):",
     "- Never auto-send financial, legal, medical, employment, relationship-conflict, password/security, urgent, emotional, or ambiguous messages — flag these as riskLevel \"high\".",
     "- Do not invent facts not present in the conversation.",

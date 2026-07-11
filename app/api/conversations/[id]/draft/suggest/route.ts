@@ -16,6 +16,7 @@ import { conversationUpdateForDraftReady } from "@/lib/workflow-status-transitio
 import { queueGmailDraftWriteback } from "@/lib/gmail-drafts"
 import { projectFlowDeskLabelsForConversation } from "@/lib/gmail-labels"
 import { ensureDraftApprovalRequest } from "@/lib/agent/approvals"
+import { validateDraftWritingPreferences } from "@/lib/agent/writing-preferences"
 
 export const runtime = "nodejs"
 
@@ -78,6 +79,7 @@ export async function POST(
   const learnedProfilePromptVersion = context.learnedProfile?.promptVersion ?? null
   let draftCacheKey: string
   let estimatedPromptTokens = 0
+  let businessDraftInput: Parameters<typeof generateDraftReply>[0] | null = null
 
   if (accountType === "personal") {
     promptVersion = "personal-draft-v1"
@@ -86,6 +88,7 @@ export async function POST(
       messages: conversation.messages,
       conversationSummary,
       userInstruction,
+      writingPreferences: context.writingPreferences,
     })
     draftCacheKey = buildDraftCacheKey(promptVersion, accountType, prompt)
     estimatedPromptTokens = estimateTokenCount(prompt)
@@ -148,7 +151,9 @@ export async function POST(
       conversationSummary,
       availableSlots,
       userInstruction,
+      writingPreferences: context.writingPreferences,
     }
+    businessDraftInput = draftInput
     const prompt = buildDraftReplyPrompt(draftInput)
     draftCacheKey = buildDraftCacheKey(promptVersion, accountType, prompt)
     estimatedPromptTokens = estimateTokenCount(prompt)
@@ -172,6 +177,53 @@ export async function POST(
       const message = err instanceof Error ? err.message : "Failed to generate AI draft"
       const status = message.includes("spend limit reached") ? 429 : 502
       return NextResponse.json({ error: message }, { status })
+    }
+  }
+
+  let writingPreferenceFailures = validateDraftWritingPreferences(result.draftText, context.writingPreferences)
+  if (writingPreferenceFailures.length > 0) {
+    try {
+      if (accountType === "personal") {
+        const retryPrompt = buildPersonalDraftReplyPrompt({
+          personalProfile: learnedProfileToPersonalStyle(context.learnedProfile),
+          messages: conversation.messages,
+          conversationSummary,
+          userInstruction,
+          writingPreferences: context.writingPreferences,
+          writingPreferenceValidationFailures: writingPreferenceFailures,
+        })
+        const { output, model: resolvedModel } = await runAiJsonFeature<Record<string, unknown>>({
+          tenantId: session.user.tenantId,
+          userId: session.user.id,
+          userEmail: session.user.email ?? "",
+          feature: "autopilot.draft",
+          messages: [{ role: "user", content: retryPrompt }],
+          schemaName: "flowdesk_draft_reply",
+          schema: draftReplyJsonSchema,
+          estimatedInputTokens: estimateTokenCount(retryPrompt),
+          estimatedOutputTokens: 500,
+        })
+        result = normalizeDraftReplyOutput(JSON.stringify(output), resolvedModel)
+      } else if (businessDraftInput) {
+        result = await generateDraftReply({
+          ...businessDraftInput,
+          writingPreferenceValidationFailures: writingPreferenceFailures,
+        })
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to regenerate AI draft"
+      return NextResponse.json({ error: message }, { status: 502 })
+    }
+
+    writingPreferenceFailures = validateDraftWritingPreferences(result.draftText, context.writingPreferences)
+    if (writingPreferenceFailures.length > 0) {
+      return NextResponse.json(
+        {
+          error: "Draft requires review because it violates writing preferences.",
+          validationFailures: writingPreferenceFailures,
+        },
+        { status: 422 }
+      )
     }
   }
 

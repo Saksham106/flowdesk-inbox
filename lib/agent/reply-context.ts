@@ -8,6 +8,7 @@ import type {
 
 import { prisma } from "@/lib/prisma"
 import { accountModeFor } from "@/lib/tenant-capabilities"
+import type { WritingPreferences } from "@/lib/agent/writing-preferences"
 
 export type AccountTypeValue = "personal" | "business"
 
@@ -18,6 +19,7 @@ export type ReplyGenerationContext = {
   learnedProfile: LearnedReplyProfile | null
   personMemory: PersonMemory | null
   conversationState: ConversationState | null
+  writingPreferences: WritingPreferences | null
 }
 
 export async function getReplyGenerationContext(input: {
@@ -53,11 +55,16 @@ export async function getReplyGenerationContext(input: {
     ? prisma.conversationState.findUnique({ where: { conversationId: input.conversationId } })
     : Promise.resolve(null)
 
+  const writingPreferencesPromise = prisma.writingPreference.findUnique({
+    where: { tenantId: input.tenantId },
+  })
+
   if (accountType === "personal") {
-    const [learnedProfile, personMemory, conversationState] = await Promise.all([
+    const [learnedProfile, personMemory, conversationState, writingPreferences] = await Promise.all([
       learnedProfilePromise,
       personMemoryPromise,
       conversationStatePromise,
+      writingPreferencesPromise,
     ])
 
     return {
@@ -67,10 +74,11 @@ export async function getReplyGenerationContext(input: {
       learnedProfile,
       personMemory,
       conversationState,
+      writingPreferences,
     }
   }
 
-  const [businessProfile, knowledgeDocuments, learnedProfile, personMemory, conversationState] = await Promise.all([
+  const [businessProfile, knowledgeDocuments, learnedProfile, personMemory, conversationState, writingPreferences] = await Promise.all([
     prisma.businessProfile.findUnique({ where: { tenantId: input.tenantId } }),
     prisma.knowledgeDocument.findMany({
       where: { tenantId: input.tenantId, NOT: { sourceType: "concierge_template" } },
@@ -80,6 +88,7 @@ export async function getReplyGenerationContext(input: {
     learnedProfilePromise,
     personMemoryPromise,
     conversationStatePromise,
+    writingPreferencesPromise,
   ])
 
   return {
@@ -89,5 +98,6 @@ export async function getReplyGenerationContext(input: {
     learnedProfile,
     personMemory,
     conversationState,
+    writingPreferences,
   }
 }

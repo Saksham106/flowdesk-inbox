@@ -14,7 +14,7 @@ export default async function TrainingSettingsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.tenantId) redirect("/login");
 
-  const [learnedReplyProfile, latestLearningUsage, senderRules, agentRulesRaw, tenant] = await Promise.all([
+  const [learnedReplyProfile, latestLearningUsage, senderRules, agentRulesRaw, tenant, writingPreferences] = await Promise.all([
     prisma.learnedReplyProfile.findFirst({
       where: { tenantId: session.user.tenantId },
       orderBy: { updatedAt: "desc" },
@@ -35,6 +35,7 @@ export default async function TrainingSettingsPage() {
       where: { id: session.user.tenantId },
       select: { salesCrmEnabled: true },
     }),
+    prisma.writingPreference.findUnique({ where: { tenantId: session.user.tenantId } }),
   ]);
 
   const isPersonal = !salesCrmEnabled(tenant);
@@ -76,7 +77,10 @@ export default async function TrainingSettingsPage() {
           </p>
         </div>
         <div className="px-6 py-5">
-          <PersonalStylePanel initial={toLearnedPanelSnapshot(learnedReplyProfile, latestLearningUsage)} />
+          <PersonalStylePanel
+            initial={toLearnedPanelSnapshot(learnedReplyProfile, latestLearningUsage)}
+            initialWritingPreferences={writingPreferences}
+          />
         </div>
       </section>
 

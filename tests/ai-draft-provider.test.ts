@@ -151,6 +151,42 @@ describe('buildDraftReplyPrompt', () => {
 })
 
 describe('buildPersonalDraftReplyPrompt', () => {
+  it('places explicit writing preferences after learned style and makes them authoritative', () => {
+    const prompt = buildPersonalDraftReplyPrompt({
+      personalProfile: {
+        toneSummary: 'Warm and conversational',
+        greetingPatterns: 'Hey there',
+        signoffPatterns: 'Best',
+        sentenceLengthStyle: 'short',
+        formalityLevel: 'casual',
+        recurringPhrasesToUse: [],
+        recurringPhrasesToAvoid: [],
+        sanitizedExamples: null,
+      },
+      writingPreferences: {
+        forbidEmDash: true,
+        preferredGreetings: ['Hello'],
+        avoidedPhrases: ['circle back'],
+        preferredSignoffs: ['Thanks'],
+        formality: 'professional',
+        replyLength: 'brief',
+        customInstruction: 'Use plain language.',
+      },
+      conversationSummary: null,
+      messages: [
+        {
+          direction: 'inbound',
+          body: 'Could you reply today?',
+          createdAt: new Date('2026-06-01T12:00:00Z'),
+        },
+      ],
+    })
+
+    expect(prompt).toContain('Explicit writing preferences (these override learned style):')
+    expect(prompt).toContain('"forbidEmDash": true')
+    expect(prompt.indexOf('Explicit writing preferences')).toBeGreaterThan(prompt.indexOf('Personal style profile:'))
+  })
+
   it('includes rough user instructions for personal drafts', () => {
     const prompt = buildPersonalDraftReplyPrompt({
       personalProfile: null,
