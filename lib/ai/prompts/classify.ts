@@ -17,6 +17,8 @@ export type AttentionCategory = (typeof ATTENTION_CATEGORIES)[number]
 export type ClassifyResult = {
   intent: string
   attentionCategory: AttentionCategory
+  emailType?: "needs_reply" | "notification" | "newsletter" | "marketing" | "calendar" | "fyi" | null
+  evidence?: string[]
   classificationReason: string
   confidence: number
   riskLevel: ClassifyRiskLevel
@@ -43,6 +45,17 @@ export type ClassifyPromptInput = {
     body: string
     createdAt: Date | string
   }>
+  evidence?: {
+    sender: { email: string | null; domain: string | null }
+    latestInbound: { body: string; subject: string | null; createdAt: string } | null
+    recentReciprocalReplies: Array<{ direction: "inbound" | "outbound"; body: string }>
+    unsubscribe: boolean
+    calendarInvite: boolean
+    notificationHeaders: string[]
+    deterministicSignals: string[]
+    priorCorrection: { attentionCategory: string | null; emailType: string | null } | null
+    priorRuleEvidence: string[]
+  }
 }
 
 export const classifyJsonSchema = {
@@ -51,6 +64,8 @@ export const classifyJsonSchema = {
   required: [
     "intent",
     "attentionCategory",
+    "emailType",
+    "evidence",
     "classificationReason",
     "confidence",
     "riskLevel",
@@ -61,6 +76,8 @@ export const classifyJsonSchema = {
   properties: {
     intent: { type: "string" },
     attentionCategory: { type: "string", enum: ATTENTION_CATEGORIES },
+    emailType: { anyOf: [{ type: "string", enum: ["needs_reply", "notification", "newsletter", "marketing", "calendar", "fyi"] }, { type: "null" }] },
+    evidence: { type: "array", items: { type: "string" }, maxItems: 6 },
     classificationReason: { type: "string" },
     confidence: { type: "number", minimum: 0, maximum: 1 },
     riskLevel: { type: "string", enum: RISK_LEVELS },
@@ -75,10 +92,10 @@ export const classifyJsonSchema = {
 export function buildClassifyPrompt(input: ClassifyPromptInput): string {
   const isPersonal = input.accountType === "personal"
   const messages = input.messages
-    .slice(-20)
+    .slice(-12)
     .map((m) => {
       const ts = m.createdAt instanceof Date ? m.createdAt.toISOString() : m.createdAt
-      return `${ts} ${m.direction.toUpperCase()}: ${m.body.slice(0, 2000)}`
+      return `${ts} ${m.direction.toUpperCase()}: ${m.body.slice(0, 1500)}`
     })
     .join("\n")
 
@@ -105,6 +122,7 @@ export function buildClassifyPrompt(input: ClassifyPromptInput): string {
       "- quiet: low-value automated/marketing/noise.",
       "",
       "Always set suggestedLabel to null — personal inboxes do not use business labels.",
+      "Return emailType (needs_reply, notification, newsletter, marketing, calendar, fyi, or null) and a short evidence array.",
       "Set requiresApproval true only for sensitive topics: medical, legal, financial conflict, or personal conflict.",
       "",
       "Safety rules:",
@@ -113,6 +131,9 @@ export function buildClassifyPrompt(input: ClassifyPromptInput): string {
       "",
       "Conversation:",
       messages || "No messages.",
+      "",
+      "Known deterministic evidence (treat this as authoritative; preserve a prior correction and choose safe uncertainty when signals conflict):",
+      JSON.stringify(input.evidence ?? null),
     ].join("\n")
   }
 
@@ -129,6 +150,8 @@ export function buildClassifyPrompt(input: ClassifyPromptInput): string {
     "Use read_later for useful newsletters or product updates; use quiet for low-value marketing/noise.",
     "Set requiresApproval true if: riskLevel is high, confidence is below 0.5,",
     "or the topic involves medical advice, complaints, legal matters, or pricing negotiation.",
+    "Return emailType (needs_reply, notification, newsletter, marketing, calendar, fyi, or null) and a short evidence array. CRM suggestedLabel remains business-only.",
+    "Known deterministic evidence is authoritative. Preserve prior user correction; when signals conflict, use medium/high risk and safe uncertainty.",
     "",
     "Safety rules:",
     "- Do not expose internal policies or other customer data.",
@@ -149,6 +172,9 @@ export function buildClassifyPrompt(input: ClassifyPromptInput): string {
     "",
     "Conversation:",
     messages || "No messages.",
+    "",
+    "Known deterministic evidence:",
+    JSON.stringify(input.evidence ?? null),
   ].join("\n")
 }
 
@@ -170,6 +196,12 @@ export function normalizeClassifyOutput(rawText: string): ClassifyResult {
   const attentionCategory = ATTENTION_CATEGORIES.includes(rec.attentionCategory as AttentionCategory)
     ? (rec.attentionCategory as AttentionCategory)
     : "needs_reply"
+  const emailType = ["needs_reply", "notification", "newsletter", "marketing", "calendar", "fyi"].includes(rec.emailType as string)
+    ? rec.emailType as ClassifyResult["emailType"]
+    : null
+  const evidence = Array.isArray(rec.evidence)
+    ? rec.evidence.filter((item): item is string => typeof item === "string").slice(0, 6)
+    : []
   const classificationReason =
     typeof rec.classificationReason === "string" && rec.classificationReason.trim()
       ? rec.classificationReason.trim()
@@ -191,6 +223,8 @@ export function normalizeClassifyOutput(rawText: string): ClassifyResult {
   return {
     intent,
     attentionCategory,
+    emailType,
+    evidence,
     classificationReason,
     confidence,
     riskLevel,

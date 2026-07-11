@@ -45,6 +45,8 @@ export async function tryStaticClassification(input: {
     result: {
       intent: "static_rule_match",
       attentionCategory: rule.targetAttention,
+      emailType: null,
+      evidence: rule.evidence,
       classificationReason: `Matched your rule: ${rule.evidence.join(" and ")}.`,
       confidence: 1,
       riskLevel: "low",

@@ -3,6 +3,7 @@ import { accountModeFor } from "@/lib/tenant-capabilities"
 import { getFullBusinessContext } from "@/lib/agent/context"
 import { classifyConversation, tryStaticClassification } from "@/lib/agent/classify"
 import { extractEmail } from "@/lib/google"
+import { buildClassificationEvidence } from "@/lib/agent/classification-evidence"
 import { checkPolicy } from "@/lib/agent/policy"
 import { checkAvailability, formatSlots, type AvailableSlot } from "@/lib/agent/availability"
 import { attemptAutopilotSend } from "@/lib/agent/autopilot"
@@ -81,7 +82,7 @@ export async function runAgentJob(jobId: string): Promise<AgentJobResult> {
           confidence: result.confidence,
           requiresApproval: result.requiresApproval,
           // "Why this fired": which rule version produced the classification.
-          classificationSource: result.staticRule ? "static_rule" : "llm",
+          classificationSource: result.gmailOverride ? "gmail_override" : result.staticRule ? "static_rule" : "llm",
           ...(result.staticRule
             ? {
                 ruleSource: result.staticRule.ruleSource,
@@ -96,15 +97,17 @@ export async function runAgentJob(jobId: string): Promise<AgentJobResult> {
 
     // Attempt autopilot send if policy and settings allow it (best-effort)
     let autopilotSent = false
-    try {
-      const autopilotResult = await attemptAutopilotSend(
-        jobId,
-        result.classification,
-        { requiresApproval: result.policyRequiresApproval, escalate: result.policyRequiresApproval, reason: null }
-      )
-      autopilotSent = autopilotResult.sent
-    } catch {
-      // autopilot errors never fail the job itself
+    if (!result.gmailOverride) {
+      try {
+        const autopilotResult = await attemptAutopilotSend(
+          jobId,
+          result.classification,
+          { requiresApproval: result.policyRequiresApproval, escalate: result.policyRequiresApproval, reason: null }
+        )
+        autopilotSent = autopilotResult.sent
+      } catch {
+        // autopilot errors never fail the job itself
+      }
     }
 
     return { status: "completed", intent: result.intent, confidence: result.confidence, requiresApproval: result.requiresApproval, autopilotSent }
@@ -137,11 +140,15 @@ async function _executeJob(
   classification: ClassifyResult
   policyRequiresApproval: boolean
   staticRule: StaticRuleMatch | null
+  gmailOverride: boolean
 }> {
   const [conversation, businessContext, tenant] = await Promise.all([
     prisma.conversation.findFirst({
       where: { id: job.conversationId, tenantId: job.tenantId },
-      include: { messages: { orderBy: { createdAt: "asc" } } },
+      include: {
+        messages: { orderBy: { createdAt: "asc" } },
+        stateRecord: { select: { source: true, attentionCategory: true, emailType: true, metadataJson: true } },
+      },
     }),
     getFullBusinessContext(job.tenantId),
     prisma.tenant.findUnique({
@@ -152,6 +159,34 @@ async function _executeJob(
 
   if (!conversation) {
     throw new Error("Conversation not found during job execution")
+  }
+
+  const evidence = buildClassificationEvidence(conversation)
+  if (evidence.hasGmailOverride) {
+    const priorEmailType = conversation.stateRecord?.emailType
+    const emailType = ["needs_reply", "notification", "newsletter", "marketing", "calendar", "fyi"].includes(priorEmailType ?? "")
+      ? priorEmailType as NonNullable<ClassifyResult["emailType"]>
+      : null
+    return {
+      intent: "gmail_label_override",
+      confidence: 1,
+      requiresApproval: false,
+      classification: {
+        intent: "gmail_label_override",
+        attentionCategory: (conversation.stateRecord?.attentionCategory as ClassifyResult["attentionCategory"]) ?? "quiet",
+        emailType,
+        evidence: ["active_gmail_label_override"],
+        classificationReason: "Skipped because a Gmail label override is active.",
+        confidence: 1,
+        riskLevel: "low",
+        suggestedLabel: null,
+        escalationReason: null,
+        requiresApproval: false,
+      },
+      policyRequiresApproval: false,
+      staticRule: null,
+      gmailOverride: true,
+    }
   }
 
   const classifyToolCall = await prisma.agentToolCall.create({
@@ -231,6 +266,7 @@ async function _executeJob(
     const classifyInput = {
       aiContext: { tenantId: job.tenantId, userId: owner.id, userEmail: owner.email },
       messages: conversation.messages,
+      evidence,
       businessProfile: businessContext.profile,
       accountType: accountModeFor(tenant),
     }
@@ -272,6 +308,7 @@ async function _executeJob(
     classification,
     policyRequiresApproval: policy.requiresApproval,
     staticRule: staticMatch?.rule ?? null,
+    gmailOverride: false,
   }
 }
 
