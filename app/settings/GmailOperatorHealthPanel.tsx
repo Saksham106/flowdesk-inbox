@@ -14,18 +14,20 @@ const DOT_STYLE: Record<GmailOperatorHealthStatus, string> = {
 
 export default function GmailOperatorHealthPanel({
   summary,
+  title = "Gmail operator health",
+  description = "Tracks sync, push, writeback, and agent jobs.",
 }: {
   summary: GmailOperatorHealthSummary
+  title?: string
+  description?: string
 }) {
   return (
     <div className={`rounded-lg border px-4 py-3 ${STATUS_STYLE[summary.status]}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold">Gmail operator health</p>
+          <p className="text-sm font-semibold">{title}</p>
           <p className="mt-1 text-xs">{summary.headline}</p>
-          <p className="mt-1 text-[11px] opacity-80">
-            Tracks sync, push, writeback, and agent jobs.
-          </p>
+          <p className="mt-1 text-[11px] opacity-80">{description}</p>
         </div>
         <span className="rounded-full bg-white/80 px-2.5 py-0.5 text-xs font-medium capitalize">
           {summary.status}

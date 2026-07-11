@@ -22,24 +22,24 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     conversation: { findFirst: mockConversationFindFirst },
     gmailLabelMapping: { findMany: mockLabelMappingFindMany },
-    gmailWritebackQueue: { upsert: mockWritebackUpsert, findUnique: mockWritebackFindUnique },
+    emailWritebackQueue: { upsert: mockWritebackUpsert, findUnique: mockWritebackFindUnique },
     auditLog: { create: mockAuditCreate },
     followUpSetting: { findUnique: mockFollowUpSettingFindUnique },
     autopilotSetting: { findUnique: mockAutopilotSettingFindUnique },
   },
 }))
 
-// The inline writeback drain (lib/agent/gmail-writeback-processor.ts) is a
+// The inline writeback drain (lib/agent/email-writeback-processor.ts) is a
 // separate concern from label projection/queueing — stub it out so these
 // tests aren't exercising real Gmail-API-adjacent code.
-vi.mock("@/lib/agent/gmail-writeback-processor", () => ({
-  processGmailWritebackJobById: vi.fn().mockResolvedValue({ ok: true }),
+vi.mock("@/lib/agent/email-writeback-processor", () => ({
+  processEmailWritebackJobById: vi.fn().mockResolvedValue({ ok: true }),
 }))
 
 import {
   filterEnabledFlowDeskLabels,
   projectFlowDeskLabelsForConversation,
-} from "@/lib/gmail-labels"
+} from "@/lib/email-labels"
 
 const GOOGLE_CONVERSATION = {
   id: "conv-1",
@@ -208,7 +208,7 @@ describe("projectFlowDeskLabelsForConversation", () => {
   })
 
   it("drains the queued job inline instead of waiting for the next cron tick", async () => {
-    const { processGmailWritebackJobById } = await import("@/lib/agent/gmail-writeback-processor")
+    const { processEmailWritebackJobById } = await import("@/lib/agent/email-writeback-processor")
     mockConversationFindFirst.mockResolvedValue(GOOGLE_CONVERSATION)
 
     await projectFlowDeskLabelsForConversation({
@@ -216,7 +216,7 @@ describe("projectFlowDeskLabelsForConversation", () => {
       conversationId: "conv-1",
     })
 
-    expect(processGmailWritebackJobById).toHaveBeenCalledWith("job-1")
+    expect(processEmailWritebackJobById).toHaveBeenCalledWith("job-1")
   })
 
   it("resets retry state when refreshing an existing label writeback", async () => {
@@ -238,10 +238,30 @@ describe("projectFlowDeskLabelsForConversation", () => {
     )
   })
 
-  it("no-ops for non-Google channels", async () => {
+  it("queues an apply_labels writeback for a Microsoft (Outlook) conversation and audits outlook.labels.queued", async () => {
     mockConversationFindFirst.mockResolvedValue({
       ...GOOGLE_CONVERSATION,
       channel: { provider: "microsoft" },
+    })
+
+    const job = await projectFlowDeskLabelsForConversation({
+      tenantId: "tenant-1",
+      conversationId: "conv-1",
+    })
+
+    expect(job).toEqual({ id: "job-1" })
+    expect(mockWritebackUpsert).toHaveBeenCalledTimes(1)
+    expect(mockAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "outlook.labels.queued" }),
+      })
+    )
+  })
+
+  it("no-ops for channels without mailbox writeback support (e.g. twilio)", async () => {
+    mockConversationFindFirst.mockResolvedValue({
+      ...GOOGLE_CONVERSATION,
+      channel: { provider: "twilio" },
     })
     const job = await projectFlowDeskLabelsForConversation({
       tenantId: "tenant-1",

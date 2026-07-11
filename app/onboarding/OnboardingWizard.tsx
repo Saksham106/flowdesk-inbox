@@ -13,7 +13,7 @@ type Sample = {
 }
 
 type FirstPassResult = {
-  hadGmail: boolean
+  hadEmailChannel: boolean
   belowAutomationLevel: boolean
   minAutomationLevel: number
   organizedCount: number
@@ -55,7 +55,7 @@ function LabelChip({ label, count }: { label: string; count?: number }) {
   )
 }
 
-const STEP_LABELS = ["Connect Gmail", "Train your style"]
+const STEP_LABELS = ["Connect your inbox", "Train your style"]
 
 function stepIndex(step: OnboardingStep): number {
   if (step === "connect" || step === "firstPass") return 0
@@ -108,12 +108,21 @@ export default function OnboardingWizard({
   initialStep,
   connectedEmail,
   styleTrained,
+  microsoftConfigured = false,
 }: {
   initialStep: OnboardingStep
   connectedEmail: string | null
   styleTrained: boolean
+  microsoftConfigured?: boolean
 }) {
   const [step, setStep] = useState<OnboardingStep>(initialStep)
+
+  // The outlook callback passes `connected=outlook` as a provider marker (not
+  // a real address, unlike the gmail callback's `connected=<email>`) so the
+  // wizard can tell which provider was just connected without a real email to
+  // sniff. Anything else — including null — is treated as gmail, which keeps
+  // this component's output unchanged for every existing (non-outlook) flow.
+  const connectedProvider: "gmail" | "outlook" = connectedEmail === "outlook" ? "outlook" : "gmail"
 
   // ── First-pass state (step 1 completion) ──
   const [firstPassStatus, setFirstPassStatus] = useState<"running" | "done" | "error">("running")
@@ -186,10 +195,13 @@ export default function OnboardingWizard({
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-2xl">
               ✉️
             </div>
-            <h1 className="text-3xl font-bold text-slate-900">Connect your Gmail</h1>
+            <h1 className="text-3xl font-bold text-slate-900">
+              {microsoftConfigured ? "Connect your inbox" : "Connect your Gmail"}
+            </h1>
             <p className="mx-auto mt-3 max-w-md text-sm text-slate-500">
               FlowDesk organizes your inbox with labels, drafts replies in your voice, and keeps
-              watch so nothing slips. It starts by connecting to your Gmail account.
+              watch so nothing slips. It starts by connecting to your{" "}
+              {microsoftConfigured ? "Gmail or Outlook account" : "Gmail account"}.
             </p>
             <div className="mt-8 flex flex-col items-center gap-3">
               <a
@@ -198,6 +210,14 @@ export default function OnboardingWizard({
               >
                 Connect Gmail →
               </a>
+              {microsoftConfigured && (
+                <a
+                  href="/api/connectors/outlook/connect"
+                  className="inline-flex w-full max-w-xs items-center justify-center rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Connect Outlook →
+                </a>
+              )}
               <Link href="/home" className="text-xs font-medium text-slate-500 hover:text-slate-700">
                 Skip for now
               </Link>
@@ -217,8 +237,11 @@ export default function OnboardingWizard({
                 <div className="mx-auto mb-6 h-10 w-10 animate-spin rounded-full border-[3px] border-slate-200 border-t-blue-500" />
                 <h1 className="text-2xl font-semibold text-slate-900">Organizing your inbox…</h1>
                 <p className="mt-2 text-sm text-slate-500">
-                  FlowDesk is labeling your recent emails in Gmail
-                  {connectedEmail ? ` for ${connectedEmail}` : ""}. This takes a few seconds.
+                  FlowDesk is labeling your recent emails
+                  {connectedProvider === "outlook"
+                    ? " in Outlook"
+                    : ` in Gmail${connectedEmail ? ` for ${connectedEmail}` : ""}`}
+                  . This takes a few seconds.
                 </p>
               </div>
             )}
@@ -250,9 +273,10 @@ export default function OnboardingWizard({
                         {firstPass.organizedCount} email{firstPass.organizedCount === 1 ? "" : "s"} organized
                       </h1>
                       <p className="mt-2 text-sm text-slate-500">
-                        FlowDesk labeled your recent inbox in Gmail. Open Gmail and you’ll see the
-                        labels on your threads — and it keeps organizing new mail automatically
-                        from here.
+                        FlowDesk labeled your recent inbox
+                        {connectedProvider === "outlook" ? " in Outlook" : " in Gmail"}. Open your
+                        inbox and you’ll see the labels on your threads — and it keeps organizing
+                        new mail automatically from here.
                       </p>
                     </div>
 
@@ -294,12 +318,14 @@ export default function OnboardingWizard({
                   </>
                 ) : (
                   <div className="text-center">
-                    <h1 className="text-2xl font-semibold text-slate-900">Gmail connected</h1>
+                    <h1 className="text-2xl font-semibold text-slate-900">
+                      {connectedProvider === "outlook" ? "Outlook connected" : "Gmail connected"}
+                    </h1>
                     <p className="mt-2 text-sm text-slate-500">
                       {firstPass.belowAutomationLevel
-                        ? "FlowDesk is connected but your automation level is set below applying Gmail labels. Raise it in Settings → Automation to let FlowDesk organize your inbox."
-                        : !firstPass.hadGmail
-                          ? "Connect a Gmail account to let FlowDesk start organizing your inbox."
+                        ? "FlowDesk is connected but your automation level is set below applying labels. Raise it in Settings → Automation to let FlowDesk organize your inbox."
+                        : !firstPass.hadEmailChannel
+                          ? "Connect an email account to let FlowDesk start organizing your inbox."
                           : "FlowDesk is connected and watching your inbox — new mail will be organized as it arrives."}
                     </p>
                   </div>
@@ -416,12 +442,12 @@ export default function OnboardingWizard({
                 Go to your control room →
               </Link>
               <a
-                href="https://mail.google.com"
+                href={connectedProvider === "outlook" ? "https://outlook.office.com/mail/" : "https://mail.google.com"}
                 target="_blank"
                 rel="noreferrer"
                 className="text-xs font-medium text-slate-500 hover:text-slate-700"
               >
-                Open Gmail to see your labels
+                Open your inbox to see your labels
               </a>
             </div>
           </div>

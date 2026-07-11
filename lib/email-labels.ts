@@ -3,6 +3,7 @@ import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status
 import { getAutomationLevel, isActionAllowedAtLevel } from "@/lib/agent/automation-level"
 import { classifyEmailType } from "@/lib/agent/email-classifier"
 import { hasGmailLabelOverride } from "@/lib/agent/gmail-label-override"
+import { supportsMailboxWriteback, auditPrefixForProvider } from "@/lib/email/provider-support"
 
 // Labels are flat, top-level Gmail labels named exactly for what they mean
 // ("Needs Reply", "Waiting On", …) with no "FlowDesk/" namespace prefix.
@@ -70,6 +71,13 @@ export function isFlowDeskGmailLabelName(label: string): label is FlowDeskGmailL
   return FLOWDESK_GMAIL_LABEL_SET.has(label)
 }
 
+// Neutral aliases: the taxonomy applies to any mailbox provider (Gmail labels,
+// Outlook categories). New code should use these; the Gmail-suffixed names
+// remain for existing imports.
+export const FLOWDESK_LABEL_NAMES = FLOWDESK_GMAIL_LABEL_NAMES
+export type FlowDeskLabelName = FlowDeskGmailLabelName
+export const isFlowDeskLabelName = isFlowDeskGmailLabelName
+
 export function flowDeskLabelsForConversationState(input: {
   workflowStatus: WorkflowStatus
   draftStatus?: string | null
@@ -135,15 +143,17 @@ export async function queueFlowDeskLabelWriteback(input: {
   threadId: string
   labels: FlowDeskGmailLabelName[]
   reason: string
+  provider: string
 }) {
   const labels = Array.from(new Set(input.labels))
+  const auditPrefix = auditPrefixForProvider(input.provider)
 
   // An empty set means "remove all FlowDesk labels". Only queue that removal
   // for threads we have labeled (or tried to label) before — a prior
   // apply_labels queue row is the cheap proxy — so we don't spam Gmail with
   // removals for threads FlowDesk never touched.
   if (labels.length === 0) {
-    const prior = await prisma.gmailWritebackQueue.findUnique({
+    const prior = await prisma.emailWritebackQueue.findUnique({
       where: {
         conversationId_action: {
           conversationId: input.conversationId,
@@ -161,7 +171,7 @@ export async function queueFlowDeskLabelWriteback(input: {
     reason: input.reason,
   }
 
-  const job = await prisma.gmailWritebackQueue.upsert({
+  const job = await prisma.emailWritebackQueue.upsert({
     where: {
       conversationId_action: {
         conversationId: input.conversationId,
@@ -191,7 +201,7 @@ export async function queueFlowDeskLabelWriteback(input: {
   await prisma.auditLog.create({
     data: {
       tenantId: input.tenantId,
-      action: "gmail.labels.queued",
+      action: `${auditPrefix}.labels.queued`,
       payloadJson: {
         conversationId: input.conversationId,
         channelId: input.channelId,
@@ -202,16 +212,17 @@ export async function queueFlowDeskLabelWriteback(input: {
     },
   })
 
-  // Best-effort inline drain: apply this job to Gmail right away instead of
-  // waiting for the next gmail-writeback cron tick. This is what makes label
-  // changes actually show up in Gmail promptly rather than depending entirely
-  // on a cron being scheduled — the cron remains the reliability backstop for
-  // whatever this inline attempt can't finish (Gmail hiccup, etc). Dynamic
-  // import avoids a static circular dependency: the processor depends on
-  // lib/google.ts, which itself depends on this file for label constants.
-  const { processGmailWritebackJobById } = await import("@/lib/agent/gmail-writeback-processor")
-  await processGmailWritebackJobById(job.id).catch((err) => {
-    console.error("[gmail-labels] inline writeback drain failed, will retry via cron:", err)
+  // Best-effort inline drain: apply this job to the mailbox right away instead
+  // of waiting for the next email-writeback cron tick. This is what makes label
+  // changes actually show up in the user's mailbox promptly rather than
+  // depending entirely on a cron being scheduled — the cron remains the
+  // reliability backstop for whatever this inline attempt can't finish (a
+  // provider hiccup, etc). Dynamic import avoids a static circular dependency:
+  // the processor depends on lib/google.ts, which itself depends on this file
+  // for label constants.
+  const { processEmailWritebackJobById } = await import("@/lib/agent/email-writeback-processor")
+  await processEmailWritebackJobById(job.id).catch((err) => {
+    console.error("[email-labels] inline writeback drain failed, will retry via cron:", err)
   })
 
   return job
@@ -245,11 +256,12 @@ export async function filterEnabledFlowDeskLabels(
  * classification / work-item sync — the counterpart to the manual status routes.
  *
  * No-ops (returns null) when the tenant's automation level is below 2 (labels
- * are the first rung of the trust ladder that touches Gmail), for non-Google
- * channels, and for conversations without a Gmail thread id. An empty computed
- * label set — including when the tenant has disabled every applicable label — is
- * projected as a removal of all FlowDesk labels, but only for threads that were
- * labeled before (see queueFlowDeskLabelWriteback).
+ * are the first rung of the trust ladder that touches the mailbox), for
+ * channels without mailbox writeback support, and for conversations without a
+ * thread id. An empty computed label set — including when the tenant has
+ * disabled every applicable label — is projected as a removal of all
+ * FlowDesk labels, but only for threads that were labeled before (see
+ * queueFlowDeskLabelWriteback).
  */
 export async function projectFlowDeskLabelsForConversation(input: {
   tenantId: string
@@ -280,7 +292,8 @@ export async function projectFlowDeskLabelsForConversation(input: {
   })
 
   if (!conversation) return null
-  if (conversation.channel?.provider !== "google") return null
+  const provider = conversation.channel?.provider
+  if (!supportsMailboxWriteback(provider)) return null
   if (!conversation.externalThreadId) return null
   if (hasGmailLabelOverride(conversation.stateRecord?.metadataJson)) return null
 
@@ -329,5 +342,6 @@ export async function projectFlowDeskLabelsForConversation(input: {
     threadId: conversation.externalThreadId,
     labels: enabledLabels,
     reason: `classification.${workflowStatus}`,
+    provider: provider as string,
   })
 }

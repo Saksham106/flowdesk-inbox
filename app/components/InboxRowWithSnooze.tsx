@@ -23,7 +23,7 @@ type InboxRowWithSnoozeProps = {
   attentionCategory: string | null
   contentType?: string | null
   isPersonal: boolean
-  isGmail: boolean
+  supportsMailboxActions: boolean
   isVip?: boolean
   vipLabel?: string | null
   snoozeUntil?: string | null

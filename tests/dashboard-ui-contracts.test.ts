@@ -306,7 +306,7 @@ describe("dashboard and inbox UI source contracts", () => {
 
     expect(connect).toContain("GmailOperatorHealthPanel")
     expect(connect).toContain("summarizeGmailOperatorHealth")
-    expect(connect).toContain("gmailWritebackQueue")
+    expect(connect).toContain("emailWritebackQueue")
     expect(connect).toContain("gmailPushEvent")
     expect(connect).toContain("agentJob")
     expect(panel).toContain("Gmail operator health")

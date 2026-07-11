@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { FLOWDESK_GMAIL_LABEL_NAMES } from "@/lib/gmail-labels"
+import { FLOWDESK_GMAIL_LABEL_NAMES } from "@/lib/email-labels"
 import {
   MAIL_LABEL_TABS,
   buildMailLabelTabWhere,

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 
-import { processPendingGmailWritebackJobs } from "@/lib/agent/gmail-writeback-processor"
+import { processPendingEmailWritebackJobs } from "@/lib/agent/email-writeback-processor"
 
 export const runtime = "nodejs"
 
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { processed, errors } = await processPendingGmailWritebackJobs(25)
+  const { processed, errors } = await processPendingEmailWritebackJobs(25)
 
   return NextResponse.json(
     { processed, errors },

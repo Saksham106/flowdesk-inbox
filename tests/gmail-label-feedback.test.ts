@@ -28,7 +28,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     conversation: { findFirst: mockConversationFindFirst, update: mockConversationUpdate },
     conversationState: { upsert: mockStateUpsert, update: mockStateUpdate, findUnique: mockStateFindUnique },
-    gmailWritebackQueue: { findUnique: mockWritebackFindUnique, updateMany: mockWritebackUpdateMany },
+    emailWritebackQueue: { findUnique: mockWritebackFindUnique, updateMany: mockWritebackUpdateMany },
     auditLog: { create: mockAuditCreate },
     classificationCorrection: { create: mockCorrectionCreate },
     message: { findFirst: mockMessageFindFirst },

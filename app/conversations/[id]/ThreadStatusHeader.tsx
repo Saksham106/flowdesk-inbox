@@ -13,7 +13,7 @@ export default function ThreadStatusHeader({
   isPersonal,
   isAutoEmail,
   isRead,
-  isGmail,
+  supportsMailboxActions,
 }: {
   conversationId: string
   initialStatus: string
@@ -23,7 +23,8 @@ export default function ThreadStatusHeader({
   isPersonal: boolean
   isAutoEmail: boolean
   isRead: boolean
-  isGmail: boolean
+  /** Archive / move-to-trash are writeback ops FlowDesk can push to the provider's mailbox (Gmail + Outlook). */
+  supportsMailboxActions: boolean
 }) {
   const router = useRouter()
   const [status, setStatus] = useState(initialStatus)
@@ -169,7 +170,7 @@ export default function ThreadStatusHeader({
             {loading ? "…" : status === "closed" ? "Reopen" : "Close"}
           </button>
         )}
-        {isGmail && (
+        {supportsMailboxActions && (
           <button
             onClick={archive}
             disabled={archiveLoading}
@@ -179,7 +180,7 @@ export default function ThreadStatusHeader({
             {archiveLoading ? "…" : "Archive"}
           </button>
         )}
-        {isGmail && (
+        {supportsMailboxActions && (
           <div ref={moreRef} className="relative">
             <button
               onClick={() => { setShowMore((v) => !v); setShowTrashConfirm(false) }}

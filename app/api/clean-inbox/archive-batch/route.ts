@@ -6,7 +6,7 @@ import { Prisma } from "@prisma/client"
 import { buildBatchToken } from "@/lib/clean-inbox-token"
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
 import { revalidateInboxViews } from "@/lib/cache-tags"
-import { archiveConversationsInGmail } from "@/lib/clean-inbox-gmail"
+import { archiveConversationsInProviderMailbox } from "@/lib/clean-inbox-email"
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions)
@@ -90,10 +90,11 @@ export async function POST(request: Request) {
     }),
   ])
 
-  // Actually archive in Gmail (remove INBOX) so cleanup leaves the user's real
-  // inbox, not just the FlowDesk row. Best-effort and per-thread isolated: a
-  // provider failure on one thread never fails the whole batch.
-  const gmailArchive = await archiveConversationsInGmail(convs)
+  // Actually archive in the provider mailbox (Gmail: remove INBOX; Outlook:
+  // move out of Inbox) so cleanup leaves the user's real inbox, not just the
+  // FlowDesk row. Best-effort and per-thread isolated: a provider failure on
+  // one thread never fails the whole batch.
+  const gmailArchive = await archiveConversationsInProviderMailbox(convs)
 
   const batchToken = buildBatchToken(validIds)
 

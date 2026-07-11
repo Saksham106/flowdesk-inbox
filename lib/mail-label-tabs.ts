@@ -1,4 +1,4 @@
-import { FLOWDESK_GMAIL_LABEL_NAMES, type FlowDeskGmailLabelName } from "@/lib/gmail-labels"
+import { FLOWDESK_GMAIL_LABEL_NAMES, type FlowDeskGmailLabelName } from "@/lib/email-labels"
 import type { WorkflowStatus } from "@/lib/workflow-status"
 
 // Mail's desktop tab strip mirrors the Gmail label vocabulary 1:1 (plus an

@@ -33,7 +33,7 @@ vi.mock("@/lib/prisma", () => ({
     draft: { updateMany: mockDraftUpdateMany },
     conversation: { findFirst: mockConversationFindFirst },
     auditLog: { create: mockAuditCreate },
-    gmailWritebackQueue: {
+    emailWritebackQueue: {
       upsert: mockWritebackUpsert,
       deleteMany: mockWritebackDeleteMany,
     },
@@ -199,10 +199,32 @@ describe("projectDecisionOntoDraft", () => {
     )
   })
 
-  it("rejecting on a non-Google channel skips the Gmail withdrawal", async () => {
+  it("rejecting clears the draft and withdraws the Outlook draft on Microsoft channels", async () => {
     mockConversationFindFirst.mockResolvedValue({
       channelId: "channel-2",
       channel: { provider: "microsoft" },
+    })
+
+    await projectDecisionOntoDraft({
+      tenantId: TENANT,
+      draftId: DRAFT,
+      conversationId: CONV,
+      decision: "rejected",
+    })
+
+    expect(mockWritebackUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          conversationId_action: { conversationId: CONV, action: "withdraw_draft" },
+        },
+      })
+    )
+  })
+
+  it("rejecting on a channel without mailbox writeback support skips withdrawal", async () => {
+    mockConversationFindFirst.mockResolvedValue({
+      channelId: "channel-3",
+      channel: { provider: "sms" },
     })
 
     await projectDecisionOntoDraft({

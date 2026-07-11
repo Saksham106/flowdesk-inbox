@@ -1,13 +1,13 @@
 import { processAgentJobWork } from "@/lib/agent/job-executor"
-import { processPendingGmailWritebackJobs } from "@/lib/agent/gmail-writeback-processor"
+import { processPendingEmailWritebackJobs } from "@/lib/agent/email-writeback-processor"
 import { runGmailPushRetryCron } from "@/lib/agent/gmail-push-retry"
 import { runSnoozeCheckCron } from "@/lib/agent/snooze-check"
 import { runDueWorkflows } from "@/lib/agent/workflow-runner"
 import { processOutlookSyncWork } from "@/lib/outlook-worker"
 import { runFollowUpLabelSweep, runFollowUpBatch } from "@/lib/agent/follow-up"
 import { runLeadSequenceBatch } from "@/lib/agent/lead-sequence"
-import { runGmailStateReconcileCron } from "@/lib/agent/gmail-state-reconcile"
-import { runGmailLabelReconcileCron } from "@/lib/agent/gmail-label-reconcile"
+import { runEmailStateReconcileCron } from "@/lib/agent/email-state-reconcile"
+import { runEmailLabelReconcileCron } from "@/lib/agent/email-label-reconcile"
 import { runGmailWatchRenewalCron } from "@/lib/agent/gmail-watch-renewal"
 import { runSnippetMineCron } from "@/lib/agent/snippet-miner"
 import { runValueSnapshotCron } from "@/lib/agent/value-report"
@@ -41,10 +41,10 @@ export function buildJobRegistry(): ScheduledJob[] {
       run: () => processAgentJobWork(),
     },
     {
-      name: "gmail-writeback",
+      name: "email-writeback",
       intervalMs: MINUTE,
       runOnStart: true,
-      run: () => processPendingGmailWritebackJobs(25),
+      run: () => processPendingEmailWritebackJobs(25),
     },
     {
       name: "gmail-push-retry",
@@ -81,14 +81,14 @@ export function buildJobRegistry(): ScheduledJob[] {
       run: () => runLeadSequenceBatch(),
     },
     {
-      name: "gmail-state-reconcile",
+      name: "email-state-reconcile",
       intervalMs: 30 * MINUTE,
-      run: () => runGmailStateReconcileCron(),
+      run: () => runEmailStateReconcileCron(),
     },
     {
-      name: "gmail-label-reconcile",
+      name: "email-label-reconcile",
       intervalMs: 6 * HOUR,
-      run: () => runGmailLabelReconcileCron(),
+      run: () => runEmailLabelReconcileCron(),
     },
     {
       name: "gmail-watch",

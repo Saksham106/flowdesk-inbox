@@ -1,7 +1,17 @@
 export type GmailOperatorHealthStatus = "healthy" | "warning" | "critical"
 
 export type GmailOperatorHealthCheck = {
-  id: "gmail-auth-sync" | "gmail-push" | "gmail-writeback" | "agent-jobs"
+  // "outlook-*" ids are produced by lib/outlook-operator-health.ts, which
+  // reuses this shared summary/check shape so both providers render through
+  // the same operator health panel.
+  id:
+    | "gmail-auth-sync"
+    | "gmail-push"
+    | "gmail-writeback"
+    | "agent-jobs"
+    | "outlook-auth-sync"
+    | "outlook-subscription"
+    | "outlook-writeback"
   label: string
   status: GmailOperatorHealthStatus
   detail: string

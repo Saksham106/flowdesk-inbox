@@ -1,29 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const {
-  mockChannelFindMany,
   mockAuditCreate,
   mockRevalidateInboxViews,
-  mockReconcile,
+  mockRunRelabelCatchUp,
   mockAutopilotSettingFindUnique,
 } = vi.hoisted(() => ({
-  mockChannelFindMany: vi.fn(),
   mockAuditCreate: vi.fn(),
   mockRevalidateInboxViews: vi.fn(),
-  mockReconcile: vi.fn(),
+  mockRunRelabelCatchUp: vi.fn(),
   mockAutopilotSettingFindUnique: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    channel: { findMany: mockChannelFindMany },
     auditLog: { create: mockAuditCreate },
     autopilotSetting: { findUnique: mockAutopilotSettingFindUnique },
   },
 }))
 
-vi.mock("@/lib/agent/gmail-label-reconcile", () => ({
-  reconcileGmailLabelsForChannel: mockReconcile,
+vi.mock("@/lib/agent/email-label-reconcile", () => ({
+  runRelabelCatchUp: mockRunRelabelCatchUp,
+  RELABEL_BATCH_SIZE: 100,
 }))
 
 vi.mock("@/lib/cache-tags", () => ({
@@ -57,20 +55,14 @@ vi.mock("next/server", () => {
 
 import { POST } from "@/app/api/connectors/gmail/relabel/route"
 
-function postRequest(body: unknown = {}) {
-  return {
-    json: () => Promise.resolve(body),
-  } as unknown as Request
-}
 
 describe("POST /api/connectors/gmail/relabel", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSession = { user: { tenantId: "tenant-1" } }
-    mockChannelFindMany.mockResolvedValue([{ id: "channel-1", tenantId: "tenant-1" }])
-    mockReconcile.mockResolvedValue({
-      labelsEnsured: true,
-      labelsEnsureError: null,
+    mockRunRelabelCatchUp.mockResolvedValue({
+      channels: 1,
+      labelsEnsured: 1,
       scanned: 12,
       queued: 12,
       errors: 0,
@@ -81,18 +73,25 @@ describe("POST /api/connectors/gmail/relabel", () => {
 
   it("returns 401 when unauthenticated", async () => {
     mockSession = null
-    const res = await POST(postRequest())
+    const res = await POST()
     expect(res.status).toBe(401)
+    expect(mockRunRelabelCatchUp).not.toHaveBeenCalled()
   })
 
   it("returns 404 when the tenant has no connected Gmail account", async () => {
-    mockChannelFindMany.mockResolvedValue([])
-    const res = await POST(postRequest())
+    mockRunRelabelCatchUp.mockResolvedValue({
+      channels: 0,
+      labelsEnsured: 0,
+      scanned: 0,
+      queued: 0,
+      errors: 0,
+    })
+    const res = await POST()
     expect(res.status).toBe(404)
   })
 
   it("reconciles labels for every connected Gmail channel scoped to the caller's tenant", async () => {
-    const res = await POST(postRequest())
+    const res = await POST()
     const body = await res.json()
 
     expect(res.status).toBe(200)
@@ -107,15 +106,7 @@ describe("POST /api/connectors/gmail/relabel", () => {
       belowAutomationLevel: false,
       minAutomationLevel: 2,
     })
-    expect(mockChannelFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ tenantId: "tenant-1", provider: "google" }),
-      })
-    )
-    expect(mockReconcile).toHaveBeenCalledWith(
-      { id: "channel-1", tenantId: "tenant-1" },
-      expect.objectContaining({ windowDays: expect.any(Number), batchSize: expect.any(Number) })
-    )
+    expect(mockRunRelabelCatchUp).toHaveBeenCalledWith({ tenantId: "tenant-1", provider: "google" })
     expect(mockRevalidateInboxViews).toHaveBeenCalledWith("tenant-1")
     expect(mockAuditCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -129,15 +120,15 @@ describe("POST /api/connectors/gmail/relabel", () => {
     // fix" and "automation level silently blocked every conversation" — the
     // client can now tell these apart and point the user at the real fix.
     mockAutopilotSettingFindUnique.mockResolvedValue({ automationLevel: 1 })
-    mockReconcile.mockResolvedValue({
-      labelsEnsured: false,
-      labelsEnsureError: null,
+    mockRunRelabelCatchUp.mockResolvedValue({
+      channels: 1,
+      labelsEnsured: 0,
       scanned: 5,
       queued: 0,
       errors: 0,
     })
 
-    const res = await POST(postRequest())
+    const res = await POST()
     const body = await res.json()
 
     expect(body.automationLevel).toBe(1)
@@ -146,24 +137,15 @@ describe("POST /api/connectors/gmail/relabel", () => {
   })
 
   it("reports hasMore when the batch came back full, so the client knows to prompt another click", async () => {
-    mockReconcile.mockResolvedValue({
-      labelsEnsured: true,
-      labelsEnsureError: null,
+    mockRunRelabelCatchUp.mockResolvedValue({
+      channels: 1,
+      labelsEnsured: 1,
       scanned: 100,
       queued: 100,
       errors: 0,
     })
-    const res = await POST(postRequest())
+    const res = await POST()
     const body = await res.json()
     expect(body.hasMore).toBe(true)
-  })
-
-  it("does not leak another tenant's channel even if a channelId is guessed", async () => {
-    await POST(postRequest({ channelId: "someone-elses-channel" }))
-    expect(mockChannelFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ tenantId: "tenant-1", id: "someone-elses-channel" }),
-      })
-    )
   })
 })

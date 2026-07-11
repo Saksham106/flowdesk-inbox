@@ -9,7 +9,9 @@ import SyncGmailButton from "@/app/settings/SyncGmailButton";
 import DisconnectOutlookButton from "@/app/settings/DisconnectOutlookButton";
 import SyncOutlookButton from "@/app/settings/SyncOutlookButton";
 import GmailOperatorHealthPanel from "@/app/settings/GmailOperatorHealthPanel";
+import FixGmailLabelsButton from "@/app/settings/FixGmailLabelsButton";
 import { summarizeGmailOperatorHealth } from "@/lib/gmail-operator-health";
+import { summarizeOutlookOperatorHealth } from "@/lib/outlook-operator-health";
 import { salesCrmEnabled } from "@/lib/tenant-capabilities";
 
 export const dynamic = "force-dynamic";
@@ -23,13 +25,18 @@ interface Props {
   };
 }
 
+// invalid_state / token_exchange_failed / userinfo_failed / no_email /
+// invalid_callback are emitted by BOTH the Gmail and Outlook callback routes,
+// so their copy must stay provider-neutral. Only *_denied (and missing_tokens,
+// Gmail-only) may name a provider.
 const ERROR_MESSAGES: Record<string, string> = {
   google_denied: "Google sign-in was cancelled.",
+  outlook_denied: "Microsoft sign-in was cancelled.",
   invalid_state: "The authentication request expired. Please try again.",
-  token_exchange_failed: "Could not complete Google sign-in. Please try again.",
+  token_exchange_failed: "Could not complete sign-in. Please try again.",
   missing_tokens: "Google did not return the required permissions. Make sure to grant all requested scopes.",
   userinfo_failed: "Could not retrieve account info.",
-  no_email: "No email address returned from Google.",
+  no_email: "No email address was returned by the provider.",
   invalid_callback: "Invalid callback. Please try connecting again.",
 };
 
@@ -52,9 +59,13 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
     failedAgentJobs,
     oldestPendingAgentJob,
     recentPushFailures,
+    outlookWritebackPending,
+    outlookWritebackFailed,
+    oldestPendingOutlookWriteback,
+    outlookSyncEventsFailed,
   ] = await Promise.all([
     prisma.channel.findMany({
-      where: { tenantId: session.user.tenantId, type: "email" },
+      where: { tenantId: session.user.tenantId, type: "email", provider: "google" },
       include: {
         gmailCredential: {
           select: {
@@ -73,24 +84,35 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
     }),
     prisma.channel.findMany({
       where: { tenantId: session.user.tenantId, provider: "microsoft" },
-      include: { outlookCredential: { select: { createdAt: true, lastSyncedAt: true, lastSyncError: true } } },
+      include: {
+        outlookCredential: {
+          select: {
+            createdAt: true,
+            lastSyncedAt: true,
+            lastSyncStatus: true,
+            lastSyncError: true,
+            subscriptionExpiresAt: true,
+            subscriptionError: true,
+          },
+        },
+      },
       orderBy: { createdAt: "asc" },
     }),
     prisma.tenant.findUnique({
       where: { id: session.user.tenantId },
       select: { salesCrmEnabled: true },
     }),
-    prisma.gmailWritebackQueue.count({
-      where: { tenantId: session.user.tenantId, status: "pending" },
+    prisma.emailWritebackQueue.count({
+      where: { tenantId: session.user.tenantId, status: "pending", channel: { provider: "google" } },
     }),
-    prisma.gmailWritebackQueue.count({
-      where: { tenantId: session.user.tenantId, status: "processing" },
+    prisma.emailWritebackQueue.count({
+      where: { tenantId: session.user.tenantId, status: "processing", channel: { provider: "google" } },
     }),
-    prisma.gmailWritebackQueue.count({
-      where: { tenantId: session.user.tenantId, status: "failed" },
+    prisma.emailWritebackQueue.count({
+      where: { tenantId: session.user.tenantId, status: "failed", channel: { provider: "google" } },
     }),
-    prisma.gmailWritebackQueue.findFirst({
-      where: { tenantId: session.user.tenantId, status: "pending" },
+    prisma.emailWritebackQueue.findFirst({
+      where: { tenantId: session.user.tenantId, status: "pending", channel: { provider: "google" } },
       orderBy: { nextAttemptAt: "asc" },
       select: { nextAttemptAt: true },
     }),
@@ -115,21 +137,50 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
         createdAt: { gte: recentPushFailureCutoff },
       },
     }),
+    prisma.emailWritebackQueue.count({
+      where: {
+        tenantId: session.user.tenantId,
+        status: "pending",
+        channel: { provider: "microsoft" },
+      },
+    }),
+    prisma.emailWritebackQueue.count({
+      where: {
+        tenantId: session.user.tenantId,
+        status: "failed",
+        channel: { provider: "microsoft" },
+      },
+    }),
+    prisma.emailWritebackQueue.findFirst({
+      where: {
+        tenantId: session.user.tenantId,
+        status: "pending",
+        channel: { provider: "microsoft" },
+      },
+      orderBy: { nextAttemptAt: "asc" },
+      select: { nextAttemptAt: true },
+    }),
+    prisma.outlookSyncEvent.count({
+      where: {
+        tenantId: session.user.tenantId,
+        status: "failed",
+        createdAt: { gte: recentPushFailureCutoff },
+      },
+    }),
   ]);
 
   const isPersonal = !salesCrmEnabled(tenant);
 
   const gmailOperatorHealth = summarizeGmailOperatorHealth({
-    channels: gmailChannels
-      .filter((channel) => channel.provider === "google")
-      .map((channel) => ({
-        emailAddress: channel.emailAddress,
-        lastSyncedAt: channel.gmailCredential?.lastSyncedAt ?? null,
-        lastSyncStatus: channel.gmailCredential?.lastSyncStatus ?? null,
-        lastSyncError: channel.gmailCredential?.lastSyncError ?? null,
-        watchExpiresAt: channel.gmailCredential?.watchExpiresAt ?? null,
-        watchRenewalError: channel.gmailCredential?.watchRenewalError ?? null,
-      })),
+    // gmailChannels is already scoped to provider: "google" in the query above.
+    channels: gmailChannels.map((channel) => ({
+      emailAddress: channel.emailAddress,
+      lastSyncedAt: channel.gmailCredential?.lastSyncedAt ?? null,
+      lastSyncStatus: channel.gmailCredential?.lastSyncStatus ?? null,
+      lastSyncError: channel.gmailCredential?.lastSyncError ?? null,
+      watchExpiresAt: channel.gmailCredential?.watchExpiresAt ?? null,
+      watchRenewalError: channel.gmailCredential?.watchRenewalError ?? null,
+    })),
     writeback: {
       pending: pendingWritebacks,
       processing: processingWritebacks,
@@ -145,12 +196,41 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
     recentPushFailures,
   });
 
+  // Assembled only meaningfully when microsoft channels exist; summarizer
+  // returns a benign "not connected" summary otherwise, and the panel below
+  // only renders when outlookChannels.length > 0.
+  const outlookOperatorHealth = summarizeOutlookOperatorHealth({
+    now: new Date(),
+    channels: outlookChannels.map((channel) => ({
+      id: channel.id,
+      emailAddress: channel.emailAddress,
+      lastSyncedAt: channel.outlookCredential?.lastSyncedAt ?? null,
+      lastSyncStatus: channel.outlookCredential?.lastSyncStatus ?? null,
+      lastSyncError: channel.outlookCredential?.lastSyncError ?? null,
+      subscriptionExpiresAt: channel.outlookCredential?.subscriptionExpiresAt ?? null,
+      subscriptionError: channel.outlookCredential?.subscriptionError ?? null,
+    })),
+    writebackPending: outlookWritebackPending,
+    writebackFailed: outlookWritebackFailed,
+    oldestPendingWritebackAt: oldestPendingOutlookWriteback?.nextAttemptAt ?? null,
+    syncEventsFailed: outlookSyncEventsFailed,
+  });
+
   const googleConfigured = !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
   const microsoftConfigured = !!process.env.MICROSOFT_CLIENT_ID && !!process.env.MICROSOFT_CLIENT_SECRET;
 
-  const gmailError = searchParams.error
+  // Some error codes (invalid_state, token_exchange_failed, userinfo_failed, no_email,
+  // invalid_callback) are shared between the Gmail and Outlook callback routes, so the
+  // provider can't always be inferred — fall back to a neutral "Connection" prefix
+  // rather than assuming Gmail.
+  const connectError = searchParams.error
     ? (ERROR_MESSAGES[searchParams.error] ?? "An error occurred. Please try again.")
     : null;
+  const connectErrorPrefix = searchParams.error?.startsWith("google")
+    ? "Google"
+    : searchParams.error?.startsWith("outlook")
+      ? "Outlook"
+      : "Connection";
 
   const calError = searchParams.cal_error
     ? (ERROR_MESSAGES[searchParams.cal_error] ?? "An error occurred. Please try again.")
@@ -160,9 +240,9 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
     <>
       {/* Success / error banners */}
       <div className="space-y-3 empty:hidden">
-        {gmailError && (
+        {connectError && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            Gmail: {gmailError}
+            {connectErrorPrefix}: {connectError}
           </div>
         )}
         {searchParams.connected && (
@@ -291,6 +371,7 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
                   <p className="text-sm font-medium">Outlook / Microsoft 365</p>
                   <p className="text-xs text-slate-500">
                     Read your inbox and reply to emails directly from FlowDesk.
+                    FlowDesk labels appear as Outlook categories.
                   </p>
                 </div>
               </div>
@@ -324,6 +405,12 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
 
             {outlookChannels.length > 0 && (
               <div className="mt-4 space-y-3">
+                <GmailOperatorHealthPanel
+                  summary={outlookOperatorHealth}
+                  title="Outlook operator health"
+                  description="Tracks sync, subscription, and writeback."
+                />
+                <FixGmailLabelsButton provider="outlook" providerLabel="Outlook" />
                 {outlookChannels.map((channel) => (
                   <div
                     key={channel.id}

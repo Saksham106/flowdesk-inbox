@@ -101,7 +101,7 @@ model Tenant {
   agentRules                AgentRule[]
   snippets                  Snippet[]
   gmailPushEvents           GmailPushEvent[]
-  gmailWritebackQueue       GmailWritebackQueue[]
+  emailWritebackQueue       EmailWritebackQueue[]
   outlookSyncEvents         OutlookSyncEvent[]
   schedulingSessions        SchedulingSession[]
   automationRuns            AutomationRun[]
@@ -161,7 +161,7 @@ model Channel {
   outlookCredential        OutlookCredential?
   learnedReplyProfiles     LearnedReplyProfile[]
   gmailPushEvents          GmailPushEvent[]
-  gmailWritebackQueue      GmailWritebackQueue[]
+  emailWritebackQueue      EmailWritebackQueue[]
   outlookSyncEvents        OutlookSyncEvent[]
 }
 
@@ -202,7 +202,10 @@ model GmailPushEvent {
   @@index([status])
 }
 
-model GmailWritebackQueue {
+// Queue of pending mailbox writebacks (label/read/archive/reply state changes)
+// for all email providers (Gmail + Outlook); rows are provider-scoped via
+// channelId.
+model EmailWritebackQueue {
   id                     String   @id @default(cuid())
   tenantId               String
   channelId              String
@@ -372,7 +375,7 @@ model Conversation {
   leads            Lead[]
   snoozeReminders  SnoozeReminder[]
   emailAttachments EmailAttachment[]
-  gmailWritebacks  GmailWritebackQueue[]
+  emailWritebacks  EmailWritebackQueue[]
   schedulingSession         SchedulingSession?
   automationRuns            AutomationRun[]
   workflowRuns              WorkflowRun[]

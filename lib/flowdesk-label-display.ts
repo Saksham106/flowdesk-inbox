@@ -4,7 +4,7 @@
 // client" component would bundle server-only code into the browser. Keep the
 // FLOWDESK_LABEL_OPTIONS list in sync with FLOWDESK_GMAIL_LABEL_NAMES in
 // lib/gmail-labels.ts.
-import type { FlowDeskGmailLabelName } from "@/lib/gmail-labels"
+import type { FlowDeskGmailLabelName } from "@/lib/email-labels"
 import type { WorkflowStatus } from "@/lib/workflow-status"
 
 export const FLOWDESK_LABEL_OPTIONS: { value: FlowDeskGmailLabelName; label: string; dot: string }[] = [

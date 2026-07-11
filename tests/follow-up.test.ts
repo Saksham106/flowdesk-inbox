@@ -38,11 +38,11 @@ vi.mock('@/lib/prisma', () => ({
     conversationState:  { findUnique: mockStateFindUnique, update: mockStateUpdate },
     agentJob:           { findFirst: mockJobFindFirst, count: mockJobCount, create: mockJobCreate, updateMany: mockJobUpdateMany },
     auditLog:           { create: mockAuditCreate },
-    gmailWritebackQueue: { findMany: mockWritebackFindMany },
+    emailWritebackQueue: { findMany: mockWritebackFindMany },
   },
 }))
 
-vi.mock('@/lib/gmail-labels', () => ({
+vi.mock('@/lib/email-labels', () => ({
   projectFlowDeskLabelsForConversation: mockProjectLabels,
 }))
 
@@ -318,12 +318,12 @@ describe('runFollowUpLabelSweep', () => {
     })
   })
 
-  it('only sweeps waiting-on conversations on Google channels', async () => {
+  it('only sweeps waiting-on conversations on mailbox-writeback channels', async () => {
     await runFollowUpLabelSweep(now)
 
     const where = mockConvFindMany.mock.calls[0][0].where
     expect(where.OR).toEqual([{ status: 'in_progress' }, { userState: 'waiting_on' }])
-    expect(where.channel).toEqual({ provider: 'google' })
+    expect(where.channel).toEqual({ provider: { in: ['google', 'microsoft'] } })
   })
 
   it('counts projection failures without aborting the sweep', async () => {

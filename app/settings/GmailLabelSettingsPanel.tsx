@@ -46,9 +46,9 @@ export default function GmailLabelSettingsPanel({
   return (
     <div className="space-y-3">
       <p className="text-xs text-slate-500">
-        Choose which FlowDesk labels appear in your Gmail. Disabled labels are
-        skipped when FlowDesk organizes your inbox. (Renaming labels is coming
-        soon.)
+        Choose which FlowDesk labels appear in your inbox (Gmail labels /
+        Outlook categories). Disabled labels are skipped when FlowDesk
+        organizes your inbox. (Renaming labels is coming soon.)
       </p>
       <ul className="divide-y divide-slate-100 rounded-lg border border-slate-100">
         {labels.map((label) => {

@@ -7,7 +7,8 @@ import {
   flowDeskLabelsForConversationState,
   queueFlowDeskLabelWriteback,
   type FlowDeskGmailLabelName,
-} from "@/lib/gmail-labels"
+} from "@/lib/email-labels"
+import { supportsMailboxWriteback } from "@/lib/email/provider-support"
 import { revalidateInboxViews } from "@/lib/cache-tags"
 
 type ConversationStatus = "needs_reply" | "in_progress" | "closed"
@@ -358,7 +359,7 @@ export async function setConversationFlowDeskLabel(
     })
   }
 
-  if (conversation.channel?.provider === "google" && conversation.externalThreadId) {
+  if (supportsMailboxWriteback(conversation.channel?.provider) && conversation.externalThreadId) {
     const labels = flowDeskLabelsForConversationState({
       workflowStatus:
         resolved.status === "closed"
@@ -379,6 +380,7 @@ export async function setConversationFlowDeskLabel(
       threadId: conversation.externalThreadId,
       labels,
       reason: `manual_label.${label}`,
+      provider: conversation.channel!.provider,
     })
   }
 

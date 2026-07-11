@@ -62,7 +62,7 @@ import {
   FLOWDESK_GMAIL_LABEL_NAMES,
   flowDeskLabelsForConversationState,
   normalizeFlowDeskLabelPayload,
-} from "@/lib/gmail-labels"
+} from "@/lib/email-labels"
 import { applyFlowDeskLabelsToGmailThread } from "@/lib/google"
 
 describe("FlowDesk Gmail labels", () => {
