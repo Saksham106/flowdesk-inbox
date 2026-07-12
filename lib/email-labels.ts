@@ -136,6 +136,12 @@ export function normalizeFlowDeskLabelPayload(value: unknown): {
   return { threadId, labels: Array.from(new Set(labels)) }
 }
 
+// How long a completed/acknowledged apply_labels row counts as "already
+// applied" for identical label sets. Long enough to smother the push echo
+// (seconds) and redundant reconcile passes (minutes-hours); short enough that
+// reconcile still repairs hand-edited mailbox drift within a day.
+const COMPLETED_LABEL_JOB_CURRENT_MS = 24 * 60 * 60 * 1000
+
 export async function queueFlowDeskLabelWriteback(input: {
   tenantId: string
   channelId: string
@@ -148,21 +154,48 @@ export async function queueFlowDeskLabelWriteback(input: {
   const labels = Array.from(new Set(input.labels))
   const auditPrefix = auditPrefixForProvider(input.provider)
 
+  const existingJob = await prisma.emailWritebackQueue.findUnique({
+    where: {
+      conversationId_action: {
+        conversationId: input.conversationId,
+        action: "apply_labels",
+      },
+    },
+    select: { id: true, status: true, providerMessageIdsJson: true, updatedAt: true },
+  })
+
   // An empty set means "remove all FlowDesk labels". Only queue that removal
   // for threads we have labeled (or tried to label) before — a prior
   // apply_labels queue row is the cheap proxy — so we don't spam Gmail with
   // removals for threads FlowDesk never touched.
-  if (labels.length === 0) {
-    const prior = await prisma.emailWritebackQueue.findUnique({
-      where: {
-        conversationId_action: {
-          conversationId: input.conversationId,
-          action: "apply_labels",
-        },
-      },
-      select: { id: true },
-    })
-    if (!prior) return null
+  if (labels.length === 0 && !existingJob) return null
+
+  // Re-queueing an unchanged label set is what powered the writeback ↔ push
+  // feedback loop: our own mailbox mutation echoed back through push/sync,
+  // re-ran projection, reset this row to pending, and mutated the mailbox
+  // again, forever. If the last writeback for this conversation asked for
+  // exactly the same labels, there is nothing new to say to the mailbox —
+  // return without re-queueing, auditing, or draining. Completed rows only
+  // count as current for a bounded window so the label-reconcile cron can
+  // still converge genuine drift (a user hand-deleting a label in the
+  // mailbox) by re-queueing once the row goes stale.
+  if (existingJob) {
+    const existingPayload = normalizeFlowDeskLabelPayload(existingJob.providerMessageIdsJson)
+    const sameLabels =
+      existingPayload !== null &&
+      existingPayload.threadId === input.threadId &&
+      existingPayload.labels.length === labels.length &&
+      existingPayload.labels.every((label) => labels.includes(label))
+    if (sameLabels) {
+      if (existingJob.status === "pending" || existingJob.status === "processing") {
+        return existingJob
+      }
+      const isCurrent =
+        Date.now() - existingJob.updatedAt.getTime() < COMPLETED_LABEL_JOB_CURRENT_MS
+      if ((existingJob.status === "completed" || existingJob.status === "acknowledged") && isCurrent) {
+        return null
+      }
+    }
   }
 
   const payload = {

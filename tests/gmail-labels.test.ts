@@ -7,6 +7,7 @@ const {
   mockLabelsPatch,
   mockLabelsDelete,
   mockThreadsModify,
+  mockThreadsGet,
 } = vi.hoisted(() => ({
   mockCredFindUnique: vi.fn(),
   mockLabelsList: vi.fn(),
@@ -14,6 +15,7 @@ const {
   mockLabelsPatch: vi.fn(),
   mockLabelsDelete: vi.fn(),
   mockThreadsModify: vi.fn(),
+  mockThreadsGet: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -40,6 +42,7 @@ vi.mock("googleapis", () => ({
         },
         threads: {
           modify: mockThreadsModify,
+          get: mockThreadsGet,
         },
         messages: {
           modify: vi.fn(),
@@ -89,6 +92,11 @@ describe("FlowDesk Gmail labels", () => {
     mockLabelsPatch.mockResolvedValue({ data: {} })
     mockLabelsDelete.mockResolvedValue({ data: {} })
     mockThreadsModify.mockResolvedValue({ data: {} })
+    // Default thread state: "Handled" (Label_2) applied, "Needs Reply" absent —
+    // so adds and the Label_2 removal in the tests below are real changes.
+    mockThreadsGet.mockResolvedValue({
+      data: { messages: [{ labelIds: ["INBOX", "Label_2"] }] },
+    })
   })
 
   it("keeps the user-facing Gmail label vocabulary small, flat, and friendly", () => {
@@ -189,6 +197,9 @@ describe("FlowDesk Gmail labels", () => {
   })
 
   it("removes every existing FlowDesk label when given an empty label set", async () => {
+    mockThreadsGet.mockResolvedValue({
+      data: { messages: [{ labelIds: ["Label_1", "Label_2"] }] },
+    })
     await applyFlowDeskLabelsToGmailThread("channel-1", "thread-1", [])
 
     expect(mockLabelsCreate).not.toHaveBeenCalled()
@@ -222,6 +233,9 @@ describe("FlowDesk Gmail labels", () => {
       },
     })
 
+    mockThreadsGet.mockResolvedValue({
+      data: { messages: [{ labelIds: ["INBOX", "Legacy_2"] }] },
+    })
     await applyFlowDeskLabelsToGmailThread("channel-1", "thread-1", ["Needs Reply"])
 
     // Legacy labels are renamed in place (keeping their ids), not recreated.
@@ -291,6 +305,53 @@ describe("FlowDesk Gmail labels", () => {
         addLabelIds: ["Flat_1"],
         removeLabelIds: [],
       },
+    })
+  })
+
+  it("skips the modify entirely when the thread already matches the requested labels", async () => {
+    // The echo-loop guard: FlowDesk's own writeback comes back through
+    // push/sync and re-projects the same labels. The thread already carries
+    // "Needs Reply" and none of the to-remove labels, so no mutation happens —
+    // and no mutation means no new mailbox history to echo back.
+    mockThreadsGet.mockResolvedValue({
+      data: { messages: [{ labelIds: ["INBOX", "Label_1"] }] },
+    })
+
+    await applyFlowDeskLabelsToGmailThread("channel-1", "thread-1", ["Needs Reply"])
+
+    expect(mockThreadsGet).toHaveBeenCalledWith({
+      userId: "me",
+      id: "thread-1",
+      format: "minimal",
+    })
+    expect(mockThreadsModify).not.toHaveBeenCalled()
+  })
+
+  it("still adds a label when any message in the thread is missing it", async () => {
+    mockThreadsGet.mockResolvedValue({
+      data: {
+        messages: [{ labelIds: ["INBOX", "Label_1"] }, { labelIds: ["INBOX"] }],
+      },
+    })
+
+    await applyFlowDeskLabelsToGmailThread("channel-1", "thread-1", ["Needs Reply"])
+
+    expect(mockThreadsModify).toHaveBeenCalledWith({
+      userId: "me",
+      id: "thread-1",
+      requestBody: { addLabelIds: ["Label_1"], removeLabelIds: [] },
+    })
+  })
+
+  it("falls back to the unfiltered modify when the thread read returns no messages", async () => {
+    mockThreadsGet.mockResolvedValue({ data: {} })
+
+    await applyFlowDeskLabelsToGmailThread("channel-1", "thread-1", ["Needs Reply"])
+
+    expect(mockThreadsModify).toHaveBeenCalledWith({
+      userId: "me",
+      id: "thread-1",
+      requestBody: { addLabelIds: ["Label_1"], removeLabelIds: ["Label_2"] },
     })
   })
 
