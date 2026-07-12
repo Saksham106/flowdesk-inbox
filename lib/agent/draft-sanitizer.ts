@@ -78,3 +78,49 @@ export function sanitizeDraftText(original: string): SanitizeDraftResult {
 
   return { text: working, autoFixed, flagged }
 }
+
+// Matches list-like lines: "- item", "* item", "1. item" (with optional leading
+// whitespace). These lines must keep their own line break rather than being
+// joined into the surrounding prose.
+const LIST_LINE_PATTERN = /^\s*([-*]|\d+\.)\s+/
+
+/**
+ * Undoes model-generated "hard wrap" line breaks — some models still write
+ * plaintext email replies with a literal `\n` roughly every 70-80 characters,
+ * a convention from old plaintext email clients. Embedded verbatim into an
+ * outgoing MIME body, every one of those newlines renders as a real line
+ * break in Gmail, splitting sentences mid-way.
+ *
+ * This joins consecutive non-blank, non-list lines with a single space
+ * (undoing the hard wrap) while preserving:
+ * - blank-line paragraph breaks (`\n\n` stays a real paragraph break), and
+ * - list-like lines (`-`, `*`, or `1.` bullets), which keep their own line
+ *   break before and after so lists aren't flattened into prose.
+ */
+export function unwrapHardWrappedText(text: string): string {
+  const lines = text.split("\n")
+  const outputLines: string[] = []
+  let buffer: string[] = []
+
+  const flush = () => {
+    if (buffer.length > 0) {
+      outputLines.push(buffer.join(" "))
+      buffer = []
+    }
+  }
+
+  for (const rawLine of lines) {
+    if (rawLine.trim() === "") {
+      flush()
+      outputLines.push("")
+    } else if (LIST_LINE_PATTERN.test(rawLine)) {
+      flush()
+      outputLines.push(rawLine.trim())
+    } else {
+      buffer.push(rawLine.trim())
+    }
+  }
+  flush()
+
+  return outputLines.join("\n")
+}
