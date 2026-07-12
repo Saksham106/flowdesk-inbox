@@ -16,7 +16,7 @@ const features: Array<{
     cta: "Get a tidier inbox",
     imageLeft: true,
     image: "/images/landing/feature-tidy-inbox.png",
-    imageAlt: "FlowDesk inbox with emails automatically sorted into categories",
+    imageAlt: "Gmail inbox rows sorted with FlowDesk labels like Newsletter, Handled, and Needs Action",
   },
   {
     title: "Replies drafted in your voice",
