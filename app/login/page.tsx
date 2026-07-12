@@ -49,7 +49,9 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const authError = searchParams.get("error");
-  const [signInError, setSignInError] = useState(false);
+  const [signInError, setSignInError] = useState<
+    "invalid" | "unavailable" | null
+  >(null);
 
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
@@ -60,7 +62,7 @@ function LoginForm() {
   async function onSignIn(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
-    setSignInError(false);
+    setSignInError(null);
 
     const result = await signIn("credentials", {
       email,
@@ -76,7 +78,9 @@ function LoginForm() {
       return;
     }
 
-    setSignInError(true);
+    // "CredentialsSignin" is NextAuth's code for a null return (bad email or
+    // password); anything else means authorize threw (e.g. database down).
+    setSignInError(result?.error === "CredentialsSignin" ? "invalid" : "unavailable");
   }
 
   async function onSignUp(event: React.FormEvent<HTMLFormElement>) {
@@ -546,7 +550,7 @@ function LoginForm() {
               onClick={() => {
                 setMode(m);
                 setSignupError(null);
-                setSignInError(false);
+                setSignInError(null);
               }}
               style={{
                 flex: 1,
@@ -607,7 +611,10 @@ function LoginForm() {
                   color: "#e11d48",
                 }}
               >
-                Invalid email or password.
+                {signInError === "unavailable" ||
+                (authError && authError !== "CredentialsSignin")
+                  ? "Sign-in is temporarily unavailable. Please try again in a few minutes."
+                  : "Invalid email or password."}
               </div>
             )}
 
@@ -722,7 +729,7 @@ function LoginForm() {
               onClick={() => {
                 setMode(mode === "signin" ? "signup" : "signin");
                 setSignupError(null);
-                setSignInError(false);
+                setSignInError(null);
               }}
               style={{
                 background: "none",
