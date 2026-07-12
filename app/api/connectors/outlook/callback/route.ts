@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { canReconnectChannel } from "@/lib/channel-ownership"
 import { encryptString } from "@/lib/crypto"
 import {
   verifyOutlookState,
@@ -47,6 +48,9 @@ export async function GET(request: Request) {
   let channelId: string
 
   if (existing) {
+    if (!canReconnectChannel(existing.tenantId, tenantId)) {
+      return NextResponse.redirect(`${redirectBase}?error=account_already_connected`)
+    }
     channelId = existing.id
     await prisma.outlookCredential.update({
       where: { channelId },
