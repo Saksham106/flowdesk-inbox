@@ -14,6 +14,9 @@ const SCOPES = [
   "Mail.Read",
   "Mail.Send",
   "Mail.ReadWrite",
+  // Outlook master categories (FlowDesk labels) live under mailbox settings;
+  // without this scope /me/outlook/masterCategories returns 403 ErrorAccessDenied.
+  "MailboxSettings.ReadWrite",
   "User.Read",
 ].join(" ")
 
