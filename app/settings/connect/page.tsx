@@ -390,7 +390,7 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
                   <li>Go to <span className="font-mono">portal.azure.com</span> &rarr; Azure Active Directory &rarr; App registrations</li>
                   <li>Create a new registration with &ldquo;personal + work accounts&rdquo; support</li>
                   <li>Add redirect URI: <span className="font-mono">{"{NEXTAUTH_URL}"}/api/connectors/outlook/callback</span></li>
-                  <li>Add API permissions: <span className="font-medium">Mail.Read, Mail.Send, Mail.ReadWrite, User.Read, offline_access</span></li>
+                  <li>Add API permissions: <span className="font-medium">Mail.Read, Mail.Send, Mail.ReadWrite, MailboxSettings.ReadWrite, User.Read, offline_access</span></li>
                   <li>Set <span className="font-mono">MICROSOFT_CLIENT_ID</span> and <span className="font-mono">MICROSOFT_CLIENT_SECRET</span> in your <span className="font-mono">.env</span></li>
                 </ol>
               </div>
