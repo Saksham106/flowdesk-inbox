@@ -23,10 +23,18 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-          include: { tenant: { select: { salesCrmEnabled: true } } },
-        });
+        let user;
+        try {
+          user = await prisma.user.findUnique({
+            where: { email: credentials.email },
+            include: { tenant: { select: { salesCrmEnabled: true } } },
+          });
+        } catch (error) {
+          console.error("[auth] authorize lookup failed:", error);
+          // Thrown messages surface in the client redirect URL, so keep this
+          // opaque — raw Prisma errors leak internal hostnames.
+          throw new Error("service_unavailable");
+        }
 
         if (!user) {
           return null;
