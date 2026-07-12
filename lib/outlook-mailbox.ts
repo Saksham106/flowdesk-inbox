@@ -33,7 +33,7 @@ const FLOWDESK_CATEGORY_PRESETS: Record<FlowDeskLabelName, string> = {
 const FLOWDESK_CATEGORY_SET = new Set<string>(FLOWDESK_LABEL_NAMES)
 
 type MasterCategory = { id: string; displayName: string; color?: string }
-type ConversationMessage = { id: string; categories?: string[] }
+type ConversationMessage = { id: string; categories?: string[]; receivedDateTime?: string }
 
 function graphIdFromProviderMessageId(providerMessageId: string): string | null {
   return providerMessageId.startsWith("outlook_") ? providerMessageId.slice("outlook_".length) : null
@@ -44,14 +44,18 @@ async function listConversationMessages(
   externalThreadId: string,
   extra: { draftsOnly?: boolean } = {}
 ): Promise<ConversationMessage[]> {
+  // No $orderby here: Graph rejects $filter-on-conversationId combined with
+  // $orderby on a property absent from the filter (400 InefficientFilter).
+  // Sort client-side instead — the page is capped, so this is cheap.
   const params = new URLSearchParams({
     $filter: `conversationId eq '${externalThreadId.replace(/'/g, "''")}' and isDraft eq ${extra.draftsOnly ? "true" : "false"}`,
-    $orderby: "receivedDateTime desc",
     $top: String(OUTLOOK_CONVERSATION_MESSAGE_CAP),
-    $select: "id,categories",
+    $select: "id,categories,receivedDateTime",
   })
   const page = await graphGet<{ value: ConversationMessage[] }>(`/messages?${params}`, token)
-  return page.value ?? []
+  return (page.value ?? []).sort((left, right) =>
+    (right.receivedDateTime ?? "").localeCompare(left.receivedDateTime ?? "")
+  )
 }
 
 // Adopts existing same-named categories (never duplicates, never deletes user
@@ -184,14 +188,19 @@ export async function createOutlookDraftReply(
   input: { externalThreadId: string; body: string }
 ): Promise<string> {
   const token = await getOutlookAccessToken(channelId)
+  // $orderby with a conversationId filter triggers Graph's InefficientFilter
+  // rejection, so fetch the capped page and pick the newest client-side.
   const params = new URLSearchParams({
     $filter: `conversationId eq '${input.externalThreadId.replace(/'/g, "''")}' and isDraft eq false`,
-    $orderby: "receivedDateTime desc",
-    $top: "1",
-    $select: "id",
+    $top: String(OUTLOOK_CONVERSATION_MESSAGE_CAP),
+    $select: "id,receivedDateTime",
   })
-  const latest = await graphGet<{ value: Array<{ id: string }> }>(`/messages?${params}`, token)
-  const lastMessageId = latest.value?.[0]?.id
+  const latest = await graphGet<{ value: Array<{ id: string; receivedDateTime?: string }> }>(
+    `/messages?${params}`,
+    token
+  )
+  const lastMessageId = (latest.value ?? [])
+    .sort((left, right) => (right.receivedDateTime ?? "").localeCompare(left.receivedDateTime ?? ""))[0]?.id
   if (!lastMessageId) throw new Error("No Outlook message found to draft a reply to")
 
   const draft = await graphRequest<{ id: string }>(
