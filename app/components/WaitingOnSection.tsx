@@ -55,7 +55,7 @@ export default function WaitingOnSection({
                     <span className={due.overdue ? "text-amber-600 font-medium" : ""}>{due.text}</span>
                   </p>
                 </div>
-                <span className="text-[10px] font-semibold text-blue-500 border border-blue-200 bg-blue-50 rounded-md px-2 py-0.5 flex-shrink-0 hover:bg-blue-100 transition">
+                <span className="text-[10px] font-semibold text-[var(--color-accent)] border border-slate-200 bg-[var(--color-accent-soft)] rounded-md px-2 py-0.5 flex-shrink-0 hover:bg-slate-200 transition">
                   Nudge →
                 </span>
               </Link>

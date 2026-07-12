@@ -265,7 +265,7 @@ describe("dashboard and inbox UI source contracts", () => {
     expect(client).toContain("appearance-none")
     expect(client).toContain("h-9 w-full")
     expect(client).toContain("rounded-lg border border-slate-200")
-    expect(client).toContain("focus-visible:ring-2 focus-visible:ring-blue-500")
+    expect(client).toContain("focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)]")
     expect(client).toContain("Select all visible groups")
     expect(client).toContain("From")
     expect(client).toContain("Emails ↓")

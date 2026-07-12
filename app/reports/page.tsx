@@ -120,9 +120,9 @@ export default async function ReportsPage() {
 
       <main className="mx-auto max-w-5xl px-6 py-8">
         {/* Headline card */}
-        <section className="mb-8 rounded-xl border border-blue-100 bg-blue-50 p-5">
-          <p className="text-sm font-medium text-blue-900">{headline}</p>
-          <p className="mt-2 text-xs text-blue-700">
+        <section className="mb-8 rounded-xl border border-slate-200 bg-slate-50 p-5">
+          <p className="text-sm font-medium text-slate-900">{headline}</p>
+          <p className="mt-2 text-xs text-slate-600">
             Time saved is a conservative estimate: 4 min per draft, 3 min per follow-up, 2 min per
             extracted task, 5 min per detected lead.
           </p>
@@ -179,7 +179,7 @@ export default async function ReportsPage() {
                           <span className="text-xs text-slate-500 mb-1">{weekLabel}</span>
                           <div className="w-full bg-slate-100 rounded h-6 flex items-end">
                             <div
-                              className="bg-blue-400 rounded"
+                              className="bg-[var(--color-accent)] rounded"
                               style={{
                                 width: `${pct}%`,
                                 height: "100%",
@@ -255,7 +255,7 @@ export default async function ReportsPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <Link
                           href={`/conversations/${lead.conversationId}`}
-                          className="text-sm font-medium text-slate-800 hover:text-blue-600"
+                          className="text-sm font-medium text-slate-800 hover:text-[var(--color-accent)]"
                         >
                           {contactName}
                         </Link>
@@ -277,7 +277,7 @@ export default async function ReportsPage() {
                     </div>
                     <Link
                       href={`/conversations/${lead.conversationId}`}
-                      className="shrink-0 text-xs text-blue-500 hover:text-blue-700"
+                      className="shrink-0 text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
                     >
                       View &rarr;
                     </Link>

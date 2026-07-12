@@ -436,7 +436,7 @@ async function renderMailPage(
                     href={attentionTabHref(cat)}
                     className={`whitespace-nowrap border-b-2 pb-3 pt-2 text-sm font-medium transition ${
                       isActive
-                        ? "border-blue-600 text-blue-700"
+                        ? "border-[var(--color-accent)] text-[var(--color-accent)]"
                         : "border-transparent text-slate-500 hover:text-slate-700"
                     }`}
                   >
@@ -452,7 +452,7 @@ async function renderMailPage(
                     href={contentTypeTabHref(value)}
                     className={`whitespace-nowrap border-b-2 pb-3 pt-2 text-sm font-medium transition ${
                       isActive
-                        ? "border-blue-600 text-blue-700"
+                        ? "border-[var(--color-accent)] text-[var(--color-accent)]"
                         : "border-transparent text-slate-500 hover:text-slate-700"
                     }`}
                   >

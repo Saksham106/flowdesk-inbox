@@ -101,16 +101,16 @@ export default function MailInboxRow({
         href={href}
         className={`grid w-full grid-cols-[16px_180px_minmax(0,1fr)_auto_72px] items-center gap-3 px-4 py-2.5 transition ${
           isSelected
-            ? "border-l-2 border-l-blue-500 bg-blue-50"
+            ? "border-l-2 border-l-[var(--color-accent)] bg-[var(--color-accent-soft)]"
             : isUnread
-              ? "hover:bg-blue-50/60"
+              ? "hover:bg-[var(--color-accent-soft)]/60"
               : "hover:bg-slate-50"
         }`}
       >
         {/* Unread indicator */}
         <span className="flex items-center justify-center">
           {isUnread && (
-            <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+            <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-accent)]" />
           )}
         </span>
 
@@ -176,13 +176,13 @@ export default function MailInboxRow({
             disabled={!!pendingAction}
             title={isRead ? "Mark unread" : "Mark read"}
             aria-label={isRead ? "Mark unread" : "Mark read"}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-40 disabled:cursor-wait"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)] disabled:opacity-40 disabled:cursor-wait"
           >
             {pendingAction === "read"
               ? <span className="inline-block h-2 w-2 rounded-full border-2 border-slate-300 border-t-slate-500 animate-spin" />
               : isRead
                 ? <span className="inline-block h-2 w-2 rounded-full border-2 border-slate-400" />
-                : <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />}
+                : <span className="inline-block h-2 w-2 rounded-full bg-[var(--color-accent)]" />}
           </button>
 
           <button
@@ -193,7 +193,7 @@ export default function MailInboxRow({
             title="Change label"
             aria-label="Change label"
             aria-expanded={showAttention}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-40 disabled:cursor-wait"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)] disabled:opacity-40 disabled:cursor-wait"
           >
             {pendingAction === "attention"
               ? <span className="inline-block h-2 w-2 rounded-full border-2 border-slate-300 border-t-slate-500 animate-spin" />
@@ -224,7 +224,7 @@ export default function MailInboxRow({
               disabled={!!pendingAction}
               title={archiveError ?? "Archive"}
               aria-label="Archive"
-              className={`flex h-6 w-6 items-center justify-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-40 disabled:cursor-wait ${
+              className={`flex h-6 w-6 items-center justify-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)] disabled:opacity-40 disabled:cursor-wait ${
                 archiveError
                   ? "text-red-500 hover:bg-red-50"
                   : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
@@ -249,7 +249,7 @@ export default function MailInboxRow({
               disabled={!!pendingAction}
               title={isClosed ? "Reopen thread" : "Close thread"}
               aria-label={isClosed ? "Reopen thread" : "Close thread"}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-40 disabled:cursor-wait"
+              className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)] disabled:opacity-40 disabled:cursor-wait"
             >
               {pendingAction === "status"
                 ? <span className="inline-block h-2 w-2 rounded-full border-2 border-slate-300 border-t-slate-500 animate-spin" />

@@ -89,16 +89,16 @@ export default function InboxRow({
         href={href}
         className={`block border-b border-slate-50 px-3 py-2.5 transition ${
           isSelected
-            ? "border-l-2 border-l-blue-500 bg-blue-50"
+            ? "border-l-2 border-l-[var(--color-accent)] bg-[var(--color-accent-soft)]"
             : isUnread
-              ? "hover:bg-blue-50/60"
+              ? "hover:bg-[var(--color-accent-soft)]/60"
               : "hover:bg-slate-50"
         }`}
       >
         <div className="flex items-baseline justify-between gap-1">
           <div className="flex min-w-0 items-center gap-1.5">
             {isUnread && (
-              <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+              <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-accent)]" />
             )}
             <p
               className={`min-w-0 truncate text-xs ${
@@ -156,13 +156,13 @@ export default function InboxRow({
           disabled={!!pendingAction}
           title={isRead ? "Mark unread" : "Mark read"}
           aria-label={isRead ? "Mark unread" : "Mark read"}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-40 disabled:cursor-wait"
+          className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)] disabled:opacity-40 disabled:cursor-wait"
         >
           {pendingAction === "read"
             ? <span className="inline-block h-2 w-2 rounded-full border-2 border-slate-300 border-t-slate-500 animate-spin" />
             : isRead
               ? <span className="inline-block h-2 w-2 rounded-full border-2 border-slate-400" />
-              : <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />}
+              : <span className="inline-block h-2 w-2 rounded-full bg-[var(--color-accent)]" />}
         </button>
 
         {/* Attention / label picker — dropdown rendered in a portal to escape the scroll container */}
@@ -174,7 +174,7 @@ export default function InboxRow({
           title="Change label"
           aria-label="Change label"
           aria-expanded={showAttention}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-40 disabled:cursor-wait"
+          className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)] disabled:opacity-40 disabled:cursor-wait"
         >
           {pendingAction === "attention"
             ? <span className="inline-block h-2 w-2 rounded-full border-2 border-slate-300 border-t-slate-500 animate-spin" />
@@ -205,7 +205,7 @@ export default function InboxRow({
             disabled={!!pendingAction}
             title={archiveError ?? "Archive"}
             aria-label="Archive"
-            className={`flex h-6 w-6 items-center justify-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-40 disabled:cursor-wait ${
+            className={`flex h-6 w-6 items-center justify-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)] disabled:opacity-40 disabled:cursor-wait ${
               archiveError
                 ? "text-red-500 hover:bg-red-50"
                 : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
@@ -231,7 +231,7 @@ export default function InboxRow({
             disabled={!!pendingAction}
             title={isClosed ? "Reopen thread" : "Close thread"}
             aria-label={isClosed ? "Reopen thread" : "Close thread"}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-40 disabled:cursor-wait"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)] disabled:opacity-40 disabled:cursor-wait"
           >
             {pendingAction === "status"
               ? <span className="inline-block h-2 w-2 rounded-full border-2 border-slate-300 border-t-slate-500 animate-spin" />

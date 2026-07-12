@@ -96,7 +96,7 @@ export default async function AssistantRulesPage() {
             <h3 className="text-sm font-semibold text-slate-900">Built-in label rules</h3>
             <p className="text-xs text-slate-500">Enabled automatically when FlowDesk connects to Gmail.</p>
           </div>
-          <Link href="/settings/gmail" className="text-xs font-medium text-blue-600 hover:underline">Manage labels →</Link>
+          <Link href="/settings/gmail" className="text-xs font-medium text-[var(--color-accent)] hover:underline">Manage labels →</Link>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
           {builtInRules.map((rule) => (

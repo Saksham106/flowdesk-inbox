@@ -61,7 +61,7 @@ function BillItem({ item }: ItemRowProps) {
         <button
           type="button"
           onClick={handleDismiss}
-          className="text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:opacity-100"
+          className="text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)] focus:opacity-100"
           aria-label="Done"
         >
           Done
@@ -69,7 +69,7 @@ function BillItem({ item }: ItemRowProps) {
         <button
           type="button"
           onClick={handleDismiss}
-          className="text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200 text-slate-500 hover:bg-slate-50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:opacity-100"
+          className="text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200 text-slate-500 hover:bg-slate-50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)] focus:opacity-100"
           aria-label="Not relevant"
         >
           Not relevant

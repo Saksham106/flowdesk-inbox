@@ -727,7 +727,7 @@ export default async function ConversationPage({
                         <article
                           key={message.id}
                           className={`overflow-hidden rounded-xl border px-3 py-2.5 ${
-                            isOutbound ? "border-blue-100 bg-blue-50" : "border-slate-200 bg-white"
+                            isOutbound ? "border-slate-300 bg-[var(--color-accent-soft)]" : "border-slate-200 bg-white"
                           }`}
                         >
                           <div className="mb-3 flex items-start justify-between gap-3">

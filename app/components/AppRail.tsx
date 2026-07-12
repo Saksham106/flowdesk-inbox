@@ -95,7 +95,7 @@ export default function AppRail(props: Props) {
         href="/home"
         aria-label="Go to FlowDesk home"
         title="FlowDesk home"
-        className="mb-3 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg transition hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-900"
+        className="mb-3 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg transition hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-ring)] focus:ring-offset-2 focus:ring-offset-slate-900"
       >
         <img src="/images/landing/logo-icon.svg" alt="" className="h-8 w-8 rounded-lg" />
       </Link>
@@ -109,7 +109,7 @@ export default function AppRail(props: Props) {
         type="button"
         data-ask-flowdesk
         title="Ask FlowDesk"
-        className="relative flex h-9 w-10 flex-col items-center justify-center gap-0.5 rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-900"
+        className="relative flex h-9 w-10 flex-col items-center justify-center gap-0.5 rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-ring)] focus:ring-offset-2 focus:ring-offset-slate-900"
       >
         <ChatIcon />
         <span className="text-[8px] font-semibold leading-none">Ask</span>
@@ -137,7 +137,7 @@ function RailLink({
     <Link
       href={href}
       title={label}
-      className={`relative flex h-9 w-10 flex-col items-center justify-center gap-0.5 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 focus:ring-offset-slate-900 ${
+      className={`relative flex h-9 w-10 flex-col items-center justify-center gap-0.5 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-ring)] focus:ring-offset-2 focus:ring-offset-slate-900 ${
         active
           ? "bg-slate-700 text-white"
           : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"

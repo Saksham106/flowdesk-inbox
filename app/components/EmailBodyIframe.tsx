@@ -99,7 +99,7 @@ export default function EmailBodyIframe({ html, remoteHtml }: Props) {
           <span>Remote images blocked for privacy</span>
           <button
             type="button"
-            className="shrink-0 font-medium text-blue-600 hover:text-blue-700"
+            className="shrink-0 font-medium text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
             onClick={() => setRemoteImagesLoaded(true)}
           >
             Load images

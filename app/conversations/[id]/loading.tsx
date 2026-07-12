@@ -54,7 +54,7 @@ export default function ConversationLoading() {
                 <div
                   key={i}
                   className={`rounded-xl border px-3 py-2.5 animate-pulse ${
-                    msg.outbound ? "border-blue-100 bg-blue-50" : "border-slate-200 bg-white"
+                    msg.outbound ? "border-slate-300 bg-[var(--color-accent-soft)]" : "border-slate-200 bg-white"
                   }`}
                 >
                   <div className="flex items-start gap-2 mb-3">

@@ -50,7 +50,7 @@ export default function SalesCrmModeToggle({ enabled }: { enabled: boolean }) {
         onClick={toggle}
         disabled={saving}
         className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition disabled:opacity-50 ${
-          on ? "bg-blue-600" : "bg-slate-300"
+          on ? "bg-[var(--color-accent)]" : "bg-slate-300"
         }`}
       >
         <span

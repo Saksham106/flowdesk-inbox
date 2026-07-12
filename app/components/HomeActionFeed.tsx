@@ -119,7 +119,7 @@ export default function HomeActionFeed({ items }: { items: HomeActionItem[] }) {
                   onClick={() => draftReply(item)}
                   disabled={drafting === item.key}
                   aria-label={`Draft reply to ${item.title}`}
-                  className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                  className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-100 disabled:opacity-50"
                 >
                   {drafting === item.key ? "Drafting…" : "Draft reply"}
                 </button>

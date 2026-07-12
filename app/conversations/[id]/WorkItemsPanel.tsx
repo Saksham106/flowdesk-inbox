@@ -168,7 +168,7 @@ export default function WorkItemsPanel({
       <button
         type="button"
         onClick={() => setShowTaskForm(true)}
-        className="mt-2 text-xs text-blue-600 hover:underline"
+        className="mt-2 text-xs text-[var(--color-accent)] hover:underline"
       >
         + Add task
       </button>
@@ -180,25 +180,25 @@ export default function WorkItemsPanel({
       )}
 
       {lead && !isPersonal ? (
-        <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs">
+        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="font-semibold text-blue-900">Lead</h3>
-            <span className="rounded-full bg-white px-2 py-0.5 font-medium text-blue-700">
+            <h3 className="font-semibold text-slate-900">Lead</h3>
+            <span className="rounded-full bg-white px-2 py-0.5 font-medium text-slate-700">
               {lead.score}
             </span>
           </div>
-          <p className="mt-2 font-medium text-blue-950">
+          <p className="mt-2 font-medium text-slate-950">
             {lead.company ?? lead.name}
           </p>
-          <p className="mt-1 text-blue-800">{lead.need}</p>
-          <p className="mt-2 text-blue-700">{lead.nextAction}</p>
+          <p className="mt-1 text-slate-800">{lead.need}</p>
+          <p className="mt-2 text-slate-700">{lead.nextAction}</p>
           {lead.budgetClue ? (
-            <p className="mt-2 text-blue-700">{lead.budgetClue}</p>
+            <p className="mt-2 text-slate-700">{lead.budgetClue}</p>
           ) : null}
           <div className="mt-3 flex items-center gap-2">
             <label
               htmlFor={`lead-stage-${lead.id}`}
-              className="text-xs text-blue-700"
+              className="text-xs text-slate-700"
             >
               Stage:
             </label>
@@ -207,7 +207,7 @@ export default function WorkItemsPanel({
               value={lead.stage}
               disabled={stagingLeadId === lead.id}
               onChange={(e) => updateLeadStage(lead.id, e.target.value)}
-              className="rounded border border-blue-200 bg-white px-2 py-0.5 text-xs text-blue-900 disabled:opacity-50"
+              className="rounded border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-900 disabled:opacity-50"
             >
               {LEAD_STAGES.map((s) => (
                 <option key={s} value={s}>

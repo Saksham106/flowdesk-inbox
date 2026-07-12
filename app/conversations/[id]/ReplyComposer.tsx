@@ -365,7 +365,7 @@ export default function ReplyComposer({
       {/* Draft status indicator */}
       {draftStatusLabel && (
         <div className="flex items-center justify-between px-3 pt-2">
-          <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-[10px] font-bold text-blue-700">
+          <span className="rounded-full bg-[var(--color-accent-soft)] px-2.5 py-0.5 text-[10px] font-bold text-[var(--color-accent)]">
             {draftStatusLabel}
           </span>
           <button

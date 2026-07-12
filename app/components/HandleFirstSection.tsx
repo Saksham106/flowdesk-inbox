@@ -114,7 +114,7 @@ function HandleFirstCard({ item }: CardProps) {
               body: JSON.stringify({ workflowStatus: "needs_reply" }),
             })
           }}
-          className="text-[10px] font-semibold text-blue-600 hover:underline"
+          className="text-[10px] font-semibold text-[var(--color-accent)] hover:underline"
         >
           Undo
         </button>
@@ -205,7 +205,7 @@ function HandleFirstCard({ item }: CardProps) {
   }
 
   const priorityClass = PRIORITY_STYLES[item.priority] ?? ""
-  const readClass = item.isRead ? "" : "ring-1 ring-blue-100"
+  const readClass = item.isRead ? "" : "ring-1 ring-[var(--color-accent-ring)]/40"
   const action = item.action
 
   return (
@@ -214,7 +214,7 @@ function HandleFirstCard({ item }: CardProps) {
       tabIndex={0}
       onClick={openCard}
       onKeyDown={handleKeyDown}
-      className={`cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:shadow-sm hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 ${priorityClass} ${readClass}`}
+      className={`cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:shadow-sm hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-ring)] ${priorityClass} ${readClass}`}
       aria-label={`Open ${item.displayName}`}
     >
       <div className="flex items-baseline justify-between gap-2 mb-1">
@@ -250,7 +250,7 @@ function HandleFirstCard({ item }: CardProps) {
           <button
             onClick={(e) => { e.stopPropagation(); handleDraftReply() }}
             disabled={draftLoading}
-            className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-blue-600 text-white disabled:opacity-60 hover:bg-blue-700 transition"
+            className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-[var(--color-accent)] text-white disabled:opacity-60 hover:bg-[var(--color-accent-hover)] transition"
           >
             {draftLoading ? "Generating…" : "Draft Reply"}
           </button>
@@ -258,7 +258,7 @@ function HandleFirstCard({ item }: CardProps) {
         {item.approvalReason && !item.needsReply && (
           <button
             onClick={(e) => { e.stopPropagation(); router.push(item.href) }}
-            className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition"
+            className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition"
           >
             Review Draft
           </button>

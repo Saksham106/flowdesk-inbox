@@ -82,7 +82,7 @@ export default function WorkflowStatusSelect({
     <div className="mt-2">
       <label className="text-xs text-slate-500">Label</label>
       {derived === "draft_ready" && (
-        <p className="mt-0.5 rounded-md bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700">
+        <p className="mt-0.5 rounded-md bg-[var(--color-accent-soft)] px-2 py-1 text-[11px] font-medium text-[var(--color-accent)]">
           Draft Ready — review before sending
         </p>
       )}

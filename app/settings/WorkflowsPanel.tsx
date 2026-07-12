@@ -49,7 +49,7 @@ export default function WorkflowsPanel({
                 {t.stepsJson.length} steps &middot; Trigger: {t.trigger.replace(/_/g, " ")}
               </p>
               {(activeCounts[t.id] ?? 0) > 0 && (
-                <p className="mt-0.5 text-xs text-blue-600">{activeCounts[t.id]} active runs</p>
+                <p className="mt-0.5 text-xs text-[var(--color-accent)]">{activeCounts[t.id]} active runs</p>
               )}
             </div>
             <button
