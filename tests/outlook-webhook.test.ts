@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   credentialFindUnique: vi.fn(),
   eventCreateMany: vi.fn(),
   decrypt: vi.fn((value: string) => value.replace("enc:", "")),
+  processSyncWork: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -14,6 +15,7 @@ vi.mock("@/lib/prisma", () => ({
 }))
 
 vi.mock("@/lib/crypto", () => ({ decryptString: mocks.decrypt }))
+vi.mock("@/lib/outlook-worker", () => ({ processOutlookSyncWork: mocks.processSyncWork }))
 
 import { POST } from "@/app/api/connectors/outlook/webhook/route"
 
@@ -34,6 +36,7 @@ describe("Outlook webhook", () => {
       channel: { tenantId: "tenant-1" },
     })
     mocks.eventCreateMany.mockResolvedValue({ count: 1 })
+    mocks.processSyncWork.mockResolvedValue({ completedEvents: 0 })
   })
 
   it("echoes Microsoft's validation token as plain text", async () => {
@@ -97,6 +100,21 @@ describe("Outlook webhook", () => {
     const response = await POST(requestWithBody({ value: [notification] }))
     expect(response.status).toBe(202)
     expect(mocks.eventCreateMany).toHaveBeenCalledWith(expect.objectContaining({ skipDuplicates: true }))
+    // Nothing new queued — no inline drain either.
+    expect(mocks.processSyncWork).not.toHaveBeenCalled()
+  })
+
+  it("drains queued events inline so pushes reflect without waiting for the cron", async () => {
+    mocks.processSyncWork.mockResolvedValue({ completedEvents: 1 })
+    const response = await POST(requestWithBody({ value: [notification] }))
+    expect(response.status).toBe(202)
+    expect(mocks.processSyncWork).toHaveBeenCalledTimes(1)
+  })
+
+  it("still returns 202 when the inline drain fails (cron is the backstop)", async () => {
+    mocks.processSyncWork.mockRejectedValue(new Error("graph hiccup"))
+    const response = await POST(requestWithBody({ value: [notification] }))
+    expect(response.status).toBe(202)
   })
 })
 
