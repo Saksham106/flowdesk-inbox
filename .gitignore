@@ -48,3 +48,4 @@ next-env.d.ts
 
 # Session handoff (local context only)
 SESSION_HANDOFF.md
+.claude/worktrees/
