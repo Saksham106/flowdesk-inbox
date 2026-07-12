@@ -21,6 +21,7 @@ export function isDbStartingError(err: unknown): boolean {
 
 export interface GmailSyncChannel {
   id: string;
+  provider: "google" | "microsoft";
   emailAddress: string | null;
   lastSyncedAt: Date | null;
   lastSyncStatus: string | null;
@@ -64,7 +65,7 @@ export async function getAppShellContext(tenantId: string, requestedChannelId?: 
     : null;
   const conversationScope = { tenantId, ...(activeChannelId ? { channelId: activeChannelId } : {}) };
 
-  const [tenant, statusCounts, gmailChannels, pendingApprovals] = await Promise.all([
+  const [tenant, statusCounts, gmailChannels, outlookChannels, pendingApprovals] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: tenantId },
       select: { salesCrmEnabled: true },
@@ -93,6 +94,20 @@ export async function getAppShellContext(tenantId: string, requestedChannelId?: 
       },
       orderBy: { createdAt: "asc" },
     }),
+    prisma.channel.findMany({
+      where: { tenantId, type: "email", provider: "microsoft" },
+      select: {
+        id: true,
+        emailAddress: true,
+        outlookCredential: {
+          select: {
+            lastSyncedAt: true,
+            lastSyncError: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
     prisma.approvalRequest.count({
       where: {
         tenantId,
@@ -111,19 +126,41 @@ export async function getAppShellContext(tenantId: string, requestedChannelId?: 
   const totalCount = statusCounts.reduce((sum, r) => sum + r._count.status, 0);
   const needsReplyCount = countByStatus["needs_reply"] ?? 0;
 
-  const gmailSyncChannels: GmailSyncChannel[] = gmailChannels
-    .filter((channel) => channel.gmailCredential)
-    .map((channel) => ({
-      id: channel.id,
-      emailAddress: channel.emailAddress,
-      lastSyncedAt: channel.gmailCredential?.lastSyncedAt ?? null,
-      lastSyncStatus: channel.gmailCredential?.lastSyncStatus ?? null,
-      lastSyncError: channel.gmailCredential?.lastSyncError ?? null,
-      watchExpiresAt: channel.gmailCredential?.watchExpiresAt ?? null,
-      watchLastRenewalAttempt: channel.gmailCredential?.watchLastRenewalAttempt ?? null,
-      watchRenewalError: channel.gmailCredential?.watchRenewalError ?? null,
-      lastHistoryFallbackAt: channel.gmailCredential?.lastHistoryFallbackAt ?? null,
-    }));
+  // Despite the historical name, this list covers every connected mailbox —
+  // the shared sync control routes each entry to its provider's sync API.
+  const gmailSyncChannels: GmailSyncChannel[] = [
+    ...gmailChannels
+      .filter((channel) => channel.gmailCredential)
+      .map((channel): GmailSyncChannel => ({
+        id: channel.id,
+        provider: "google",
+        emailAddress: channel.emailAddress,
+        lastSyncedAt: channel.gmailCredential?.lastSyncedAt ?? null,
+        lastSyncStatus: channel.gmailCredential?.lastSyncStatus ?? null,
+        lastSyncError: channel.gmailCredential?.lastSyncError ?? null,
+        watchExpiresAt: channel.gmailCredential?.watchExpiresAt ?? null,
+        watchLastRenewalAttempt: channel.gmailCredential?.watchLastRenewalAttempt ?? null,
+        watchRenewalError: channel.gmailCredential?.watchRenewalError ?? null,
+        lastHistoryFallbackAt: channel.gmailCredential?.lastHistoryFallbackAt ?? null,
+      })),
+    ...outlookChannels
+      .filter((channel) => channel.outlookCredential)
+      .map((channel): GmailSyncChannel => ({
+        id: channel.id,
+        provider: "microsoft",
+        emailAddress: channel.emailAddress,
+        lastSyncedAt: channel.outlookCredential?.lastSyncedAt ?? null,
+        lastSyncStatus: null,
+        lastSyncError: channel.outlookCredential?.lastSyncError ?? null,
+        // Graph subscription health is tracked on the connect page; the
+        // watch fields are Gmail-only and stay null so the push-health
+        // warnings in the sync control never fire for Outlook entries.
+        watchExpiresAt: null,
+        watchLastRenewalAttempt: null,
+        watchRenewalError: null,
+        lastHistoryFallbackAt: null,
+      })),
+  ];
 
   return {
     isBusiness,
