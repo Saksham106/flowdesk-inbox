@@ -12,7 +12,7 @@
 
 import { prisma } from "@/lib/prisma"
 import { groupCleanupBySender, type CleanupCandidate } from "@/lib/agent/sender-cleanup"
-import { cleanupRangeCutoff, type CleanupRange } from "@/lib/cleanup-range"
+import { cleanupRangeCutoff, previousCleanupRangeWindow, type CleanupRange } from "@/lib/cleanup-range"
 
 export type CleanupGroupView = {
   senderEmail: string
@@ -53,6 +53,60 @@ export type CleanupConnectionIssue = "not_connected" | "auth_error" | "sync_erro
 
 export type CleanupOverview = CleanupSummary & {
   connectionIssue: CleanupConnectionIssue | null
+}
+
+export type CleanupTrendDirection = "up" | "down" | "flat"
+
+export type CleanupTrend = {
+  /**
+   * "down" = fewer cleanable conversations than the prior period (the good
+   * direction — render green). "up" = more than the prior period (render
+   * red). "flat" = no meaningful change, or no prior-period data to compare
+   * against (render neutral/gray).
+   */
+  direction: CleanupTrendDirection
+  /** Percentage change vs. the prior period. `null` when it can't be meaningfully
+   * expressed as a percentage (no prior period, or prior period was zero). */
+  deltaPct: number | null
+  deltaAbs: number
+}
+
+// Below this magnitude a percentage swing isn't worth calling out as a trend.
+const FLAT_THRESHOLD_PCT = 1
+
+/**
+ * Pure, unit-testable period-over-period comparison for the analytics
+ * headline stat. Deliberately takes `previous: CleanupAnalytics | null`
+ * rather than assuming one always exists, since `range: "all"` has no
+ * bounded prior period to compare against.
+ */
+export function computeCleanupTrend(
+  current: CleanupAnalytics,
+  previous: CleanupAnalytics | null
+): CleanupTrend {
+  const currentValue = current.totalCleanable
+  if (!previous) {
+    return { direction: "flat", deltaPct: null, deltaAbs: 0 }
+  }
+
+  const previousValue = previous.totalCleanable
+  const deltaAbs = currentValue - previousValue
+
+  if (previousValue === 0) {
+    // Never divide by zero. If both periods are zero there's genuinely no
+    // change; if the prior period had zero cleanable conversations but the
+    // current one doesn't, there's a real increase but no sensible
+    // percentage to attach to it (would be +Infinity), so report the
+    // direction with a null percentage instead.
+    if (currentValue === 0) return { direction: "flat", deltaPct: null, deltaAbs: 0 }
+    return { direction: "up", deltaPct: null, deltaAbs }
+  }
+
+  const deltaPct = (deltaAbs / previousValue) * 100
+  if (Math.abs(deltaPct) < FLAT_THRESHOLD_PCT) {
+    return { direction: "flat", deltaPct, deltaAbs }
+  }
+  return { direction: deltaAbs > 0 ? "up" : "down", deltaPct, deltaAbs }
 }
 
 export type EmailChannelHealth = {
@@ -198,7 +252,33 @@ export function stillNeedsCleanup(source: CleanupSourceHealth): boolean {
 }
 
 export async function getCleanupOverview(tenantId: string, range: CleanupRange = "quarter"): Promise<CleanupOverview> {
-  const cutoff = cleanupRangeCutoff(range)
+  return getCleanupOverviewForWindow(tenantId, { start: cleanupRangeCutoff(range), end: null })
+}
+
+/**
+ * Same data as `getCleanupOverview`, but for the date window immediately
+ * preceding the current range's window (equal length) — used to compute the
+ * headline trend badge without any new historical/snapshot storage. Returns
+ * `null` for `range: "all"`, which has no bounded prior period.
+ */
+export async function getPreviousCleanupOverview(
+  tenantId: string,
+  range: CleanupRange
+): Promise<CleanupOverview | null> {
+  const window = previousCleanupRangeWindow(range)
+  if (!window) return null
+  return getCleanupOverviewForWindow(tenantId, window)
+}
+
+async function getCleanupOverviewForWindow(
+  tenantId: string,
+  window: { start: Date | null; end: Date | null }
+): Promise<CleanupOverview> {
+  const lastMessageAt: { gte?: Date; lt?: Date } = {}
+  if (window.start) lastMessageAt.gte = window.start
+  if (window.end) lastMessageAt.lt = window.end
+  const hasBound = lastMessageAt.gte !== undefined || lastMessageAt.lt !== undefined
+
   const channels = await prisma.channel.findMany({
     where: { tenantId, type: "email" },
     select: {
@@ -224,7 +304,7 @@ export async function getCleanupOverview(tenantId: string, range: CleanupRange =
   const fetched = await prisma.conversation.findMany({
     where: {
       tenantId,
-      ...(cutoff ? { lastMessageAt: { gte: cutoff } } : {}),
+      ...(hasBound ? { lastMessageAt } : {}),
       OR: [
         { stateRecord: { emailType: { in: ["newsletter", "marketing"] } } },
         { stateRecord: { attentionCategory: { in: ["quiet", "fyi_done"] } } },
