@@ -102,3 +102,45 @@ describe("mark read / archive / drafts", () => {
     await expect(deleteOutlookDraft("ch1", "gone")).resolves.toBeUndefined()
   })
 })
+
+describe("Graph query shape (InefficientFilter regression)", () => {
+  // Graph returns 400 InefficientFilter when a conversationId $filter is
+  // combined with $orderby on a property not in the filter — observed live
+  // 2026-07-12; every category writeback failed out. Ordering must happen
+  // client-side.
+  it("never combines a conversationId filter with $orderby", async () => {
+    graphGet
+      .mockResolvedValueOnce({ value: [] }) // ensure: master categories
+      .mockResolvedValueOnce({ value: [] }) // conversation messages
+    await applyFlowDeskCategoriesToConversation("ch1", "conv-1", ["Needs Reply"])
+
+    graphGet.mockResolvedValueOnce({ value: [{ id: "m1", receivedDateTime: "2026-07-12T00:00:00Z" }] })
+    graphRequest.mockResolvedValue({ id: "draft-1" })
+    await createOutlookDraftReply("ch1", { externalThreadId: "conv-1", body: "hi" })
+
+    const conversationQueries = graphGet.mock.calls
+      .map(([path]) => String(path))
+      .filter((path) => path.includes("conversationId"))
+    expect(conversationQueries.length).toBeGreaterThanOrEqual(2)
+    for (const path of conversationQueries) {
+      expect(path).not.toContain("orderby")
+    }
+  })
+
+  it("drafts the reply against the newest message without relying on server ordering", async () => {
+    graphGet.mockResolvedValueOnce({ value: [
+      { id: "old", receivedDateTime: "2026-07-01T00:00:00Z" },
+      { id: "newest", receivedDateTime: "2026-07-12T09:00:00Z" },
+      { id: "middle", receivedDateTime: "2026-07-05T00:00:00Z" },
+    ] })
+    graphRequest.mockResolvedValue({ id: "draft-1" })
+
+    await createOutlookDraftReply("ch1", { externalThreadId: "conv-1", body: "hi" })
+
+    expect(graphRequest).toHaveBeenCalledWith(
+      "/me/messages/newest/createReply",
+      "token",
+      { method: "POST" }
+    )
+  })
+})
