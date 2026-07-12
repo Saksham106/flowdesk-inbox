@@ -25,6 +25,13 @@ export default function ApprovalActions({
         setError("Could not save")
         return
       }
+      const data = await res.json().catch(() => null)
+      if (data?.sendError) {
+        // Decision saved but the reply did not go out — keep the row visible
+        // so the reviewer sees why instead of the item silently vanishing.
+        setError(data.sendError)
+        return
+      }
       onDecided(approvalId)
     } catch {
       setError("Could not save")

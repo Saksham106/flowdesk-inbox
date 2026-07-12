@@ -14,6 +14,10 @@ const {
   mockApprovalUpdateMany,
   mockAuditCreate,
   mockRevalidateInboxViews,
+  mockDraftFindFirst,
+  mockDraftUpdate,
+  mockDraftUpdateMany,
+  mockSendConversationMessage,
 } = vi.hoisted(() => ({
   mockTaskFindFirst: vi.fn(),
   mockTaskUpdate: vi.fn(),
@@ -25,6 +29,17 @@ const {
   mockApprovalUpdateMany: vi.fn(),
   mockAuditCreate: vi.fn(),
   mockRevalidateInboxViews: vi.fn(),
+  mockDraftFindFirst: vi.fn(),
+  mockDraftUpdate: vi.fn(),
+  mockDraftUpdateMany: vi.fn(),
+  mockSendConversationMessage: vi.fn(),
+}))
+
+vi.mock("@/lib/conversations/send-message", () => ({
+  sendConversationMessage: mockSendConversationMessage,
+  ConversationSendError: class ConversationSendError extends Error {
+    constructor(message: string, public readonly status: number) { super(message) }
+  },
 }))
 
 vi.mock("@/lib/cache-tags", () => ({
@@ -41,6 +56,12 @@ vi.mock("@/lib/prisma", () => ({
       update: mockApprovalUpdate,
       updateMany: mockApprovalUpdateMany,
     },
+    draft: {
+      findFirst: mockDraftFindFirst,
+      update: mockDraftUpdate,
+      updateMany: mockDraftUpdateMany,
+    },
+    conversation: { findFirst: vi.fn().mockResolvedValue(null) },
     auditLog: { create: mockAuditCreate },
   },
 }))
@@ -349,6 +370,78 @@ describe("POST /api/approvals/[id]/decide", () => {
         data: expect.objectContaining({ status: "rejected", decisionNote: "Too informal" }),
       })
     )
+  })
+
+  it("sends the approved draft for a send-step approval", async () => {
+    mockGetServerSession.mockResolvedValue({ user: { tenantId: "ten-1", id: "u1" } })
+    const approval = {
+      id: "a1", tenantId: "ten-1", conversationId: "c1", status: "pending",
+      step: "send", draftId: "d1",
+    }
+    mockApprovalFindFirst.mockResolvedValue(approval)
+    mockApprovalUpdate.mockResolvedValue({ ...approval, status: "approved" })
+    mockDraftFindFirst.mockResolvedValue({ id: "d1", text: "Sounds good — Friday works.", status: "proposed" })
+    mockDraftUpdateMany.mockResolvedValue({ count: 1 })
+    mockSendConversationMessage.mockResolvedValue({ ok: true })
+    mockDraftUpdate.mockResolvedValue({})
+    mockAuditCreate.mockResolvedValue({})
+
+    const res = (await POST(makeRequest({ decision: "approved" }), params("a1"))) as {
+      status: number; _body: { ok: boolean; sendError?: string }
+    }
+
+    expect(res.status).toBe(200)
+    expect(res._body.sendError).toBeUndefined()
+    expect(mockSendConversationMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: "c1", tenantId: "ten-1", text: "Sounds good — Friday works." })
+    )
+    expect(mockDraftUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "sent", text: "" } })
+    )
+    expect(mockAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: "draft.sent" }) })
+    )
+  })
+
+  it("keeps the decision but surfaces sendError when the send fails", async () => {
+    mockGetServerSession.mockResolvedValue({ user: { tenantId: "ten-1", id: "u1" } })
+    const approval = {
+      id: "a1", tenantId: "ten-1", conversationId: "c1", status: "pending",
+      step: "send", draftId: "d1",
+    }
+    mockApprovalFindFirst.mockResolvedValue(approval)
+    mockApprovalUpdate.mockResolvedValue({ ...approval, status: "approved" })
+    mockDraftFindFirst.mockResolvedValue({ id: "d1", text: "hello", status: "proposed" })
+    mockDraftUpdateMany.mockResolvedValue({ count: 1 })
+    mockSendConversationMessage.mockRejectedValue(new Error("Graph exploded"))
+    mockAuditCreate.mockResolvedValue({})
+
+    const res = (await POST(makeRequest({ decision: "approved" }), params("a1"))) as {
+      status: number; _body: { ok: boolean; sendError?: string }
+    }
+
+    expect(res.status).toBe(200)
+    expect(res._body.ok).toBe(true)
+    expect(res._body.sendError).toBeTruthy()
+    expect(mockDraftUpdate).not.toHaveBeenCalled()
+    expect(mockAuditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: "draft.send_failed" }) })
+    )
+  })
+
+  it("does not send when rejecting a send-step approval", async () => {
+    mockGetServerSession.mockResolvedValue({ user: { tenantId: "ten-1", id: "u1" } })
+    const approval = {
+      id: "a1", tenantId: "ten-1", conversationId: "c1", status: "pending",
+      step: "send", draftId: "d1",
+    }
+    mockApprovalFindFirst.mockResolvedValue(approval)
+    mockApprovalUpdate.mockResolvedValue({ ...approval, status: "rejected" })
+    mockDraftUpdateMany.mockResolvedValue({ count: 1 })
+    mockAuditCreate.mockResolvedValue({})
+
+    await POST(makeRequest({ decision: "rejected" }), params("a1"))
+    expect(mockSendConversationMessage).not.toHaveBeenCalled()
   })
 })
 
