@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type GmailSyncChannel = {
   id: string;
+  provider?: "google" | "microsoft";
   emailAddress: string | null;
   lastSyncedAt: Date | string | null;
   lastSyncStatus?: string | null;
@@ -128,7 +129,11 @@ export default function GmailSyncControl({
       try {
         let totalSynced = 0;
         for (const channel of channels) {
-          const res = await fetch("/api/connectors/gmail/sync", {
+          const endpoint =
+            channel.provider === "microsoft"
+              ? "/api/connectors/outlook/sync"
+              : "/api/connectors/gmail/sync";
+          const res = await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ channelId: channel.id, incremental: Boolean(lastSyncedAt) }),

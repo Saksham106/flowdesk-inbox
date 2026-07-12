@@ -26,6 +26,8 @@ describe("getAppShellContext account scope", () => {
         { id: "channel-a", emailAddress: "a@example.com", provider: "google" },
         { id: "channel-b", emailAddress: "b@example.com", provider: "microsoft" },
       ])
+      // gmail sync-channel query, then the outlook sync-channel query
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
     conversationGroupBy.mockResolvedValue([])
     approvalCount.mockResolvedValue(0)
