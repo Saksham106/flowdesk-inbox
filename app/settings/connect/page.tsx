@@ -12,7 +12,6 @@ import GmailOperatorHealthPanel from "@/app/settings/GmailOperatorHealthPanel";
 import FixGmailLabelsButton from "@/app/settings/FixGmailLabelsButton";
 import { summarizeGmailOperatorHealth } from "@/lib/gmail-operator-health";
 import { summarizeOutlookOperatorHealth } from "@/lib/outlook-operator-health";
-import { salesCrmEnabled } from "@/lib/tenant-capabilities";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +49,6 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
   const [
     gmailChannels,
     outlookChannels,
-    tenant,
     pendingWritebacks,
     processingWritebacks,
     failedWritebacks,
@@ -98,10 +96,6 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
         },
       },
       orderBy: { createdAt: "asc" },
-    }),
-    prisma.tenant.findUnique({
-      where: { id: session.user.tenantId },
-      select: { salesCrmEnabled: true },
     }),
     prisma.emailWritebackQueue.count({
       where: { tenantId: session.user.tenantId, status: "pending", channel: { provider: "google" } },
@@ -169,8 +163,6 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
       },
     }),
   ]);
-
-  const isPersonal = !salesCrmEnabled(tenant);
 
   const gmailOperatorHealth = summarizeGmailOperatorHealth({
     // gmailChannels is already scoped to provider: "google" in the query above.
@@ -354,10 +346,10 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
           )}
         </div>
 
-        {/* Outlook / Microsoft 365 — deferred out of the MVP default path; still
-            shown when already connected so existing channels stay manageable */}
-        {(!isPersonal || outlookChannels.length > 0) && (
-          <div className="px-6 py-5">
+        {/* Outlook / Microsoft 365 — was deferred out of the personal-account
+            MVP path until full parity shipped (PR #143); now offered to all
+            accounts alongside Gmail. */}
+        <div className="px-6 py-5">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white">
@@ -435,8 +427,7 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
                 ))}
               </div>
             )}
-          </div>
-        )}
+        </div>
       </section>
     </>
   );
