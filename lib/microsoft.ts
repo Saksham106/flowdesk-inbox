@@ -259,15 +259,22 @@ export async function sendOutlookReply({
   const ccRecipients = (cc ?? []).map((address) => ({ emailAddress: { address } }))
   const bccRecipients = (bcc ?? []).map((address) => ({ emailAddress: { address } }))
 
-  // Find the last message in this conversation to reply to
+  // Find the last message in this conversation to reply to. No $orderby:
+  // Graph rejects a conversationId $filter combined with $orderby on a
+  // property outside the filter (400 InefficientFilter) — pick the newest
+  // client-side instead.
   const params = new URLSearchParams({
     $filter: `conversationId eq '${conversationId}' and isDraft eq false`,
-    $orderby: "receivedDateTime desc",
-    $top: "1",
-    $select: "id",
+    $top: "50",
+    $select: "id,receivedDateTime",
   })
   const latest = await graphGet<GraphMessageList>(`/messages?${params}`, token)
-  const lastMessageId = latest.value[0]?.id
+  const lastMessageId = [...(latest.value ?? [])]
+    .sort((left, right) =>
+      ((right as { receivedDateTime?: string }).receivedDateTime ?? "").localeCompare(
+        (left as { receivedDateTime?: string }).receivedDateTime ?? ""
+      )
+    )[0]?.id
 
   if (lastMessageId) {
     // Use the reply API to preserve threading
