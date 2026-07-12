@@ -4,6 +4,8 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { projectDecisionOntoDraft } from "@/lib/agent/approvals"
+import { ConversationSendError, sendConversationMessage } from "@/lib/conversations/send-message"
+import { revalidateInboxViews } from "@/lib/cache-tags"
 import {
   bookSchedulingSession,
   APPROVAL_STEP_BOOK_EVENT,
@@ -68,6 +70,63 @@ export async function POST(
     })
   }
 
+  // Approving a send-step draft actually sends the reply — that is what the
+  // reviewer is approving. Previously this route only flipped the draft to
+  // "approved" and the message silently went nowhere unless the user found
+  // the separate send button in the conversation view (observed live
+  // 2026-07-12 on an Outlook conversation). A send failure does not undo the
+  // decision; it is audited and surfaced to the queue UI via `sendError`, and
+  // the approved draft stays sendable from the conversation view.
+  let sendError: string | null = null
+  if (approval.step === "send" && approval.draftId && decision === "approved") {
+    const draft = await prisma.draft.findFirst({
+      where: { id: approval.draftId, conversation: { tenantId: session.user.tenantId } },
+    })
+    const text = draft?.text?.trim() ?? ""
+    if (draft && text) {
+      try {
+        await sendConversationMessage({
+          conversationId: approval.conversationId,
+          tenantId: session.user.tenantId,
+          userId: session.user.id,
+          text,
+          auditAction: "conversation.send",
+        })
+        await prisma.draft.update({
+          where: { conversationId: approval.conversationId },
+          data: { status: "sent", text: "" },
+        })
+        await prisma.auditLog.create({
+          data: {
+            tenantId: session.user.tenantId,
+            userId: session.user.id,
+            action: "draft.sent",
+            payloadJson: { conversationId: approval.conversationId, draftId: draft.id },
+          },
+        })
+        revalidateInboxViews(session.user.tenantId, approval.conversationId)
+      } catch (err) {
+        sendError =
+          err instanceof ConversationSendError
+            ? err.message
+            : "Sending failed — the approved draft is still available in the conversation."
+        console.error("[approvals/decide] send after approve failed:", err)
+        await prisma.auditLog.create({
+          data: {
+            tenantId: session.user.tenantId,
+            userId: session.user.id,
+            action: "draft.send_failed",
+            payloadJson: {
+              conversationId: approval.conversationId,
+              draftId: draft.id,
+              error: sendError,
+            },
+          },
+        })
+      }
+    }
+  }
+
   // Approving a book_event request executes the booking. A calendar failure
   // does not undo the decision — the error lands on the scheduling session
   // (audited) and stays retryable from the conversation's Scheduling panel.
@@ -93,5 +152,5 @@ export async function POST(
     },
   })
 
-  return NextResponse.json({ ok: true, approval: updated })
+  return NextResponse.json({ ok: true, approval: updated, ...(sendError ? { sendError } : {}) })
 }
