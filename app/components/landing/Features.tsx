@@ -6,6 +6,8 @@ const features: Array<{
   description: string;
   cta: string;
   imageLeft: boolean;
+  image: string;
+  imageAlt: string;
 }> = [
   {
     title: "A tidy inbox, automatically",
@@ -13,6 +15,8 @@ const features: Array<{
       "FlowDesk reads every incoming email and sorts it with Gmail labels — what needs you rises to the top, and the noise quietly steps aside.",
     cta: "Get a tidier inbox",
     imageLeft: true,
+    image: "/images/landing/feature-tidy-inbox.png",
+    imageAlt: "FlowDesk inbox with emails automatically sorted into categories",
   },
   {
     title: "Replies drafted in your voice",
@@ -20,6 +24,8 @@ const features: Array<{
       "It learns how you write from the emails you've already sent, then leaves ready-to-go drafts right in Gmail. You tweak or just hit send.",
     cta: "See drafts that sound like you",
     imageLeft: false,
+    image: "/images/landing/feature-drafts.png",
+    imageAlt: "A reply drafted by FlowDesk awaiting review",
   },
   {
     title: "Follow-ups that remember for you",
@@ -27,10 +33,12 @@ const features: Array<{
       "FlowDesk keeps track of who still owes you a reply and nudges the thread at the right moment — and when someone proposes a time, it can put it straight on your calendar.",
     cta: "Stop dropping threads",
     imageLeft: true,
+    image: "/images/landing/feature-followups.png",
+    imageAlt: "FlowDesk tracking threads that still need a reply",
   },
 ];
 
-function ProductImageCard() {
+function ProductImageCard({ src, alt }: { src: string; alt: string }) {
   return (
     <div className="flex-1 min-w-0 relative rounded-xl overflow-hidden self-stretch bg-[#e0e1ec]" style={{ minHeight: 360 }}>
       <img
@@ -42,8 +50,8 @@ function ProductImageCard() {
         className="absolute inset-0 w-full h-full object-cover rounded-xl"
       />
       <img
-        src="/images/landing/product-screenshot.png"
-        alt="Flowdesk product screenshot"
+        src={src}
+        alt={alt}
         width={3832}
         height={2396}
         className="absolute inset-0 w-full h-full object-cover object-top"
@@ -95,13 +103,13 @@ export default function Features() {
             >
               {feature.imageLeft ? (
                 <>
-                  <ProductImageCard />
+                  <ProductImageCard src={feature.image} alt={feature.imageAlt} />
                   <FeatureContent feature={feature} />
                 </>
               ) : (
                 <>
                   <FeatureContent feature={feature} />
-                  <ProductImageCard />
+                  <ProductImageCard src={feature.image} alt={feature.imageAlt} />
                 </>
               )}
             </div>
