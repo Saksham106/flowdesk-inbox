@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { proposeDraftForConversation } from "@/lib/agent/draft-generation"
 import { getAutomationLevel } from "@/lib/agent/automation-level"
+import { gmailDraftIdFromMetadata } from "@/lib/gmail-drafts"
 
 export const runtime = "nodejs"
 
@@ -30,12 +31,24 @@ export async function POST(request: Request) {
 
   const take = scope === "last_n" ? Math.min(typeof n === "number" ? n : 10, HARD_CAP) : HARD_CAP
 
-  const conversations = await prisma.conversation.findMany({
-    where: { tenantId: session.user.tenantId, status: "needs_reply", draft: null },
+  // Widen the query to every needs_reply conversation, then filter in app
+  // code: conversations with no Draft at all are eligible, but so are
+  // conversations that already have a Draft whose metadataJson never picked
+  // up a gmailDraftId (e.g. it was created while the tenant was below
+  // automation Level 3, so the Gmail-side draft creation was skipped). A
+  // Prisma `draft: null` filter only matches the former case and silently
+  // excludes the latter from backfill, which is the bug this fixes.
+  const candidates = await prisma.conversation.findMany({
+    where: { tenantId: session.user.tenantId, status: "needs_reply" },
     orderBy: { lastMessageAt: "desc" },
-    take,
-    select: { id: true },
+    include: { draft: true },
   })
+
+  const eligible = candidates.filter(
+    (c) => !c.draft || gmailDraftIdFromMetadata(c.draft.metadataJson) === null
+  )
+
+  const conversations = eligible.slice(0, take)
 
   const results: Array<{ conversationId: string; status: string }> = []
   for (const conversation of conversations) {

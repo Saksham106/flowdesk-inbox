@@ -36,7 +36,10 @@ describe("POST /api/autopilot-settings/backfill-drafts", () => {
   })
 
   it("proposes a draft for each needs_reply conversation without an existing draft, scope all", async () => {
-    mockFindMany.mockResolvedValue([{ id: "c1" }, { id: "c2" }])
+    mockFindMany.mockResolvedValue([
+      { id: "c1", draft: null },
+      { id: "c2", draft: null },
+    ])
     mockProposeDraft
       .mockResolvedValueOnce({ status: "drafted", draftId: "d1" })
       .mockResolvedValueOnce({ status: "gated_out", reason: "newsletter" })
@@ -46,7 +49,8 @@ describe("POST /api/autopilot-settings/backfill-drafts", () => {
 
     expect(mockFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ tenantId: "t1", status: "needs_reply", draft: null }),
+        where: expect.objectContaining({ tenantId: "t1", status: "needs_reply" }),
+        include: { draft: true },
       })
     )
     expect(mockProposeDraft).toHaveBeenCalledTimes(2)
@@ -59,16 +63,49 @@ describe("POST /api/autopilot-settings/backfill-drafts", () => {
     ])
   })
 
+  it("includes a conversation whose existing draft never got a gmailDraftId (dashboard-only draft)", async () => {
+    mockFindMany.mockResolvedValue([
+      { id: "c1", draft: { metadataJson: { intent: "reply" } } },
+    ])
+    mockProposeDraft.mockResolvedValueOnce({ status: "drafted", draftId: "d1" })
+
+    const res = await POST(new Request("http://x", { method: "POST", body: JSON.stringify({ scope: "all" }) }))
+    const data = await res.json()
+
+    expect(mockProposeDraft).toHaveBeenCalledTimes(1)
+    expect(mockProposeDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: "c1", source: "backfill" })
+    )
+    expect(data.results).toEqual([{ conversationId: "c1", status: "drafted" }])
+  })
+
+  it("skips a conversation whose draft already has a gmailDraftId (already synced to Gmail)", async () => {
+    mockFindMany.mockResolvedValue([
+      { id: "c1", draft: { metadataJson: { intent: "reply", gmailDraftId: "gmail-draft-123" } } },
+    ])
+
+    const res = await POST(new Request("http://x", { method: "POST", body: JSON.stringify({ scope: "all" }) }))
+    const data = await res.json()
+
+    expect(mockProposeDraft).not.toHaveBeenCalled()
+    expect(data.results).toEqual([])
+  })
+
   it("caps to 10 conversations for scope last_n with n=10", async () => {
     mockFindMany.mockResolvedValue([])
     await POST(new Request("http://x", { method: "POST", body: JSON.stringify({ scope: "last_n", n: 10 }) }))
-    expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({ take: 10 }))
+    expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({ orderBy: { lastMessageAt: "desc" } }))
   })
 
-  it("caps requests at 50 conversations regardless of requested n", async () => {
-    mockFindMany.mockResolvedValue([])
-    await POST(new Request("http://x", { method: "POST", body: JSON.stringify({ scope: "last_n", n: 500 }) }))
-    expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({ take: 50 }))
+  it("caps eligible results at 50 conversations for scope all regardless of matches", async () => {
+    mockFindMany.mockResolvedValue(
+      Array.from({ length: 60 }, (_, i) => ({ id: `c${i}`, draft: null }))
+    )
+    mockProposeDraft.mockResolvedValue({ status: "drafted", draftId: "d" })
+    const res = await POST(new Request("http://x", { method: "POST", body: JSON.stringify({ scope: "all" }) }))
+    const data = await res.json()
+    expect(mockProposeDraft).toHaveBeenCalledTimes(50)
+    expect(data.results).toHaveLength(50)
   })
 
   it("rejects an invalid scope", async () => {
