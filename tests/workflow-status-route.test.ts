@@ -28,6 +28,7 @@ vi.mock("@/lib/prisma", () => ({
       updateMany: mockDraftUpdateMany,
     },
     emailWritebackQueue: {
+      findUnique: vi.fn().mockResolvedValue(null),
       upsert: mockWritebackUpsert,
       deleteMany: mockWritebackDeleteMany,
     },

@@ -965,12 +965,35 @@ export async function applyFlowDeskLabelsToGmailThread(
   // Nothing to add and none of our labels exist in the account — no mutation needed.
   if (addLabelIds.length === 0 && removeLabelIds.length === 0) return
 
+  // Only mutate when the thread's actual label state differs from the request.
+  // A redundant threads.modify is not free: it advances mailbox history, which
+  // comes back to us through push/sync as an apparent change and re-enters the
+  // classification pipeline (the writeback ↔ push echo loop). Reading the
+  // thread first keeps a no-op writeback read-only. If the read yields no
+  // messages (unexpected shape), fall through to the unfiltered modify.
+  const currentThread = await gmail.users.threads.get({
+    userId: "me",
+    id: gmailThreadId,
+    format: "minimal",
+  })
+  const messageLabelSets = (currentThread.data.messages ?? []).map(
+    (message) => new Set(message.labelIds ?? [])
+  )
+  const hasThreadState = messageLabelSets.length > 0
+  const effectiveAddLabelIds = hasThreadState
+    ? addLabelIds.filter((id) => messageLabelSets.some((labelSet) => !labelSet.has(id)))
+    : addLabelIds
+  const effectiveRemoveLabelIds = hasThreadState
+    ? removeLabelIds.filter((id) => messageLabelSets.some((labelSet) => labelSet.has(id)))
+    : removeLabelIds
+  if (effectiveAddLabelIds.length === 0 && effectiveRemoveLabelIds.length === 0) return
+
   await gmail.users.threads.modify({
     userId: "me",
     id: gmailThreadId,
     requestBody: {
-      addLabelIds,
-      removeLabelIds,
+      addLabelIds: effectiveAddLabelIds,
+      removeLabelIds: effectiveRemoveLabelIds,
     },
   })
 }
