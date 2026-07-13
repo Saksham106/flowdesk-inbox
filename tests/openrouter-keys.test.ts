@@ -70,6 +70,23 @@ describe("getOpenRouterApiKeyForUser", () => {
     expect(mockCreate).not.toHaveBeenCalled()
   })
 
+  it("defaults the monthly limit to $3 when OPENROUTER_CHILD_KEY_MONTHLY_LIMIT_USD is unset", async () => {
+    delete process.env.OPENROUTER_CHILD_KEY_MONTHLY_LIMIT_USD
+    mockFindUnique.mockResolvedValue(null)
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ key: "sk-or-new", hash: "hash2", label: "sk-or-v1-new" }),
+    }))
+    mockUpsert.mockResolvedValue({ encryptedApiKey: "enc:sk-or-new", keyHash: "hash2", disabled: false })
+
+    const { getOpenRouterApiKeyForUser } = await import("@/lib/ai/openrouter-keys")
+    await getOpenRouterApiKeyForUser({ tenantId: "t1", userId: "u1", email: "a@example.com" })
+
+    const requestBody = JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body)
+    expect(requestBody.limit).toBe(3)
+    expect(requestBody.limit_reset).toBe("monthly")
+  })
+
   it("includes workspace_id in the provisioning request when OPENROUTER_WORKSPACE_ID is configured", async () => {
     process.env.OPENROUTER_WORKSPACE_ID = "ws-abc-123"
     mockFindUnique.mockResolvedValue(null)
