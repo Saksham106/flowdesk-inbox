@@ -25,7 +25,7 @@ import { supportsMailboxWriteback } from "@/lib/email/provider-support"
 import { ensureDraftApprovalRequest } from "@/lib/agent/approvals"
 import { validateDraftWritingPreferences } from "@/lib/agent/writing-preferences"
 import { resolveDraftEligibility } from "@/lib/agent/draft-eligibility"
-import { sanitizeDraftText } from "@/lib/agent/draft-sanitizer"
+import { sanitizeDraftText, unwrapHardWrappedText } from "@/lib/agent/draft-sanitizer"
 
 const VALID_LABELS = ["Lead", "Reschedule", "Pricing", "Complaint"] as const
 
@@ -271,6 +271,11 @@ export async function proposeDraftForConversation(
   }
 
   const sanitized = sanitizeDraftText(result.draftText)
+  // Undo model hard-wrap line breaks (see unwrapHardWrappedText) so the
+  // stored/sent draft doesn't split sentences mid-way in Gmail. Only applied
+  // to AI-drafted text here — manual replies keep the user's own line
+  // breaks exactly as typed (see sendConversationMessage / buildReplyMimeRaw).
+  sanitized.text = unwrapHardWrappedText(sanitized.text)
 
   const suggestedLabel = accountType === "business" ? result.suggestedLabel : null
   const conversationText = conversation.messages.map((m) => m.body).join("\n")
