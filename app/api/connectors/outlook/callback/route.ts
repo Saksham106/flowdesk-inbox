@@ -10,6 +10,7 @@ import {
 import { runOutlookDeltaSync } from "@/lib/outlook-sync"
 import { ensureOutlookSubscription } from "@/lib/outlook-subscriptions"
 import { ensureFlowDeskCategories } from "@/lib/outlook-mailbox"
+import { requeueFailedWritebacksForChannel } from "@/lib/email/writeback-requeue"
 
 export const runtime = "nodejs"
 
@@ -60,6 +61,9 @@ export async function GET(request: Request) {
         tokenExpiry: tokens.expiresAt,
       },
     })
+    // Jobs that permanently failed on the old (expired/revoked) credential are
+    // retryable now that a fresh one exists — give them back to the cron.
+    await requeueFailedWritebacksForChannel(channelId, tenantId, "outlook")
   } else {
     const channel = await prisma.channel.create({
       data: {
