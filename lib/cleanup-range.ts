@@ -23,3 +23,24 @@ export function cleanupRangeCutoff(range: CleanupRange, now = new Date()): Date 
   else cutoff.setUTCMonth(cutoff.getUTCMonth() - 6)
   return cutoff
 }
+
+/**
+ * The date window immediately preceding the current range's window, of equal
+ * length, e.g. for `range: "month"` and `now` = July 12, this returns
+ * [June 12, July 12) — the 30 days before the current 30-day window. Used to
+ * compute period-over-period trend deltas without any new historical storage:
+ * the previous window is just re-derived from the same cutoff math, shifted
+ * back once.
+ *
+ * Returns `null` for `range: "all"` — there is no bounded "prior period" to
+ * compare an unbounded range against.
+ */
+export function previousCleanupRangeWindow(
+  range: CleanupRange,
+  now = new Date()
+): { start: Date | null; end: Date } | null {
+  const end = cleanupRangeCutoff(range, now)
+  if (end === null) return null
+  const start = cleanupRangeCutoff(range, end)
+  return { start, end }
+}
