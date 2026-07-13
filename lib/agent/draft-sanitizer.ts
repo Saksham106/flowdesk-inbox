@@ -84,6 +84,14 @@ export function sanitizeDraftText(original: string): SanitizeDraftResult {
 // joined into the surrounding prose.
 const LIST_LINE_PATTERN = /^\s*([-*]|\d+\.)\s+/
 
+// Hard-wrapped lines from old plaintext email clients land close to a fixed
+// column width (typically 70-80 chars). A short line — a greeting ("Hi
+// Jane,"), a signoff ("Thanks,"), or a signature name — is very unlikely to
+// be a mid-sentence wrap point, so it must not be joined into the next line.
+// Only a line at or above this length is treated as a plausible wrap
+// continuation.
+const WRAP_CONTINUATION_MIN_LENGTH = 50
+
 /**
  * Undoes model-generated "hard wrap" line breaks — some models still write
  * plaintext email replies with a literal `\n` roughly every 70-80 characters,
@@ -93,9 +101,13 @@ const LIST_LINE_PATTERN = /^\s*([-*]|\d+\.)\s+/
  *
  * This joins consecutive non-blank, non-list lines with a single space
  * (undoing the hard wrap) while preserving:
- * - blank-line paragraph breaks (`\n\n` stays a real paragraph break), and
+ * - blank-line paragraph breaks (`\n\n` stays a real paragraph break),
  * - list-like lines (`-`, `*`, or `1.` bullets), which keep their own line
- *   break before and after so lists aren't flattened into prose.
+ *   break before and after so lists aren't flattened into prose, and
+ * - short lines (below `WRAP_CONTINUATION_MIN_LENGTH`), which are far more
+ *   likely to be an intentional greeting/signoff break than a wrap point —
+ *   e.g. "Thanks,\nJane" keeps its line break instead of becoming
+ *   "Thanks, Jane".
  */
 export function unwrapHardWrappedText(text: string): string {
   const lines = text.split("\n")
@@ -110,14 +122,22 @@ export function unwrapHardWrappedText(text: string): string {
   }
 
   for (const rawLine of lines) {
-    if (rawLine.trim() === "") {
+    const trimmed = rawLine.trim()
+    if (trimmed === "") {
       flush()
       outputLines.push("")
     } else if (LIST_LINE_PATTERN.test(rawLine)) {
       flush()
-      outputLines.push(rawLine.trim())
+      outputLines.push(trimmed)
     } else {
-      buffer.push(rawLine.trim())
+      const previous = buffer[buffer.length - 1]
+      if (buffer.length > 0 && previous.length < WRAP_CONTINUATION_MIN_LENGTH) {
+        // The line before this one was short — almost certainly an
+        // intentional break (greeting/signoff), not a wrap point. Start a
+        // new line instead of joining onto it.
+        flush()
+      }
+      buffer.push(trimmed)
     }
   }
   flush()

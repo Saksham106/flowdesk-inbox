@@ -15,13 +15,13 @@ describe("unwrapHardWrappedText", () => {
 
   it("preserves blank-line paragraph breaks", () => {
     const wrapped =
-      "First paragraph line one\n" +
-      "first paragraph line two.\n" +
+      "First paragraph line one that is long enough to look like a real wrap\n" +
+      "first paragraph line two, continuing the same sentence naturally.\n" +
       "\n" +
       "Second paragraph only line."
     const result = unwrapHardWrappedText(wrapped)
     expect(result).toBe(
-      "First paragraph line one first paragraph line two.\n\nSecond paragraph only line."
+      "First paragraph line one that is long enough to look like a real wrap first paragraph line two, continuing the same sentence naturally.\n\nSecond paragraph only line."
     )
   })
 
@@ -46,7 +46,16 @@ describe("unwrapHardWrappedText", () => {
   it("leaves text with only natural paragraph-break newlines unchanged", () => {
     const original = "Hi there,\n\nThanks for the update, I'll take a look today.\n\nBest,\nJane"
     const result = unwrapHardWrappedText(original)
-    expect(result).toBe("Hi there,\n\nThanks for the update, I'll take a look today.\n\nBest, Jane")
+    expect(result).toBe(original)
+  })
+
+  it("does not join a short signoff line into the name below it", () => {
+    // "Thanks,\nJohn" has no blank line before the name — a very common
+    // signoff pattern. Both lines are short, so neither looks like a
+    // hard-wrap continuation, and the break must be preserved.
+    const original = "Sounds good, see you then.\n\nThanks,\nJohn"
+    const result = unwrapHardWrappedText(original)
+    expect(result).toBe(original)
   })
 
   it("leaves a normal short reply unchanged", () => {
