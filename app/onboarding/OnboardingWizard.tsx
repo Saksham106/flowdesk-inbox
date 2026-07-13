@@ -69,15 +69,15 @@ function StepIndicator({ current }: { current: number }) {
       {STEP_LABELS.map((label, i) => (
         <div key={label} className="flex items-center">
           {i > 0 && (
-            <div className={`mx-3 h-px w-10 ${current > i - 1 ? "bg-blue-500" : "bg-slate-200"}`} />
+            <div className={`mx-3 h-px w-10 ${current > i - 1 ? "bg-[var(--color-accent)]" : "bg-slate-200"}`} />
           )}
           <div className="flex items-center gap-2">
             <span
               className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${
                 current > i
-                  ? "bg-blue-600 text-white"
+                  ? "bg-[var(--color-accent)] text-white"
                   : current === i
-                    ? "border-2 border-blue-600 bg-white text-blue-600"
+                    ? "border-2 border-[var(--color-accent)] bg-white text-[var(--color-accent)]"
                     : "border border-slate-300 bg-white text-slate-400"
               }`}
             >
@@ -99,7 +99,7 @@ function PrimaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       {...props}
-      className="inline-flex w-full max-w-xs items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+      className="inline-flex w-full max-w-xs items-center justify-center rounded-lg bg-[var(--color-accent)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
     />
   )
 }
@@ -192,7 +192,7 @@ export default function OnboardingWizard({
         {/* ── Step 1: Connect Gmail ── */}
         {step === "connect" && (
           <div className="text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-2xl">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-2xl">
               ✉️
             </div>
             <h1 className="text-3xl font-bold text-slate-900">
@@ -206,7 +206,7 @@ export default function OnboardingWizard({
             <div className="mt-8 flex flex-col items-center gap-3">
               <a
                 href="/api/connectors/gmail/connect"
-                className="inline-flex w-full max-w-xs items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+                className="inline-flex w-full max-w-xs items-center justify-center rounded-lg bg-[var(--color-accent)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--color-accent-hover)]"
               >
                 Connect Gmail →
               </a>
@@ -234,7 +234,7 @@ export default function OnboardingWizard({
           <div>
             {firstPassStatus === "running" && (
               <div className="text-center">
-                <div className="mx-auto mb-6 h-10 w-10 animate-spin rounded-full border-[3px] border-slate-200 border-t-blue-500" />
+                <div className="mx-auto mb-6 h-10 w-10 animate-spin rounded-full border-[3px] border-slate-200 border-t-[var(--color-accent)]" />
                 <h1 className="text-2xl font-semibold text-slate-900">Organizing your inbox…</h1>
                 <p className="mt-2 text-sm text-slate-500">
                   FlowDesk is labeling your recent emails
@@ -344,7 +344,7 @@ export default function OnboardingWizard({
           <div className="text-center">
             {trainStatus === "running" ? (
               <>
-                <div className="mx-auto mb-6 h-10 w-10 animate-spin rounded-full border-[3px] border-slate-200 border-t-blue-500" />
+                <div className="mx-auto mb-6 h-10 w-10 animate-spin rounded-full border-[3px] border-slate-200 border-t-[var(--color-accent)]" />
                 <h1 className="text-2xl font-semibold text-slate-900">Reading your sent mail…</h1>
                 <p className="mt-2 text-sm text-slate-500">
                   FlowDesk is learning your tone, greetings, and sign-offs so drafts sound like
@@ -394,7 +394,7 @@ export default function OnboardingWizard({
               </>
             ) : (
               <>
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-2xl">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-2xl">
                   ✍️
                 </div>
                 <h1 className="text-3xl font-bold text-slate-900">Train your writing style</h1>
@@ -437,7 +437,7 @@ export default function OnboardingWizard({
             <div className="mt-8 flex flex-col items-center gap-3">
               <Link
                 href="/home"
-                className="inline-flex w-full max-w-xs items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+                className="inline-flex w-full max-w-xs items-center justify-center rounded-lg bg-[var(--color-accent)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--color-accent-hover)]"
               >
                 Go to your control room →
               </Link>

@@ -115,12 +115,12 @@ export default function TrainAgentPanel({ initialRules }: { initialRules: AgentR
       </div>
 
       {preview && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-2 text-sm">
-          <p className="font-medium text-blue-900">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-2 text-sm">
+          <p className="font-medium text-slate-900">
             Rule understood &mdash; affects {preview.affectedCount} emails in the last 90 days
           </p>
           {preview.examples.length > 0 && (
-            <ul className="list-disc list-inside text-blue-700 text-xs">
+            <ul className="list-disc list-inside text-slate-700 text-xs">
               {preview.examples.map((ex, i) => <li key={i}>{ex}</li>)}
             </ul>
           )}

@@ -87,8 +87,8 @@ export default function SchedulingPanel({
   if (!session && calendarEmails.length === 0) return null
 
   return (
-    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-3">
-      <p className="text-xs font-semibold text-blue-800">Scheduling Request Detected</p>
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+      <p className="text-xs font-semibold text-slate-800">Scheduling Request Detected</p>
 
       {!session || session.status === "detecting" ? (
         <div className="space-y-2">
@@ -96,7 +96,7 @@ export default function SchedulingPanel({
             <select
               value={selectedCalendar}
               onChange={(e) => setSelectedCalendar(e.target.value)}
-              className="w-full rounded border border-blue-200 bg-white px-2 py-1 text-xs"
+              className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs"
             >
               {calendarEmails.map((e) => <option key={e} value={e}>{e}</option>)}
             </select>
@@ -104,20 +104,20 @@ export default function SchedulingPanel({
           <button
             onClick={proposeSlots}
             disabled={loading || !selectedCalendar}
-            className="w-full rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-800 disabled:opacity-50"
+            className="w-full rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
           >
             {loading ? "Checking availability…" : "Propose time slots"}
           </button>
         </div>
       ) : session.status === "proposing" && session.proposedTimesJson ? (
         <div className="space-y-2">
-          <p className="text-xs text-blue-700">Proposed slots &mdash; click to confirm:</p>
+          <p className="text-xs text-slate-700">Proposed slots &mdash; click to confirm:</p>
           {session.proposedTimesJson.map((slot, i) => (
             <button
               key={i}
               onClick={() => confirmSlot(slot, i)}
               disabled={confirmingSlot !== null}
-              className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-left text-xs hover:bg-blue-50 disabled:opacity-50 disabled:cursor-wait"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-xs hover:bg-slate-50 disabled:opacity-50 disabled:cursor-wait"
             >
               {confirmingSlot === i ? "Confirming…" : slot.label}
             </button>
@@ -125,7 +125,7 @@ export default function SchedulingPanel({
         </div>
       ) : session.status === "confirmed" ? (
         <div className="space-y-2">
-          <p className="text-xs text-blue-700">
+          <p className="text-xs text-slate-700">
             Time confirmed: {session.confirmedTime ? new Date(session.confirmedTime).toLocaleString() : "—"}
           </p>
           {approvalPending && (
@@ -143,7 +143,7 @@ export default function SchedulingPanel({
           <button
             onClick={bookEvent}
             disabled={booking}
-            className="w-full rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-800 disabled:opacity-50"
+            className="w-full rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
           >
             {booking ? "Booking…" : bookingError ? "Retry booking" : "Book calendar event"}
           </button>

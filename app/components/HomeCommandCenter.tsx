@@ -48,7 +48,7 @@ export default function HomeCommandCenter({
             <h2 className="text-sm font-semibold text-slate-900">Your action items</h2>
             {feed.total > 0 && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{feed.total}</span>}
           </div>
-          <Link href="/mail" className="text-xs font-medium text-blue-600 hover:underline">View all in Mail →</Link>
+          <Link href="/mail" className="text-xs font-medium text-[var(--color-accent)] hover:underline">View all in Mail →</Link>
         </div>
         {feed.items.length > 0 ? (
           <HomeActionFeed items={feed.items} />
@@ -64,7 +64,7 @@ export default function HomeCommandCenter({
         <details className="mt-6 border-t border-slate-200 pt-4 text-xs text-slate-500">
           <summary className="cursor-pointer font-semibold text-slate-600">What FlowDesk did today</summary>
           <p className="mt-2">{activity}</p>
-          <Link href="/audit" className="mt-2 inline-block font-medium text-blue-600 hover:underline">Full activity log →</Link>
+          <Link href="/audit" className="mt-2 inline-block font-medium text-[var(--color-accent)] hover:underline">Full activity log →</Link>
         </details>
       )}
     </div>
@@ -73,9 +73,9 @@ export default function HomeCommandCenter({
 
 function Metric({ label, value, emphasized = false }: { label: string; value: number; emphasized?: boolean }) {
   return (
-    <div className={`rounded-xl border px-4 py-3 shadow-sm ${emphasized ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white"}`}>
-      <p className={`text-2xl font-semibold ${emphasized ? "text-blue-700" : "text-slate-900"}`}>{value.toLocaleString()}</p>
-      <p className={`text-xs ${emphasized ? "text-blue-600" : "text-slate-500"}`}>{label}</p>
+    <div className={`rounded-xl border px-4 py-3 shadow-sm ${emphasized ? "border-slate-300 bg-slate-50" : "border-slate-200 bg-white"}`}>
+      <p className={`text-2xl font-semibold ${emphasized ? "text-slate-900" : "text-slate-900"}`}>{value.toLocaleString()}</p>
+      <p className={`text-xs ${emphasized ? "text-slate-700" : "text-slate-500"}`}>{label}</p>
     </div>
   )
 }

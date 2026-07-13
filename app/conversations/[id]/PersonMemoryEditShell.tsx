@@ -22,7 +22,7 @@ export default function PersonMemoryEditShell({
       {!editing && (
         <button
           onClick={() => setEditing(true)}
-          className="mt-1 text-xs text-blue-600 hover:underline"
+          className="mt-1 text-xs text-[var(--color-accent)] hover:underline"
         >
           Edit
         </button>

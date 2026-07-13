@@ -386,13 +386,13 @@ export default function SenderRulesPanel({
                 )}
 
                 {dryRun && (
-                  <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs">
-                    <p className="font-medium text-blue-900">
+                  <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
+                    <p className="font-medium text-slate-900">
                       Dry-run over your last {dryRun.sampleSize} conversations: {dryRun.matchedCount}{" "}
                       matched, {dryRun.skippedCount} skipped. Nothing was changed.
                     </p>
                     {dryRun.plannedAction && (
-                      <p className="mt-1 text-blue-800">
+                      <p className="mt-1 text-slate-800">
                         On match: mark as{" "}
                         {ATTENTION_LABELS[dryRun.plannedAction.targetAttention] ??
                           dryRun.plannedAction.targetAttention}
@@ -400,7 +400,7 @@ export default function SenderRulesPanel({
                           <> and apply {dryRun.plannedAction.gmailLabels.join(", ")}</>
                         )}
                         {!dryRun.wouldApplyGmailLabels && (
-                          <span className="text-blue-600">
+                          <span className="text-slate-600">
                             {" "}
                             (Gmail labels are off at automation level {dryRun.automationLevel})
                           </span>
@@ -408,12 +408,12 @@ export default function SenderRulesPanel({
                       </p>
                     )}
                     {dryRun.matches.length > 0 && (
-                      <ul className="mt-2 space-y-1 text-blue-700">
+                      <ul className="mt-2 space-y-1 text-slate-700">
                         {dryRun.matches.slice(0, 5).map((m) => (
                           <li key={m.conversationId}>
                             <span className="font-mono">{m.fromEmail}</span>
                             {m.subject ? ` — ${m.subject}` : ""}
-                            <span className="text-blue-500"> ({m.evidence.join("; ")})</span>
+                            <span className="text-slate-500"> ({m.evidence.join("; ")})</span>
                           </li>
                         ))}
                       </ul>

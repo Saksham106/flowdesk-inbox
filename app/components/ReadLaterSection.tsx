@@ -91,7 +91,7 @@ function ReadLaterCard({ item, onDismissed }: CardProps) {
         <span className="text-[11px] text-slate-500">Marked as done · </span>
         <button
           onClick={handleUndo}
-          className="text-[10px] font-semibold text-blue-600 hover:underline"
+          className="text-[10px] font-semibold text-[var(--color-accent)] hover:underline"
         >
           Undo
         </button>
@@ -118,7 +118,7 @@ function ReadLaterCard({ item, onDismissed }: CardProps) {
             type="button"
             onClick={(e) => markDone(e, true)}
             disabled={loading}
-            className="text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-100 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:opacity-100 disabled:opacity-40 disabled:cursor-wait"
+            className="text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-100 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)] focus:opacity-100 disabled:opacity-40 disabled:cursor-wait"
           >
             {loading ? "…" : "Done"}
           </button>
@@ -126,7 +126,7 @@ function ReadLaterCard({ item, onDismissed }: CardProps) {
             type="button"
             onClick={(e) => markDone(e, false)}
             disabled={loading}
-            className="text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200 text-slate-500 hover:bg-slate-100 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:opacity-100 disabled:opacity-40 disabled:cursor-wait"
+            className="text-[10px] font-medium px-2 py-0.5 rounded border border-slate-200 text-slate-500 hover:bg-slate-100 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-ring)] focus:opacity-100 disabled:opacity-40 disabled:cursor-wait"
           >
             {loading ? "…" : "Not interested"}
           </button>
@@ -174,7 +174,7 @@ export default function ReadLaterSection({ items }: Props) {
       <div className="flex items-center justify-between mb-2">
         <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Read Later</p>
         {overflow > 0 && (
-          <a href="/mail?attention=read_later" className="text-[10px] text-blue-500 hover:underline">
+          <a href="/mail?attention=read_later" className="text-[10px] text-[var(--color-accent)] hover:underline">
             +{overflow} more
           </a>
         )}

@@ -143,8 +143,8 @@ export default function DesktopResizablePanels({ left, main, right, storageKey }
         aria-label={label}
         aria-orientation="vertical"
         aria-valuenow={target === "left" ? layout.leftWidth : layout.rightWidth}
-        className={`group relative z-10 h-full w-2 shrink-0 cursor-col-resize bg-transparent outline-none transition hover:bg-blue-50 focus-visible:bg-blue-50 ${
-          activeTarget === target ? "bg-blue-50" : ""
+        className={`group relative z-10 h-full w-2 shrink-0 cursor-col-resize bg-transparent outline-none transition hover:bg-[var(--color-accent-soft)] focus-visible:bg-[var(--color-accent-soft)] ${
+          activeTarget === target ? "bg-[var(--color-accent-soft)]" : ""
         }`}
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture(event.pointerId);
@@ -154,8 +154,8 @@ export default function DesktopResizablePanels({ left, main, right, storageKey }
         role="separator"
       >
         <span
-          className={`absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-slate-200 transition group-hover:bg-blue-400 group-focus-visible:bg-blue-400 ${
-            activeTarget === target ? "bg-blue-500" : ""
+          className={`absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-slate-200 transition group-hover:bg-[var(--color-accent-ring)] group-focus-visible:bg-[var(--color-accent-ring)] ${
+            activeTarget === target ? "bg-[var(--color-accent)]" : ""
           }`}
         />
       </button>

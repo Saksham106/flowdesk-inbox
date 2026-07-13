@@ -176,7 +176,7 @@ export default function ApprovalList({ items }: { items: ApprovalItem[] }) {
                       </Link>
 
                       {item.actionLabel ? (
-                        <p className="mt-2 inline-flex rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+                        <p className="mt-2 inline-flex rounded-md bg-[var(--color-accent-soft)] px-2 py-1 text-xs font-medium text-[var(--color-accent)]">
                           {item.actionLabel}
                         </p>
                       ) : null}

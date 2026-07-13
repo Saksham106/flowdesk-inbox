@@ -32,9 +32,9 @@ export default function SupportPanel({
   if (!isSupport) return null
 
   return (
-    <section className="overflow-hidden rounded-xl border border-blue-200 bg-blue-50 shadow-sm">
-      <div className="flex items-center gap-2 border-b border-blue-100 px-4 py-3">
-        <span className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
+      <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-700">
           Support
         </span>
         {churnRisk && (
@@ -56,7 +56,7 @@ export default function SupportPanel({
 
       {suggestedKbDoc && (
         <div className="px-4 py-3">
-          <p className="mb-1.5 text-xs font-medium text-blue-800">Suggested answer from KB:</p>
+          <p className="mb-1.5 text-xs font-medium text-slate-800">Suggested answer from KB:</p>
           <p className="text-xs font-semibold text-slate-800">{suggestedKbDoc.title}</p>
           <p className="mt-1 line-clamp-3 text-xs text-slate-600">
             {expanded
@@ -67,7 +67,7 @@ export default function SupportPanel({
           {suggestedKbDoc.content.length > 300 && (
             <button
               onClick={() => setExpanded((v) => !v)}
-              className="mt-1 text-xs text-blue-600 hover:underline"
+              className="mt-1 text-xs text-[var(--color-accent)] hover:underline"
             >
               {expanded ? "Show less" : "Show more"}
             </button>
@@ -92,7 +92,7 @@ export default function SupportPanel({
               }
             }}
             disabled={useAnswerLoading}
-            className="mt-3 block rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-800 disabled:opacity-60 disabled:cursor-wait"
+            className="mt-3 block rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-60 disabled:cursor-wait"
           >
             {useAnswerLoading ? "Applying…" : "Use this answer"}
           </button>
