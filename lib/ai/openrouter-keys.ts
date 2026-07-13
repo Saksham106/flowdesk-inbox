@@ -57,7 +57,7 @@ export async function getOpenRouterApiKeyForUser(input: {
     throw new Error("OPENROUTER_MANAGEMENT_API_KEY is not configured")
   }
 
-  const limit = Number(process.env.OPENROUTER_CHILD_KEY_MONTHLY_LIMIT_USD ?? "10")
+  const limit = Number(process.env.OPENROUTER_CHILD_KEY_MONTHLY_LIMIT_USD ?? "3")
   const res = await fetch("https://openrouter.ai/api/v1/keys", {
     method: "POST",
     headers: {
@@ -66,7 +66,7 @@ export async function getOpenRouterApiKeyForUser(input: {
     },
     body: JSON.stringify({
       name: buildOpenRouterKeyName(input.email, input.userId),
-      limit: Number.isFinite(limit) ? limit : 10,
+      limit: Number.isFinite(limit) ? limit : 3,
       limit_reset: "monthly",
       // Omitted entirely (rather than sent as undefined/null) so OpenRouter
       // falls back to its own default workspace when unset.
@@ -85,7 +85,7 @@ export async function getOpenRouterApiKeyForUser(input: {
 
   if (!apiKey || !keyHash) throw new Error("OpenRouter key provisioning response was missing key/hash")
 
-  const resolvedLimit = Number.isFinite(limit) ? limit : 10
+  const resolvedLimit = Number.isFinite(limit) ? limit : 3
   const encryptedApiKey = encryptString(apiKey)
 
   // `userId` is unique on this model, so a disabled row falls through to this
