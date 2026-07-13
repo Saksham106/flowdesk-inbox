@@ -5,6 +5,7 @@ export type DataRetentionResult = {
   auditLogsDeleted: number
   aiUsageEventsDeleted: number
   gmailPushEventsDeleted: number
+  outlookSyncEventsDeleted: number
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -13,7 +14,10 @@ const AUDIT_LOG_RETENTION_DAYS = 30
 // Must stay longer than a full calendar month: lib/ai/budget.ts aggregates
 // AiUsageEvent from the start of the current month for spend limits.
 const AI_USAGE_RETENTION_DAYS = 90
+// Push/notification receipts for both providers: a row this old is dead
+// regardless of status — the sync cursor has long since moved past it.
 const GMAIL_PUSH_EVENT_RETENTION_DAYS = 30
+const OUTLOOK_SYNC_EVENT_RETENTION_DAYS = 30
 
 function cutoff(days: number): Date {
   return new Date(Date.now() - days * DAY_MS)
@@ -23,7 +27,7 @@ function cutoff(days: number): Date {
 // instead of growing forever. These are per-action receipts, not product
 // data — the 2026-07-12 outage was this class of data filling the volume.
 export async function runDataRetentionCron(): Promise<DataRetentionResult> {
-  const [audit, usage, push] = await Promise.all([
+  const [audit, usage, push, outlook] = await Promise.all([
     prisma.auditLog.deleteMany({
       where: { createdAt: { lt: cutoff(AUDIT_LOG_RETENTION_DAYS) } },
     }),
@@ -33,6 +37,9 @@ export async function runDataRetentionCron(): Promise<DataRetentionResult> {
     prisma.gmailPushEvent.deleteMany({
       where: { createdAt: { lt: cutoff(GMAIL_PUSH_EVENT_RETENTION_DAYS) } },
     }),
+    prisma.outlookSyncEvent.deleteMany({
+      where: { createdAt: { lt: cutoff(OUTLOOK_SYNC_EVENT_RETENTION_DAYS) } },
+    }),
   ])
 
   return {
@@ -40,5 +47,6 @@ export async function runDataRetentionCron(): Promise<DataRetentionResult> {
     auditLogsDeleted: audit.count,
     aiUsageEventsDeleted: usage.count,
     gmailPushEventsDeleted: push.count,
+    outlookSyncEventsDeleted: outlook.count,
   }
 }

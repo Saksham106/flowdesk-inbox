@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
-const { mockAuditDeleteMany, mockUsageDeleteMany, mockPushDeleteMany } = vi.hoisted(() => ({
+const { mockAuditDeleteMany, mockUsageDeleteMany, mockPushDeleteMany, mockOutlookDeleteMany } = vi.hoisted(() => ({
   mockAuditDeleteMany: vi.fn(),
   mockUsageDeleteMany: vi.fn(),
   mockPushDeleteMany: vi.fn(),
+  mockOutlookDeleteMany: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -11,6 +12,7 @@ vi.mock("@/lib/prisma", () => ({
     auditLog: { deleteMany: mockAuditDeleteMany },
     aiUsageEvent: { deleteMany: mockUsageDeleteMany },
     gmailPushEvent: { deleteMany: mockPushDeleteMany },
+    outlookSyncEvent: { deleteMany: mockOutlookDeleteMany },
   },
 }))
 
@@ -27,6 +29,7 @@ describe("runDataRetentionCron", () => {
     mockAuditDeleteMany.mockResolvedValue({ count: 0 })
     mockUsageDeleteMany.mockResolvedValue({ count: 0 })
     mockPushDeleteMany.mockResolvedValue({ count: 0 })
+    mockOutlookDeleteMany.mockResolvedValue({ count: 0 })
   })
 
   afterEach(() => {
@@ -54,10 +57,18 @@ describe("runDataRetentionCron", () => {
     })
   })
 
+  it("deletes Outlook sync events older than 30 days", async () => {
+    await runDataRetentionCron()
+    expect(mockOutlookDeleteMany).toHaveBeenCalledWith({
+      where: { createdAt: { lt: new Date(NOW.getTime() - 30 * DAY) } },
+    })
+  })
+
   it("reports how many rows each table dropped", async () => {
     mockAuditDeleteMany.mockResolvedValue({ count: 12 })
     mockUsageDeleteMany.mockResolvedValue({ count: 3 })
     mockPushDeleteMany.mockResolvedValue({ count: 7 })
+    mockOutlookDeleteMany.mockResolvedValue({ count: 5 })
 
     const result = await runDataRetentionCron()
 
@@ -66,6 +77,7 @@ describe("runDataRetentionCron", () => {
       auditLogsDeleted: 12,
       aiUsageEventsDeleted: 3,
       gmailPushEventsDeleted: 7,
+      outlookSyncEventsDeleted: 5,
     })
   })
 })
