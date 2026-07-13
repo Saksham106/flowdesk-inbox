@@ -64,22 +64,25 @@ function InboxRow({ row, p, after }: { row: HeroRow; p: number; after: boolean }
         </span>
 
         <span
-          className={`w-28 sm:w-40 shrink-0 truncate ${
+          className={`w-24 sm:w-40 shrink-0 truncate ${
             bold || typing ? "font-semibold text-white" : "text-[#bdc1c6]"
           }`}
         >
           {typing ? (
             <>
-              Shivansh, <span className="font-normal text-[#e8734a]">Draft</span> 2
+              John, <span className="font-normal text-[#e8734a]">Draft</span> 2
             </>
           ) : (
             sender
           )}
         </span>
 
-        <span className="hidden md:flex items-center gap-1 shrink-0">
-          {chips.map((kind) => (
-            <Chip key={kind} kind={kind} pop />
+        {/* below md only the first chip fits alongside sender + subject */}
+        <span className="flex items-center gap-1 shrink-0">
+          {chips.map((kind, i) => (
+            <span key={kind} className={i > 0 ? "hidden md:inline-flex" : "inline-flex"}>
+              <Chip kind={kind} pop />
+            </span>
           ))}
         </span>
 

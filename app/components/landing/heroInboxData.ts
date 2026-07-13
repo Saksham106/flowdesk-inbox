@@ -138,14 +138,14 @@ const RAW_ROWS: RawRow[] = [
   },
   {
     id: "shivansh-draft",
-    sender: "Shivansh, Draft 2",
+    sender: "John, Draft 2",
     chips: ["autodrafted"],
     subject: "Re: Quick sync this week?",
     snippet:
-      "Hi Shivansh — Thursday 2pm works great. I've attached the numbers you asked about.",
+      "Hi John — Thursday 2pm works great. I've attached the numbers you asked about.",
     date: "Jul 8",
     draft: true,
-    beforeSender: "Shivansh Goel",
+    beforeSender: "John Carter",
     beforeSubject: "Quick sync this week?",
     beforeSnippet: "Did you get a chance to look at the numbers? Still",
   },
