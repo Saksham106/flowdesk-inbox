@@ -211,10 +211,14 @@ async function applyLiveMessage({
     createdAt: receivedAt,
   } as const
 
+  // Only isRead can genuinely change on a message we already ingested — the
+  // delta feed re-delivers the whole message for category/read edits, and
+  // rewriting the full row (body included) made every such touch a dead-tuple
+  // + WAL churn write. Gmail's equivalent path updates read/label state only.
   await prisma.message.upsert({
     where: { providerMessageId },
     create: { ...values, providerMessageId },
-    update: values,
+    update: { isRead: values.isRead },
   })
 
   // Recompute the provider-unread flag after the upsert. `gmailUnread`, despite

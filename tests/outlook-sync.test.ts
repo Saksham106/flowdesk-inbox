@@ -243,6 +243,24 @@ describe("runOutlookDeltaSync", () => {
     });
   });
 
+  it("only updates isRead for a message that already exists, never the stored body", async () => {
+    mocks.messageFindUnique.mockResolvedValue({ id: "local-message" });
+    mocks.graphGet.mockResolvedValueOnce({
+      value: [message("message-1", "2026-06-24T12:00:00.000Z", { isRead: true })],
+      "@odata.deltaLink": "https://graph.microsoft.com/final",
+    });
+
+    await runOutlookDeltaSync({
+      channelId: "channel-1",
+      tenantId: "tenant-1",
+      requestedMode: "webhook",
+    });
+
+    const upsert = mocks.messageUpsert.mock.calls[0][0];
+    expect(upsert.update).toEqual({ isRead: true });
+    expect(upsert.create).toEqual(expect.objectContaining({ isRead: true }));
+  });
+
   it("runs category feedback for an updated pre-existing inbound message with the pre-run job snapshot", async () => {
     mocks.messageFindUnique.mockResolvedValue({ id: "local-message" });
     mocks.writebackFindUnique.mockResolvedValue({
