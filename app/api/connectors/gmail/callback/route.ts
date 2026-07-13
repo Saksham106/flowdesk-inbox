@@ -7,6 +7,7 @@ import { encryptString } from "@/lib/crypto";
 import { createOAuth2Client, ensureFlowDeskLabels, verifyState } from "@/lib/google";
 import { runGmailSync } from "@/lib/gmail-sync";
 import { canReconnectChannel } from "@/lib/channel-ownership";
+import { requeueFailedWritebacksForChannel } from "@/lib/email/writeback-requeue";
 
 export const runtime = "nodejs";
 
@@ -80,6 +81,9 @@ export async function GET(request: Request) {
         tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
       },
     });
+    // Jobs that permanently failed on the old (expired/revoked) credential are
+    // retryable now that a fresh one exists — give them back to the cron.
+    await requeueFailedWritebacksForChannel(channelId, tenantId, "gmail");
   } else {
     const channel = await prisma.channel.create({
       data: {
