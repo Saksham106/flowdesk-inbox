@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ScrollReveal from "@/app/components/ScrollReveal";
+import HeroInboxDemo from "@/app/components/landing/HeroInboxDemo";
 
 export default function Hero() {
   return (
@@ -52,17 +53,10 @@ export default function Hero() {
           </ScrollReveal>
         </div>
 
-        {/* Product screenshot */}
+        {/* Interactive product demo */}
         <ScrollReveal delay={360} className="reveal-scale w-full flex items-start justify-center pb-0">
           <div className="border border-[#e0e1ec] shadow-[0px_8px_0px_0px_rgba(0,0,0,0.25)] rounded-t-xl overflow-hidden w-full max-w-4xl">
-            <img
-              src="/images/landing/product-screenshot.png"
-              alt="Flowdesk inbox screenshot"
-              width={3832}
-              height={2396}
-              className="w-full object-cover object-top"
-              style={{ display: "block" }}
-            />
+            <HeroInboxDemo />
           </div>
         </ScrollReveal>
       </div>

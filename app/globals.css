@@ -82,6 +82,49 @@ body {
   }
 }
 
+/* ── Hero inbox demo ───────────────────────────────────────── */
+@keyframes hero-chip-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  70% { transform: scale(1.08); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.hero-chip-pop { animation: hero-chip-pop 260ms ease-out both; }
+
+.hero-caret {
+  display: inline-block;
+  width: 1px;
+  height: 0.9em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: #e8eaed;
+  animation: hero-caret-blink 0.9s steps(1) infinite;
+}
+@keyframes hero-caret-blink { 50% { opacity: 0; } }
+
+.hero-beam-cone {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 236, 190, 0.16) 45%,
+    rgba(255, 236, 190, 0.16) 55%,
+    transparent
+  );
+  clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%);
+}
+@keyframes hero-beam-idle {
+  0%, 100% { box-shadow: 0 0 16px 4px rgba(255, 220, 150, 0.55); }
+  50% { box-shadow: 0 0 26px 9px rgba(255, 220, 150, 0.75); }
+}
+.hero-beam-idle { animation: hero-beam-idle 2.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-chip-pop,
+  .hero-caret,
+  .hero-beam-idle {
+    animation: none;
+  }
+}
+
 /* ── Email body rendering ──────────────────────────────────── */
 .email-body {
   overflow-wrap: anywhere;
