@@ -429,6 +429,25 @@ export default async function ConnectSettingsPage({ searchParams }: Props) {
             )}
         </div>
       </section>
+
+      {/* Restart onboarding */}
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between gap-4 px-6 py-5">
+          <div>
+            <h2 className="font-semibold">Onboarding</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Walk through the setup wizard again — reconnect an inbox, organize recent emails,
+              and retrain your writing style.
+            </p>
+          </div>
+          <Link
+            href="/onboarding?restart=1"
+            className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Restart onboarding
+          </Link>
+        </div>
+      </section>
     </>
   );
 }
