@@ -237,7 +237,7 @@ export default function HeroInboxDemo() {
   return (
     <div
       ref={containerRef}
-      className="relative bg-[#161618] text-left font-sans"
+      className="relative select-none bg-[#161618] text-left font-sans"
       aria-label="Demo: FlowDesk organizing a Gmail inbox"
     >
       {/* top chrome */}
@@ -261,8 +261,13 @@ export default function HeroInboxDemo() {
           </svg>
           Search mail
         </div>
-        <div className="ml-auto flex h-6 w-6 items-center justify-center rounded-full bg-[#7c4dbe] text-[11px] font-medium text-white">
-          S
+        <div className="ml-auto flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-white/90">
+          <img
+            src="/images/landing/logo-icon.svg"
+            alt=""
+            className="h-4 w-4"
+            aria-hidden="true"
+          />
         </div>
       </div>
 
