@@ -4,7 +4,6 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { resolveOnboardingStep } from "@/lib/onboarding"
 import { prisma } from "@/lib/prisma"
-import { salesCrmEnabled } from "@/lib/tenant-capabilities"
 import OnboardingWizard from "./OnboardingWizard"
 
 export const dynamic = "force-dynamic"
@@ -20,7 +19,7 @@ export default async function OnboardingPage({
   const session = await getServerSession(authOptions)
   if (!session?.user?.tenantId) redirect("/login")
 
-  const [channel, learnedProfile, tenant] = await Promise.all([
+  const [channel, learnedProfile] = await Promise.all([
     prisma.channel.findFirst({
       where: { tenantId: session.user.tenantId, type: "email" },
       select: { id: true },
@@ -29,18 +28,14 @@ export default async function OnboardingPage({
       where: { tenantId: session.user.tenantId },
       select: { id: true },
     }),
-    prisma.tenant.findUnique({
-      where: { id: session.user.tenantId },
-      select: { salesCrmEnabled: true },
-    }),
   ])
 
-  // Mirrors the Settings → Connect gating: Outlook is deferred out of the
-  // default personal (B2C) path and only offered once Sales/CRM mode is on,
-  // in addition to the app-level MICROSOFT_CLIENT_ID/SECRET configuration.
-  const microsoftConfigured =
-    Boolean(process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET) &&
-    salesCrmEnabled(tenant)
+  // Mirrors the Settings → Connect gating: Outlook is offered to every
+  // account whenever the app-level MICROSOFT_CLIENT_ID/SECRET are configured
+  // (full parity shipped in PR #143).
+  const microsoftConfigured = Boolean(
+    process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET
+  )
 
   const step = resolveOnboardingStep({
     gmailConnected: Boolean(channel),
