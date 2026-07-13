@@ -10,6 +10,7 @@ import { runEmailStateReconcileCron } from "@/lib/agent/email-state-reconcile"
 import { runEmailLabelReconcileCron } from "@/lib/agent/email-label-reconcile"
 import { runGmailWatchRenewalCron } from "@/lib/agent/gmail-watch-renewal"
 import { runSnippetMineCron } from "@/lib/agent/snippet-miner"
+import { runDataRetentionCron } from "@/lib/agent/data-retention"
 import { runValueSnapshotCron } from "@/lib/agent/value-report"
 
 // Registry of every background job that used to depend entirely on an
@@ -99,6 +100,15 @@ export function buildJobRegistry(): ScheduledJob[] {
       name: "snippet-mine",
       intervalMs: 24 * HOUR,
       run: () => runSnippetMineCron(),
+    },
+    {
+      name: "data-retention",
+      // Prunes AuditLog / AiUsageEvent / GmailPushEvent past their retention
+      // windows. runOnStart so a fresh deploy reclaims space immediately
+      // instead of waiting a day (the delete is a no-op when nothing is old).
+      intervalMs: 24 * HOUR,
+      runOnStart: true,
+      run: () => runDataRetentionCron(),
     },
     {
       name: "value-snapshot",
