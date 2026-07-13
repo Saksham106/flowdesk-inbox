@@ -2,14 +2,13 @@ import { describe, it, expect } from "vitest"
 import { getPrimaryNav, getInboxNavigation } from "@/lib/app-navigation"
 
 describe("primary navigation", () => {
-  it("has exactly the 6 primary destinations in order", () => {
+  it("has exactly the 5 primary destinations in order", () => {
     const nav = getPrimaryNav()
     expect(nav.map((i) => i.href)).toEqual([
       "/mail",
       "/assistant",
       "/approvals",
       "/clean-inbox",
-      "/tools",
       "/settings",
     ])
   })
@@ -20,6 +19,13 @@ describe("primary navigation", () => {
     expect(hrefs).not.toContain("/search")
     expect(hrefs).not.toContain("/tasks")
     expect(hrefs).not.toContain("/chat")
+    // Tools is a placeholder page — demoted to the secondary nav until it works.
+    expect(hrefs).not.toContain("/tools")
+  })
+
+  it("keeps Tools reachable from the secondary nav", () => {
+    const nav = getInboxNavigation({ salesCrm: false })
+    expect(nav.secondary.map((i) => i.href)).toContain("/tools")
   })
 
   it("does not duplicate Home — the F logo is the sole Home affordance", () => {

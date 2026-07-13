@@ -23,7 +23,7 @@ export default async function ToolsPage() {
           <AppRail needsReplyCount={needsReplyCount} pendingApprovals={pendingApprovals} />
         </div>
         <main className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-          <h1 className="text-xl font-semibold text-slate-900">Tools</h1>
+          <h1 className="font-serif text-2xl font-normal text-slate-900">Tools</h1>
           <p className="max-w-sm text-sm text-slate-500">
             {PLANNED_TOOLS.join(", ")} are planned but not built yet. Nothing here works today.
           </p>

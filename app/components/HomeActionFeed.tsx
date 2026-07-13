@@ -14,12 +14,14 @@ const KIND_LABEL: Record<HomeActionItem["kind"], string> = {
   follow_up: "Follow up",
 }
 
+// Kind chips use the landing pastel palette — amber for the two
+// decision-needed kinds, cooler tones for the rest.
 const KIND_STYLE: Record<HomeActionItem["kind"], string> = {
-  approval: "bg-red-50 text-red-700",
-  reply: "bg-amber-50 text-amber-700",
-  action: "bg-blue-50 text-blue-700",
-  deadline: "bg-violet-50 text-violet-700",
-  follow_up: "bg-cyan-50 text-cyan-700",
+  approval: "bg-[#f3ead6] text-[#7a5a1e]",
+  reply: "bg-[#f3ead6] text-[#7a5a1e]",
+  action: "bg-[#e2eaf4] text-[#39597f]",
+  deadline: "bg-[#eae5f2] text-[#584b7e]",
+  follow_up: "bg-[#e2efe4] text-[#3c6647]",
 }
 
 type ConversationActionItem = Extract<HomeActionItem, { kind: "reply" | "action" | "follow_up" }>
@@ -104,8 +106,8 @@ export default function HomeActionFeed({ items }: { items: HomeActionItem[] }) {
       )}
       <div className="space-y-2">
         {visibleItems.map((item) => (
-          <article key={item.key} className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-            <span className={`rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${KIND_STYLE[item.kind]}`}>
+          <article key={item.key} className="flex flex-wrap items-center gap-3 rounded-lg border border-black/[0.08] bg-white px-4 py-3">
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] ${KIND_STYLE[item.kind]}`}>
               {KIND_LABEL[item.kind]}
             </span>
             <div className="min-w-0 flex-1 basis-52">
@@ -119,7 +121,7 @@ export default function HomeActionFeed({ items }: { items: HomeActionItem[] }) {
                   onClick={() => draftReply(item)}
                   disabled={drafting === item.key}
                   aria-label={`Draft reply to ${item.title}`}
-                  className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-100 disabled:opacity-50"
+                  className="rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-85 disabled:opacity-50"
                 >
                   {drafting === item.key ? "Drafting…" : "Draft reply"}
                 </button>

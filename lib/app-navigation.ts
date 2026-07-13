@@ -14,25 +14,26 @@ export type NavCapabilities = {
 }
 
 /**
- * The 6 primary destinations shown in the desktop rail and mobile nav.
+ * The 5 primary destinations shown in the desktop rail and mobile nav.
  * Home is not one of them — the `F` logo at the top of the desktop rail is
  * the sole Home affordance, so it is never duplicated as a nav item.
  * Assistant surfaces AI rules (previously buried in Settings > Training).
  * Approvals keeps its own slot — a trust-critical surface, not folded into
- * Mail's sidebar. Tools is a placeholder landing page for now.
+ * Mail's sidebar. Tools (a not-yet-functional placeholder page) lives in the
+ * secondary nav so the rail only carries surfaces that actually work.
  */
 const PRIMARY_NAV: AppNavigationItem[] = [
   { label: "Mail", href: "/mail" },
   { label: "Assistant", href: "/assistant" },
   { label: "Approvals", href: "/approvals" },
   { label: "Clean", href: "/clean-inbox" },
-  { label: "Tools", href: "/tools" },
   { label: "Settings", href: "/settings" },
 ]
 
 const SECONDARY_NAV: AppNavigationItem[] = [
   { label: "Tasks", href: "/tasks" },
   { label: "Activity", href: "/audit" },
+  { label: "Tools", href: "/tools" },
 ]
 
 /** Opt-in Sales & CRM surfaces, shown only when the capability is enabled. */

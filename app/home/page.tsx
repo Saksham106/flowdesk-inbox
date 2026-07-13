@@ -329,7 +329,7 @@ async function renderHomePage(tenantId: string, requestedChannelId?: string) {
           <div className="mx-auto max-w-5xl px-4 sm:px-6">
             <div className="flex items-center justify-between py-4">
               <div className="min-w-0">
-                <h1 className="text-xl font-semibold">Control room</h1>
+                <h1 className="font-serif text-2xl font-normal">Home</h1>
               </div>
               <div className="flex items-center gap-2">
                 <AccountScopePicker accounts={mailboxAccounts} activeAccountId={activeChannelId} />

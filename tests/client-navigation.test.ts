@@ -62,12 +62,12 @@ describe("getInboxNavigation (B2C: baseline + opt-in Sales & CRM)", () => {
         { label: "Assistant", href: "/assistant" },
         { label: "Approvals", href: "/approvals" },
         { label: "Clean", href: "/clean-inbox" },
-        { label: "Tools", href: "/tools" },
         { label: "Settings", href: "/settings" },
       ],
       secondary: [
         { label: "Tasks", href: "/tasks" },
         { label: "Activity", href: "/audit" },
+        { label: "Tools", href: "/tools" },
       ],
     });
   });
@@ -77,6 +77,7 @@ describe("getInboxNavigation (B2C: baseline + opt-in Sales & CRM)", () => {
     expect(secondary).toEqual([
       "/tasks",
       "/audit",
+      "/tools",
       "/leads",
       "/reports",
       "/risk-radar",

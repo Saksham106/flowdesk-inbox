@@ -323,7 +323,7 @@ async function renderMailPage(
         <AppRail needsReplyCount={needsReplyCount} pendingApprovals={pendingApprovals} />
         <div className="flex flex-1 flex-col overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-            <h1 className="text-lg font-semibold text-slate-900">Mail</h1>
+            <h1 className="font-serif text-xl font-normal text-slate-900">Mail</h1>
             <div className="flex items-center gap-3">
               <AccountScopePicker accounts={mailboxAccounts} activeAccountId={activeChannelId} />
               <Suspense><SearchInput defaultValue={q} /></Suspense>
@@ -347,10 +347,10 @@ async function renderMailPage(
           <div className="mx-auto max-w-5xl px-4 sm:px-6">
             <div className="flex items-center justify-between py-4">
               <div className="min-w-0">
-                <h1 className="text-xl font-semibold">Mail</h1>
+                <h1 className="font-serif text-2xl font-normal">Mail</h1>
                 <p className="text-sm text-slate-500">
                   {needsReplyCount > 0 ? (
-                    <span className="font-medium text-red-600">
+                    <span className="font-medium text-[var(--color-signal-ink)]">
                       {needsReplyCount} to handle
                     </span>
                   ) : (
