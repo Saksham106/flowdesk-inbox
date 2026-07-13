@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 
 import type { OnboardingStep } from "@/lib/onboarding"
@@ -104,6 +104,91 @@ function PrimaryButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   )
 }
 
+// Pre-OAuth instructions: FlowDesk's Google/Microsoft app verification is
+// still in review, so both consent screens show an "unverified app" warning.
+// This interstitial walks the user through it and explains why it's safe
+// BEFORE sending them into the OAuth flow.
+const PROVIDER_INSTRUCTIONS = {
+  gmail: {
+    name: "Google",
+    connectHref: "/api/connectors/gmail/connect",
+    steps: [
+      "Choose the Google account you want to connect.",
+      'On the "Google hasn’t verified this app" screen, click Advanced.',
+      'Click "Go to flowdeskinbox.com (unsafe)". Despite the wording, nothing unsafe happens — this screen only means Google’s review of FlowDesk isn’t finished yet.',
+      "Click Continue to grant FlowDesk access to your inbox.",
+    ],
+  },
+  outlook: {
+    name: "Microsoft",
+    connectHref: "/api/connectors/outlook/connect",
+    steps: [
+      "Choose the Microsoft account you want to connect.",
+      "If Microsoft shows an “unverified” or “needs admin approval” style warning, that’s only because FlowDesk’s Microsoft verification is still in progress.",
+      "Review the requested permissions and click Accept to grant FlowDesk access to your inbox.",
+    ],
+  },
+} as const
+
+function ProviderInstructions({
+  provider,
+  onBack,
+}: {
+  provider: "gmail" | "outlook"
+  onBack: () => void
+}) {
+  const info = PROVIDER_INSTRUCTIONS[provider]
+  return (
+    <div>
+      <div className="text-center">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-2xl">
+          ⚠️
+        </div>
+        <h1 className="text-3xl font-bold text-slate-900">Before you connect {info.name}</h1>
+        <p className="mx-auto mt-3 max-w-md text-sm text-slate-500">
+          FlowDesk is still being verified by {info.name}, so you&rsquo;ll see a warning during
+          sign-in. It&rsquo;s expected — here&rsquo;s how to get through it:
+        </p>
+      </div>
+
+      <ol className="mx-auto mt-8 max-w-md space-y-3">
+        {info.steps.map((step, i) => (
+          <li key={i} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-xs font-semibold text-[var(--color-accent)]">
+              {i + 1}
+            </span>
+            <span className="text-sm text-slate-700">{step}</span>
+          </li>
+        ))}
+      </ol>
+
+      <div className="mx-auto mt-4 max-w-md rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-left">
+        <p className="text-sm font-semibold text-emerald-800">Your data stays safe</p>
+        <p className="mt-1 text-sm text-emerald-700">
+          You sign in directly with {info.name}, so FlowDesk never sees or stores your password.
+          Your email data is encrypted, never sold or shared, and deleted if you disconnect. The
+          warning only means the app review hasn&rsquo;t finished — not that anything is wrong.
+        </p>
+      </div>
+
+      <div className="mt-8 flex flex-col items-center gap-3">
+        <a
+          href={info.connectHref}
+          className="inline-flex w-full max-w-xs items-center justify-center rounded-lg bg-[var(--color-accent)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--color-accent-hover)]"
+        >
+          Continue to {info.name} →
+        </a>
+        <button
+          onClick={onBack}
+          className="text-xs font-medium text-slate-500 hover:text-slate-700"
+        >
+          ← Back
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function OnboardingWizard({
   initialStep,
   connectedEmail,
@@ -124,24 +209,39 @@ export default function OnboardingWizard({
   // this component's output unchanged for every existing (non-outlook) flow.
   const connectedProvider: "gmail" | "outlook" = connectedEmail === "outlook" ? "outlook" : "gmail"
 
+  // ── Connect state (step 1): which provider's pre-OAuth instructions are open ──
+  const [providerChoice, setProviderChoice] = useState<"gmail" | "outlook" | null>(null)
+
   // ── First-pass state (step 1 completion) ──
-  const [firstPassStatus, setFirstPassStatus] = useState<"running" | "done" | "error">("running")
+  // "choose" first: the user picks how many recent emails to organize (0 skips
+  // the pass entirely) before anything runs.
+  const [firstPassStatus, setFirstPassStatus] = useState<"choose" | "running" | "done" | "error">(
+    "choose"
+  )
+  const [backfillLimit, setBackfillLimit] = useState<0 | 25 | 50>(25)
   const [firstPass, setFirstPass] = useState<FirstPassResult | null>(null)
-  const firstPassStarted = useRef(false)
 
   // ── Training state (step 2) ──
   const [trainStatus, setTrainStatus] = useState<"idle" | "running" | "done" | "error">("idle")
   const [trainError, setTrainError] = useState<string | null>(null)
   const [style, setStyle] = useState<StyleSummary | null>(null)
 
-  useEffect(() => {
-    if (step !== "firstPass") return
-    // Guard against double-invocation (React 18 strict mode mounts twice); the
-    // endpoint is idempotent anyway, but one pass is enough.
-    if (firstPassStarted.current) return
-    firstPassStarted.current = true
+  function afterFirstPass() {
+    setStep(styleTrained ? "done" : "train")
+  }
 
-    fetch("/api/connectors/gmail/first-pass", { method: "POST" })
+  function startFirstPass() {
+    if (backfillLimit === 0) {
+      // Nothing to organize now — new mail still gets labeled as it arrives.
+      afterFirstPass()
+      return
+    }
+    setFirstPassStatus("running")
+    fetch("/api/connectors/gmail/first-pass", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ limit: backfillLimit }),
+    })
       .then(async (res) => {
         if (!res.ok) throw new Error(`first-pass failed: ${res.status}`)
         return (await res.json()) as FirstPassResult
@@ -151,10 +251,6 @@ export default function OnboardingWizard({
         setFirstPassStatus("done")
       })
       .catch(() => setFirstPassStatus("error"))
-  }, [step])
-
-  function afterFirstPass() {
-    setStep(styleTrained ? "done" : "train")
   }
 
   async function trainStyle() {
@@ -189,8 +285,11 @@ export default function OnboardingWizard({
       <div className="mx-auto max-w-2xl px-4 py-16 sm:py-24">
         <StepIndicator current={stepIndex(step)} />
 
-        {/* ── Step 1: Connect Gmail ── */}
-        {step === "connect" && (
+        {/* ── Step 1: Connect an inbox ── */}
+        {step === "connect" && providerChoice && (
+          <ProviderInstructions provider={providerChoice} onBack={() => setProviderChoice(null)} />
+        )}
+        {step === "connect" && !providerChoice && (
           <div className="text-center">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-2xl">
               ✉️
@@ -204,19 +303,19 @@ export default function OnboardingWizard({
               {microsoftConfigured ? "Gmail or Outlook account" : "Gmail account"}.
             </p>
             <div className="mt-8 flex flex-col items-center gap-3">
-              <a
-                href="/api/connectors/gmail/connect"
+              <button
+                onClick={() => setProviderChoice("gmail")}
                 className="inline-flex w-full max-w-xs items-center justify-center rounded-lg bg-[var(--color-accent)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--color-accent-hover)]"
               >
                 Connect Gmail →
-              </a>
+              </button>
               {microsoftConfigured && (
-                <a
-                  href="/api/connectors/outlook/connect"
+                <button
+                  onClick={() => setProviderChoice("outlook")}
                   className="inline-flex w-full max-w-xs items-center justify-center rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   Connect Outlook →
-                </a>
+                </button>
               )}
               <Link href="/home" className="text-xs font-medium text-slate-500 hover:text-slate-700">
                 Skip for now
@@ -232,6 +331,47 @@ export default function OnboardingWizard({
         {/* ── Step 1 completion: first pass over the existing inbox ── */}
         {step === "firstPass" && (
           <div>
+            {firstPassStatus === "choose" && (
+              <div className="text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl">
+                  ✓
+                </div>
+                <h1 className="text-3xl font-bold text-slate-900">
+                  {connectedProvider === "outlook" ? "Outlook connected" : "Gmail connected"}
+                </h1>
+                <p className="mx-auto mt-3 max-w-md text-sm text-slate-500">
+                  FlowDesk can label a batch of your most recent emails right now so your inbox
+                  starts organized. How many should it look at? New mail is organized
+                  automatically either way.
+                </p>
+                <div className="mx-auto mt-8 flex max-w-md justify-center gap-3">
+                  {([0, 25, 50] as const).map((option) => (
+                    <button
+                      key={option}
+                      onClick={() => setBackfillLimit(option)}
+                      className={`flex-1 rounded-xl border px-4 py-3 text-sm font-semibold transition ${
+                        backfillLimit === option
+                          ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                      }`}
+                    >
+                      {option === 0 ? "None" : `${option} emails`}
+                      {option === 25 && (
+                        <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-wide opacity-70">
+                          Recommended
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-8 flex justify-center">
+                  <PrimaryButton onClick={startFirstPass}>
+                    {backfillLimit === 0 ? "Skip organizing →" : `Organize ${backfillLimit} emails →`}
+                  </PrimaryButton>
+                </div>
+              </div>
+            )}
+
             {firstPassStatus === "running" && (
               <div className="text-center">
                 <div className="mx-auto mb-6 h-10 w-10 animate-spin rounded-full border-[3px] border-slate-200 border-t-[var(--color-accent)]" />

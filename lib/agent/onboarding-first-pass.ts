@@ -14,8 +14,13 @@ import { isFlowDeskGmailLabelName } from "@/lib/email-labels"
 // full-history catch-up — that's what the relabel button is for) and safe to
 // re-run: reconcile upserts writeback rows and projection is idempotent.
 const ONBOARDING_WINDOW_DAYS = 30
-const ONBOARDING_BATCH_SIZE = 40
 const SAMPLE_LIMIT = 6
+
+// How many recent threads the pass may label. The user picks one of these in
+// the onboarding wizard (0 = skip the pass entirely, handled by the caller).
+export const ONBOARDING_BATCH_SIZES = [0, 25, 50] as const
+export type OnboardingBatchSize = (typeof ONBOARDING_BATCH_SIZES)[number]
+export const DEFAULT_ONBOARDING_BATCH_SIZE: OnboardingBatchSize = 25
 
 export type OnboardingFirstPassSample = {
   conversationId: string
@@ -58,7 +63,12 @@ function extractQueuedLabels(payloadJson: unknown): { conversationId: string; la
   return { conversationId, labels }
 }
 
-export async function runOnboardingFirstPass(tenantId: string): Promise<OnboardingFirstPassResult> {
+export async function runOnboardingFirstPass(
+  tenantId: string,
+  options?: { batchSize?: number }
+): Promise<OnboardingFirstPassResult> {
+  const batchSize = options?.batchSize ?? DEFAULT_ONBOARDING_BATCH_SIZE
+
   const channels = await prisma.channel.findMany({
     where: {
       tenantId,
@@ -72,6 +82,11 @@ export async function runOnboardingFirstPass(tenantId: string): Promise<Onboardi
 
   if (channels.length === 0) {
     return emptyResult({ hadEmailChannel: false })
+  }
+
+  if (batchSize <= 0) {
+    // "Don't organize anything now" — an explicit user choice, not an error.
+    return emptyResult({ hadEmailChannel: true })
   }
 
   // Labels are the first rung of the automation ladder; new tenants default to
@@ -91,7 +106,7 @@ export async function runOnboardingFirstPass(tenantId: string): Promise<Onboardi
   for (const channel of channels) {
     const result = await reconcileLabelsForChannel(channel, {
       windowDays: ONBOARDING_WINDOW_DAYS,
-      batchSize: ONBOARDING_BATCH_SIZE,
+      batchSize,
     })
     errors += result.errors
   }

@@ -65,6 +65,35 @@ describe("runOnboardingFirstPass", () => {
     })
   })
 
+  it("skips the pass entirely for batchSize 0 without treating it as an error", async () => {
+    mockChannelFindMany.mockResolvedValue([{ id: "chan-1", tenantId: "tenant-1" }])
+    const result = await runOnboardingFirstPass("tenant-1", { batchSize: 0 })
+    expect(result.hadEmailChannel).toBe(true)
+    expect(result.organizedCount).toBe(0)
+    expect(result.errors).toBe(0)
+    expect(mockReconcile).not.toHaveBeenCalled()
+  })
+
+  it("passes the chosen batchSize through to reconcile", async () => {
+    mockChannelFindMany.mockResolvedValue([{ id: "chan-1", tenantId: "tenant-1" }])
+    mockAuditFindMany.mockResolvedValue([])
+    await runOnboardingFirstPass("tenant-1", { batchSize: 50 })
+    expect(mockReconcile).toHaveBeenCalledWith(
+      { id: "chan-1", tenantId: "tenant-1" },
+      expect.objectContaining({ batchSize: 50 })
+    )
+  })
+
+  it("defaults the batchSize to 25 when none is given", async () => {
+    mockChannelFindMany.mockResolvedValue([{ id: "chan-1", tenantId: "tenant-1" }])
+    mockAuditFindMany.mockResolvedValue([])
+    await runOnboardingFirstPass("tenant-1")
+    expect(mockReconcile).toHaveBeenCalledWith(
+      { id: "chan-1", tenantId: "tenant-1" },
+      expect.objectContaining({ batchSize: 25 })
+    )
+  })
+
   it("flags belowAutomationLevel without projecting when the level is too low", async () => {
     mockChannelFindMany.mockResolvedValue([{ id: "chan-1", tenantId: "tenant-1" }])
     mockGetAutomationLevel.mockResolvedValue(1)
