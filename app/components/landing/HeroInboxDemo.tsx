@@ -176,6 +176,59 @@ export default function HeroInboxDemo() {
     sweep(0, TIMELINE.restAt, TIMELINE.sweepMs);
   }, [sweep]);
 
+  const stageRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+
+  const pFromClientX = useCallback((clientX: number) => {
+    const rect = stageRef.current!.getBoundingClientRect();
+    return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+  }, []);
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      cancelSweep();
+      playedRef.current = true;
+      draggingRef.current = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setP(pFromClientX(e.clientX));
+    },
+    [cancelSweep, pFromClientX]
+  );
+
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (draggingRef.current) setP(pFromClientX(e.clientX));
+    },
+    [pFromClientX]
+  );
+
+  const endDrag = useCallback(() => {
+    draggingRef.current = false;
+  }, []);
+
+  const onKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const step = 0.05;
+      if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+        cancelSweep();
+        setP((v) => Math.min(1, v + step));
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+        cancelSweep();
+        setP((v) => Math.max(0, v - step));
+      } else if (e.key === "Home") {
+        cancelSweep();
+        setP(0);
+      } else if (e.key === "End") {
+        cancelSweep();
+        setP(1);
+      } else {
+        return;
+      }
+      e.preventDefault();
+    },
+    [cancelSweep]
+  );
+
   const clipRight = (1 - p) * 100;
 
   return (
@@ -250,13 +303,50 @@ export default function HeroInboxDemo() {
           </div>
 
           {/* the wipe stage */}
-          <div className="relative overflow-hidden rounded-b-lg bg-[#1c1c1e]">
+          <div ref={stageRef} className="relative overflow-hidden rounded-b-lg bg-[#1c1c1e]">
             <InboxList p={p} after={false} />
             <div
               className="absolute inset-0 bg-[#1c1c1e]"
               style={{ clipPath: `inset(0 ${clipRight}% 0 0)` }}
             >
               <InboxList p={p} after />
+            </div>
+
+            {/* lighthouse beam divider */}
+            <div
+              className="absolute inset-y-0 z-10 touch-none"
+              style={{ left: `calc(${p * 100}% - 22px)`, width: 44, cursor: "grab" }}
+              role="slider"
+              tabIndex={0}
+              aria-label="Drag to organize the inbox"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(p * 100)}
+              aria-valuetext={`Inbox ${Math.round(p * 100)}% organized`}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+              onKeyDown={onKeyDown}
+            >
+              {/* light cone */}
+              <div className="hero-beam-cone pointer-events-none absolute inset-y-0 left-1/2 w-40 -translate-x-1/2" />
+              {/* hard edge */}
+              <div className="pointer-events-none absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 bg-[#ffedbe]/90 shadow-[0_0_24px_6px_rgba(255,220,150,0.45)]" />
+              {/* handle */}
+              <div
+                className={`absolute left-1/2 top-1/2 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#fff7e0] text-[#6b5210] shadow-[0_0_16px_4px_rgba(255,220,150,0.55)] ${
+                  !reducedMotion ? "hero-beam-idle" : ""
+                }`}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4 fill-none stroke-current"
+                  strokeWidth="2"
+                >
+                  <path d="M8 7l-4 5 4 5M16 7l4 5-4 5" />
+                </svg>
+              </div>
             </div>
           </div>
         </div>
