@@ -123,10 +123,9 @@ function InboxList({ p, after }: { p: number; after: boolean }) {
 
 const easeInOutSine = (t: number) => -(Math.cos(Math.PI * t) - 1) / 2;
 
-// p positions just past the stage edges where the beam (edge + glow cone) is
-// fully clipped away, so it can exit one side and re-enter from the other
+// p position just past the left stage edge where the beam (edge + glow cone)
+// is fully clipped away, so sweeps can start from off-stage
 const BEAM_OFF_LEFT = -0.12;
-const BEAM_OFF_RIGHT = 1.12;
 
 export default function HeroInboxDemo() {
   // Server renders the finished state; the client rewinds and plays only
@@ -187,12 +186,12 @@ export default function HeroInboxDemo() {
   }, [sweep, cancelSweep, setProgress]);
 
   const replay = useCallback(() => {
-    // the beam exits off the right edge, then re-enters from the left
-    sweep(pRef.current, BEAM_OFF_RIGHT, 500, () => {
-      setProgress(BEAM_OFF_LEFT);
+    // quick smooth rewind to the left (the wipe visibly un-organizes the
+    // inbox on the way back), then play forward
+    sweep(Math.min(1, Math.max(0, pRef.current)), BEAM_OFF_LEFT, 650, () => {
       sweep(BEAM_OFF_LEFT, TIMELINE.restAt, TIMELINE.sweepMs);
     });
-  }, [sweep, setProgress]);
+  }, [sweep]);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
@@ -283,7 +282,7 @@ export default function HeroInboxDemo() {
             <button
               type="button"
               onClick={replay}
-              className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs text-white/80 transition-colors hover:bg-white/20"
+              className="flex items-center gap-1.5 rounded-full bg-[#ffedbe] px-3 py-1.5 text-xs font-medium text-[#5c4a12] shadow-[0_0_12px_2px_rgba(255,220,150,0.35)] transition-all hover:scale-105 hover:shadow-[0_0_18px_4px_rgba(255,220,150,0.5)]"
             >
               <svg
                 viewBox="0 0 24 24"
