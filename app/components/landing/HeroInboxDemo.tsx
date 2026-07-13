@@ -123,6 +123,11 @@ function InboxList({ p, after }: { p: number; after: boolean }) {
 
 const easeInOutSine = (t: number) => -(Math.cos(Math.PI * t) - 1) / 2;
 
+// p positions just past the stage edges where the beam (edge + glow cone) is
+// fully clipped away, so it can exit one side and re-enter from the other
+const BEAM_OFF_LEFT = -0.12;
+const BEAM_OFF_RIGHT = 1.12;
+
 export default function HeroInboxDemo() {
   // Server renders the finished state; the client rewinds and plays only
   // when motion is allowed and the demo is in view.
@@ -131,22 +136,29 @@ export default function HeroInboxDemo() {
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef(0);
   const playedRef = useRef(false);
+  const pRef = useRef<number>(TIMELINE.restAt);
+
+  const setProgress = useCallback((v: number) => {
+    pRef.current = v;
+    setP(v);
+  }, []);
 
   const cancelSweep = useCallback(() => cancelAnimationFrame(rafRef.current), []);
 
   const sweep = useCallback(
-    (from: number, to: number, ms: number) => {
+    (from: number, to: number, ms: number, onDone?: () => void) => {
       cancelSweep();
       let start = 0;
       const frame = (now: number) => {
         if (!start) start = now;
         const t = Math.min(1, (now - start) / ms);
-        setP(from + (to - from) * easeInOutSine(t));
+        setProgress(from + (to - from) * easeInOutSine(t));
         if (t < 1) rafRef.current = requestAnimationFrame(frame);
+        else onDone?.();
       };
       rafRef.current = requestAnimationFrame(frame);
     },
-    [cancelSweep]
+    [cancelSweep, setProgress]
   );
 
   useEffect(() => {
@@ -160,8 +172,8 @@ export default function HeroInboxDemo() {
       ([entry]) => {
         if (entry.isIntersecting && !playedRef.current) {
           playedRef.current = true;
-          setP(0);
-          sweep(0, TIMELINE.restAt, TIMELINE.sweepMs);
+          setProgress(BEAM_OFF_LEFT);
+          sweep(BEAM_OFF_LEFT, TIMELINE.restAt, TIMELINE.sweepMs);
           observer.disconnect();
         }
       },
@@ -172,12 +184,15 @@ export default function HeroInboxDemo() {
       observer.disconnect();
       cancelSweep();
     };
-  }, [sweep, cancelSweep]);
+  }, [sweep, cancelSweep, setProgress]);
 
   const replay = useCallback(() => {
-    setP(0);
-    sweep(0, TIMELINE.restAt, TIMELINE.sweepMs);
-  }, [sweep]);
+    // the beam exits off the right edge, then re-enters from the left
+    sweep(pRef.current, BEAM_OFF_RIGHT, 500, () => {
+      setProgress(BEAM_OFF_LEFT);
+      sweep(BEAM_OFF_LEFT, TIMELINE.restAt, TIMELINE.sweepMs);
+    });
+  }, [sweep, setProgress]);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
@@ -193,16 +208,16 @@ export default function HeroInboxDemo() {
       playedRef.current = true;
       draggingRef.current = true;
       e.currentTarget.setPointerCapture(e.pointerId);
-      setP(pFromClientX(e.clientX));
+      setProgress(pFromClientX(e.clientX));
     },
-    [cancelSweep, pFromClientX]
+    [cancelSweep, pFromClientX, setProgress]
   );
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (draggingRef.current) setP(pFromClientX(e.clientX));
+      if (draggingRef.current) setProgress(pFromClientX(e.clientX));
     },
-    [pFromClientX]
+    [pFromClientX, setProgress]
   );
 
   const endDrag = useCallback(() => {
@@ -212,27 +227,29 @@ export default function HeroInboxDemo() {
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       const step = 0.05;
+      const clamped = Math.min(1, Math.max(0, pRef.current));
       if (e.key === "ArrowRight" || e.key === "ArrowUp") {
         cancelSweep();
-        setP((v) => Math.min(1, v + step));
+        setProgress(Math.min(1, clamped + step));
       } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
         cancelSweep();
-        setP((v) => Math.max(0, v - step));
+        setProgress(Math.max(0, clamped - step));
       } else if (e.key === "Home") {
         cancelSweep();
-        setP(0);
+        setProgress(0);
       } else if (e.key === "End") {
         cancelSweep();
-        setP(1);
+        setProgress(1);
       } else {
         return;
       }
       e.preventDefault();
     },
-    [cancelSweep]
+    [cancelSweep, setProgress]
   );
 
-  const clipRight = (1 - p) * 100;
+  const clipRight = Math.min(100, Math.max(0, (1 - p) * 100));
+  const pct = Math.round(Math.min(1, Math.max(0, p)) * 100);
 
   return (
     <div
@@ -250,7 +267,7 @@ export default function HeroInboxDemo() {
         <span className="text-[15px] font-medium tracking-tight text-white/90">
           Gmail
         </span>
-        <div className="mx-2 flex h-8 max-w-md flex-1 items-center gap-2 rounded-full bg-white/[0.08] px-3 text-xs text-white/50">
+        <div className="mx-2 hidden h-8 max-w-md flex-1 items-center gap-2 rounded-full bg-white/[0.08] px-3 text-xs text-white/50 sm:flex">
           <svg
             viewBox="0 0 24 24"
             className="h-3.5 w-3.5 fill-none stroke-current"
@@ -261,13 +278,31 @@ export default function HeroInboxDemo() {
           </svg>
           Search mail
         </div>
-        <div className="ml-auto flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-white/90">
-          <img
-            src="/images/landing/logo-icon.svg"
-            alt=""
-            className="h-4 w-4"
-            aria-hidden="true"
-          />
+        <div className="ml-auto flex items-center gap-3">
+          {!reducedMotion && (
+            <button
+              type="button"
+              onClick={replay}
+              className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs text-white/80 transition-colors hover:bg-white/20"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-3.5 w-3.5 fill-none stroke-current"
+                strokeWidth="2"
+              >
+                <path d="M20 11a8 8 0 10-2.3 5.7M20 5v6h-6" />
+              </svg>
+              Replay
+            </button>
+          )}
+          <div className="h-6 w-6 overflow-hidden rounded-full">
+            <img
+              src="/images/landing/logo-icon.svg"
+              alt=""
+              className="h-full w-full scale-[1.5] object-cover"
+              aria-hidden="true"
+            />
+          </div>
         </div>
       </div>
 
@@ -329,8 +364,8 @@ export default function HeroInboxDemo() {
               aria-label="Drag to organize the inbox"
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-valuenow={Math.round(p * 100)}
-              aria-valuetext={`Inbox ${Math.round(p * 100)}% organized`}
+              aria-valuenow={pct}
+              aria-valuetext={`Inbox ${pct}% organized`}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={endDrag}
@@ -360,22 +395,6 @@ export default function HeroInboxDemo() {
         </div>
       </div>
 
-      {!reducedMotion && (
-        <button
-          type="button"
-          onClick={replay}
-          className="absolute bottom-3 right-3 z-10 flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs text-white/80 backdrop-blur transition-colors hover:bg-white/20"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            className="h-3.5 w-3.5 fill-none stroke-current"
-            strokeWidth="2"
-          >
-            <path d="M20 11a8 8 0 10-2.3 5.7M20 5v6h-6" />
-          </svg>
-          Replay
-        </button>
-      )}
     </div>
   );
 }
