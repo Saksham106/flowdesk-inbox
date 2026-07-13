@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { getServerSession } from "next-auth"
+import AppShell from "@/app/components/AppShell"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { salesCrmEnabled } from "@/lib/tenant-capabilities"
@@ -140,14 +141,15 @@ export default async function AuditPage({ searchParams }: Props) {
   }
 
   return (
+    <AppShell tenantId={tenantId}>
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <div>
-            <Link href="/home" className="text-sm text-slate-500 hover:text-slate-700">
+            <Link href="/home" className="text-sm text-slate-500 hover:text-slate-700 lg:hidden">
               ← Back to inbox
             </Link>
-            <h1 className="mt-1 text-xl font-semibold">Agent &amp; Autopilot Audit Log</h1>
+            <h1 className="mt-1 font-serif text-2xl font-normal">Activity</h1>
             <p className="text-sm text-slate-500">{total.toLocaleString()} events</p>
           </div>
         </div>
@@ -294,5 +296,6 @@ export default async function AuditPage({ searchParams }: Props) {
         )}
       </main>
     </div>
+    </AppShell>
   )
 }

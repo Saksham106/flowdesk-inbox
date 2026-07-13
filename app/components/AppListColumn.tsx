@@ -138,12 +138,14 @@ const STATUS_FILTERS = [
 ]
 
 
+// Dot/text pairs use the landing chip palette: amber = needs you, blue =
+// draft ready, purple = waiting, green = handled. See app/components/badges.tsx.
 const WORKFLOW_STATUS_STYLE: Record<WorkflowStatus, { dot: string; text: string }> = {
-  needs_reply: { dot: "bg-red-500",     text: "text-red-700" },
-  draft_ready: { dot: "bg-blue-500",    text: "text-blue-700" },
-  waiting_on:  { dot: "bg-indigo-400",  text: "text-indigo-700" },
-  read_later:  { dot: "bg-violet-400",  text: "text-violet-700" },
-  done:        { dot: "bg-emerald-500", text: "text-emerald-700" },
+  needs_reply: { dot: "bg-[#c9922e]", text: "text-[#7a5a1e]" },
+  draft_ready: { dot: "bg-[#5b82ab]", text: "text-[#39597f]" },
+  waiting_on:  { dot: "bg-[#8a7ab0]", text: "text-[#584b7e]" },
+  read_later:  { dot: "bg-slate-400", text: "text-slate-500" },
+  done:        { dot: "bg-[#579467]", text: "text-[#3c6647]" },
 }
 
 const WORKFLOW_STATUS_LABEL: Record<WorkflowStatus, string> = {

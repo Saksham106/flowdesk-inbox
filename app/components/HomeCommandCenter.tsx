@@ -26,9 +26,9 @@ export default function HomeCommandCenter({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <header className="mb-7 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Good morning</h1>
+          <h1 className="font-serif text-[28px] font-normal leading-tight text-slate-900">{greeting(date)}</h1>
           <p className="mt-1 text-sm text-slate-500">
             {date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })} · Here’s what needs your attention.
           </p>
@@ -53,8 +53,8 @@ export default function HomeCommandCenter({
         {feed.items.length > 0 ? (
           <HomeActionFeed items={feed.items} />
         ) : (
-          <div className="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center shadow-sm">
-            <p className="text-sm font-semibold text-slate-900">You’re caught up</p>
+          <div className="rounded-lg border border-black/[0.08] bg-white px-6 py-12 text-center">
+            <p className="font-serif text-lg text-slate-900">You’re caught up</p>
             <p className="mt-1 text-xs text-slate-500">FlowDesk will surface new decisions here when they need you.</p>
           </div>
         )}
@@ -71,11 +71,20 @@ export default function HomeCommandCenter({
   )
 }
 
+function greeting(date: Date) {
+  const hour = date.getHours()
+  if (hour < 12) return "Good morning"
+  if (hour < 18) return "Good afternoon"
+  return "Good evening"
+}
+
 function Metric({ label, value, emphasized = false }: { label: string; value: number; emphasized?: boolean }) {
+  // The "needs you" metric carries the warm lighthouse-amber tint; the rest
+  // stay quiet paper cards.
   return (
-    <div className={`rounded-xl border px-4 py-3 shadow-sm ${emphasized ? "border-slate-300 bg-slate-50" : "border-slate-200 bg-white"}`}>
-      <p className={`text-2xl font-semibold ${emphasized ? "text-slate-900" : "text-slate-900"}`}>{value.toLocaleString()}</p>
-      <p className={`text-xs ${emphasized ? "text-slate-700" : "text-slate-500"}`}>{label}</p>
+    <div className={`rounded-lg border px-4 py-3 ${emphasized ? "border-[#ecdec0] bg-[#faf4e4]" : "border-black/[0.08] bg-white"}`}>
+      <p className="font-serif text-2xl text-slate-900">{value.toLocaleString()}</p>
+      <p className={`text-xs ${emphasized ? "text-[#7a5a1e]" : "text-slate-500"}`}>{label}</p>
     </div>
   )
 }

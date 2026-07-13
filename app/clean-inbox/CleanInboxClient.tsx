@@ -136,7 +136,7 @@ export default function CleanInboxClient({
       <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <Link href="/home" className="text-xs text-slate-400 hover:text-slate-700">← Back to control room</Link>
-          <h1 className="mt-2 text-xl font-semibold text-slate-900">{mode === "unsubscribe" ? "Bulk Unsubscribe" : "Bulk Archive"}</h1>
+          <h1 className="mt-2 font-serif text-2xl font-normal text-slate-900">{mode === "unsubscribe" ? "Bulk Unsubscribe" : "Bulk Archive"}</h1>
           <p className="mt-1 text-sm text-slate-500">{totalEmails.toLocaleString()} emails across {visible.length} {groupMode === "label" ? "labels" : "senders"} · {protectedOrSkipped} protected</p>
         </div>
         <label className="text-xs font-medium text-slate-600">

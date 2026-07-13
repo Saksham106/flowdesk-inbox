@@ -38,10 +38,10 @@ function AssistantContent({ children }: { children: ReactNode }) {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 py-4">
           <div>
-            <Link href="/home" className="text-sm text-slate-500 hover:text-slate-700">
-              &larr; Back to control room
+            <Link href="/home" className="text-sm text-slate-500 hover:text-slate-700 lg:hidden">
+              &larr; Back to home
             </Link>
-            <h1 className="mt-1 text-xl font-semibold">Assistant</h1>
+            <h1 className="mt-1 font-serif text-2xl font-normal">Assistant</h1>
             <p className="mt-0.5 text-sm text-slate-500">
               Rules the agent uses to triage and act on your inbox.
             </p>

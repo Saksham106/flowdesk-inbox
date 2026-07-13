@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { getServerSession } from "next-auth"
 
+import AppShell from "@/app/components/AppShell"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { salesCrmEnabled } from "@/lib/tenant-capabilities"
@@ -75,16 +76,17 @@ export default async function RiskRadarPage() {
   const radar = buildRiskRadar(conversations)
 
   return (
+    <AppShell tenantId={tenantId}>
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-5 sm:px-6">
           <div>
             <p className="text-sm font-medium text-slate-500">Inbox risk radar</p>
-            <h1 className="text-2xl font-semibold text-slate-950">Risk Radar</h1>
+            <h1 className="font-serif text-2xl font-normal text-slate-950">Risk Radar</h1>
           </div>
           <Link
             href="/home"
-            className="rounded-md border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+            className="rounded-md border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 lg:hidden"
           >
             Inbox
           </Link>
@@ -139,6 +141,7 @@ export default async function RiskRadarPage() {
         </div>
       </main>
     </div>
+    </AppShell>
   )
 }
 

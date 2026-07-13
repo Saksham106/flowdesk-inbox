@@ -7,17 +7,19 @@
 import type { FlowDeskGmailLabelName } from "@/lib/email-labels"
 import type { WorkflowStatus } from "@/lib/workflow-status"
 
+// Dots use the landing chip palette (amber/blue/purple/green + neutrals) so
+// the picker matches the badge and status-dot vocabulary in the app shell.
 export const FLOWDESK_LABEL_OPTIONS: { value: FlowDeskGmailLabelName; label: string; dot: string }[] = [
-  { value: "Needs Reply",  label: "Needs Reply",  dot: "bg-red-500" },
-  { value: "Needs Action", label: "Needs Action", dot: "bg-orange-500" },
-  { value: "Waiting On",   label: "Waiting On",   dot: "bg-indigo-400" },
-  { value: "Read Later",   label: "Read Later",   dot: "bg-violet-400" },
-  { value: "Handled",      label: "Handled",      dot: "bg-emerald-500" },
-  { value: "Autodrafted",  label: "Autodrafted",  dot: "bg-blue-400" },
+  { value: "Needs Reply",  label: "Needs Reply",  dot: "bg-[#c9922e]" },
+  { value: "Needs Action", label: "Needs Action", dot: "bg-[#c9922e]" },
+  { value: "Waiting On",   label: "Waiting On",   dot: "bg-[#8a7ab0]" },
+  { value: "Read Later",   label: "Read Later",   dot: "bg-slate-400" },
+  { value: "Handled",      label: "Handled",      dot: "bg-[#579467]" },
+  { value: "Autodrafted",  label: "Autodrafted",  dot: "bg-[#5b82ab]" },
   { value: "Newsletter",   label: "Newsletter",   dot: "bg-slate-400" },
-  { value: "Marketing",    label: "Marketing",    dot: "bg-pink-400" },
+  { value: "Marketing",    label: "Marketing",    dot: "bg-[#b3766a]" },
   { value: "Notification", label: "Notification", dot: "bg-slate-400" },
-  { value: "Calendar",     label: "Calendar",     dot: "bg-teal-400" },
+  { value: "Calendar",     label: "Calendar",     dot: "bg-[#579467]" },
 ]
 
 // Maps the AI-derived attentionCategory / content-type signals a conversation

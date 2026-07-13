@@ -152,11 +152,11 @@ export default function MailInboxRow({
               {statusLabel}
             </span>
             {hasDraft && workflowStatus !== "done" && (
-              <span className="text-[10px] font-semibold text-blue-600">✦ draft</span>
+              <span className="text-[10px] font-semibold text-[#39597f]">✦ draft</span>
             )}
             <ContentTypeBadge emailType={contentType} />
             {snoozeUntil && (
-              <span className="text-xs text-indigo-500">
+              <span className="text-xs text-slate-500">
                 💤 {new Date(snoozeUntil).toLocaleDateString()}
               </span>
             )}

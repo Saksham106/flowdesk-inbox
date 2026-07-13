@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { getServerSession } from "next-auth"
 
+import AppShell from "@/app/components/AppShell"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { getCalendarClient, listEvents } from "@/lib/google"
@@ -28,20 +29,22 @@ export default async function MeetingsPage() {
 
   if (!credential) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <div className="mx-auto max-w-2xl px-4 py-16 text-center">
-          <h1 className="text-2xl font-semibold text-slate-900">Meeting Prep</h1>
-          <p className="mt-3 text-slate-600">
-            Connect Google Calendar to get prep briefs and post-meeting follow-ups.
-          </p>
-          <Link
-            href="/settings"
-            className="mt-6 inline-block rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
-          >
-            Go to Settings →
-          </Link>
+      <AppShell tenantId={tenantId}>
+        <div className="min-h-screen bg-slate-50">
+          <div className="mx-auto max-w-2xl px-4 py-16 text-center">
+            <h1 className="font-serif text-2xl font-normal text-slate-900">Meeting Prep</h1>
+            <p className="mt-3 text-slate-600">
+              Connect Google Calendar to get prep briefs and post-meeting follow-ups.
+            </p>
+            <Link
+              href="/settings"
+              className="mt-6 inline-block rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
+            >
+              Go to Settings →
+            </Link>
+          </div>
         </div>
-      </div>
+      </AppShell>
     )
   }
 
@@ -63,13 +66,14 @@ export default async function MeetingsPage() {
   }
 
   return (
+    <AppShell tenantId={tenantId}>
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white px-6 py-5">
         <div className="mx-auto max-w-3xl">
-          <Link href="/home" className="text-sm text-slate-500 hover:text-slate-700">
+          <Link href="/home" className="text-sm text-slate-500 hover:text-slate-700 lg:hidden">
             ← Inbox
           </Link>
-          <h1 className="mt-2 text-2xl font-semibold text-slate-900">Meeting Prep</h1>
+          <h1 className="mt-2 font-serif text-2xl font-normal text-slate-900">Meeting Prep</h1>
           <p className="mt-1 text-sm text-slate-500">
             Prep briefs from your email history · Post-meeting follow-up drafts
           </p>
@@ -130,5 +134,6 @@ export default async function MeetingsPage() {
         )}
       </main>
     </div>
+    </AppShell>
   )
 }

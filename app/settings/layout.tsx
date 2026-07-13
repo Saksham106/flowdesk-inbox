@@ -38,10 +38,10 @@ function SettingsContent({ children }: { children: ReactNode }) {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
           <div>
-            <Link href="/home" className="text-sm text-slate-500 hover:text-slate-700">
-              &larr; Back to control room
+            <Link href="/home" className="text-sm text-slate-500 hover:text-slate-700 lg:hidden">
+              &larr; Back to home
             </Link>
-            <h1 className="mt-1 text-xl font-semibold">Settings</h1>
+            <h1 className="mt-1 font-serif text-2xl font-normal">Settings</h1>
             <p className="mt-0.5 text-sm text-slate-500">
               Tune what FlowDesk does in your Gmail, how much it can act on its own, and what it learns.
             </p>

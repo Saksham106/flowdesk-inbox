@@ -26,7 +26,7 @@ function ApprovalsContent({ count, items }: { count: number; items: ApprovalItem
             <Link href="/home" className="text-sm text-slate-500 hover:text-slate-700 lg:hidden">
               ← Back to inbox
             </Link>
-            <h1 className="mt-1 text-xl font-semibold">Approval Queue</h1>
+            <h1 className="mt-1 font-serif text-2xl font-normal">Approvals</h1>
             <p className="text-sm text-slate-500">
               {count} draft{count === 1 ? "" : "s"} waiting for review
             </p>

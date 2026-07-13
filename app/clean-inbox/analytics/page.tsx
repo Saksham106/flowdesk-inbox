@@ -41,7 +41,7 @@ export default async function CleanupAnalyticsPage({ searchParams }: { searchPar
             <CleanupTabNav range={range} />
           </div>
           <main className="mx-auto max-w-5xl px-6 pb-8">
-            <h1 className="text-xl font-semibold text-slate-900">Cleanup Analytics</h1>
+            <h1 className="font-serif text-2xl font-normal text-slate-900">Cleanup Analytics</h1>
 
             {/* Headline: the one number that matters, with a trend badge vs. the prior period. */}
             <section className="mt-4 rounded-xl border border-slate-200 bg-white p-6">

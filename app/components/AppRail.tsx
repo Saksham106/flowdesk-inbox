@@ -51,11 +51,6 @@ const RAIL_CONFIG: Record<string, RailRenderConfig> = {
     icon: <AssistantIcon />,
     isActive: (p) => p === "/assistant" || p.startsWith("/assistant/"),
   },
-  "/tools": {
-    label: "Tools",
-    icon: <ToolsIcon />,
-    isActive: (p) => p === "/tools" || p.startsWith("/tools/"),
-  },
   "/settings": {
     label: "Settings",
     icon: <SettingsIcon />,
@@ -89,13 +84,13 @@ export default function AppRail(props: Props) {
   }
 
   return (
-    <nav className="flex h-full w-14 shrink-0 flex-col items-center bg-slate-900 py-3 gap-1">
+    <nav className="flex h-full w-16 shrink-0 flex-col items-center gap-1 border-r border-black/[0.08] bg-white py-3">
       {/* Logo */}
       <Link
         href="/home"
         aria-label="Go to FlowDesk home"
         title="FlowDesk home"
-        className="mb-3 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg transition hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-ring)] focus:ring-offset-2 focus:ring-offset-slate-900"
+        className="mb-3 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg transition hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-ring)] focus:ring-offset-2 focus:ring-offset-white"
       >
         <img src="/images/landing/logo-icon.svg" alt="" className="h-8 w-8 rounded-lg" />
       </Link>
@@ -109,10 +104,10 @@ export default function AppRail(props: Props) {
         type="button"
         data-ask-flowdesk
         title="Ask FlowDesk"
-        className="relative flex h-9 w-10 flex-col items-center justify-center gap-0.5 rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-ring)] focus:ring-offset-2 focus:ring-offset-slate-900"
+        className="relative flex h-10 w-12 flex-col items-center justify-center gap-0.5 rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-ring)] focus:ring-offset-2 focus:ring-offset-white"
       >
         <ChatIcon />
-        <span className="text-[8px] font-semibold leading-none">Ask</span>
+        <span className="text-[9px] font-medium leading-none">Ask</span>
       </button>
 
       {bottomItems.map((item) => renderItem(item.href))}
@@ -137,16 +132,16 @@ function RailLink({
     <Link
       href={href}
       title={label}
-      className={`relative flex h-9 w-10 flex-col items-center justify-center gap-0.5 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-ring)] focus:ring-offset-2 focus:ring-offset-slate-900 ${
+      className={`relative flex h-10 w-12 flex-col items-center justify-center gap-0.5 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-ring)] focus:ring-offset-2 focus:ring-offset-white ${
         active
-          ? "bg-slate-700 text-white"
-          : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+          ? "bg-slate-900 text-white"
+          : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
       }`}
     >
       {children}
-      <span className="text-[8px] font-semibold leading-none">{label}</span>
+      <span className="text-[9px] font-medium leading-none">{label}</span>
       {badge !== undefined && (
-        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-signal)] px-1 text-[9px] font-bold text-white">
           {badge > 99 ? "99+" : badge}
         </span>
       )}
@@ -193,15 +188,6 @@ function AssistantIcon() {
     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 3a5 5 0 0 0-5 5v2a5 5 0 0 0 3 4.58V17a2 2 0 0 0 4 0v-2.42A5 5 0 0 0 17 10V8a5 5 0 0 0-5-5Z" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 21h6" />
-    </svg>
-  )
-}
-
-function ToolsIcon() {
-  return (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="m14.7 6.3 3 3-7.4 7.4a2 2 0 0 1-1.2.6l-2.4.3.3-2.4a2 2 0 0 1 .6-1.2l7.1-7.1Z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M17 3.5 20.5 7l-1.8 1.8-3.5-3.5Z" />
     </svg>
   )
 }
