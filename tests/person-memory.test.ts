@@ -34,6 +34,7 @@ vi.mock("@/lib/ai/gateway", () => ({
 
 import {
   buildPersonMemoryContentHash,
+  syncPersonMemory,
   syncPersonMemoryWithLLM,
 } from "@/lib/agent/person-memory"
 
@@ -103,12 +104,58 @@ describe("person memory AI cache", () => {
 
     expect(result.status).toBe("cache_hit")
     expect(mockRunAiJsonFeature).not.toHaveBeenCalled()
-    expect(mockAiUsageCreate).toHaveBeenCalledWith(
+    // A cache hit is a non-event: no durable usage receipt for the skipped call.
+    expect(mockAiUsageCreate).not.toHaveBeenCalled()
+  })
+
+  it("records no usage receipt when there are too few messages for LLM memory", async () => {
+    mockContactFindFirst.mockResolvedValue({
+      ...contact,
+      conversations: [
+        {
+          id: "conv-1",
+          lastMessageAt: now,
+          messages: [{ direction: "inbound", body: "Hi", createdAt: now }],
+        },
+      ],
+    })
+
+    const result = await syncPersonMemoryWithLLM("tenant-1", "contact-1")
+
+    expect(result.status).toBe("deterministic")
+    expect(mockRunAiJsonFeature).not.toHaveBeenCalled()
+    expect(mockAiUsageCreate).not.toHaveBeenCalled()
+  })
+
+  it("skips the deterministic write and audit row when person memory is unchanged", async () => {
+    const contentHash = buildPersonMemoryContentHash(
+      contact.conversations.flatMap((conversation) => conversation.messages)
+    )
+    mockPersonMemoryFindUnique.mockResolvedValue({
+      id: "memory-1",
+      contentHash,
+      source: "deterministic",
+    })
+
+    await syncPersonMemory("tenant-1", "contact-1")
+
+    expect(mockPersonMemoryUpsert).not.toHaveBeenCalled()
+    expect(mockAuditCreate).not.toHaveBeenCalled()
+  })
+
+  it("writes and audits deterministic person memory when content changed", async () => {
+    mockPersonMemoryFindUnique.mockResolvedValue({
+      id: "memory-1",
+      contentHash: "stale-hash",
+      source: "deterministic",
+    })
+
+    await syncPersonMemory("tenant-1", "contact-1")
+
+    expect(mockPersonMemoryUpsert).toHaveBeenCalledOnce()
+    expect(mockAuditCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          feature: "person_memory.cache_hit",
-          status: "skipped",
-        }),
+        data: expect.objectContaining({ action: "person_memory.synced" }),
       })
     )
   })

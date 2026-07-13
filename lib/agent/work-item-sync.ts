@@ -9,7 +9,6 @@ import { classifySupportSignals } from "@/lib/agent/support-classifier"
 import { classifySalesSignals } from "@/lib/agent/sales-classifier"
 import { classifyEmailType } from "@/lib/agent/email-classifier"
 import { evaluatePersonMemoryPolicy } from "@/lib/ai/usage-policy"
-import { recordAiUsageEvent } from "@/lib/ai/usage"
 import { extractEmail } from "@/lib/google"
 import { detectLifeAdminType } from "@/lib/agent/life-admin"
 import { detectVip } from "@/lib/agent/vip-detector"
@@ -45,6 +44,79 @@ export type SyncConversationWorkItemsResult = {
   leadSynced: boolean
   supportClassified: boolean
   salesClassified: boolean
+}
+
+// Keys the email classifier merges into metadataJson AFTER the deterministic
+// upsert below. They are re-derived on every sync, so their presence in the
+// stored row must not defeat the "nothing changed" check. Sales-classifier
+// keys are deliberately NOT listed: conversations carrying them simply keep
+// the previous always-write behavior.
+const CLASSIFIER_OWNED_METADATA_KEYS = new Set([
+  "emailType",
+  "attentionCategory",
+  "attentionReason",
+  "attentionConfidence",
+  "attentionSource",
+  "action",
+  "expiresIn",
+])
+
+// Deterministic JSON encoding (sorted keys, undefined-valued keys dropped —
+// matching what surviving a Prisma JSON round-trip does to an object).
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`)
+      .join(",")}}`
+  }
+  return JSON.stringify(value) ?? "null"
+}
+
+function deterministicStateUnchanged(
+  existing: {
+    state: string
+    priority: string
+    reason: string
+    nextAction: string
+    confidence: number
+    source: string
+    metadataJson: unknown
+  } | null,
+  next: {
+    state: string
+    priority: string
+    reason: string
+    nextAction: string
+    confidence: number
+    source: string
+    metadata: Record<string, unknown>
+  }
+): boolean {
+  if (!existing) return false
+  if (
+    existing.state !== next.state ||
+    existing.priority !== next.priority ||
+    existing.reason !== next.reason ||
+    existing.nextAction !== next.nextAction ||
+    existing.confidence !== next.confidence ||
+    existing.source !== next.source
+  ) {
+    return false
+  }
+  const storedMeta =
+    existing.metadataJson &&
+    typeof existing.metadataJson === "object" &&
+    !Array.isArray(existing.metadataJson)
+      ? Object.fromEntries(
+          Object.entries(existing.metadataJson as Record<string, unknown>).filter(
+            ([key]) => !CLASSIFIER_OWNED_METADATA_KEYS.has(key)
+          )
+        )
+      : {}
+  return stableStringify(storedMeta) === stableStringify(next.metadata)
 }
 
 export async function syncConversationWorkItems(
@@ -95,7 +167,15 @@ export async function syncConversationWorkItems(
 
   const initialState = await prisma.conversationState.findUnique({
     where: { conversationId: conversation.id },
-    select: { source: true, metadataJson: true },
+    select: {
+      source: true,
+      metadataJson: true,
+      state: true,
+      priority: true,
+      reason: true,
+      nextAction: true,
+      confidence: true,
+    },
   })
   const initialMeta =
     initialState?.metadataJson &&
@@ -110,7 +190,7 @@ export async function syncConversationWorkItems(
   const hasUserOverrideOrLabelHold =
     hasUserOverride || hasLabelOverride || conversation.status === "closed"
 
-  if (!hasUserOverrideOrLabelHold) {
+  if (!hasUserOverrideOrLabelHold && !deterministicStateUnchanged(initialState, summary.state)) {
     const metadataJson = summary.state.metadata as Prisma.InputJsonValue
     await prisma.conversationState.upsert({
       where: { conversationId: conversation.id },
@@ -137,19 +217,22 @@ export async function syncConversationWorkItems(
         ...conversationStateMetadataData(metadataJson),
       },
     })
-  }
 
-  await prisma.auditLog.create({
-    data: {
-      tenantId: conversation.tenantId,
-      action: "conversation_state.synced",
-      payloadJson: {
-        conversationId: conversation.id,
-        state: summary.state.state,
-        priority: summary.state.priority,
+    // Receipt only when something was actually written — an unchanged
+    // classification re-confirmed by every sync is a non-event, and these
+    // rows were the single biggest AuditLog contributor before being gated.
+    await prisma.auditLog.create({
+      data: {
+        tenantId: conversation.tenantId,
+        action: "conversation_state.synced",
+        payloadJson: {
+          conversationId: conversation.id,
+          state: summary.state.state,
+          priority: summary.state.priority,
+        },
       },
-    },
-  })
+    })
+  }
 
   // Waiting-on lifecycle: a reply sent directly in Gmail (outside FlowDesk)
   // arrives here as the latest outbound message on a needs_reply conversation.
@@ -916,30 +999,12 @@ export async function syncConversationWorkItems(
       isSupport: supportSignals.isSupport,
     })
 
+    // A policy skip is a non-event — no usage or audit receipt. These rows
+    // (person_memory.policy_skipped / ai.person_memory.skipped) were written
+    // once per synced conversation per pass and dominated both tables.
     if (memoryPolicy.shouldRunLLM) {
       await syncPersonMemoryWithLLM(conversation.tenantId, conversation.contactId, {
         featureContext: "work_item_sync",
-      })
-    } else {
-      await recordAiUsageEvent({
-        tenantId: conversation.tenantId,
-        feature: "person_memory.policy_skipped",
-        model: "none",
-        status: "skipped",
-      })
-      await prisma.auditLog.create({
-        data: {
-          tenantId: conversation.tenantId,
-          action: "ai.person_memory.skipped",
-          payloadJson: {
-            conversationId: conversation.id,
-            contactId: conversation.contactId,
-            tier: memoryPolicy.tier,
-            reason: memoryPolicy.reason,
-            emailType: emailClassification?.emailType ?? null,
-            attentionCategory: emailClassification?.attentionCategory ?? null,
-          } as Prisma.InputJsonValue,
-        },
       })
     }
   }

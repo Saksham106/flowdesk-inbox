@@ -139,6 +139,17 @@ export async function syncPersonMemory(
   const allMessages = contact.conversations
     .flatMap((c) => c.messages)
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+  const contentHash = buildPersonMemoryContentHash(allMessages)
+
+  // The deterministic summary is a pure function of the messages, so an
+  // unchanged content hash means the write (and its audit row) is a no-op.
+  // Only skip when the stored memory is deterministic — an "llm" row must
+  // still be overwritten, matching the previous unconditional behavior.
+  const existing = await prisma.personMemory.findUnique({
+    where: { contactId },
+    select: { contentHash: true, source: true },
+  })
+  if (existing?.contentHash === contentHash && existing.source === "deterministic") return
 
   await prisma.personMemory.upsert({
     where: { contactId },
@@ -152,7 +163,7 @@ export async function syncPersonMemory(
       openQuestions: draft.openQuestions,
       promisedActions: draft.promisedActions,
       source: "deterministic",
-      contentHash: buildPersonMemoryContentHash(allMessages),
+      contentHash,
     },
     update: {
       lastContactAt: draft.lastContactAt,
@@ -162,7 +173,7 @@ export async function syncPersonMemory(
       openQuestions: draft.openQuestions,
       promisedActions: draft.promisedActions,
       source: "deterministic",
-      contentHash: buildPersonMemoryContentHash(allMessages),
+      contentHash,
     },
   })
 
@@ -228,12 +239,6 @@ export async function syncPersonMemoryWithLLM(
 
   if (allMessages.length < 3) {
     await syncPersonMemory(tenantId, contactId)
-    await recordAiUsageEvent({
-      tenantId,
-      feature: "person_memory.too_few_messages",
-      model: "none",
-      status: "skipped",
-    })
     return { status: "deterministic", reason: "Too few messages for LLM relationship memory" }
   }
 
@@ -244,12 +249,6 @@ export async function syncPersonMemoryWithLLM(
   })
 
   if (!options.force && existing?.source === "llm" && existing.contentHash === contentHash) {
-    await recordAiUsageEvent({
-      tenantId,
-      feature: "person_memory.cache_hit",
-      model: "none",
-      status: "skipped",
-    })
     return { status: "cache_hit", contentHash }
   }
 

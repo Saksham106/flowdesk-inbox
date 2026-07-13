@@ -201,6 +201,68 @@ describe("syncConversationWorkItems", () => {
     )
   })
 
+  it("skips the state write and its audit row when nothing changed", async () => {
+    mockTenantFindUnique.mockResolvedValue({ salesCrmEnabled: false })
+
+    // First sync: no existing state, so it creates and audits.
+    await syncConversationWorkItems({ tenantId: "tenant-1", conversationId: "conv-1", now })
+    expect(mockStateUpsert).toHaveBeenCalledOnce()
+    const written = mockStateUpsert.mock.calls[0][0].create
+
+    // Second sync: the stored row already matches what this sync would write.
+    mockStateFindUnique.mockResolvedValue({
+      state: written.state,
+      priority: written.priority,
+      reason: written.reason,
+      nextAction: written.nextAction,
+      confidence: written.confidence,
+      source: written.source,
+      metadataJson: written.metadataJson,
+    })
+    mockStateUpsert.mockClear()
+    mockAuditCreate.mockClear()
+
+    await syncConversationWorkItems({ tenantId: "tenant-1", conversationId: "conv-1", now })
+
+    expect(mockStateUpsert).not.toHaveBeenCalled()
+    expect(mockAuditCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "conversation_state.synced" }),
+      })
+    )
+  })
+
+  it("still skips the redundant state write when classifier keys are present in stored metadata", async () => {
+    mockTenantFindUnique.mockResolvedValue({ salesCrmEnabled: false })
+
+    await syncConversationWorkItems({ tenantId: "tenant-1", conversationId: "conv-1", now })
+    const written = mockStateUpsert.mock.calls[0][0].create
+
+    // At rest the email classifier has merged its own keys into metadataJson;
+    // those are re-derived every sync and must not defeat the no-change check.
+    mockStateFindUnique.mockResolvedValue({
+      state: written.state,
+      priority: written.priority,
+      reason: written.reason,
+      nextAction: written.nextAction,
+      confidence: written.confidence,
+      source: written.source,
+      metadataJson: {
+        ...written.metadataJson,
+        emailType: "notification",
+        attentionCategory: "read_later",
+        attentionReason: "Automated notification",
+        attentionConfidence: 0.9,
+        attentionSource: "ai",
+      },
+    })
+    mockStateUpsert.mockClear()
+
+    await syncConversationWorkItems({ tenantId: "tenant-1", conversationId: "conv-1", now })
+
+    expect(mockStateUpsert).not.toHaveBeenCalled()
+  })
+
   it("does not create lead records for personal accounts", async () => {
     mockTenantFindUnique.mockResolvedValue({ salesCrmEnabled: false })
 
@@ -574,12 +636,10 @@ describe("syncConversationWorkItems", () => {
     })
 
     expect(mockSyncPersonMemoryWithLLM).not.toHaveBeenCalled()
-    expect(mockAuditCreate).toHaveBeenCalledWith(
+    // Skipping the LLM is a non-event: no audit receipt or usage row is written.
+    expect(mockAuditCreate).not.toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          action: "ai.person_memory.skipped",
-          payloadJson: expect.objectContaining({ reason: expect.stringMatching(/transactional/i) }),
-        }),
+        data: expect.objectContaining({ action: "ai.person_memory.skipped" }),
       })
     )
   })
