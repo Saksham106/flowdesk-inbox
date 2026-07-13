@@ -58,6 +58,40 @@ describe("unwrapHardWrappedText", () => {
     expect(result).toBe(original)
   })
 
+  it("does not glue a signoff onto a long body line above it", () => {
+    // The body line is long enough to look like a wrap point, but
+    // "Best regards," is a signoff, not a wrap continuation — the break
+    // before it (and before the name) must survive.
+    const original =
+      "Dear John,\n" +
+      "I wanted to confirm that Tuesday at 2pm still works for you next week.\n" +
+      "Best regards,\n" +
+      "Shivansh"
+    const result = unwrapHardWrappedText(original)
+    expect(result).toBe(original)
+  })
+
+  it("does not glue a colon lead-in onto a long line above it", () => {
+    const original =
+      "I pulled together everything we discussed on the call this afternoon.\n" +
+      "Next steps:\n" +
+      "- Send the contract\n" +
+      "- Book the kickoff"
+    const result = unwrapHardWrappedText(original)
+    expect(result).toBe(original)
+  })
+
+  it("still joins a short sentence-ending fragment of a wrapped paragraph", () => {
+    const wrapped =
+      "Thanks so much for reaching out about the appointment next week and\n" +
+      "for sending over the updated documents ahead of our conversation on\n" +
+      "Tuesday afternoon."
+    const result = unwrapHardWrappedText(wrapped)
+    expect(result).toBe(
+      "Thanks so much for reaching out about the appointment next week and for sending over the updated documents ahead of our conversation on Tuesday afternoon."
+    )
+  })
+
   it("leaves a normal short reply unchanged", () => {
     const original = "Thanks for the update, I'll take a look today."
     const result = unwrapHardWrappedText(original)

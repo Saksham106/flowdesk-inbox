@@ -92,6 +92,15 @@ const LIST_LINE_PATTERN = /^\s*([-*]|\d+\.)\s+/
 // continuation.
 const WRAP_CONTINUATION_MIN_LENGTH = 50
 
+// A short line ending in "," or ":" is almost always an intentional break —
+// a signoff ("Best regards,"), a greeting ("Dear Jane,"), or a list lead-in
+// ("Here are the options:") — even when the line above it is long enough to
+// look like a wrap point. A genuine mid-wrap fragment that short would end
+// mid-sentence, not on trailing punctuation like this.
+function isIntentionalBreakLine(trimmed: string): boolean {
+  return trimmed.length < WRAP_CONTINUATION_MIN_LENGTH && /[,:]$/.test(trimmed)
+}
+
 /**
  * Undoes model-generated "hard wrap" line breaks — some models still write
  * plaintext email replies with a literal `\n` roughly every 70-80 characters,
@@ -107,7 +116,10 @@ const WRAP_CONTINUATION_MIN_LENGTH = 50
  * - short lines (below `WRAP_CONTINUATION_MIN_LENGTH`), which are far more
  *   likely to be an intentional greeting/signoff break than a wrap point —
  *   e.g. "Thanks,\nJane" keeps its line break instead of becoming
- *   "Thanks, Jane".
+ *   "Thanks, Jane", and
+ * - short lines ending in "," or ":" (see isIntentionalBreakLine), so a
+ *   signoff after a long body line isn't glued onto the paragraph —
+ *   "…see you then.\nBest regards," keeps its line break.
  */
 export function unwrapHardWrappedText(text: string): string {
   const lines = text.split("\n")
@@ -131,10 +143,15 @@ export function unwrapHardWrappedText(text: string): string {
       outputLines.push(trimmed)
     } else {
       const previous = buffer[buffer.length - 1]
-      if (buffer.length > 0 && previous.length < WRAP_CONTINUATION_MIN_LENGTH) {
-        // The line before this one was short — almost certainly an
-        // intentional break (greeting/signoff), not a wrap point. Start a
-        // new line instead of joining onto it.
+      if (
+        buffer.length > 0 &&
+        (previous.length < WRAP_CONTINUATION_MIN_LENGTH || isIntentionalBreakLine(trimmed))
+      ) {
+        // Either the line before this one was short (almost certainly an
+        // intentional greeting/signoff break, not a wrap point), or this
+        // line itself is a signoff/lead-in ("Best regards,") that must not
+        // be glued onto the paragraph above it. Start a new line instead of
+        // joining.
         flush()
       }
       buffer.push(trimmed)
