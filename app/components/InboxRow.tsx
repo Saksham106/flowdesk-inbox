@@ -68,6 +68,8 @@ export default function InboxRow({
     portalRef,
     archiveError,
     pendingAction,
+    isNavigating,
+    navigateToConversation,
     toggleRead,
     toggleStatus,
     archiveConversation,
@@ -87,7 +89,11 @@ export default function InboxRow({
     <div className="group relative">
       <Link
         href={href}
+        onClick={(e) => navigateToConversation(e, href)}
+        aria-busy={isNavigating}
         className={`block border-b border-slate-50 px-3 py-2.5 transition ${
+          isNavigating ? "cursor-progress opacity-60" : ""
+        } ${
           isSelected
             ? "border-l-2 border-l-[var(--color-accent)] bg-[var(--color-accent-soft)]"
             : isUnread
@@ -117,7 +123,16 @@ export default function InboxRow({
               </span>
             )}
           </div>
-          <span className={`shrink-0 text-[10px] ${isUnread ? "font-medium text-slate-600" : "text-slate-400"}`}>{timeLabel}</span>
+          <span className={`flex shrink-0 items-center text-[10px] ${isUnread ? "font-medium text-slate-600" : "text-slate-400"}`}>
+            {isNavigating ? (
+              <span
+                aria-label="Opening conversation"
+                className="inline-block h-2.5 w-2.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-500"
+              />
+            ) : (
+              timeLabel
+            )}
+          </span>
         </div>
         {snippet && (
           <p className={`mt-0.5 truncate text-[11px] ${

@@ -78,6 +78,8 @@ export default function MailInboxRow({
     portalRef,
     archiveError,
     pendingAction,
+    isNavigating,
+    navigateToConversation,
     toggleRead,
     toggleStatus,
     archiveConversation,
@@ -99,7 +101,11 @@ export default function MailInboxRow({
     <div className="group relative w-full border-b border-slate-100 last:border-b-0">
       <Link
         href={href}
+        onClick={(e) => navigateToConversation(e, href)}
+        aria-busy={isNavigating}
         className={`grid w-full grid-cols-[16px_180px_minmax(0,1fr)_auto_72px] items-center gap-3 px-4 py-2.5 transition ${
+          isNavigating ? "cursor-progress opacity-60" : ""
+        } ${
           isSelected
             ? "border-l-2 border-l-[var(--color-accent)] bg-[var(--color-accent-soft)]"
             : isUnread
@@ -267,9 +273,16 @@ export default function MailInboxRow({
           )}
         </div>
 
-        {/* Timestamp */}
-        <span className={`shrink-0 text-right text-xs ${isUnread ? "font-medium text-slate-600" : "text-slate-400"}`}>
-          {timeLabel}
+        {/* Timestamp — swaps to a spinner while the conversation opens */}
+        <span className={`flex shrink-0 items-center justify-end text-right text-xs ${isUnread ? "font-medium text-slate-600" : "text-slate-400"}`}>
+          {isNavigating ? (
+            <span
+              aria-label="Opening conversation"
+              className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-slate-500"
+            />
+          ) : (
+            timeLabel
+          )}
         </span>
       </Link>
 

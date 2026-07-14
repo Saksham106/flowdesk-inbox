@@ -383,6 +383,28 @@ describe("dashboard and inbox UI source contracts", () => {
     expect(page).toContain("<TrainAgentPanel")
   })
 
+  it("inbox rows show immediate pending feedback while a conversation opens", () => {
+    // Clicking a row starts a tracked transition (useTransition + router.push)
+    // instead of relying on Link's silent default navigation, because in slow
+    // conditions (dev route compile, cold caches) the App Router can take many
+    // seconds to commit — with no feedback, clicks read as "nothing happened"
+    // and repeat clicks can force a full-document fallback navigation.
+    const hook = source("app/components/useInboxRowActions.ts")
+    expect(hook).toContain("useTransition")
+    expect(hook).toContain("navigateToConversation")
+    // Modified clicks (cmd/ctrl/shift/alt, non-left button) keep native
+    // open-in-new-tab behavior.
+    expect(hook).toContain("e.metaKey")
+    expect(hook).toContain("e.button !== 0")
+
+    for (const path of ["app/components/MailInboxRow.tsx", "app/components/InboxRow.tsx"]) {
+      const row = source(path)
+      expect(row).toContain("navigateToConversation")
+      expect(row).toContain("aria-busy")
+      expect(row).toContain("isNavigating")
+    }
+  })
+
   it("mail row uses label language rather than tag language", () => {
     const row = source("app/components/MailInboxRow.tsx")
     expect(row).toContain("Change label")
