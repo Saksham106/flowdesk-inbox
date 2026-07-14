@@ -127,6 +127,11 @@ const easeInOutSine = (t: number) => -(Math.cos(Math.PI * t) - 1) / 2;
 // is fully clipped away, so sweeps can start from off-stage
 const BEAM_OFF_LEFT = -0.12;
 
+// hover may not retrigger a replay until this long after a sweep settles
+const HOVER_REPLAY_COOLDOWN_MS = 1000;
+// while the cursor stays on the demo, replay again this long after settling
+const HOVER_LOOP_DELAY_MS = 1800;
+
 export default function HeroInboxDemo() {
   // Server renders the finished state; the client rewinds and plays only
   // when motion is allowed and the demo is in view.
@@ -170,6 +175,45 @@ export default function HeroInboxDemo() {
     [cancelSweep, setProgress]
   );
 
+  const stageRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+  const hoveredRef = useRef(false);
+  const settledAtRef = useRef(0);
+  const loopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const replayRef = useRef<() => void>(() => {});
+
+  const idleAtRest = useCallback(
+    () =>
+      !sweepingRef.current &&
+      !draggingRef.current &&
+      Math.abs(pRef.current - TIMELINE.restAt) < 0.02,
+    []
+  );
+
+  // Called when a forward sweep settles at rest: start the hover cooldown,
+  // and if the cursor is still on the demo, queue the next loop iteration.
+  const onSettled = useCallback(() => {
+    settledAtRef.current = performance.now();
+    if (loopTimerRef.current) clearTimeout(loopTimerRef.current);
+    loopTimerRef.current = setTimeout(() => {
+      if (hoveredRef.current && !reducedMotion && idleAtRest()) {
+        replayRef.current();
+      }
+    }, HOVER_LOOP_DELAY_MS);
+  }, [reducedMotion, idleAtRest]);
+
+  const replay = useCallback(() => {
+    // quick smooth rewind to the left (the wipe visibly un-organizes the
+    // inbox on the way back), then play forward
+    sweep(Math.min(1, Math.max(0, pRef.current)), BEAM_OFF_LEFT, 650, () => {
+      sweep(BEAM_OFF_LEFT, TIMELINE.restAt, TIMELINE.sweepMs, onSettled);
+    });
+  }, [sweep, onSettled]);
+
+  useEffect(() => {
+    replayRef.current = replay;
+  }, [replay]);
+
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       setReducedMotion(true);
@@ -182,7 +226,7 @@ export default function HeroInboxDemo() {
         if (entry.isIntersecting && !playedRef.current) {
           playedRef.current = true;
           setProgress(BEAM_OFF_LEFT);
-          sweep(BEAM_OFF_LEFT, TIMELINE.restAt, TIMELINE.sweepMs);
+          sweep(BEAM_OFF_LEFT, TIMELINE.restAt, TIMELINE.sweepMs, onSettled);
           observer.disconnect();
         }
       },
@@ -192,37 +236,36 @@ export default function HeroInboxDemo() {
     return () => {
       observer.disconnect();
       cancelSweep();
+      if (loopTimerRef.current) clearTimeout(loopTimerRef.current);
     };
-  }, [sweep, cancelSweep, setProgress]);
+  }, [sweep, cancelSweep, setProgress, onSettled]);
 
-  const replay = useCallback(() => {
-    // quick smooth rewind to the left (the wipe visibly un-organizes the
-    // inbox on the way back), then play forward
-    sweep(Math.min(1, Math.max(0, pRef.current)), BEAM_OFF_LEFT, 650, () => {
-      sweep(BEAM_OFF_LEFT, TIMELINE.restAt, TIMELINE.sweepMs);
-    });
-  }, [sweep]);
-
-  const stageRef = useRef<HTMLDivElement>(null);
-  const draggingRef = useRef(false);
-
-  // Hovering the demo replays it, but only from a settled rest state — never
-  // mid-sweep, mid-drag, or after the user parked the beam somewhere on
-  // purpose. Mouse only: on touch, pointerenter fires on every tap.
+  // Hovering the demo replays it (and keeps looping while hovered), but only
+  // from a settled rest state — never mid-sweep, mid-drag, or after the user
+  // parked the beam somewhere on purpose — and not within the cooldown right
+  // after a sweep finishes. Mouse only: on touch, pointerenter fires on every
+  // tap. The Replay button stays instant and unthrottled.
   const onDemoPointerEnter = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.pointerType !== "mouse") return;
+      hoveredRef.current = true;
       if (
-        e.pointerType === "mouse" &&
         !reducedMotion &&
         playedRef.current &&
-        !sweepingRef.current &&
-        !draggingRef.current &&
-        Math.abs(pRef.current - TIMELINE.restAt) < 0.02
+        idleAtRest() &&
+        performance.now() - settledAtRef.current >= HOVER_REPLAY_COOLDOWN_MS
       ) {
         replay();
       }
     },
-    [reducedMotion, replay]
+    [reducedMotion, replay, idleAtRest]
+  );
+
+  const onDemoPointerLeave = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === "mouse") hoveredRef.current = false;
+    },
+    []
   );
 
   const pFromClientX = useCallback((clientX: number) => {
@@ -285,6 +328,7 @@ export default function HeroInboxDemo() {
       className="relative select-none bg-[#161618] text-left font-sans"
       aria-label="Demo: FlowDesk organizing a Gmail inbox"
       onPointerEnter={onDemoPointerEnter}
+      onPointerLeave={onDemoPointerLeave}
     >
       {/* top chrome */}
       <div className="flex items-center gap-3 px-4 py-2.5">
