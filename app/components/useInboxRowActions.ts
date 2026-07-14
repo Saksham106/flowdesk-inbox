@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import type { WorkflowStatus } from "@/lib/workflow-status"
 // Type-only import — safe from a client component since it's erased at
@@ -53,8 +53,25 @@ export function useInboxRowActions({
 
   const [archiveError, setArchiveError] = useState<string | null>(null)
   const [pendingAction, setPendingAction] = useState<"read" | "status" | "archive" | "attention" | null>(null)
+  const [isNavigating, startNavigation] = useTransition()
   const isUnread = !isRead
   const isClosed = workflowStatus === "done"
+
+  // Opens the conversation via a tracked transition instead of Link's silent
+  // default navigation. When the target route is slow to respond (dev route
+  // compilation, cold caches), the App Router can take seconds to commit —
+  // with no pending state the click reads as "nothing happened", and repeat
+  // clicks can interrupt the transition into a full-document fallback
+  // navigation. isNavigating lets rows render immediate feedback and swallow
+  // repeat clicks until the navigation commits.
+  function navigateToConversation(e: React.MouseEvent<HTMLAnchorElement>, href: string) {
+    // Modified clicks (new tab/window) and non-left buttons keep Link's
+    // native behavior.
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
+    e.preventDefault()
+    if (isNavigating) return
+    startNavigation(() => router.push(href))
+  }
 
   // Close attention dropdown on outside click or any scroll (covers inbox list scroll)
   useEffect(() => {
@@ -205,6 +222,8 @@ export function useInboxRowActions({
     portalRef,
     archiveError,
     pendingAction,
+    isNavigating,
+    navigateToConversation,
     toggleRead,
     toggleStatus,
     archiveConversation,
