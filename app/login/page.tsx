@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { signIn } from "next-auth/react";
+import Logo from "@/app/components/landing/Logo";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { getAuthSuccessPath } from "@/lib/client-navigation";
@@ -154,34 +154,78 @@ function LoginForm() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-white px-5 py-12">
-      {/* Warm beam wash — the landing hero's lighthouse light, kept faint. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(ellipse 90% 55% at 50% -12%, rgba(255,214,140,0.32), transparent 68%)",
-        }}
-      />
+      {/* The landing hero's scene, full bleed: aurora sky, lighthouse right. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <img
+          src="/images/landing/hero-bg.png"
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+          style={{ objectPosition: "70% 22%" }}
+        />
+        {/* Lighthouse beam — turns slowly behind the card; parked when motion is reduced. */}
+        <div className="login-beam absolute" />
+        {/* Veil keeps the form area calm without washing out the edges. */}
+        <div className="login-veil absolute inset-0" />
+      </div>
 
       <style>{`
+        .login-beam {
+          top: -32vh;
+          left: 60%;
+          width: 42vmin;
+          height: 175vh;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255, 228, 168, 0.5) 45%,
+            rgba(255, 228, 168, 0.5) 55%,
+            transparent
+          );
+          clip-path: polygon(44% 0, 56% 0, 86% 100%, 14% 100%);
+          -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,0.9), transparent 90%);
+          mask-image: linear-gradient(180deg, rgba(0,0,0,0.9), transparent 90%);
+          transform: rotate(14deg);
+          transform-origin: 50% 0;
+        }
+        .login-veil {
+          background: radial-gradient(
+            ellipse 52% 70% at 50% 55%,
+            rgba(255, 255, 255, 0.66),
+            rgba(255, 255, 255, 0.2) 60%,
+            transparent 82%
+          );
+        }
+        @media (min-width: 1024px) {
+          .login-veil {
+            background: radial-gradient(
+              ellipse 40% 78% at 37% 55%,
+              rgba(255, 255, 255, 0.66),
+              rgba(255, 255, 255, 0.2) 60%,
+              transparent 82%
+            );
+          }
+        }
         @media (prefers-reduced-motion: no-preference) {
           @keyframes login-enter {
             from { opacity: 0; transform: translateY(10px); }
             to   { opacity: 1; transform: translateY(0); }
           }
           .login-enter { animation: login-enter 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+          @keyframes login-beam-sweep {
+            0%, 100% { transform: rotate(2deg); }
+            50% { transform: rotate(26deg); }
+          }
+          .login-beam { animation: login-beam-sweep 13s ease-in-out infinite; }
         }
       `}</style>
 
-      <div className="login-enter relative z-10 w-full max-w-[400px]">
+      <div className="login-enter relative z-10 w-full max-w-[400px] lg:mr-[26vw]">
         {/* Brand */}
-        <Link href="/" className="mb-8 flex items-center justify-center gap-1.5">
-          <img src="/images/landing/logo-icon.svg" alt="" className="h-7 w-7" />
-          <img src="/images/landing/logo-wordmark.svg" alt="Flowdesk" className="h-[17px] w-auto" />
-        </Link>
+        <div className="mb-8 flex justify-center">
+          <Logo />
+        </div>
 
-        <div className="rounded-2xl border border-black/[0.08] bg-white p-8 shadow-[0_16px_48px_-24px_rgba(0,0,0,0.18)]">
+        <div className="rounded-2xl border border-black/[0.08] bg-white/85 p-8 shadow-[0_24px_64px_-32px_rgba(122,74,18,0.4)] backdrop-blur-md">
           <div className="mb-6 text-center">
             <h1 className="font-serif text-[26px] font-normal leading-tight text-[#1a1a1a]">
               {mode === "signin" ? "Welcome back" : "Create your account"}
