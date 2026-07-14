@@ -142,18 +142,28 @@ export default function HeroInboxDemo() {
     setP(v);
   }, []);
 
-  const cancelSweep = useCallback(() => cancelAnimationFrame(rafRef.current), []);
+  const sweepingRef = useRef(false);
+
+  const cancelSweep = useCallback(() => {
+    cancelAnimationFrame(rafRef.current);
+    sweepingRef.current = false;
+  }, []);
 
   const sweep = useCallback(
     (from: number, to: number, ms: number, onDone?: () => void) => {
       cancelSweep();
+      sweepingRef.current = true;
       let start = 0;
       const frame = (now: number) => {
         if (!start) start = now;
         const t = Math.min(1, (now - start) / ms);
         setProgress(from + (to - from) * easeInOutSine(t));
-        if (t < 1) rafRef.current = requestAnimationFrame(frame);
-        else onDone?.();
+        if (t < 1) {
+          rafRef.current = requestAnimationFrame(frame);
+        } else {
+          sweepingRef.current = false;
+          onDone?.();
+        }
       };
       rafRef.current = requestAnimationFrame(frame);
     },
@@ -195,6 +205,25 @@ export default function HeroInboxDemo() {
 
   const stageRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
+
+  // Hovering the demo replays it, but only from a settled rest state — never
+  // mid-sweep, mid-drag, or after the user parked the beam somewhere on
+  // purpose. Mouse only: on touch, pointerenter fires on every tap.
+  const onDemoPointerEnter = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (
+        e.pointerType === "mouse" &&
+        !reducedMotion &&
+        playedRef.current &&
+        !sweepingRef.current &&
+        !draggingRef.current &&
+        Math.abs(pRef.current - TIMELINE.restAt) < 0.02
+      ) {
+        replay();
+      }
+    },
+    [reducedMotion, replay]
+  );
 
   const pFromClientX = useCallback((clientX: number) => {
     const rect = stageRef.current!.getBoundingClientRect();
@@ -255,6 +284,7 @@ export default function HeroInboxDemo() {
       ref={containerRef}
       className="relative select-none bg-[#161618] text-left font-sans"
       aria-label="Demo: FlowDesk organizing a Gmail inbox"
+      onPointerEnter={onDemoPointerEnter}
     >
       {/* top chrome */}
       <div className="flex items-center gap-3 px-4 py-2.5">
@@ -282,11 +312,11 @@ export default function HeroInboxDemo() {
             <button
               type="button"
               onClick={replay}
-              className="flex items-center gap-1.5 rounded-full bg-[#ffedbe] px-3 py-1.5 text-xs font-medium text-[#5c4a12] shadow-[0_0_12px_2px_rgba(255,220,150,0.35)] transition-all hover:scale-105 hover:shadow-[0_0_18px_4px_rgba(255,220,150,0.5)]"
+              className="hero-replay-alive flex items-center gap-1.5 rounded-full bg-[#ffedbe] px-3 py-1.5 text-xs font-medium text-[#5c4a12] transition-transform hover:scale-105"
             >
               <svg
                 viewBox="0 0 24 24"
-                className="h-3.5 w-3.5 fill-none stroke-current"
+                className="hero-replay-icon h-3.5 w-3.5 fill-none stroke-current"
                 strokeWidth="2"
               >
                 <path d="M20 11a8 8 0 10-2.3 5.7M20 5v6h-6" />

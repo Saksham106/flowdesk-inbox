@@ -141,10 +141,27 @@ body {
 }
 .hero-beam-idle { animation: hero-beam-idle 2.4s ease-in-out infinite; }
 
+/* Replay button idle life: breathing glow on the pill (shadow only, so the
+   hover scale transition still owns transform) + a periodic icon spin */
+@keyframes hero-replay-breathe {
+  0%, 100% { box-shadow: 0 0 10px 1px rgba(255, 220, 150, 0.3); }
+  50% { box-shadow: 0 0 20px 5px rgba(255, 220, 150, 0.6); }
+}
+.hero-replay-alive { animation: hero-replay-breathe 2.6s ease-in-out infinite; }
+.hero-replay-alive:hover { box-shadow: 0 0 18px 4px rgba(255, 220, 150, 0.5); }
+
+@keyframes hero-replay-spin {
+  0%, 76% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.hero-replay-icon { animation: hero-replay-spin 5.2s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
   .hero-chip-pop,
   .hero-caret,
-  .hero-beam-idle {
+  .hero-beam-idle,
+  .hero-replay-alive,
+  .hero-replay-icon {
     animation: none;
   }
 }
