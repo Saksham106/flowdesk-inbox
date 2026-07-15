@@ -79,9 +79,8 @@ export default function PrivacyPolicyPage() {
 
       <h3>Other connections (optional)</h3>
       <p>
-        FlowDesk can also connect Microsoft Outlook (email sync via Microsoft Graph) and Google
-        Calendar (events and availability). All connection tokens are stored encrypted at rest
-        and each connection is optional.
+        FlowDesk can also connect Microsoft Outlook (email sync via Microsoft Graph). All
+        connection tokens are stored encrypted at rest and each connection is optional.
       </p>
 
       <h2>How we use your data</h2>
