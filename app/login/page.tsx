@@ -225,7 +225,7 @@ function LoginForm() {
           <Logo />
         </div>
 
-        <div className="rounded-2xl border border-black/[0.08] bg-white/85 p-8 shadow-[0_24px_64px_-32px_rgba(122,74,18,0.4)] backdrop-blur-md">
+        <div className="rounded-2xl border border-black/[0.08] bg-white/70 p-8 shadow-[0_24px_64px_-32px_rgba(122,74,18,0.4)] backdrop-blur-lg">
           <div className="mb-6 text-center">
             <h1 className="font-serif text-[26px] font-normal leading-tight text-[#1a1a1a]">
               {mode === "signin" ? "Welcome back" : "Create your account"}
