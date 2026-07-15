@@ -33,6 +33,12 @@ describe("deriveWorkflowStatus", () => {
   it("attentionCategory=waiting_on → waiting_on", () => {
     expect(deriveWorkflowStatus({ status: "needs_reply", userState: null, attentionCategory: "waiting_on" })).toBe("waiting_on")
   })
+  it("attentionCategory=review_soon → read_later instead of falling through to needs_reply", () => {
+    expect(deriveWorkflowStatus({ status: "needs_reply", userState: null, attentionCategory: "review_soon" })).toBe("read_later")
+  })
+  it("a closed review_soon conversation stays done (status ranks above review_soon)", () => {
+    expect(deriveWorkflowStatus({ status: "closed", userState: null, attentionCategory: "review_soon" })).toBe("done")
+  })
   it("attentionCategory=read_later → read_later", () => {
     expect(deriveWorkflowStatus({ status: "needs_reply", userState: null, attentionCategory: "read_later" })).toBe("read_later")
   })

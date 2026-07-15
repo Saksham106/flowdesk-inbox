@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { salesCrmEnabled, accountModeFor } from "@/lib/tenant-capabilities";
+import { buildNeedsReplyWhere } from "@/lib/mail-label-tabs";
 
 /**
  * Recognizes the transient "database is still booting" errors that Railway's
@@ -65,7 +66,7 @@ export async function getAppShellContext(tenantId: string, requestedChannelId?: 
     : null;
   const conversationScope = { tenantId, ...(activeChannelId ? { channelId: activeChannelId } : {}) };
 
-  const [tenant, statusCounts, gmailChannels, outlookChannels, pendingApprovals] = await Promise.all([
+  const [tenant, statusCounts, derivedNeedsReplyCount, gmailChannels, outlookChannels, pendingApprovals] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: tenantId },
       select: { salesCrmEnabled: true },
@@ -74,6 +75,12 @@ export async function getAppShellContext(tenantId: string, requestedChannelId?: 
       by: ["status"],
       where: conversationScope,
       _count: { status: true },
+    }),
+    // Raw status counts go stale when the classifier/draft gate retags a
+    // conversation (ConversationState changes, Conversation.status doesn't),
+    // so the "needs reply" badge counts by derived workflow status instead.
+    prisma.conversation.count({
+      where: { ...conversationScope, ...buildNeedsReplyWhere() },
     }),
     prisma.channel.findMany({
       where: { tenantId, type: "email", provider: "google" },
@@ -124,7 +131,7 @@ export async function getAppShellContext(tenantId: string, requestedChannelId?: 
     statusCounts.map((r) => [r.status, r._count.status])
   ) as Record<string, number>;
   const totalCount = statusCounts.reduce((sum, r) => sum + r._count.status, 0);
-  const needsReplyCount = countByStatus["needs_reply"] ?? 0;
+  const needsReplyCount = derivedNeedsReplyCount;
 
   // Despite the historical name, this list covers every connected mailbox —
   // the shared sync control routes each entry to its provider's sync API.

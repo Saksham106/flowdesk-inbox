@@ -34,6 +34,11 @@ export function deriveWorkflowStatus(input: DeriveWorkflowStatusInput): Workflow
   if (input.status === "closed") return "done"
   if (input.status === "in_progress") return "waiting_on"
 
+  // Security/alert reviews ("review_soon") aren't replies — without this they
+  // fell through to needs_reply. Ranked after the status checks so an
+  // already-closed alert stays "done".
+  if (input.attentionCategory === "review_soon") return "read_later"
+
   // Auto-email types
   if (FYI_EMAIL_TYPES.has(input.emailType ?? "")) return "done"
 

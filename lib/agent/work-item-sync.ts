@@ -278,22 +278,6 @@ export async function syncConversationWorkItems(
     }
   }
 
-  // Project FlowDesk state onto Gmail labels automatically after classification.
-  // Self-guards for non-Google channels; best-effort so a Gmail hiccup never
-  // fails the sync. Skipped when the user has overridden state manually — their
-  // explicit choice is already projected by the status routes (the waiting-on
-  // lifecycle transitions above re-project because they change the derived state).
-  if ((!hasUserOverride || waitingOnLifecycleChanged) && !hasLabelOverride) {
-    try {
-      await projectFlowDeskLabelsForConversation({
-        tenantId: conversation.tenantId,
-        conversationId: conversation.id,
-      })
-    } catch (err) {
-      console.error("[work-item-sync] Gmail label projection failed:", err)
-    }
-  }
-
   // Auto-close automated/FYI conversations that were never engaged with
   const hasOutboundMessages = conversation.messages.some((m) => m.direction === "outbound")
   if (
@@ -591,75 +575,100 @@ export async function syncConversationWorkItems(
     }
     detectedAttentionCategory = attentionCategory
 
-    const persistedAction = action
-      ? {
-          type: action.type,
-          explanation: action.explanation,
-          ...(action.actionLink ? { actionLink: action.actionLink } : {}),
-          ...(action.expirationText ? { expirationText: action.expirationText } : {}),
-          hasDetectedCode: Boolean(action.detectedCode),
-          ...(action.detectedCode ? { detectedCode: action.detectedCode } : {}),
-        }
-      : null
+    // A draft-gate demotion recorded for this same inbound message is
+    // authoritative until a new message arrives (lib/agent/draft-eligibility.ts
+    // stores the decision keyed by message id). Without this guard, every
+    // sync/push re-ran the static classifier and stomped the gate's
+    // read_later/notification retag back to needs_reply, the gate demoted it
+    // again, and the resulting mailbox label ping-pong produced the interleaved
+    // echoes that got misread as user label edits.
+    const gateDecisionRaw = currentMeta.draftGateDecision
+    const gateDecision =
+      gateDecisionRaw && typeof gateDecisionRaw === "object" && !Array.isArray(gateDecisionRaw)
+        ? (gateDecisionRaw as Record<string, unknown>)
+        : null
+    const gateDemotionCurrent =
+      !isUserAttentionCorrected &&
+      attentionSource === "ai" &&
+      gateDecision?.needsReply === false &&
+      typeof gateDecision.messageId === "string" &&
+      gateDecision.messageId === firstInbound.id
 
-    const updatedEmailMeta = {
-      ...currentMeta,
-      emailType,
-      ...(isUserAttentionCorrected
-        ? {}
-        : { attentionCategory, attentionReason: attentionSource === "rule" ? "Applied from your learned preference rule." : reason, attentionConfidence: attentionSource === "rule" ? 1 : confidence, attentionSource }),
-      ...(persistedAction ? { action: persistedAction } : {}),
-      ...(expiresIn ? { expiresIn } : {}),
-    }
+    if (gateDemotionCurrent) {
+      detectedEmailType = typeof currentMeta.emailType === "string" ? currentMeta.emailType : emailType
+      detectedAttentionCategory =
+        typeof currentMeta.attentionCategory === "string" ? currentMeta.attentionCategory : attentionCategory
+    } else {
+      const persistedAction = action
+        ? {
+            type: action.type,
+            explanation: action.explanation,
+            ...(action.actionLink ? { actionLink: action.actionLink } : {}),
+            ...(action.expirationText ? { expirationText: action.expirationText } : {}),
+            hasDetectedCode: Boolean(action.detectedCode),
+            ...(action.detectedCode ? { detectedCode: action.detectedCode } : {}),
+          }
+        : null
 
-    if (!hasLabelOverride) {
-      await prisma.conversationState.update({
-        where: { conversationId: conversation.id },
-        data: {
-          metadataJson: updatedEmailMeta as Prisma.InputJsonValue,
-          ...conversationStateMetadataData(updatedEmailMeta),
-        },
-      })
-    }
+      const updatedEmailMeta = {
+        ...currentMeta,
+        emailType,
+        ...(isUserAttentionCorrected
+          ? {}
+          : { attentionCategory, attentionReason: attentionSource === "rule" ? "Applied from your learned preference rule." : reason, attentionConfidence: attentionSource === "rule" ? 1 : confidence, attentionSource }),
+        ...(persistedAction ? { action: persistedAction } : {}),
+        ...(expiresIn ? { expiresIn } : {}),
+      }
 
-    if (!hasUserOverrideOrLabelHold && attentionCategory === "needs_action") {
-      await prisma.conversationState.update({
-        where: { conversationId: conversation.id },
-        data: {
-          state: "waiting_on_you",
-          priority: "high",
-          reason,
-          nextAction: extractedCode
-            ? "Use the verification code only in the service that requested it."
-            : "Complete the requested account action.",
-          confidence,
-          source: "deterministic",
-        },
-      })
-    } else if (!hasUserOverrideOrLabelHold && attentionCategory === "review_soon") {
-      await prisma.conversationState.update({
-        where: { conversationId: conversation.id },
-        data: {
-          state: "risky_urgent",
-          priority: "high",
-          reason,
-          nextAction: "Review the alert and decide whether action is needed.",
-          confidence,
-          source: "deterministic",
-        },
-      })
-    } else if (!hasUserOverrideOrLabelHold && attentionCategory === "read_later") {
-      await prisma.conversationState.update({
-        where: { conversationId: conversation.id },
-        data: {
-          state: "fyi_only",
-          priority: "low",
-          reason,
-          nextAction: "Read later if relevant.",
-          confidence,
-          source: "deterministic",
-        },
-      })
+      if (!hasLabelOverride) {
+        await prisma.conversationState.update({
+          where: { conversationId: conversation.id },
+          data: {
+            metadataJson: updatedEmailMeta as Prisma.InputJsonValue,
+            ...conversationStateMetadataData(updatedEmailMeta),
+          },
+        })
+      }
+
+      if (!hasUserOverrideOrLabelHold && attentionCategory === "needs_action") {
+        await prisma.conversationState.update({
+          where: { conversationId: conversation.id },
+          data: {
+            state: "waiting_on_you",
+            priority: "high",
+            reason,
+            nextAction: extractedCode
+              ? "Use the verification code only in the service that requested it."
+              : "Complete the requested account action.",
+            confidence,
+            source: "deterministic",
+          },
+        })
+      } else if (!hasUserOverrideOrLabelHold && attentionCategory === "review_soon") {
+        await prisma.conversationState.update({
+          where: { conversationId: conversation.id },
+          data: {
+            state: "risky_urgent",
+            priority: "high",
+            reason,
+            nextAction: "Review the alert and decide whether action is needed.",
+            confidence,
+            source: "deterministic",
+          },
+        })
+      } else if (!hasUserOverrideOrLabelHold && attentionCategory === "read_later") {
+        await prisma.conversationState.update({
+          where: { conversationId: conversation.id },
+          data: {
+            state: "fyi_only",
+            priority: "low",
+            reason,
+            nextAction: "Read later if relevant.",
+            confidence,
+            source: "deterministic",
+          },
+        })
+      }
     }
   }
 
@@ -979,6 +988,28 @@ export async function syncConversationWorkItems(
       where: { id: conversation.id },
       data: { status: "closed" },
     })
+  }
+
+  // Project FlowDesk state onto mailbox labels once, at the end of the pass —
+  // after classification, the draft gate, draft creation, and both auto-close
+  // passes have settled. This used to run at the top of the sync (before the
+  // classify block even wrote its results), so the first pass stamped labels
+  // from stale pre-classification state and corrected them seconds later —
+  // the mailbox flip-flop whose interleaved echoes got misread as user label
+  // edits. Self-guards for non-writeback channels; best-effort so a provider
+  // hiccup never fails the sync. Skipped when the user has overridden state
+  // manually — their explicit choice is already projected by the status routes
+  // (the waiting-on lifecycle transitions above re-project because they change
+  // the derived state).
+  if ((!hasUserOverride || waitingOnLifecycleChanged) && !hasLabelOverride) {
+    try {
+      await projectFlowDeskLabelsForConversation({
+        tenantId: conversation.tenantId,
+        conversationId: conversation.id,
+      })
+    } catch (err) {
+      console.error("[work-item-sync] label projection failed:", err)
+    }
   }
 
   if (conversation.contactId && input.enableRichAi !== false) {

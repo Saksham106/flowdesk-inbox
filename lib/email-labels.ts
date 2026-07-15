@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma"
+import type { Prisma } from "@prisma/client"
+import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
 import { deriveWorkflowStatus, type WorkflowStatus } from "@/lib/workflow-status"
 import { getAutomationLevel, isActionAllowedAtLevel } from "@/lib/agent/automation-level"
 import { classifyEmailType } from "@/lib/agent/email-classifier"
@@ -118,6 +120,55 @@ export function flowDeskLabelsForConversationState(input: {
   return Array.from(new Set(labels))
 }
 
+// One prior label application recorded on the queue payload. The queue keeps a
+// single upserted apply_labels row per conversation, so when projections fire
+// in quick succession (classification, then a draft-gate retag seconds later)
+// the payload of an already-applied set gets replaced before its mailbox echo
+// arrives. Without this history, applyLabelFeedbackCore compared echoes only
+// against the latest payload and misread our own earlier application as a user
+// hand-edit — recording a bogus gmailLabelOverride that then blocked
+// reprojection and reclassification permanently (the prod "Gmail says Needs
+// Reply, FlowDesk says Read Later" lockups).
+export type FlowDeskLabelApplication = {
+  labels: FlowDeskGmailLabelName[]
+  at: string
+}
+
+// Superseded label sets stay matchable as echoes for this long. Generously
+// above observed push-echo latency (seconds) but short enough that a user
+// re-applying the same labels later is still learned as feedback.
+export const FLOWDESK_LABEL_ECHO_WINDOW_MS = 15 * 60 * 1000
+const LABEL_HISTORY_MAX_ENTRIES = 5
+
+export function flowDeskLabelWritebackHistory(payload: unknown): FlowDeskLabelApplication[] {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return []
+  const history = (payload as Record<string, unknown>).history
+  if (!Array.isArray(history)) return []
+  const entries: FlowDeskLabelApplication[] = []
+  for (const entry of history) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue
+    const record = entry as Record<string, unknown>
+    if (typeof record.at !== "string" || !Array.isArray(record.labels)) continue
+    entries.push({
+      labels: record.labels.filter(
+        (label): label is FlowDeskGmailLabelName => typeof label === "string" && isFlowDeskGmailLabelName(label)
+      ),
+      at: record.at,
+    })
+  }
+  return entries
+}
+
+function pruneLabelHistory(entries: FlowDeskLabelApplication[]): FlowDeskLabelApplication[] {
+  const cutoff = Date.now() - FLOWDESK_LABEL_ECHO_WINDOW_MS
+  return entries
+    .filter((entry) => {
+      const at = Date.parse(entry.at)
+      return Number.isFinite(at) && at >= cutoff
+    })
+    .slice(-LABEL_HISTORY_MAX_ENTRIES)
+}
+
 // An empty `labels` array is a valid payload meaning "remove all FlowDesk
 // labels from the thread"; only a missing threadId or non-array labels field
 // makes the payload invalid.
@@ -198,10 +249,24 @@ export async function queueFlowDeskLabelWriteback(input: {
     }
   }
 
+  // Carry the superseded label set forward as history so the mailbox echo of
+  // an application that this upsert replaces is still recognized as our own
+  // write (see FlowDeskLabelApplication above). Pending rows may not have been
+  // applied yet — recording them anyway is harmless, since a matching "user
+  // edit" inside the short echo window is overwhelmingly our own echo.
+  const previousPayload = existingJob ? normalizeFlowDeskLabelPayload(existingJob.providerMessageIdsJson) : null
+  const history = pruneLabelHistory([
+    ...(existingJob ? flowDeskLabelWritebackHistory(existingJob.providerMessageIdsJson) : []),
+    ...(existingJob && previousPayload
+      ? [{ labels: previousPayload.labels, at: existingJob.updatedAt.toISOString() }]
+      : []),
+  ])
+
   const payload = {
     threadId: input.threadId,
     labels,
     reason: input.reason,
+    ...(history.length > 0 ? { history } : {}),
   }
 
   const job = await prisma.emailWritebackQueue.upsert({
@@ -349,6 +414,36 @@ export async function projectFlowDeskLabelsForConversation(input: {
     })
     attentionCategory = fallback.attentionCategory
     emailType = fallback.emailType
+
+    // Persist the fallback so the app derives the same label the mailbox is
+    // about to get. Un-persisted, the mailbox showed the classifier's label
+    // while every in-app surface (which reads ConversationState) fell through
+    // to "Needs Reply" — a permanent, invisible divergence. Only fills the
+    // still-null fields on an existing state row; the classification pipeline
+    // remains the owner of these values and overwrites them on its next pass.
+    if (conversation.stateRecord) {
+      const currentMeta =
+        conversation.stateRecord.metadataJson &&
+        typeof conversation.stateRecord.metadataJson === "object" &&
+        !Array.isArray(conversation.stateRecord.metadataJson)
+          ? (conversation.stateRecord.metadataJson as Record<string, unknown>)
+          : {}
+      const fallbackMeta = {
+        ...currentMeta,
+        attentionCategory,
+        emailType,
+        attentionReason: fallback.reason,
+        attentionConfidence: fallback.confidence,
+        attentionSource: "deterministic_fallback",
+      }
+      await prisma.conversationState.update({
+        where: { conversationId: conversation.id },
+        data: {
+          metadataJson: fallbackMeta as Prisma.InputJsonValue,
+          ...conversationStateMetadataData(fallbackMeta),
+        },
+      })
+    }
   }
 
   const workflowStatus = deriveWorkflowStatus({

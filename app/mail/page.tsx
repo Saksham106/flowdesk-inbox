@@ -12,7 +12,7 @@ import AutoRefresh from "@/app/components/AutoRefresh";
 import { StatusBadge, LabelBadge } from "@/app/components/badges";
 import AppRail from "@/app/components/AppRail";
 import AskFlowDeskPanel from "@/app/components/AskFlowDeskPanel";
-import { getCachedListData, mapConversationRowToListItem } from "@/app/components/AppListColumn";
+import { getCachedListData, mapConversationRowToListItem, resolveAttentionCategory } from "@/app/components/AppListColumn";
 import MailTopTabs from "@/app/components/MailTopTabs";
 import MailInboxTable from "@/app/components/MailInboxTable";
 import type { InboxListItem } from "@/app/components/ClientFilteredInboxList";
@@ -29,6 +29,7 @@ import { getAppShellContext, isDbStartingError } from "@/lib/app-shell";
 import { resolveAccountMode } from "@/lib/account-mode";
 import {
   MAIL_LABEL_TABS,
+  buildNeedsReplyWhere,
   coerceMailLabelTab,
   matchesMailLabelTab,
   type MailLabelTabValue,
@@ -98,7 +99,15 @@ async function renderMailPage(
     where: {
       tenantId,
       ...(activeChannelId ? { channelId: activeChannelId } : {}),
-      ...(activeStatus ? { status: activeStatus } : {}),
+      // "Needs Reply" filters by derived workflow status: the raw status
+      // column stays "needs_reply" when the classifier/draft gate retags a
+      // conversation, so filtering on it floods this tab with demoted
+      // newsletters/notifications. Other status tabs keep raw semantics.
+      ...(activeStatus === "needs_reply"
+        ? buildNeedsReplyWhere()
+        : activeStatus
+        ? { status: activeStatus }
+        : {}),
       ...(salesFilter && isBusiness ? { stateRecord: { is: { isSalesLead: true } } } : {}),
       ...(attentionFilter && attentionFilter !== "life_admin" && attentionFilter !== "snoozed"
         ? { stateRecord: { is: { attentionCategory: attentionFilter } } }
@@ -121,6 +130,7 @@ async function renderMailPage(
       messages: { orderBy: { createdAt: "desc" }, take: 1 },
       channel: true,
       contact: true,
+      draft: { select: { status: true } },
       stateRecord: { select: { metadataJson: true, state: true, attentionCategory: true, emailType: true } },
     },
   });
@@ -190,7 +200,13 @@ async function renderMailPage(
 
   const listTabs = [
     { label: "All", status: "all" as const, count: totalCount },
-    ...ALL_STATUSES.map((s) => ({ label: STATUS_LABELS[s], status: s, count: countByStatus[s] ?? 0 })),
+    // Needs Reply counts by derived workflow status (see buildNeedsReplyWhere);
+    // the raw status count includes conversations the classifier demoted.
+    ...ALL_STATUSES.map((s) => ({
+      label: STATUS_LABELS[s],
+      status: s,
+      count: s === "needs_reply" ? needsReplyCount : countByStatus[s] ?? 0,
+    })),
   ];
 
   const appNavigation = getInboxNavigation({ salesCrm: isBusiness });
@@ -499,8 +515,8 @@ async function renderMailPage(
                           <StatusBadge status={deriveWorkflowStatus({
                             status: conversation.status,
                             userState: conversation.userState,
-                            draftStatus: null,
-                            attentionCategory: conversation.stateRecord?.attentionCategory ?? null,
+                            draftStatus: conversation.draft?.status ?? null,
+                            attentionCategory: resolveAttentionCategory(conversation),
                             emailType: conversation.stateRecord?.emailType ?? null,
                           })} />
                           {isBusiness && conversation.label && <LabelBadge label={conversation.label} />}

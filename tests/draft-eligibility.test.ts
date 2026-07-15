@@ -74,6 +74,7 @@ describe("resolveDraftEligibility", () => {
       confidence: 0.7,
       reason: "Human message likely expects a reply.",
     },
+    messageId: "m1",
     message: { subject: "Join our beta", body: "We're launching, click here to join the waitlist." },
   }
 
@@ -208,6 +209,81 @@ describe("resolveDraftEligibility", () => {
     const result = await resolveDraftEligibility(baseInput)
 
     expect(result.eligible).toBe(true)
+    // Only the decision memo is persisted — no classification retag.
+    expect(mockUpdate).toHaveBeenCalledTimes(1)
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          metadataJson: expect.objectContaining({
+            draftGateDecision: expect.objectContaining({ messageId: "m1", needsReply: true }),
+          }),
+        },
+      })
+    )
+  })
+
+  it("returns the memoized decision for the same message without re-running the AI", async () => {
+    mockFindUnique.mockResolvedValue({
+      attentionCategory: "read_later",
+      metadataJson: {
+        draftGateDecision: { messageId: "m1", needsReply: false, reason: "One-way update.", decidedAt: "2026-07-13T13:18:32.000Z" },
+      },
+    })
+
+    const result = await resolveDraftEligibility(baseInput)
+
+    expect(result).toEqual({ eligible: false, reason: "One-way update." })
+    expect(mockRunAiJsonFeature).not.toHaveBeenCalled()
     expect(mockUpdate).not.toHaveBeenCalled()
+    expect(mockProjectLabels).not.toHaveBeenCalled()
+  })
+
+  it("re-runs the gate when a new inbound message arrives", async () => {
+    mockFindUnique.mockResolvedValue({
+      attentionCategory: "read_later",
+      metadataJson: {
+        draftGateDecision: { messageId: "m1", needsReply: false, reason: "One-way update.", decidedAt: "2026-07-13T13:18:32.000Z" },
+      },
+    })
+    mockRunAiJsonFeature.mockResolvedValue({
+      output: {
+        needsReply: true,
+        suggestedEmailType: "needs_reply",
+        suggestedAttentionCategory: "needs_reply",
+        reason: "Follow-up question awaiting an answer.",
+      },
+      model: "test-model",
+      providerGenerationId: null,
+    })
+
+    const result = await resolveDraftEligibility({ ...baseInput, messageId: "m2" })
+
+    expect(result.eligible).toBe(true)
+    expect(mockRunAiJsonFeature).toHaveBeenCalledTimes(1)
+  })
+
+  it("records the decision memo when retagging", async () => {
+    mockRunAiJsonFeature.mockResolvedValue({
+      output: {
+        needsReply: false,
+        suggestedEmailType: "notification",
+        suggestedAttentionCategory: "read_later",
+        reason: "Confirmation only; no response expected.",
+      },
+      model: "test-model",
+      providerGenerationId: null,
+    })
+
+    await resolveDraftEligibility(baseInput)
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          metadataJson: expect.objectContaining({
+            draftGateDecision: expect.objectContaining({ messageId: "m1", needsReply: false }),
+          }),
+        }),
+      })
+    )
   })
 })

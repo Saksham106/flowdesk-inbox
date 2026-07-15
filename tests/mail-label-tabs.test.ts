@@ -3,6 +3,7 @@ import { FLOWDESK_GMAIL_LABEL_NAMES } from "@/lib/email-labels"
 import {
   MAIL_LABEL_TABS,
   buildMailLabelTabWhere,
+  buildNeedsReplyWhere,
   coerceMailLabelTab,
   matchesMailLabelTab,
 } from "@/lib/mail-label-tabs"
@@ -129,6 +130,58 @@ describe("buildMailLabelTabWhere", () => {
       OR: [
         { draft: { is: { status: "proposed" } } },
         { draft: { is: { status: "approved" } } },
+      ],
+    })
+  })
+})
+
+describe("buildNeedsReplyWhere", () => {
+  // The where-fragment must mirror deriveWorkflowStatus's needs_reply /
+  // draft_ready derivation exactly — this locks the contract so the two
+  // can't drift apart silently.
+  it("mirrors deriveWorkflowStatus: user override wins, then draft, then status/attention/emailType", () => {
+    expect(buildNeedsReplyWhere()).toEqual({
+      AND: [
+        { OR: [{ userState: null }, { userState: { notIn: ["waiting_on", "read_later", "done"] } }] },
+        {
+          OR: [
+            { draft: { is: { status: "proposed" } } },
+            {
+              AND: [
+                { status: { notIn: ["closed", "in_progress"] } },
+                {
+                  OR: [
+                    { stateRecord: { is: null } },
+                    {
+                      stateRecord: {
+                        is: {
+                          AND: [
+                            {
+                              OR: [
+                                { attentionCategory: null },
+                                {
+                                  attentionCategory: {
+                                    notIn: ["waiting_on", "read_later", "review_soon", "fyi_done", "quiet"],
+                                  },
+                                },
+                              ],
+                            },
+                            {
+                              OR: [
+                                { emailType: null },
+                                { emailType: { notIn: ["notification", "newsletter", "marketing"] } },
+                              ],
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
       ],
     })
   })

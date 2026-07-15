@@ -112,12 +112,22 @@ export function mapConversationRowToListItem(
   }
 }
 
-function attentionCategory(conv: ConvRow): string | null {
+/**
+ * Attention category with the metadataJson fallback for legacy rows whose
+ * ConversationState column was never backfilled (the column/JSON desync noted
+ * in lib/mail-label-tabs.ts). Exported so the mobile mail list derives its row
+ * badges from the same inputs as this desktop list.
+ */
+export function resolveAttentionCategory(conv: Pick<ConvRow, "stateRecord">): string | null {
   if (conv.stateRecord?.attentionCategory) return conv.stateRecord.attentionCategory
   const meta = conv.stateRecord?.metadataJson
   if (!meta || typeof meta !== "object" || Array.isArray(meta)) return null
   const value = (meta as Record<string, unknown>).attentionCategory
   return typeof value === "string" ? value : null
+}
+
+function attentionCategory(conv: ConvRow): string | null {
+  return resolveAttentionCategory(conv)
 }
 
 function relativeTime(date: Date | string): string {

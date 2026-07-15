@@ -147,4 +147,40 @@ describe("queueFlowDeskLabelWriteback echo-loop idempotence", () => {
     expect(job).toEqual({ id: "job-1" })
     expect(mockQueueUpsert).toHaveBeenCalledTimes(1)
   })
+
+  it("records the superseded label set as payload history when re-queueing", async () => {
+    // The history is what lets applyLabelFeedbackCore recognize the mailbox
+    // echo of an application this upsert just replaced (rapid classification →
+    // draft-gate retag sequences) instead of misreading it as a user edit.
+    const supersededAt = new Date(Date.now() - 10_000)
+    mockQueueFindUnique.mockResolvedValue(
+      existingRow({ labels: ["Read Later", "Notification"], updatedAt: supersededAt })
+    )
+
+    await queueFlowDeskLabelWriteback(INPUT)
+
+    const upsertArg = mockQueueUpsert.mock.calls[0][0]
+    expect(upsertArg.update.providerMessageIdsJson).toEqual(
+      expect.objectContaining({
+        labels: ["Needs Reply"],
+        history: [{ labels: ["Read Later", "Notification"], at: supersededAt.toISOString() }],
+      })
+    )
+  })
+
+  it("prunes history entries older than the echo window", async () => {
+    const recentAt = new Date(Date.now() - 10_000)
+    const row = existingRow({ labels: ["Read Later"], updatedAt: recentAt })
+    ;(row.providerMessageIdsJson as Record<string, unknown>).history = [
+      { labels: ["Handled"], at: new Date(Date.now() - 20 * 60 * 1000).toISOString() },
+    ]
+    mockQueueFindUnique.mockResolvedValue(row)
+
+    await queueFlowDeskLabelWriteback(INPUT)
+
+    const upsertArg = mockQueueUpsert.mock.calls[0][0]
+    expect(upsertArg.update.providerMessageIdsJson.history).toEqual([
+      { labels: ["Read Later"], at: recentAt.toISOString() },
+    ])
+  })
 })
