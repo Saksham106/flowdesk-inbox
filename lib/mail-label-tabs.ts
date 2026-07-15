@@ -104,6 +104,66 @@ export function coerceMailLabelTab(input: { label?: string; tab?: string }): Mai
   return MAIL_LABEL_TAB_VALUES.has(raw) ? (raw as MailLabelTabValue) : "all"
 }
 
+/**
+ * Prisma where-fragment matching exactly the conversations deriveWorkflowStatus
+ * (lib/workflow-status.ts) resolves to "needs_reply" or "draft_ready". The raw
+ * Conversation.status column goes stale when the classifier or draft gate
+ * retags a conversation via ConversationState only — so surfaces that count or
+ * list "needs reply" conversations (the AppRail badge, the mobile Needs Reply
+ * tab) must use this derived filter, not `{ status: "needs_reply" }`, or they
+ * show newsletters that were long since demoted. Keep the branch order in sync
+ * with deriveWorkflowStatus. NULL-able columns need the explicit `null` OR arm
+ * because Prisma's notIn (SQL NOT IN) never matches NULL rows.
+ */
+export function buildNeedsReplyWhere(): Record<string, unknown> {
+  return {
+    AND: [
+      // No explicit user choice parking the conversation elsewhere
+      { OR: [{ userState: null }, { userState: { notIn: ["waiting_on", "read_later", "done"] } }] },
+      {
+        OR: [
+          // draft_ready: an active proposed draft surfaces as needs-reply work
+          { draft: { is: { status: "proposed" } } },
+          {
+            AND: [
+              { status: { notIn: ["closed", "in_progress"] } },
+              {
+                OR: [
+                  { stateRecord: { is: null } },
+                  {
+                    stateRecord: {
+                      is: {
+                        AND: [
+                          {
+                            OR: [
+                              { attentionCategory: null },
+                              {
+                                attentionCategory: {
+                                  notIn: ["waiting_on", "read_later", "review_soon", "fyi_done", "quiet"],
+                                },
+                              },
+                            ],
+                          },
+                          {
+                            OR: [
+                              { emailType: null },
+                              { emailType: { notIn: ["notification", "newsletter", "marketing"] } },
+                            ],
+                          },
+                        ],
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  }
+}
+
 export function buildMailLabelTabWhere(tab: MailLabelTabValue | null | undefined): Record<string, unknown> | null {
   switch (tab) {
     case "needs_reply":

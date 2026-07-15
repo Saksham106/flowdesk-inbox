@@ -158,6 +158,110 @@ describe("applyGmailLabelFeedback", () => {
     expect(mockConversationUpdate).not.toHaveBeenCalled()
   })
 
+  it("ignores the echo of a superseded application recorded in payload history", async () => {
+    // Projection A applied [Read Later, Notification]; projection B replaced
+    // the payload with [Needs Reply] before A's mailbox echo arrived. The
+    // echo must match A's history entry, not be learned as a user edit.
+    mockWritebackFindUnique.mockResolvedValue({
+      id: "writeback-1",
+      status: "pending",
+      updatedAt: new Date(),
+      providerMessageIdsJson: {
+        threadId: "th-1",
+        labels: ["Needs Reply"],
+        history: [{ labels: ["Read Later", "Notification"], at: new Date(Date.now() - 5_000).toISOString() }],
+      },
+    })
+
+    await expect(
+      applyGmailLabelFeedback({ tenantId: "t1", conversationId: "c1", added: ["Read Later", "Notification"], removed: ["Needs Reply"] })
+    ).resolves.toEqual({ applied: false, kind: "ignored" })
+    expect(mockConversationUpdate).not.toHaveBeenCalled()
+    expect(mockStateUpsert).not.toHaveBeenCalled()
+  })
+
+  it("still learns an edit matching only a stale history entry", async () => {
+    mockWritebackFindUnique.mockResolvedValue({
+      id: "writeback-1",
+      status: "pending",
+      updatedAt: new Date(),
+      providerMessageIdsJson: {
+        threadId: "th-1",
+        labels: ["Needs Reply"],
+        history: [{ labels: ["Read Later"], at: new Date(Date.now() - 20 * 60 * 1000).toISOString() }],
+      },
+    })
+
+    await expect(applyGmailLabelFeedback({ tenantId: "t1", conversationId: "c1", added: ["Read Later"], removed: [] }))
+      .resolves.toEqual({ applied: true, kind: "addition" })
+  })
+
+  it("ignores a duplicate echo of an already-acknowledged application within the echo window", async () => {
+    mockWritebackFindUnique.mockResolvedValue({
+      id: "writeback-1",
+      status: "acknowledged",
+      updatedAt: new Date(),
+      providerMessageIdsJson: { threadId: "th-1", labels: ["Read Later"] },
+    })
+
+    await expect(applyGmailLabelFeedback({ tenantId: "t1", conversationId: "c1", added: ["Read Later"], removed: [] }))
+      .resolves.toEqual({ applied: false, kind: "ignored" })
+    expect(mockConversationUpdate).not.toHaveBeenCalled()
+  })
+
+  it("learns an identical user edit on an acknowledged row once the echo window passed", async () => {
+    mockWritebackFindUnique.mockResolvedValue({
+      id: "writeback-1",
+      status: "acknowledged",
+      updatedAt: new Date(Date.now() - 20 * 60 * 1000),
+      providerMessageIdsJson: { threadId: "th-1", labels: ["Read Later"] },
+    })
+
+    await expect(applyGmailLabelFeedback({ tenantId: "t1", conversationId: "c1", added: ["Read Later"], removed: [] }))
+      .resolves.toEqual({ applied: true, kind: "addition" })
+  })
+
+  it("treats removal of an active workflow label with no replacement as handled", async () => {
+    await expect(applyGmailLabelFeedback({ tenantId: "t1", conversationId: "c1", added: [], removed: ["Needs Reply"] }))
+      .resolves.toEqual({ applied: true, kind: "removal" })
+
+    expect(mockConversationUpdate).toHaveBeenCalledWith({
+      where: { id: "c1" },
+      data: expect.objectContaining({ status: "closed", userState: "done", userStateSource: "gmail_label" }),
+    })
+    expect(mockStateUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      update: expect.objectContaining({ metadataJson: expect.objectContaining({
+        attentionCategory: "fyi_done",
+        gmailLabelOverride: expect.objectContaining({ workflow: null }),
+      }) }),
+    }))
+    expect(mockCorrectionCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ newAttention: "fyi_done" }),
+    })
+  })
+
+  it("re-opens the conversation when the Handled label is removed", async () => {
+    mockConversationFindFirst.mockResolvedValue({
+      ...conversation,
+      status: "closed",
+      userState: "done",
+      stateRecord: { attentionCategory: "fyi_done", emailType: null, metadataJson: {} },
+    })
+
+    await expect(applyGmailLabelFeedback({ tenantId: "t1", conversationId: "c1", added: [], removed: ["Handled"] }))
+      .resolves.toEqual({ applied: true, kind: "removal" })
+
+    expect(mockConversationUpdate).toHaveBeenCalledWith({
+      where: { id: "c1" },
+      data: expect.objectContaining({ status: "needs_reply", userState: null, userStateSource: "gmail_label" }),
+    })
+    expect(mockStateUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      update: expect.objectContaining({ metadataJson: expect.objectContaining({
+        attentionCategory: null,
+      }) }),
+    }))
+  })
+
   it("learns a later matching manual label edit after consuming FlowDesk's writeback event", async () => {
     mockWritebackFindUnique.mockResolvedValue({
       id: "writeback-1",

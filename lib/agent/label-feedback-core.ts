@@ -1,7 +1,12 @@
 import { prisma } from "@/lib/prisma"
 import { labelToState } from "@/lib/conversation-labels"
 import { conversationStateMetadataData } from "@/lib/agent/conversation-state-metadata"
-import { isFlowDeskLabelName, type FlowDeskLabelName } from "@/lib/email-labels"
+import {
+  FLOWDESK_LABEL_ECHO_WINDOW_MS,
+  flowDeskLabelWritebackHistory,
+  isFlowDeskLabelName,
+  type FlowDeskLabelName,
+} from "@/lib/email-labels"
 
 // Provider-neutral core of mailbox-label feedback learning. A user's manual
 // edit to a thread's FlowDesk labels (Gmail) or categories (Outlook) funnels
@@ -50,11 +55,18 @@ function overrideFromMetadata(metadata: Record<string, unknown>): LabelOverride 
   }
 }
 
+// Applying a desired set D adds D's labels and removes every FlowDesk label
+// outside D — so a mailbox change is consistent with our own application of D
+// iff added ⊆ D and removed ∩ D = ∅.
+function matchesDesiredLabelSet(desired: Iterable<FlowDeskLabelName>, added: FlowDeskLabelName[], removed: FlowDeskLabelName[]) {
+  const set = new Set(desired)
+  return added.every((label) => set.has(label)) && removed.every((label) => !set.has(label))
+}
+
 function ownWritebackMatches(payload: unknown, added: FlowDeskLabelName[], removed: FlowDeskLabelName[]) {
   const value = metadataRecord(payload)
   if (!Array.isArray(value.labels)) return false
-  const desired = new Set(value.labels.filter(isFlowDeskLabelName))
-  return added.every((label) => desired.has(label)) && removed.every((label) => !desired.has(label))
+  return matchesDesiredLabelSet(value.labels.filter(isFlowDeskLabelName), added, removed)
 }
 
 export async function applyLabelFeedbackCore(input: {
@@ -70,17 +82,45 @@ export async function applyLabelFeedbackCore(input: {
 
   const latestWriteback = await prisma.emailWritebackQueue.findUnique({
     where: { conversationId_action: { conversationId: input.conversationId, action: "apply_labels" } },
-    select: { id: true, status: true, providerMessageIdsJson: true },
+    select: { id: true, status: true, providerMessageIdsJson: true, updatedAt: true },
   })
-  if (latestWriteback?.status === "completed" && ownWritebackMatches(latestWriteback.providerMessageIdsJson, added, removed)) {
-    // A completed label job can remain in the queue indefinitely. Atomically
-    // consume its one expected history echo so a later identical user edit is
-    // still learned as feedback.
-    const consumed = await prisma.emailWritebackQueue.updateMany({
-      where: { id: latestWriteback.id, status: "completed" },
-      data: { status: "acknowledged" },
-    })
-    if (consumed.count > 0) return { applied: false, kind: "ignored" }
+  if (latestWriteback) {
+    const matchesLatest = ownWritebackMatches(latestWriteback.providerMessageIdsJson, added, removed)
+    if (latestWriteback.status === "completed" && matchesLatest) {
+      // A completed label job can remain in the queue indefinitely. Atomically
+      // consume its one expected history echo so a later identical user edit is
+      // still learned as feedback.
+      const consumed = await prisma.emailWritebackQueue.updateMany({
+        where: { id: latestWriteback.id, status: "completed" },
+        data: { status: "acknowledged" },
+      })
+      if (consumed.count > 0) return { applied: false, kind: "ignored" }
+    }
+    // A second echo of an already-consumed application (inline drain + cron
+    // both applied, or the provider delivered the history record twice) must
+    // not be learned as a user edit — but only inside the echo window, so a
+    // genuine identical re-edit later still counts as feedback.
+    if (
+      latestWriteback.status === "acknowledged" &&
+      matchesLatest &&
+      Date.now() - latestWriteback.updatedAt.getTime() < FLOWDESK_LABEL_ECHO_WINDOW_MS
+    ) {
+      return { applied: false, kind: "ignored" }
+    }
+    // Echoes of applications this queue row has since superseded (see
+    // FlowDeskLabelApplication in lib/email-labels.ts): rapid back-to-back
+    // projections replace the payload before the first application's echo
+    // arrives, so match against the recorded recent sets too. Misreading one
+    // of these as a user edit is what locked conversations under a bogus
+    // gmailLabelOverride.
+    const now = Date.now()
+    for (const application of flowDeskLabelWritebackHistory(latestWriteback.providerMessageIdsJson)) {
+      const appliedAt = Date.parse(application.at)
+      if (!Number.isFinite(appliedAt) || now - appliedAt >= FLOWDESK_LABEL_ECHO_WINDOW_MS) continue
+      if (matchesDesiredLabelSet(application.labels, added, removed)) {
+        return { applied: false, kind: "ignored" }
+      }
+    }
   }
 
   const conversation = await prisma.conversation.findFirst({
@@ -124,7 +164,64 @@ export async function applyLabelFeedbackCore(input: {
   if (resolved && "rejected" in resolved) return { applied: false, kind: "ignored" }
 
   const stateUpdate = resolved && !("rejected" in resolved) ? resolved : null
-  const attentionCategory = stateUpdate?.attentionCategory ?? (contentRemoval ? null : conversation.stateRecord?.attentionCategory ?? null)
+
+  // A removal with no replacement label previously only recorded the override
+  // and left attention/status untouched — so stripping "Needs Reply" in the
+  // mailbox kept the conversation deriving needs_reply in the app forever,
+  // while the override simultaneously stopped us re-adding the label in the
+  // mailbox. Resolve the intent instead: removing an active workflow label
+  // means "done with this" (Handled semantics); removing Handled re-opens the
+  // conversation to re-derive from signals. Autodrafted projects from the
+  // draft's own status, so its removal alone changes no conversation state.
+  type RemovalResolution = {
+    status: "needs_reply" | "in_progress" | "closed"
+    userState: string | null
+    attentionCategory: string | null
+    state: string
+    priority: string
+    reason: string
+    nextAction: string
+  }
+  let removalResolution: RemovalResolution | null = null
+  if (!stateUpdate && workflowRemoval) {
+    const removedWorkflow = removed.filter((label) => WORKFLOW_LABELS.has(label) && label !== "Autodrafted")
+    if (removedWorkflow.includes("Handled")) {
+      removalResolution = {
+        status: "needs_reply",
+        userState: null,
+        attentionCategory: null,
+        state: "needs_reply",
+        priority: "medium",
+        reason: "User removed the Handled label in their mailbox; re-opening the conversation.",
+        nextAction: "Review this conversation.",
+      }
+    } else if (removedWorkflow.length > 0) {
+      const handled = labelToState("Handled", {
+        currentStatus: conversation.status,
+        currentAttentionCategory: conversation.stateRecord?.attentionCategory ?? null,
+        draftStatus: conversation.draft?.status ?? null,
+      })
+      if (!("rejected" in handled)) {
+        removalResolution = {
+          status: handled.status,
+          userState: handled.userState,
+          attentionCategory: handled.attentionCategory,
+          state: handled.state,
+          priority: handled.priority,
+          reason: `User removed the ${removedWorkflow.join(", ")} label in their mailbox; treating the conversation as handled.`,
+          nextAction: handled.nextAction,
+        }
+      }
+    }
+  }
+
+  const attentionCategory = stateUpdate
+    ? stateUpdate.attentionCategory
+    : removalResolution
+      ? removalResolution.attentionCategory
+      : contentRemoval
+        ? null
+        : conversation.stateRecord?.attentionCategory ?? null
   const emailType = stateUpdate?.emailType ?? (contentRemoval ? null : conversation.stateRecord?.emailType ?? null)
   const metadataJson = {
     ...metadata,
@@ -134,39 +231,41 @@ export async function applyLabelFeedbackCore(input: {
     updatedAt: now.toISOString(),
   }
 
+  const conversationUpdate = stateUpdate ?? removalResolution
   await prisma.conversation.update({
     where: { id: conversation.id },
-    data: stateUpdate
+    data: conversationUpdate
       ? {
-          status: stateUpdate.status,
-          userState: stateUpdate.userState,
+          status: conversationUpdate.status,
+          userState: conversationUpdate.userState,
           userStateSource: "gmail_label",
           userStateUpdatedAt: now,
-          ...(stateUpdate.status === "closed" ? { readAt: now, gmailUnread: false } : {}),
+          ...(conversationUpdate.status === "closed" ? { readAt: now, gmailUnread: false } : {}),
         }
       : workflowRemoval
         ? { userState: null, userStateSource: "gmail_label", userStateUpdatedAt: now }
         : {},
   })
 
+  const stateFields = stateUpdate ?? removalResolution
   await prisma.conversationState.upsert({
     where: { conversationId: conversation.id },
     create: {
       tenantId: input.tenantId,
       conversationId: conversation.id,
-      state: stateUpdate?.state ?? conversation.stateRecord?.state ?? "needs_reply",
-      priority: stateUpdate?.priority ?? conversation.stateRecord?.priority ?? "medium",
-      reason: stateUpdate?.reason ?? conversation.stateRecord?.reason ?? "Gmail label removed by user.",
-      nextAction: stateUpdate?.nextAction ?? conversation.stateRecord?.nextAction ?? "Review this conversation.",
+      state: stateFields?.state ?? conversation.stateRecord?.state ?? "needs_reply",
+      priority: stateFields?.priority ?? conversation.stateRecord?.priority ?? "medium",
+      reason: stateFields?.reason ?? conversation.stateRecord?.reason ?? "Gmail label removed by user.",
+      nextAction: stateFields?.nextAction ?? conversation.stateRecord?.nextAction ?? "Review this conversation.",
       confidence: 1,
       source: "gmail_label",
       metadataJson,
       ...conversationStateMetadataData(metadataJson),
     },
     update: {
-      ...(stateUpdate ? {
-        state: stateUpdate.state, priority: stateUpdate.priority, reason: stateUpdate.reason,
-        nextAction: stateUpdate.nextAction,
+      ...(stateFields ? {
+        state: stateFields.state, priority: stateFields.priority, reason: stateFields.reason,
+        nextAction: stateFields.nextAction,
       } : {}),
       confidence: 1,
       source: "gmail_label",
@@ -183,7 +282,8 @@ export async function applyLabelFeedbackCore(input: {
     },
   })
 
-  if (stateUpdate) {
+  const correctionAttention = stateUpdate?.attentionCategory ?? removalResolution?.attentionCategory ?? null
+  if (correctionAttention) {
     const sender = await prisma.message.findFirst({
       where: { conversationId: conversation.id, direction: "inbound" },
       orderBy: { createdAt: "asc" },
@@ -196,7 +296,7 @@ export async function applyLabelFeedbackCore(input: {
         data: {
           tenantId: input.tenantId, conversationId: conversation.id, fromEmail, fromDomain,
           previousAttention: conversation.stateRecord?.attentionCategory ?? null,
-          newAttention: stateUpdate.attentionCategory,
+          newAttention: correctionAttention,
         },
       })
     }

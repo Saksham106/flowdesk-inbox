@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const { channelFindMany, conversationGroupBy, approvalCount, tenantFindUnique } = vi.hoisted(() => ({
+const { channelFindMany, conversationGroupBy, conversationCount, approvalCount, tenantFindUnique } = vi.hoisted(() => ({
   channelFindMany: vi.fn(),
   conversationGroupBy: vi.fn(),
+  conversationCount: vi.fn(),
   approvalCount: vi.fn(),
   tenantFindUnique: vi.fn(),
 }))
@@ -10,7 +11,7 @@ const { channelFindMany, conversationGroupBy, approvalCount, tenantFindUnique } 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     channel: { findMany: channelFindMany },
-    conversation: { groupBy: conversationGroupBy },
+    conversation: { groupBy: conversationGroupBy, count: conversationCount },
     approvalRequest: { count: approvalCount },
     tenant: { findUnique: tenantFindUnique },
   },
@@ -30,6 +31,7 @@ describe("getAppShellContext account scope", () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
     conversationGroupBy.mockResolvedValue([])
+    conversationCount.mockResolvedValue(0)
     approvalCount.mockResolvedValue(0)
     tenantFindUnique.mockResolvedValue({ salesCrmEnabled: false })
   })
@@ -41,6 +43,22 @@ describe("getAppShellContext account scope", () => {
     expect(conversationGroupBy).toHaveBeenCalledWith(
       expect.objectContaining({ where: { tenantId: "tenant-a", channelId: "channel-b" } })
     )
+    // needsReplyCount is a derived count (buildNeedsReplyWhere), scoped the same way
+    expect(conversationCount).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ tenantId: "tenant-a", channelId: "channel-b", AND: expect.any(Array) }),
+      })
+    )
+  })
+
+  it("uses the derived needs-reply count, not the raw status count", async () => {
+    conversationGroupBy.mockResolvedValue([{ status: "needs_reply", _count: { status: 40 } }])
+    conversationCount.mockResolvedValue(10)
+
+    const result = await getAppShellContext("tenant-a", null)
+
+    expect(result.needsReplyCount).toBe(10)
+    expect(result.countByStatus["needs_reply"]).toBe(40)
   })
 
   it("falls back to all accounts for an unknown channel id", async () => {

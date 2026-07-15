@@ -101,6 +101,7 @@ export async function proposeDraftForConversation(
         userEmail,
         conversationId: conversation.id,
         classification,
+        messageId: latestInbound.id,
         message: { subject: subjectHint, body: latestInbound.body },
       })
       if (!eligibility.eligible) {
