@@ -66,6 +66,7 @@ describe("getInboxNavigation (B2C: baseline + opt-in Sales & CRM)", () => {
       ],
       secondary: [
         { label: "Tasks", href: "/tasks" },
+        { label: "History", href: "/history" },
         { label: "Activity", href: "/audit" },
         { label: "Tools", href: "/tools" },
       ],
@@ -76,6 +77,7 @@ describe("getInboxNavigation (B2C: baseline + opt-in Sales & CRM)", () => {
     const secondary = getInboxNavigation({ salesCrm: true }).secondary.map((i) => i.href);
     expect(secondary).toEqual([
       "/tasks",
+      "/history",
       "/audit",
       "/tools",
       "/leads",
