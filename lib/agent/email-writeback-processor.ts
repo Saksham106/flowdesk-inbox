@@ -8,6 +8,7 @@ import {
   providerDraftIdFromMetadata,
   latestMeaningfulInboundMessage,
 } from "@/lib/gmail-drafts"
+import { ARCHIVE_THREAD_ACTION } from "@/lib/agent/auto-triage"
 import { GMAIL_WRITEBACK_MAX_ATTEMPTS, nextWritebackAttemptDate } from "@/lib/google"
 import { getWritebackAdapter, type EmailWritebackAdapter } from "@/lib/email/writeback-adapter"
 import { prisma } from "@/lib/prisma"
@@ -283,6 +284,27 @@ async function runWritebackJob(job: FullWritebackJob): Promise<{ ok: boolean }> 
         result: "labels_applied",
         detail: { threadId: payload.threadId, labels: payload.labels },
       }
+    } else if (job.action === ARCHIVE_THREAD_ACTION) {
+      const payload = asMetadataObject(job.providerMessageIdsJson)
+      const threadId = typeof payload.threadId === "string" ? payload.threadId : ""
+      if (!threadId) {
+        await prisma.emailWritebackQueue.update({
+          where: { id: job.id },
+          data: {
+            status: "failed",
+            attempts: { increment: 1 },
+            lastError: "Invalid archive writeback payload",
+          },
+        })
+        await recordWritebackResolution(job, "failed", adapter.auditPrefix, {
+          result: "invalid_payload",
+          error: "Invalid archive writeback payload",
+          attempts: job.attempts + 1,
+        })
+        return { ok: false }
+      }
+      await adapter.archiveConversation(job.channelId, threadId)
+      resolution = { result: "archived", detail: { threadId } }
     } else if (job.action === GMAIL_DRAFT_CREATE_ACTION) {
       resolution = await handleCreateDraft(job, adapter)
     } else if (job.action === GMAIL_DRAFT_WITHDRAW_ACTION) {

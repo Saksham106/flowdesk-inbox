@@ -22,6 +22,7 @@ import { userEditedFieldsFromMetadata } from "@/lib/agent/user-edited-fields"
 import { detectSchedulingRequest } from "@/lib/agent/scheduling"
 import { handleSchedulingConfirmationForInboundReply } from "@/lib/agent/scheduling-booking"
 import { projectFlowDeskLabelsForConversation } from "@/lib/email-labels"
+import { maybeAutoTriageConversation } from "@/lib/agent/auto-triage"
 import { hasGmailLabelOverride } from "@/lib/agent/gmail-label-override"
 import { proposeDraftForConversation } from "@/lib/agent/draft-generation"
 import { getAutomationLevel } from "@/lib/agent/automation-level"
@@ -1009,6 +1010,22 @@ export async function syncConversationWorkItems(
       })
     } catch (err) {
       console.error("[work-item-sync] label projection failed:", err)
+    }
+  }
+
+  // Level 4 trust-ladder sweep: mark low-risk mail read and archive it in the
+  // mailbox itself. Runs after classification and label projection have
+  // settled so it judges the same state the labels were stamped from; guards
+  // itself (level gate, overrides, once-only marker), best-effort so a
+  // provider hiccup never fails the sync.
+  if (!hasUserOverride && !hasLabelOverride) {
+    try {
+      await maybeAutoTriageConversation({
+        tenantId: conversation.tenantId,
+        conversationId: conversation.id,
+      })
+    } catch (err) {
+      console.error("[work-item-sync] auto-triage failed:", err)
     }
   }
 

@@ -24,8 +24,8 @@ import { prisma } from "@/lib/prisma"
  *
  * *Auto-send at Level 5 still requires autopilot enabled + every existing
  * confidence/policy/budget/cap gate. Levels 0-4 can never auto-send.
- * (No automatic mark-read/archive path exists yet; the Level 4 gate is wired
- * here so future callers inherit it.)
+ * (The Level 4 mark-read/archive path is lib/agent/auto-triage.ts, invoked at
+ * the end of each work-item sync pass.)
  */
 
 export const AUTOMATION_LEVEL_MIN = 0
