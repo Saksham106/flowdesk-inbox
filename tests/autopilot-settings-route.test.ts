@@ -51,6 +51,46 @@ describe("PATCH /api/autopilot-settings", () => {
     expect(res.status).toBe(400)
   })
 
+  describe("first-save row creation for legacy tenants", () => {
+    // A tenant with no AutopilotSetting row predates signup-time creation and
+    // derives Level 3 at runtime. The upsert's create branch must preserve
+    // that, not fall back to the schema default of 2 (which silently disabled
+    // Gmail draft writeback for legacy tenants).
+    it("creates the row at Level 3 when the patch omits automationLevel", async () => {
+      mockFindUnique.mockResolvedValue(null)
+
+      await PATCH(new Request("http://x", { method: "PATCH", body: JSON.stringify({ enabled: true }) }))
+
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ automationLevel: 3 }),
+        })
+      )
+    })
+
+    it("still honors an explicit automationLevel on first save", async () => {
+      mockFindUnique.mockResolvedValue(null)
+      mockUpsert.mockResolvedValue({ automationLevel: 0 })
+
+      await PATCH(new Request("http://x", { method: "PATCH", body: JSON.stringify({ automationLevel: 0 }) }))
+
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ automationLevel: 0 }),
+        })
+      )
+    })
+
+    it("does not touch automationLevel in the update branch when omitted", async () => {
+      mockFindUnique.mockResolvedValue({ automationLevel: 4 })
+
+      await PATCH(new Request("http://x", { method: "PATCH", body: JSON.stringify({ enabled: true }) }))
+
+      const upsertArgs = mockUpsert.mock.calls[0][0]
+      expect(upsertArgs.update).not.toHaveProperty("automationLevel")
+    })
+  })
+
   describe("backfill signal", () => {
     it("includes backfillAvailable and an eligible count when crossing from below 3 to 3+", async () => {
       mockFindUnique.mockResolvedValue({ automationLevel: 2 })

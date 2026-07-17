@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Prisma } from "@prisma/client"
+import { deriveAutomationLevelFromLegacySettings } from "@/lib/agent/automation-level"
 
 export const runtime = "nodejs"
 
@@ -148,9 +149,16 @@ export async function PATCH(request: Request) {
       where: { tenantId: session.user.tenantId },
       update: updateData,
       // Apply the patched values on first save too, not just defaults.
+      // A tenant with no row here predates signup-time AutopilotSetting
+      // creation, so their effective level before this save was the legacy
+      // derivation (Level 3, see getAutomationLevel). Creating the row with
+      // the schema default of 2 would silently demote them below the Gmail
+      // drafts gate; an explicit automationLevel in the patch still wins via
+      // the updateData spread.
       create: {
         tenantId: session.user.tenantId,
         enabled: false,
+        automationLevel: deriveAutomationLevelFromLegacySettings(null),
         ...updateData,
       },
     }),
