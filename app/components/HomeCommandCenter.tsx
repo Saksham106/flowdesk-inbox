@@ -64,7 +64,10 @@ export default function HomeCommandCenter({
         <details className="mt-6 border-t border-slate-200 pt-4 text-xs text-slate-500">
           <summary className="cursor-pointer font-semibold text-slate-600">What FlowDesk did today</summary>
           <p className="mt-2">{activity}</p>
-          <Link href="/audit" className="mt-2 inline-block font-medium text-[var(--color-accent)] hover:underline">Full activity log →</Link>
+          <span className="mt-2 flex gap-4">
+            <Link href="/history" className="inline-block font-medium text-[var(--color-accent)] hover:underline">View history →</Link>
+            <Link href="/audit" className="inline-block font-medium text-slate-400 hover:underline">Full activity log →</Link>
+          </span>
         </details>
       )}
     </div>

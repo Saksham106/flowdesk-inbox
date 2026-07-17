@@ -32,6 +32,8 @@ const PRIMARY_NAV: AppNavigationItem[] = [
 
 const SECONDARY_NAV: AppNavigationItem[] = [
   { label: "Tasks", href: "/tasks" },
+  // History is the human-readable feed; Activity stays the raw audit table.
+  { label: "History", href: "/history" },
   { label: "Activity", href: "/audit" },
   { label: "Tools", href: "/tools" },
 ]
