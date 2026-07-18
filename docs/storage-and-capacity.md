@@ -72,10 +72,15 @@ bookkeeping rows when nothing changed).
 
 ### Do NOT prune these
 
-- **EmailWritebackQueue** — looks append-only but is upserted on
-  `@@unique([conversationId, action])`, so it is bounded by conversation count. Its
-  completed/acknowledged rows feed the label echo-suppression check from PR #150
-  (`queueFlowDeskLabelWriteback`); deleting them re-opens the echo-loop risk.
+- **EmailWritebackQueue (completed/acknowledged rows)** — looks append-only but is
+  upserted on `@@unique([conversationId, action])`, so it is bounded by conversation
+  count. Its completed/acknowledged rows feed the label echo-suppression check from
+  PR #150 (`queueFlowDeskLabelWriteback`); deleting them re-opens the echo-loop risk.
+  The one exception: rows at status `failed` (retries exhausted) ARE pruned by the
+  retention cron after 7 days on `updatedAt` — their only afterlife is the
+  reconnect requeue (`requeueFailedWritebacksForChannel`), which a week comfortably
+  covers, and stale failed rows otherwise pin the operator-health panels at
+  "Critical" long after the underlying error has passed.
 - **AgentJob / AgentToolCall** — has live readers that fetch a conversation's *latest*
   job (draft-generation, lead-sequence, follow-up) and a non-cascading relation to
   ApprovalRequest. Pruning needs design, not a blind `deleteMany`. Small today.
