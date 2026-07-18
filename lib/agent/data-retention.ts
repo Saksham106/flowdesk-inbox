@@ -6,6 +6,7 @@ export type DataRetentionResult = {
   aiUsageEventsDeleted: number
   gmailPushEventsDeleted: number
   outlookSyncEventsDeleted: number
+  failedWritebackJobsDeleted: number
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -18,6 +19,14 @@ const AI_USAGE_RETENTION_DAYS = 90
 // regardless of status — the sync cursor has long since moved past it.
 const GMAIL_PUSH_EVENT_RETENTION_DAYS = 30
 const OUTLOOK_SYNC_EVENT_RETENTION_DAYS = 30
+// Failed-out writeback jobs ONLY (status "failed", retries exhausted). Their
+// one legitimate afterlife is requeueFailedWritebacksForChannel on an OAuth
+// reconnect — a week covers any realistic reconnect gap, and a mailbox write
+// older than that is stale anyway (reconcile has long since re-queued the
+// current state for live conversations). Completed/acknowledged rows are
+// deliberately untouched: they feed the label echo-suppression check in
+// queueFlowDeskLabelWriteback (see docs/storage-and-capacity.md).
+const FAILED_WRITEBACK_RETENTION_DAYS = 7
 
 function cutoff(days: number): Date {
   return new Date(Date.now() - days * DAY_MS)
@@ -27,7 +36,7 @@ function cutoff(days: number): Date {
 // instead of growing forever. These are per-action receipts, not product
 // data — the 2026-07-12 outage was this class of data filling the volume.
 export async function runDataRetentionCron(): Promise<DataRetentionResult> {
-  const [audit, usage, push, outlook] = await Promise.all([
+  const [audit, usage, push, outlook, failedWritebacks] = await Promise.all([
     prisma.auditLog.deleteMany({
       where: { createdAt: { lt: cutoff(AUDIT_LOG_RETENTION_DAYS) } },
     }),
@@ -40,6 +49,11 @@ export async function runDataRetentionCron(): Promise<DataRetentionResult> {
     prisma.outlookSyncEvent.deleteMany({
       where: { createdAt: { lt: cutoff(OUTLOOK_SYNC_EVENT_RETENTION_DAYS) } },
     }),
+    // updatedAt, not createdAt: a reconnect-requeued job that fails again
+    // refreshes updatedAt, restarting its week.
+    prisma.emailWritebackQueue.deleteMany({
+      where: { status: "failed", updatedAt: { lt: cutoff(FAILED_WRITEBACK_RETENTION_DAYS) } },
+    }),
   ])
 
   return {
@@ -48,5 +62,6 @@ export async function runDataRetentionCron(): Promise<DataRetentionResult> {
     aiUsageEventsDeleted: usage.count,
     gmailPushEventsDeleted: push.count,
     outlookSyncEventsDeleted: outlook.count,
+    failedWritebackJobsDeleted: failedWritebacks.count,
   }
 }

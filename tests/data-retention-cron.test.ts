@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
-const { mockAuditDeleteMany, mockUsageDeleteMany, mockPushDeleteMany, mockOutlookDeleteMany } = vi.hoisted(() => ({
+const { mockAuditDeleteMany, mockUsageDeleteMany, mockPushDeleteMany, mockOutlookDeleteMany, mockWritebackDeleteMany } = vi.hoisted(() => ({
   mockAuditDeleteMany: vi.fn(),
   mockUsageDeleteMany: vi.fn(),
   mockPushDeleteMany: vi.fn(),
   mockOutlookDeleteMany: vi.fn(),
+  mockWritebackDeleteMany: vi.fn(),
 }))
 
 vi.mock("@/lib/prisma", () => ({
@@ -13,6 +14,7 @@ vi.mock("@/lib/prisma", () => ({
     aiUsageEvent: { deleteMany: mockUsageDeleteMany },
     gmailPushEvent: { deleteMany: mockPushDeleteMany },
     outlookSyncEvent: { deleteMany: mockOutlookDeleteMany },
+    emailWritebackQueue: { deleteMany: mockWritebackDeleteMany },
   },
 }))
 
@@ -30,6 +32,7 @@ describe("runDataRetentionCron", () => {
     mockUsageDeleteMany.mockResolvedValue({ count: 0 })
     mockPushDeleteMany.mockResolvedValue({ count: 0 })
     mockOutlookDeleteMany.mockResolvedValue({ count: 0 })
+    mockWritebackDeleteMany.mockResolvedValue({ count: 0 })
   })
 
   afterEach(() => {
@@ -64,11 +67,23 @@ describe("runDataRetentionCron", () => {
     })
   })
 
+  it("deletes only FAILED writeback jobs, by updatedAt, after 7 days", async () => {
+    await runDataRetentionCron()
+    expect(mockWritebackDeleteMany).toHaveBeenCalledWith({
+      where: { status: "failed", updatedAt: { lt: new Date(NOW.getTime() - 7 * DAY) } },
+    })
+    // Completed/acknowledged rows feed the label echo-suppression check and
+    // must never be swept by retention — the status filter is the guarantee.
+    const where = mockWritebackDeleteMany.mock.calls[0][0].where
+    expect(where.status).toBe("failed")
+  })
+
   it("reports how many rows each table dropped", async () => {
     mockAuditDeleteMany.mockResolvedValue({ count: 12 })
     mockUsageDeleteMany.mockResolvedValue({ count: 3 })
     mockPushDeleteMany.mockResolvedValue({ count: 7 })
     mockOutlookDeleteMany.mockResolvedValue({ count: 5 })
+    mockWritebackDeleteMany.mockResolvedValue({ count: 33 })
 
     const result = await runDataRetentionCron()
 
@@ -78,6 +93,7 @@ describe("runDataRetentionCron", () => {
       aiUsageEventsDeleted: 3,
       gmailPushEventsDeleted: 7,
       outlookSyncEventsDeleted: 5,
+      failedWritebackJobsDeleted: 33,
     })
   })
 })
